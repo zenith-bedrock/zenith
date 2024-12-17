@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zenith", "zenith\zenith.csproj", "{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet", "raknet\raknet.csproj", "{997A2160-941A-4695-B7F5-2BF6793639FE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{997A2160-941A-4695-B7F5-2BF6793639FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{997A2160-941A-4695-B7F5-2BF6793639FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{997A2160-941A-4695-B7F5-2BF6793639FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{997A2160-941A-4695-B7F5-2BF6793639FE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
