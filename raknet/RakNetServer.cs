@@ -11,9 +11,9 @@ public class RakNetSession
     public int Id { get; init; }
     public bool IsDisconnected { get; private set; }
 
-    public void ForciblyDisconnect()
+    public void Incoming(ReadOnlyMemory<byte> buffer)
     {
-        
+        Console.WriteLine($"[{Address}] Incoming {buffer.Length} bytes.");
     }
 }
 
@@ -28,8 +28,7 @@ public class RakNetServer
 
     private int _tickCount = 0;
     
-    private readonly ConcurrentDictionary<string, RakNetSession> _sessionsByAddress = new();
-    private readonly ConcurrentDictionary<int, RakNetSession> _sessions = new();
+    private readonly ConcurrentDictionary<string, RakNetSession> _sessions = new();
 
     public RakNetServer(int port)
     {
@@ -72,6 +71,11 @@ public class RakNetServer
         return listener;
     }
 
+    protected int NextSessionId()
+    {
+        return _sessions.Values.Count > 0 ? _sessions.Values.Max(s => s.Id) + 1 : 0;
+    }
+
     public async Task StartAsync()
     {
         Console.WriteLine("Starting RakNet connection...");
@@ -102,32 +106,29 @@ public class RakNetServer
             try
             {
                 var result = await _listener.ReceiveAsync(token);
-                var datagram = result.Buffer;
-                var length = result.Buffer.Length;
-                var remoteEndPoint = result.RemoteEndPoint.ToString();
+                var buffer = result.Buffer;
                 
-                // Handle Unconnected Datagrams and Connected Datagrams
-                if (datagram.Length < 1)
+                if (buffer.Length < 1)
                 {
                     Console.WriteLine("Received empty datagram.");
                     continue;
                 }
-                
-                if (_sessionsByAddress.TryGetValue(remoteEndPoint, out var session))
+
+                var flags = (Datagram.BitFlags) buffer[0];
+                var offline = !flags.HasFlag(Datagram.BitFlags.Valid);
+                if (offline) {
+                    Console.WriteLine("Received offline datagram.");
+                    continue;
+                }
+
+                var remoteEndPoint = result.RemoteEndPoint.ToString();
+                if (_sessions.TryGetValue(remoteEndPoint, out var session))
                 {
-                    var flag = (Datagram.BitFlags) datagram[0];
-                    if (flag.HasFlag(Datagram.BitFlags.Valid))
-                    {
-                        Console.WriteLine($"Received {length} bytes from {remoteEndPoint}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Ignored unconnected packet from {remoteEndPoint} due to session already opened (0x{datagram[0]:X2})");
-                    }
+                    session.Incoming(buffer);
                 }
                 else
                 {
-                    
+                    // Create new session or handle unconnected
                 }
             }
             catch (OperationCanceledException)

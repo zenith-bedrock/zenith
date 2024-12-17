@@ -3,14 +3,11 @@ namespace Zenith.Raknet.Protocol;
 public class Datagram
 {
     [Flags]
-    public enum BitFlags
-    {
+    public enum BitFlags {
         Valid = 0x80,
         Ack = 0x40,
         Nak = 0x20,
-        PacketPair = 0x10,
-        Continuation = 0x08,
-        NeedsBAndAS = 0x04,
+        Split = 0x10
     }
     
     public const int HEADER_SIZE = 1 + 3; // Header flags + sequence number
