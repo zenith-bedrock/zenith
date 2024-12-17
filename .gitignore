@@ -1,0 +1,62 @@
+# .gitignore for a .NET Solution
+
+## Build Folders
+bin/
+obj/
+
+## User-Specific Files
+*.user
+*.userosscache
+*.suo
+*.vs
+.vscode/
+
+## Logs and Debugging
+*.log
+*.tlog
+
+## IDE Directories
+.idea/
+.vs/
+
+## Temporary Files
+*.tmp
+*.temp
+*.cache
+*.pdb
+*.pidb
+
+## Generated Files
+*.dll
+*.exe
+*.app
+*.pdb
+*.cache
+*.stackdump
+
+## Test Results
+TestResults/
+
+## Dependency Folders
+node_modules/
+
+## Configuration Files
+appsettings.json
+appsettings.*.json
+
+## Publish Output
+publish/
+
+## JetBrains Rider
+.idea/
+
+## macOS Specific
+.DS_Store
+
+## Windows Specific
+Thumbs.db
+Desktop.ini
+
+## Other System Files
+*.swp
+*.lock
