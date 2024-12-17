@@ -5,14 +5,17 @@ using Zenith.Raknet.Protocol;
 
 namespace Zenith.Raknet;
 
+// Separate class to another file in the future for better organization
 public class RakNetSession
 {
-    public string Address { get; init; }
+    public required string Address { get; init; }
     public int Id { get; init; }
-    public bool IsDisconnected { get; private set; }
+    public long LastSeen { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     public void Incoming(ReadOnlyMemory<byte> buffer)
     {
+        LastSeen = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         Console.WriteLine($"[{Address}] Incoming {buffer.Length} bytes.");
     }
 }
