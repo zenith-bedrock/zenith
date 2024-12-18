@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Zenith.Raknet.Extension;
 using Zenith.Raknet.Protocol;
 
 namespace Zenith.Raknet;
@@ -8,7 +9,7 @@ namespace Zenith.Raknet;
 // Separate class to another file in the future for better organization
 public class RakNetSession
 {
-    public required string Address { get; init; }
+    public required IPEndPoint EndPoint { get; init; }
     public int Id { get; init; }
     public long LastSeen { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -16,7 +17,7 @@ public class RakNetSession
     {
         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        Console.WriteLine($"[{Address}] Incoming {buffer.Length} bytes.");
+        Console.WriteLine($"[{EndPoint}] Incoming {buffer.Length} bytes.");
     }
 }
 
@@ -28,15 +29,17 @@ public class RakNetServer
     private readonly UdpClient _listener;
     private readonly IPEndPoint _remoteEndPoint;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private readonly UnconnectedRakNet _unconnected;
 
     private int _tickCount = 0;
     
-    private readonly ConcurrentDictionary<string, RakNetSession> _sessions = new();
+    private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
 
     public RakNetServer(int port)
     {
         _listener = CreateListener();
         _remoteEndPoint = new IPEndPoint(IPAddress.Any, port);
+        _unconnected = new UnconnectedRakNet(this);
     }
 
     private static UdpClient CreateListener()
@@ -117,14 +120,16 @@ public class RakNetServer
                     continue;
                 }
 
+                var remoteEndPoint = result.RemoteEndPoint.ToUInt64();
+
                 var flags = (Datagram.BitFlags) buffer[0];
                 var offline = !flags.HasFlag(Datagram.BitFlags.Valid);
+
                 if (offline) {
                     Console.WriteLine("Received offline datagram.");
+                    _unconnected.Handle(result.RemoteEndPoint, buffer);
                     continue;
                 }
-
-                var remoteEndPoint = result.RemoteEndPoint.ToString();
                 if (_sessions.TryGetValue(remoteEndPoint, out var session))
                 {
                     session.Incoming(buffer);
