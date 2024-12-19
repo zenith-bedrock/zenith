@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Zenith.Raknet.Extension;
+using Zenith.Raknet.Log;
 using Zenith.Raknet.Protocol;
 
 namespace Zenith.Raknet;
@@ -30,6 +31,7 @@ public class RakNetServer
     private readonly IPEndPoint _remoteEndPoint;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly UnconnectedRakNet _unconnected;
+    public ILogger? Logger { get; init; }
 
     private int _tickCount = 0;
     
@@ -84,24 +86,23 @@ public class RakNetServer
 
     public async Task StartAsync()
     {
-        Console.WriteLine("Starting RakNet connection...");
+        Logger?.Debug("Starting RakNet connection...");
 
         _listener.Client.Bind(_remoteEndPoint);
 
         var datagramTask = ReceiveDatagramAsync(_cancellationTokenSource.Token);
         var tickTask = Task.Run(() => TickAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
 
-        Console.WriteLine($"RakNet running at {_remoteEndPoint}");
+        Logger?.Debug($"RakNet running at {_remoteEndPoint}");
         await Task.WhenAll(datagramTask, tickTask);
-        Console.WriteLine("RakNet connection stopped.");
+        Logger?.Debug("RakNet gracefully stopped.");
     }
 
     public async Task ShutdownAsync()
     {
-        Console.WriteLine("Shutting down RakNet connection...");
+        Logger?.Debug("Requesting RakNet shutdown...");
         _cancellationTokenSource.Cancel();
         _listener.Close();
-        Console.WriteLine("RakNet connection shut down.");
         await Task.CompletedTask;
     }
 
@@ -116,7 +117,7 @@ public class RakNetServer
                 
                 if (buffer.Length < 1)
                 {
-                    Console.WriteLine("Received empty datagram.");
+                    Logger?.Warning($"Received empty datagram from {result.RemoteEndPoint}.");
                     continue;
                 }
 
@@ -126,7 +127,6 @@ public class RakNetServer
                 var offline = !flags.HasFlag(Datagram.BitFlags.Valid);
 
                 if (offline) {
-                    Console.WriteLine("Received offline datagram.");
                     _unconnected.Handle(result.RemoteEndPoint, buffer);
                     continue;
                 }
@@ -141,12 +141,12 @@ public class RakNetServer
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine("Packet reception stopped.");
+                Logger?.Debug("Packet reception stopped.");
                 break;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error receiving datagram: {ex.Message}");
+                Logger?.Error($"Error receiving datagram: {ex.Message}");
             }
         }
     }
@@ -163,7 +163,7 @@ public class RakNetServer
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during tick: {ex.Message}");
+                Logger?.Error($"Error during tick: {ex.Message}");
             }
 
             _tickCount++;
