@@ -28,19 +28,24 @@ public class RakNetServer
     private static readonly TimeSpan RAKNET_TICK = TimeSpan.FromMilliseconds(1000.0 / RAKNET_TPS);
 
     private readonly UdpClient _listener;
-    private readonly IPEndPoint _remoteEndPoint;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly UnconnectedRakNet _unconnected;
-    public ILogger? Logger { get; init; }
-
-    private int _tickCount = 0;
     
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
+    
+    
+    private int _tickCount = 0;
+    
+    public ulong Guid { get; init; } = (ulong) new Random().Next(0, int.MaxValue); 
+    public IPEndPoint RemoteEndPoint { get; init; }
+    public List<RakNetSession> Connections => _sessions.Values.ToList();
+    public uint MaxConnections { get; init; } = 20;
+    public ILogger? Logger { get; init; }
 
     public RakNetServer(int port)
     {
         _listener = CreateListener();
-        _remoteEndPoint = new IPEndPoint(IPAddress.Any, port);
+        RemoteEndPoint = new IPEndPoint(IPAddress.Any, port);
         _unconnected = new UnconnectedRakNet(this);
     }
 
@@ -88,12 +93,12 @@ public class RakNetServer
     {
         Logger?.Debug("Starting RakNet connection...");
 
-        _listener.Client.Bind(_remoteEndPoint);
+        _listener.Client.Bind(RemoteEndPoint);
 
         var datagramTask = ReceiveDatagramAsync(_cancellationTokenSource.Token);
         var tickTask = Task.Run(() => TickAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
 
-        Logger?.Debug($"RakNet running at {_remoteEndPoint}");
+        Logger?.Debug($"RakNet running at {RemoteEndPoint}");
         await Task.WhenAll(datagramTask, tickTask);
         Logger?.Debug("RakNet gracefully stopped.");
     }
@@ -175,5 +180,10 @@ public class RakNetServer
                 await Task.Delay(delay, token);
             }
         }
+    }
+    
+    public void Send(IPEndPoint endPoint, byte[] buffer)
+    {
+        _listener.Send(buffer, buffer.Length, endPoint);
     }
 }
