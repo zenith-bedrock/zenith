@@ -24,19 +24,21 @@ public class RakNetSession
 
 public class RakNetServer
 {
+    public static readonly byte[] MAGIC = { 0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78 };
+
     private const int RAKNET_TPS = 20;
     private static readonly TimeSpan RAKNET_TICK = TimeSpan.FromMilliseconds(1000.0 / RAKNET_TPS);
 
     private readonly UdpClient _listener;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly UnconnectedRakNet _unconnected;
-    
+
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
-    
-    
+
+
     private int _tickCount = 0;
-    
-    public ulong Guid { get; init; } = (ulong) new Random().Next(0, int.MaxValue); 
+
+    public ulong Guid { get; init; } = (ulong)new Random().Next(0, int.MaxValue);
     public IPEndPoint RemoteEndPoint { get; init; }
     public List<RakNetSession> Connections => _sessions.Values.ToList();
     public uint MaxConnections { get; init; } = 20;
@@ -64,7 +66,7 @@ public class RakNetServer
         }
 
         if (!OperatingSystem.IsWindows()) return listener;
-        
+
         try
         {
             const uint IOC_IN = 0x80000000;
@@ -72,7 +74,7 @@ public class RakNetServer
             const uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
 
             listener.Client.IOControl(
-                unchecked((int) SIO_UDP_CONNRESET),
+                unchecked((int)SIO_UDP_CONNRESET),
                 BitConverter.GetBytes(false),
                 null
             );
@@ -119,7 +121,7 @@ public class RakNetServer
             {
                 var result = await _listener.ReceiveAsync(token);
                 var buffer = result.Buffer;
-                
+
                 if (buffer.Length < 1)
                 {
                     Logger?.Warning($"Received empty datagram from {result.RemoteEndPoint}.");
@@ -128,10 +130,11 @@ public class RakNetServer
 
                 var remoteEndPoint = result.RemoteEndPoint.ToUInt64();
 
-                var flags = (Datagram.BitFlags) buffer[0];
+                var flags = (Datagram.BitFlags)buffer[0];
                 var offline = !flags.HasFlag(Datagram.BitFlags.Valid);
 
-                if (offline) {
+                if (offline)
+                {
                     _unconnected.Handle(result.RemoteEndPoint, buffer);
                     continue;
                 }
@@ -181,9 +184,10 @@ public class RakNetServer
             }
         }
     }
-    
+
     public void Send(IPEndPoint endPoint, byte[] buffer)
     {
+        Logger?.Debug($"Sending {buffer.Length} bytes...");
         _listener.Send(buffer, buffer.Length, endPoint);
     }
 }
