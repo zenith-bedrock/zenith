@@ -15,19 +15,19 @@ namespace Zenith.Raknet.Extension
                 throw new InvalidOperationException("Only IPv4 addresses are supported for UInt64 conversion.");
 
             ulong result = 0;
-            result |= ((ulong)ipBytes[0]) << 40;
-            result |= ((ulong)ipBytes[1]) << 32;
-            result |= ((ulong)ipBytes[2]) << 24;
-            result |= ((ulong)ipBytes[3]) << 16;
+            result |= (ulong)ipBytes[0] << 40;
+            result |= (ulong)ipBytes[1] << 32;
+            result |= (ulong)ipBytes[2] << 24;
+            result |= (ulong)ipBytes[3] << 16;
             result |= port;
 
             return result;
         }
         public static IPEndPoint ToIPEndPoint(this ulong value)
         {
-            ushort port = (ushort)(value & 0xFFFF);
+            var port = (ushort)(value & 0xFFFF);
 
-            byte[] ipBytes = new byte[4];
+            var ipBytes = new byte[4];
             ipBytes[0] = (byte)((value >> 40) & 0xFF);
             ipBytes[1] = (byte)((value >> 32) & 0xFF);
             ipBytes[2] = (byte)((value >> 24) & 0xFF);
