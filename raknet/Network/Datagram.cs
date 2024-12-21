@@ -1,4 +1,4 @@
-namespace Zenith.Raknet.Protocol;
+namespace Zenith.Raknet.Network;
 
 public class Datagram
 {
