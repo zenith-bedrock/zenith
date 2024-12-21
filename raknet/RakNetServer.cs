@@ -143,7 +143,7 @@ public class RakNetServer
                 }
                 else
                 {
-                    // Create new session or handle unconnected
+                    Logger?.Debug("Create new session or handle unconnected.");
                 }
             }
             catch (OperationCanceledException)

@@ -41,9 +41,21 @@ public class UnconnectedRakNet
                 {
                     Guid = _server.Guid,
                     UseSecurity = false,
-                    MTUSize = (ushort) Math.Min(request1.MTUSize + 28, 1492)
+                    MTUSize = (ushort)Math.Min(request1.MTUSize + 28, 1492)
                 }.Encode();
                 _server.Send(remoteEndPoint, reply1Buffer);
+                return true;
+            case (byte)MessageIdentifier.OpenConnectionRequest2:
+                var request2 = IPacket.From<OpenConnectionRequest2>(reader);
+                _server.Logger?.Debug($"OpenConnectionRequest2: {request2.ServerAddress} {request2.MTUSize} {request2.ClientGuid}");
+                var reply2Buffer = new OpenConnectionReply2
+                {
+                    ServerGuid = _server.Guid,
+                    ClientAddress = remoteEndPoint,
+                    MTUSize = request2.MTUSize,
+                    ServerSecurity = false
+                }.Encode();
+                _server.Send(remoteEndPoint, reply2Buffer);
                 return true;
         }
         return true;
