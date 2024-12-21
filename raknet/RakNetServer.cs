@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Extension;
 using Zenith.Raknet.Log;
 using Zenith.Raknet.Network;
+using Zenith.Raknet.Network.Protocol;
+using Zenith.Raknet.Stream;
 
 namespace Zenith.Raknet;
 
@@ -12,13 +15,40 @@ public class RakNetSession
 {
     public required IPEndPoint EndPoint { get; init; }
     public int Id { get; init; }
+    public required RakNetServer Server { get; init; }
     public long LastSeen { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-    public void Incoming(ReadOnlyMemory<byte> buffer)
+    public void Incoming(byte[] buffer)
     {
         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+        var reader = new BinaryStream(buffer[1..]);
+        var datagram = new Datagram();
+        datagram.Decode(reader);
+        foreach (var packet in datagram.Packets)
+        {
+            HandleEncapsulated(packet);
+        }
+
         Console.WriteLine($"[{EndPoint}] Incoming {buffer.Length} bytes.");
+    }
+
+    private bool HandleEncapsulated(EncapsulatedPacket packet)
+    {
+        var pid = packet.Buffer[0];
+        var reader = new BinaryStream(packet.Buffer[1..]);
+
+        Server.Logger?.Debug($"PID: {pid}");
+
+        switch (pid)
+        {
+            case (byte)MessageIdentifier.ConnectionRequest:
+                var connectionRequest = IPacket.From<ConnectionRequest>(reader);
+                Server.Logger?.Debug($"ConnectionRequest: {connectionRequest.ClientGuid} {connectionRequest.SendPingTime} {connectionRequest.UseSecurity}");
+                return true;
+        }
+
+        return false;
     }
 }
 
@@ -137,13 +167,20 @@ public class RakNetServer
                     _unconnected.Handle(result.RemoteEndPoint, buffer);
                     continue;
                 }
+
+                if (!_sessions.ContainsKey(remoteEndPoint))
+                {
+                    _sessions.TryAdd(remoteEndPoint, new RakNetSession
+                    {
+                        EndPoint = result.RemoteEndPoint,
+                        Id = NextSessionId(),
+                        Server = this
+                    });
+                }
+
                 if (_sessions.TryGetValue(remoteEndPoint, out var session))
                 {
                     session.Incoming(buffer);
-                }
-                else
-                {
-                    Logger?.Debug("Create new session or handle unconnected.");
                 }
             }
             catch (OperationCanceledException)
@@ -153,7 +190,7 @@ public class RakNetServer
             }
             catch (Exception ex)
             {
-                Logger?.Error($"Error receiving datagram: {ex.Message}");
+                Logger?.Error($"Error receiving datagram: {ex.Message}: {ex.StackTrace}");
             }
         }
     }
@@ -188,6 +225,6 @@ public class RakNetServer
     {
         _listener.Send(buffer, buffer.Length, endPoint);
     }
-    
+
     public void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) => Send(endPoint, buffer.ToArray());
 }

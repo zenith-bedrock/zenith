@@ -10,14 +10,14 @@ public class BinaryStream : IDisposable
         Big,
         Little
     }
-    
+
     public int Offset { get; set; }
     public byte[] Buffer { get; private set; }
 
     public int Length => Buffer.Length;
 
     public bool IsEndOfFile => Offset >= Buffer.Length;
-    
+
     public Span<byte> GetBufferDisposing()
     {
         var buffer = Buffer;
@@ -93,7 +93,7 @@ public class BinaryStream : IDisposable
         WriteUShort((ushort)bytes.Length);
         Write(bytes);
     }
-    
+
     public string ReadString()
     {
         var length = ReadUShort();
@@ -130,6 +130,40 @@ public class BinaryStream : IDisposable
             var buffer = new byte[2];
             BinaryPrimitives.WriteUInt16BigEndian(buffer, v);
             Write(buffer);
+        }
+    }
+
+    public uint ReadTriad(Endianess end = Endianess.Big)
+    {
+        var value = 0;
+        if (end == Endianess.Little)
+        {
+            value |= ReadByte();
+            value |= ReadByte() << 8;
+            value |= ReadByte() << 16;
+        }
+        else
+        {
+            value |= ReadByte() << 16;
+            value |= ReadByte() << 8;
+            value |= ReadByte();
+        }
+        return (uint)value;
+    }
+
+    public void WriteTriad(uint v, Endianess end = Endianess.Big)
+    {
+        if (end == Endianess.Little)
+        {
+            WriteByte((byte)(v & 0xff));
+            WriteByte((byte)((v >> 8) & 0xff));
+            WriteByte((byte)((v >> 16) & 0xff));
+        }
+        else
+        {
+            WriteByte((byte)((v >> 16) & 0xff));
+            WriteByte((byte)((v >> 8) & 0xff));
+            WriteByte((byte)(v & 0xff));
         }
     }
 
@@ -226,7 +260,7 @@ public class BinaryStream : IDisposable
             return BitConverter.ToUInt64(ReadSpan(8).ToArray(), 0);
         return BinaryPrimitives.ReadUInt64BigEndian(ReadSpan(8));
     }
-    
+
     public void WriteULong(ulong v, Endianess end = Endianess.Big)
     {
         if (end == Endianess.Little)
