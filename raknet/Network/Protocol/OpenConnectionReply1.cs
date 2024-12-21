@@ -11,20 +11,20 @@ public class OpenConnectionReply1 : IPacket
     public uint Cookie { get; set; }
     public ushort MTUSize { get; set; }
     
-    public byte[] Encode()
+    public Span<byte> Encode()
     {
-        var writer = new BinaryStreamWriter();
+        var writer = new BinaryStream();
         writer.WriteByte(Id);
         writer.WriteMagic();
-        writer.WriteUInt64BE(Guid);
+        writer.WriteULong(Guid);
         writer.WriteBool(UseSecurity);
         if (UseSecurity)
         {
-            // TODO: writer.WriteUInt32BE(Cookie);
+            writer.WriteUInt(Cookie);
         }
-        writer.WriteUInt16BE(MTUSize);
+        writer.WriteUShort(MTUSize);
         return writer.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStreamReader stream) {}
+    public void Decode(BinaryStream stream) {}
 }

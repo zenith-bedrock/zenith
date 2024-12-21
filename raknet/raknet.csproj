@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <Namespace>Zenith.RakNet</Namespace>
     <RootNamespace>Zenith.Raknet</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 </Project>
