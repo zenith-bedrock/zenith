@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Zenith.Raknet.Extension;
 using Zenith.Raknet.Log;
-using Zenith.Raknet.Protocol;
+using Zenith.Raknet.Network;
 
 namespace Zenith.Raknet;
 
@@ -94,13 +94,12 @@ public class RakNetServer
     public async Task StartAsync()
     {
         Logger?.Debug("Starting RakNet connection...");
-
         _listener.Client.Bind(RemoteEndPoint);
+        Logger?.Debug($"RakNet running at {RemoteEndPoint}");
 
         var datagramTask = ReceiveDatagramAsync(_cancellationTokenSource.Token);
         var tickTask = Task.Run(() => TickAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
 
-        Logger?.Debug($"RakNet running at {RemoteEndPoint}");
         await Task.WhenAll(datagramTask, tickTask);
         Logger?.Debug("RakNet gracefully stopped.");
     }

@@ -3,14 +3,18 @@ using System.Text;
 
 namespace Zenith.Raknet.Stream;
 
-public class BinaryStreamWriter
+public class BinaryStreamWriter : IDisposable
 {
-
-    private readonly MemoryStream _stream = new MemoryStream();
+    private readonly MemoryStream _stream = new();
 
     public void WriteByte(byte value)
     {
         _stream.WriteByte(value);
+    }
+    
+    public void WriteBool(bool value)
+    {
+        _stream.WriteByte(value ? (byte)1 : (byte)0);
     }
 
     public void WriteString(string value)
@@ -57,5 +61,16 @@ public class BinaryStreamWriter
     {
         return _stream.GetBuffer();
     }
+    
+    public byte[] GetBufferDisposing()
+    {
+        var buffer = GetBuffer();
+        Dispose();
+        return buffer;
+    }
 
+    public void Dispose()
+    {
+        _stream.Dispose();
+    }
 }
