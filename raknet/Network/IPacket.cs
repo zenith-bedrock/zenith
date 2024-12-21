@@ -6,14 +6,14 @@ public interface IPacket
 {
     public byte Id { get; }
 
-    public byte[] Encode()
+    public Span<byte> Encode()
     {
         return Array.Empty<byte>();
     }
     
-    void Decode(BinaryStreamReader stream);
+    void Decode(BinaryStream stream);
 
-    public static T From<T>(BinaryStreamReader stream) where T : IPacket
+    public static T From<T>(BinaryStream stream) where T : IPacket
     {
         var packet = (T) Activator.CreateInstance(typeof(T))!;
         packet.Decode(stream);

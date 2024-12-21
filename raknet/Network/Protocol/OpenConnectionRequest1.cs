@@ -10,7 +10,7 @@ public class OpenConnectionRequest1 : IPacket
     public byte Protocol { get; set; }
     public ushort MTUSize { get; set; }
 
-    public void Decode(BinaryStreamReader stream)
+    public void Decode(BinaryStream stream)
     {
         Magic = stream.ReadMagic();
         Protocol = stream.ReadByte();

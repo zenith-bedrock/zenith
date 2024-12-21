@@ -9,15 +9,12 @@ public class UnconnectedRakNet
 {
     private readonly RakNetServer _server;
 
-    public UnconnectedRakNet(RakNetServer server)
-    {
-        _server = server;
-    }
+    public UnconnectedRakNet(RakNetServer server) => _server = server;
 
     public bool Handle(System.Net.IPEndPoint remoteEndPoint, byte[] buffer)
     {
         var pid = buffer[0];
-        var reader = new BinaryStreamReader(buffer[1..]);
+        var reader = new BinaryStream(buffer[1..]);
 
         _server.Logger?.Debug($"PID: {pid}");
 
@@ -25,7 +22,7 @@ public class UnconnectedRakNet
         {
             case (byte)MessageIdentifier.UnconnectedPing:
                 var ping = IPacket.From<UnconnectedPing>(reader);
-
+                _server.Logger?.Debug($"Time: {ping.Time}");
                 var pongBuffer = new UnconnectedPong
                 {
                     Time = ping.Time,

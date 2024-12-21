@@ -186,7 +186,8 @@ public class RakNetServer
 
     public void Send(IPEndPoint endPoint, byte[] buffer)
     {
-        Logger?.Debug($"Sending {buffer.Length} bytes...");
         _listener.Send(buffer, buffer.Length, endPoint);
     }
+    
+    public void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) => Send(endPoint, buffer.ToArray());
 }
