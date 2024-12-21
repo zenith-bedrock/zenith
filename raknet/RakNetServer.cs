@@ -22,23 +22,44 @@ public class RakNetSession
     {
         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+        Server.Logger?.Debug($"[{EndPoint} Incoming {buffer.Length} bytes.");
+
+        var flag = buffer[0] & 0xf0;
         var reader = new BinaryStream(buffer[1..]);
-        var datagram = new Datagram();
+        switch (flag)
+        {
+            default:
+                Server.Logger?.Debug($"[{EndPoint}] Unknown flag: {flag:X2}");
+                break;
+            case (byte)MessageIdentifier.Ack:
+                Server.Logger?.Debug($"[{EndPoint}] Received ACK.");
+                break;
+            case (byte)MessageIdentifier.Nack:
+                Server.Logger?.Debug($"[{EndPoint}] Received NACK.");
+                break;
+            case (byte)BitFlags.Valid:
+                HandleIncomingFrameSet(reader);
+                break;
+        }
+        reader.Dispose();
+    }
+
+    private void HandleIncomingFrameSet(BinaryStream reader)
+    {
+        var datagram = new FrameSet();
         datagram.Decode(reader);
         foreach (var packet in datagram.Packets)
         {
             HandleEncapsulated(packet);
         }
-
-        Console.WriteLine($"[{EndPoint}] Incoming {buffer.Length} bytes.");
     }
 
-    private bool HandleEncapsulated(EncapsulatedPacket packet)
+    private bool HandleEncapsulated(Frame packet)
     {
         var pid = packet.Buffer[0];
         var reader = new BinaryStream(packet.Buffer[1..]);
 
-        Server.Logger?.Debug($"PID: {pid}");
+        Server.Logger?.Debug($"Connected PID: {pid}");
 
         switch (pid)
         {
@@ -159,8 +180,8 @@ public class RakNetServer
 
                 var remoteEndPoint = result.RemoteEndPoint.ToUInt64();
 
-                var flags = (Datagram.BitFlags)buffer[0];
-                var offline = !flags.HasFlag(Datagram.BitFlags.Valid);
+                var flags = (BitFlags)buffer[0];
+                var offline = !flags.HasFlag(BitFlags.Valid);
 
                 if (offline)
                 {

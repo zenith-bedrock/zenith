@@ -16,13 +16,12 @@ public class UnconnectedRakNet
         var pid = buffer[0];
         var reader = new BinaryStream(buffer[1..]);
 
-        _server.Logger?.Debug($"PID: {pid}");
+        _server.Logger?.Debug($"Unconnected PID: {pid}");
 
         switch (pid)
         {
             case (byte)MessageIdentifier.UnconnectedPing:
                 var ping = IPacket.From<UnconnectedPing>(reader);
-                _server.Logger?.Debug($"Time: {ping.Time}");
                 var pongBuffer = new UnconnectedPong
                 {
                     Time = ping.Time,
@@ -33,7 +32,6 @@ public class UnconnectedRakNet
                 return true;
             case (byte)MessageIdentifier.OpenConnectionRequest1:
                 var request1 = IPacket.From<OpenConnectionRequest1>(reader);
-                _server.Logger?.Debug($"OpenConnectionRequest1: {request1.Protocol} {request1.MTUSize}");
                 var reply1Buffer = new OpenConnectionReply1
                 {
                     Guid = _server.Guid,
@@ -44,7 +42,6 @@ public class UnconnectedRakNet
                 return true;
             case (byte)MessageIdentifier.OpenConnectionRequest2:
                 var request2 = IPacket.From<OpenConnectionRequest2>(reader);
-                _server.Logger?.Debug($"OpenConnectionRequest2: {request2.ServerAddress} {request2.MTUSize} {request2.ClientGuid}");
                 var reply2Buffer = new OpenConnectionReply2
                 {
                     ServerGuid = _server.Guid,
