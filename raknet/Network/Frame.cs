@@ -9,7 +9,7 @@ public class Frame
 
     public const byte RELIABILITY_SHIFT = 5;
     public const byte RELIABILITY_FLAGS = 0b111 << RELIABILITY_SHIFT;
-    
+
     public const byte SPLIT_FLAG = 0b00010000;
     public const int SPLIT_INFO_LENGTH = 4 + 2 + 4;
 
@@ -25,7 +25,19 @@ public class Frame
 
     public SplitPacketInfo? SplitInfo { get; set; }
 
-    public byte[] Buffer { get; private set; } = Array.Empty<byte>();
+    public byte[] Buffer { get; set; } = Array.Empty<byte>();
+
+    public bool IsSplit() => SplitInfo is not null;
+
+    public int GetByteLength()
+    {
+        var length = Buffer.Length + 3;
+        if (IsReliable(Reliability)) length += 3;
+        if (IsSequenced(Reliability)) length += 3;
+        if (IsOrdered(Reliability)) length += 4;
+        if (IsSplit()) length += 10;
+        return length;
+    }
 
     public static bool IsReliable(Reliability reliability)
     {
@@ -100,9 +112,9 @@ public class Frame
             writer.WriteShort(SplitInfo.Id);
             writer.WriteInt(SplitInfo.Index);
         }
-        
+
         writer.Write(Buffer);
-        
+
         return writer.GetBufferDisposing();
     }
 

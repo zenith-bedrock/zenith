@@ -11,6 +11,7 @@ public class FrameSet
     public Span<byte> Encode()
     {
         var writer = new BinaryStream();
+        writer.WriteByte((byte)BitFlags.Valid);
         writer.WriteTriad(Sequence, BinaryStream.Endianess.Little);
         foreach (var packet in Packets)
         {
