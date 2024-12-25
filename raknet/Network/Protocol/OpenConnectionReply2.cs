@@ -7,7 +7,7 @@ namespace Zenith.Raknet.Network.Protocol;
 public class OpenConnectionReply2 : IPacket
 {
     public byte Id => (byte)Enumerator.MessageIdentifier.OpenConnectionReply2;
-    
+
     public ulong ServerGuid { get; set; }
     public IPEndPoint ClientAddress { get; set; }
     public ushort MTUSize { get; set; }
@@ -25,5 +25,5 @@ public class OpenConnectionReply2 : IPacket
         return stream.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream) {}
+    public void Decode(BinaryStream stream) { }
 }
