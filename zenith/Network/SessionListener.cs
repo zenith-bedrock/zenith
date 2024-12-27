@@ -40,6 +40,10 @@ class SessionListener : IRakNetSessionListener
 
         switch (header.Id)
         {
+            case (int)ProtocolInfo.LOGIN_PACKET:
+                var loginPacket = DataPacket.From<LoginPacket>(stream);
+                Console.WriteLine($"LoginPacket: {loginPacket.Protocol}");
+                break;
             case (int)ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET:
                 var requestNetworkSettings = DataPacket.From<RequestNetworkSettingsPacket>(stream);
                 Console.WriteLine($"RequestNetworkSettingsPacket: {requestNetworkSettings.ProtocolVersion}");
