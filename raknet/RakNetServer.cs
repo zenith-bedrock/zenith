@@ -20,7 +20,6 @@ public class RakNetServer
 
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
 
-
     private int _tickCount = 0;
 
     public ulong Guid { get; init; } = (ulong)new Random().Next(0, int.MaxValue);
@@ -28,6 +27,7 @@ public class RakNetServer
     public List<RakNetSession> Connections => _sessions.Values.ToList();
     public uint MaxConnections { get; init; } = 20;
     public ILogger? Logger { get; init; }
+    public IRakNetSessionListener? SessionListener { get; set; } = null;
 
     public RakNetServer(int port)
     {
