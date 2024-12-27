@@ -49,6 +49,15 @@ public class UnconnectedRakNet
                     MTUSize = request2.MTUSize,
                     ServerSecurity = false
                 }.Encode();
+
+                _server.AddSession(new RakNetSession
+                {
+                    Id = _server.NextSessionId(),
+                    EndPoint = remoteEndPoint,
+                    MTU = request2.MTUSize,
+                    Server = _server
+                });
+
                 _server.Send(remoteEndPoint, reply2Buffer);
                 return true;
         }
