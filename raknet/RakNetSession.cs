@@ -79,7 +79,7 @@ public class RakNetSession
         {
             var ack = new ACK
             {
-                Sequences = ReceivedFrameSequences.ToArray()
+                Sequences = ReceivedFrameSequences.ToList()
             };
             ReceivedFrameSequences.Clear();
             Server.Send(EndPoint, ack.Encode());
@@ -89,7 +89,7 @@ public class RakNetSession
         {
             var nack = new NACK
             {
-                Sequences = LostFrameSequences.ToArray()
+                Sequences = LostFrameSequences.ToList()
             };
             LostFrameSequences.Clear();
             Server.Send(EndPoint, nack.Encode());
@@ -335,6 +335,8 @@ public class RakNetSession
                 Server.RemoveSession(this);
                 reader.Dispose();
                 return true;
+            case (byte)MessageIdentifier.Game:
+                return Server.SessionListener?.HandleGamePacket(this, reader) ?? false;
         }
 
         Server.Logger?.Debug($"[{EndPoint}] Unhandled {pid}");

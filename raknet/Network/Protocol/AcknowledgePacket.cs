@@ -9,7 +9,7 @@ public abstract class AcknowledgePacket : IPacket
     public const byte RECORD_TYPE_RANGE = 0;
     public const byte RECORD_TYPE_SINGLE = 1;
 
-    public uint[] Sequences = Array.Empty<uint>();
+    public List<uint> Sequences = new();
 
     public Span<byte> Encode()
     {
@@ -17,15 +17,15 @@ public abstract class AcknowledgePacket : IPacket
         var payload = new BinaryStream();
         short records = 0;
 
-        Array.Sort(Sequences);
+        Sequences.Sort();
 
-        if (Sequences.Length > 0)
+        if (Sequences.Count > 0)
         {
             var pointer = 1;
             var start = Sequences[0];
             var last = Sequences[0];
 
-            while (pointer < Sequences.Length)
+            while (pointer < Sequences.Count)
             {
                 var current = Sequences[pointer++];
                 var diff = current - last;
@@ -66,6 +66,7 @@ public abstract class AcknowledgePacket : IPacket
             records++;
         }
 
+        stream.WriteByte(Id);
         stream.WriteShort(records);
         stream.Write(payload.GetBufferDisposing());
         return stream.GetBufferDisposing();
@@ -75,7 +76,7 @@ public abstract class AcknowledgePacket : IPacket
     {
         var count = stream.ReadShort();
 
-        for (var i = 0; i < count && !stream.IsEndOfFile && Sequences.Length < 4096; ++i)
+        for (var i = 0; i < count && !stream.IsEndOfFile && Sequences.Count < 4096; ++i)
         {
             if (stream.ReadByte() == RECORD_TYPE_RANGE)
             {
@@ -87,12 +88,12 @@ public abstract class AcknowledgePacket : IPacket
                 }
                 for (var c = start; c <= end; ++c)
                 {
-                    Sequences.Append(c);
+                    Sequences.Add(c);
                 }
             }
             else
             {
-                Sequences.Append(stream.ReadTriad(BinaryStream.Endianess.Little));
+                Sequences.Add(stream.ReadTriad(BinaryStream.Endianess.Little));
             }
         }
     }
