@@ -29,18 +29,18 @@ public class RakNetSession
     protected readonly Dictionary<short, Dictionary<int, Frame>> FragmentsQueue = new();
 
     protected readonly int[] InputOrderIndex = new int[32];
-    protected Dictionary<byte, Dictionary<uint, Frame>> InputOrderingQueue = new();
+    protected readonly Dictionary<byte, Dictionary<uint, Frame>> InputOrderingQueue = new();
     protected int LastInputSequence = -1;
 
     protected readonly uint[] OutputOrderIndex = new uint[32];
     protected readonly uint[] OutputSequenceIndex = new uint[32];
 
-    protected HashSet<Frame> OutputFrames = new();
-    protected Dictionary<uint, List<Frame>> OutputBackup = new();
+    protected readonly HashSet<Frame> OutputFrames = new();
+    protected readonly Dictionary<uint, List<Frame>> OutputBackup = new();
 
-    protected uint OutputSequence = 0;
-    protected int OutputSplitIndex = 0;
-    protected uint OutputReliableIndex = 0;
+    protected uint OutputSequence;
+    protected int OutputSplitIndex;
+    protected uint OutputReliableIndex;
 
     public RakNetSession()
     {
@@ -98,7 +98,7 @@ public class RakNetSession
         SendQueue(OutputFrames.Count);
     }
 
-    void SendQueue(int count)
+    private void SendQueue(int count)
     {
         if (OutputFrames.Count == 0) return;
 
@@ -159,9 +159,7 @@ public class RakNetSession
 
     private void QueueFrame(Frame frame, Priority priority)
     {
-        var length = DGRAM_HEADER_SIZE;
-
-        foreach (var outputFrame in OutputFrames) length += frame.GetByteLength();
+        var length = DGRAM_HEADER_SIZE + OutputFrames.Sum(outputFrame => outputFrame.GetByteLength());
 
         if (length + frame.GetByteLength() > MTU + DGRAM_MTU_OVERHEAD) SendQueue(OutputFrames.Count);
 
@@ -211,12 +209,10 @@ public class RakNetSession
         var nack = IPacket.From<NACK>(reader);
         foreach (var sequence in nack.Sequences)
         {
-            if (OutputBackup.TryGetValue(sequence, out var frames))
+            if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
+            foreach (var frame in frames)
             {
-                foreach (var frame in frames)
-                {
-                    SendFrame(frame, Priority.Immediate);
-                }
+                SendFrame(frame, Priority.Immediate);
             }
         }
     }
@@ -259,32 +255,27 @@ public class RakNetSession
         {
             fragment[frame.SplitInfo.Index] = frame;
 
-            if (fragment.Count == frame.SplitInfo.Count)
-            {
-                var stream = new BinaryStream();
-                foreach (var frag in fragment) stream.Write(frag.Value.Buffer);
+            if (fragment.Count != frame.SplitInfo.Count) return false;
+            var stream = new BinaryStream();
+            foreach (var frag in fragment) stream.Write(frag.Value.Buffer);
 
-                var newFrame = new Frame
-                {
-                    Reliability = frame.Reliability,
-                    MessageIndex = frame.MessageIndex,
-                    SequenceIndex = frame.SequenceIndex,
-                    OrderIndex = frame.OrderIndex,
-                    OrderChannel = frame.OrderChannel,
-                    Buffer = stream.GetBufferDisposing().ToArray()
-                };
-
-                FragmentsQueue.Remove(frame.SplitInfo.Id);
-                return HandleFrame(newFrame);
-            }
-        }
-        else
-        {
-            FragmentsQueue[frame.SplitInfo.Id] = new()
+            var newFrame = new Frame
             {
-                [frame.SplitInfo.Index] = frame
+                Reliability = frame.Reliability,
+                MessageIndex = frame.MessageIndex,
+                SequenceIndex = frame.SequenceIndex,
+                OrderIndex = frame.OrderIndex,
+                OrderChannel = frame.OrderChannel,
+                Buffer = stream.GetBufferDisposing().ToArray()
             };
+
+            FragmentsQueue.Remove(frame.SplitInfo.Id);
+            return HandleFrame(newFrame);
         }
+        FragmentsQueue[frame.SplitInfo.Id] = new()
+        {
+            [frame.SplitInfo.Index] = frame
+        };
         return false;
     }
 
@@ -358,47 +349,39 @@ public class RakNetSession
             InputHighestSequenceIndex[frame.OrderChannel] = frame.SequenceIndex + 1;
             return HandleIncomingBatch(frame.Buffer);
         }
-        else if (Frame.IsOrdered(frame.Reliability))
+
+        if (!Frame.IsOrdered(frame.Reliability)) return HandleIncomingBatch(frame.Buffer);
+        
+        if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel]!)
         {
-            if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel]!)
+            InputHighestSequenceIndex[frame.OrderChannel] = 0;
+            InputOrderIndex[frame.OrderChannel] = frame.OrderChannel + 1;
+
+            HandleIncomingBatch(frame.Buffer);
+            var index = InputOrderIndex[frame.OrderChannel];
+
+            var outOfOrderQueue = InputOrderingQueue[frame.OrderChannel];
+
+            for (; outOfOrderQueue.ContainsKey((uint)index); index++)
             {
-                InputHighestSequenceIndex[frame.OrderChannel] = 0;
-                InputOrderIndex[frame.OrderChannel] = frame.OrderChannel + 1;
-
-                HandleIncomingBatch(frame.Buffer);
-                var index = InputOrderIndex[frame.OrderChannel];
-
-                var outOfOrderQueue = InputOrderingQueue[frame.OrderChannel];
-
-                for (; outOfOrderQueue.ContainsKey((uint)index); index++)
+                if (outOfOrderQueue.TryGetValue((uint)index, out var frameQueue))
                 {
-                    if (outOfOrderQueue.TryGetValue((uint)index, out var frameQueue))
-                    {
-                        HandleIncomingBatch(frameQueue.Buffer);
-                        outOfOrderQueue.Remove((uint)index);
-                    }
-                    else break;
+                    HandleIncomingBatch(frameQueue.Buffer);
+                    outOfOrderQueue.Remove((uint)index);
                 }
+                else break;
+            }
 
-                InputOrderingQueue[frame.OrderChannel] = outOfOrderQueue;
-                InputOrderIndex[frame.OrderChannel] = index;
-                return true;
-            }
-            else if (frame.OrderIndex > InputOrderIndex[frame.OrderChannel])
-            {
-                if (InputOrderingQueue.TryGetValue(frame.OrderChannel, out var unordered))
-                {
-                    HandleIncomingBatch(frame.Buffer);
-                    unordered[frame.OrderIndex] = frame;
-                }
-                return true;
-            }
-        }
-        else
-        {
-            return HandleIncomingBatch(frame.Buffer);
+            InputOrderingQueue[frame.OrderChannel] = outOfOrderQueue;
+            InputOrderIndex[frame.OrderChannel] = index;
+            return true;
         }
 
-        return false;
+        if (frame.OrderIndex <= InputOrderIndex[frame.OrderChannel]) return false;
+        if (!InputOrderingQueue.TryGetValue(frame.OrderChannel, out var unordered)) return true;
+        HandleIncomingBatch(frame.Buffer);
+        unordered[frame.OrderIndex] = frame;
+        return true;
+
     }
 }
