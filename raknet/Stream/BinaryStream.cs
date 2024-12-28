@@ -101,6 +101,20 @@ public class BinaryStream : IDisposable
         return Encoding.UTF8.GetString(bytes);
     }
 
+    public void WriteVarString(string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        WriteUnsignedVarInt(bytes.Length);
+        Write(bytes);
+    }
+
+    public string ReadVarString()
+    {
+        var length = ReadUnsignedVarInt();
+        var bytes = ReadSpan(length);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
     public short ReadShort(Endianess end = Endianess.Big) =>
         end == Endianess.Little ? BitConverter.ToInt16(ReadSpan(2).ToArray(), 0) :
         BinaryPrimitives.ReadInt16BigEndian(ReadSpan(2));

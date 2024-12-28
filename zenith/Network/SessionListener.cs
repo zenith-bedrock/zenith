@@ -14,11 +14,19 @@ class SessionListener : IRakNetSessionListener
     public const byte NOT_PRESENT = 0x02;
     public const byte NONE = 0xff;
 
-    void SendPacket(RakNetSession session, DataPacket packet, RakNetSession.Priority priority = RakNetSession.Priority.Normal)
+    void SendPacket(RakNetSession session, params DataPacket[] packets)
     {
+        SendPacket(session, RakNetSession.Priority.Normal, NONE, packets);
+    }
+
+    void SendPacket(RakNetSession session, RakNetSession.Priority priority, byte compression, params DataPacket[] packets)
+    {
+        var buffers = new List<byte[]>();
+        foreach (var packet in packets) buffers.Add(packet.Encode().ToArray());
         var gamePacket = new GamePacket
         {
-            Buffers = { packet.Encode().ToArray() }
+            Compression = compression,
+            Buffers = buffers
         };
 
         var frame = new Frame
@@ -40,10 +48,6 @@ class SessionListener : IRakNetSessionListener
 
         switch (header.Id)
         {
-            case (int)ProtocolInfo.LOGIN_PACKET:
-                var loginPacket = DataPacket.From<LoginPacket>(stream);
-                Console.WriteLine($"LoginPacket: {loginPacket.Protocol}");
-                break;
             case (int)ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET:
                 var requestNetworkSettings = DataPacket.From<RequestNetworkSettingsPacket>(stream);
                 Console.WriteLine($"RequestNetworkSettingsPacket: {requestNetworkSettings.ProtocolVersion}");
@@ -57,11 +61,64 @@ class SessionListener : IRakNetSessionListener
                     ClientThrottleScalar = 0
                 };
 
-                SendPacket(session, settings);
+                SendPacket(session, RakNetSession.Priority.Normal, NOT_PRESENT, settings);
+                return;
+            case (int)ProtocolInfo.LOGIN_PACKET:
+                var loginPacket = DataPacket.From<LoginPacket>(stream);
+                Console.WriteLine($"LoginPacket: {loginPacket.Protocol}");
+
+                var playStatus = new PlayStatusPacket
+                {
+                    Status = 0
+                };
+
+                var resourcePacksInfo = new ResourcePacksInfoPacket
+                {
+                    MustAccept = true,
+                    HasAddons = false,
+                    HasScripts = false,
+                    WorldTemplateVersion = ""
+                };
+
+                SendPacket(session, playStatus, resourcePacksInfo);
+                return;
+            case (int)ProtocolInfo.RESOURCE_PACK_CLIENT_RESPONSE_PACKET:
+                var response = DataPacket.From<ResourcePackClientResponsePacket>(stream);
+                Console.WriteLine($"ResourcePackClientResponsePacket: {response.Status}");
+
+                switch (response.Status)
+                {
+                    case ResourcePackClientResponsePacket.STATUS_HAVE_ALL_PACKS:
+                        var resourcePackStack = new ResourcePackStackPacket
+                        {
+                            MustAccept = false,
+                            GameVersion = "1.21.51",
+                            ExperimentsPreviouslyToggled = false,
+                            HasEditorPacks = false
+                        };
+
+                        SendPacket(session, resourcePackStack);
+                        return;
+                    case ResourcePackClientResponsePacket.STATUS_COMPLETED:
+                        var startGame = new StartGamePacket
+                        {
+                            LevelName = "world"
+                        };
+
+                        var playStatusSpawn = new PlayStatusPacket
+                        {
+                            Status = 3
+                        };
+
+                        SendPacket(session, startGame, playStatusSpawn);
+                        return;
+                }
+
                 return;
         }
 
         Console.WriteLine($"Unhandled Data Packet: {header.Id}");
+        stream.Dispose();
     }
 
     public bool HandleGamePacket(RakNetSession session, BinaryStream stream)
