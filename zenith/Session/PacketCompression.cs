@@ -1,4 +1,4 @@
-namespace zenith.Session;
+namespace Zenith.Session;
 
 /// <summary>
 /// Ids do byte de compressão usado no envelope de game packets do protocolo Bedrock.

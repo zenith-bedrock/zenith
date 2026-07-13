@@ -22,5 +22,5 @@ public class UnconnectedPong : IPacket
         return writer.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream) {}
+    public void Decode(ref BinaryStream stream) {}
 }

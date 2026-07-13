@@ -11,12 +11,12 @@ public interface IPacket
         return Array.Empty<byte>();
     }
     
-    void Decode(BinaryStream stream);
+    void Decode(ref BinaryStream stream);
 
-    public static T From<T>(BinaryStream stream) where T : IPacket
+    public static T From<T>(ref BinaryStream stream) where T : IPacket
     {
         var packet = (T) Activator.CreateInstance(typeof(T))!;
-        packet.Decode(stream);
+        packet.Decode(ref stream);
         stream.Dispose();
         return packet;
     }

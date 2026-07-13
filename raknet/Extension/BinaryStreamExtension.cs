@@ -7,7 +7,7 @@ namespace Zenith.Raknet.Extension;
 
 public static class BinaryStreamExtension
 {
-    public static IPEndPoint ReadIPEndPoint(this BinaryStream stream)
+    public static IPEndPoint ReadIPEndPoint(this ref BinaryStream stream)
     {
         var version = stream.ReadByte();
         switch (version)
@@ -32,7 +32,7 @@ public static class BinaryStreamExtension
         }
     }
 
-    public static void WriteIPEndPoint(this BinaryStream stream, IPEndPoint value)
+    public static void WriteIPEndPoint(this ref BinaryStream stream, IPEndPoint value)
     {
         var version = value.AddressFamily == AddressFamily.InterNetworkV6 ? (byte)6 : (byte)4;
         stream.WriteByte(version);

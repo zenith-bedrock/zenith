@@ -8,7 +8,7 @@ public class ConnectedPing : IPacket
 
     public ulong SendPingTime { get; set; }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         SendPingTime = stream.ReadULong();
     }

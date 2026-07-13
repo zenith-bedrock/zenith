@@ -1,10 +1,11 @@
-using zenith.Session;
-using zenith.Session.Handler;
+using Zenith.Server;
+using Zenith.Session;
+using Zenith.Session.Handler;
 using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network;
+namespace Zenith.Network;
 
 /// <summary>
 /// Ponte entre o <see cref="RakNetSession"/> (transporte) e o <see cref="NetworkSession"/>
@@ -16,11 +17,14 @@ namespace zenith.Network;
 /// </summary>
 class ZenithSessionListener : IRakNetSessionListener
 {
+    private readonly ServerContext _context;
     private readonly Dictionary<RakNetSession, NetworkSession> _sessions = new();
+
+    public ZenithSessionListener(ServerContext context) => _context = context;
 
     public void OnSessionOpen(RakNetSession rakSession)
     {
-        _sessions[rakSession] = new NetworkSession(rakSession, new LoginSessionHandler());
+        _sessions[rakSession] = new NetworkSession(rakSession, new LoginSessionHandler(), _context);
     }
 
     public void OnSessionClose(RakNetSession rakSession, DisconnectReason reason)
@@ -29,7 +33,7 @@ class ZenithSessionListener : IRakNetSessionListener
         session.HandleClose(reason);
     }
 
-    public bool HandleGamePacket(RakNetSession rakSession, BinaryStream stream)
+    public bool HandleGamePacket(RakNetSession rakSession, ref BinaryStream stream)
     {
         if (!_sessions.TryGetValue(rakSession, out var session))
         {
@@ -39,6 +43,6 @@ class ZenithSessionListener : IRakNetSessionListener
             return false;
         }
 
-        return session.HandleGamePacket(stream);
+        return session.HandleGamePacket(ref stream);
     }
 }

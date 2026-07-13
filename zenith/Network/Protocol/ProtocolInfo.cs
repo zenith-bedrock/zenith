@@ -1,4 +1,4 @@
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 enum ProtocolInfo : int
 {

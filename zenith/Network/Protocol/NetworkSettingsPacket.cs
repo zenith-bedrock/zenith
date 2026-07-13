@@ -1,6 +1,6 @@
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 class NetworkSettingsPacket : DataPacket
 {
@@ -27,7 +27,7 @@ class NetworkSettingsPacket : DataPacket
         return writer.GetBufferDisposing();
     }
 
-    public override void Decode(BinaryStream stream)
+    public override void Decode(ref BinaryStream stream)
     {
         CompressionThreshold = stream.ReadShort(BinaryStream.Endianess.Little);
         CompressionAlgorithm = stream.ReadShort(BinaryStream.Endianess.Little);

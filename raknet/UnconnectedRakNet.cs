@@ -31,7 +31,7 @@ public class UnconnectedRakNet
         switch (pid)
         {
             case (byte)MessageIdentifier.UnconnectedPing:
-                var ping = IPacket.From<UnconnectedPing>(reader);
+                var ping = IPacket.From<UnconnectedPing>(ref reader);
                 var pongBuffer = new UnconnectedPong
                 {
                     Time = ping.Time,
@@ -41,7 +41,7 @@ public class UnconnectedRakNet
                 _server.Send(remoteEndPoint, pongBuffer);
                 return true;
             case (byte)MessageIdentifier.OpenConnectionRequest1:
-                var request1 = IPacket.From<OpenConnectionRequest1>(reader);
+                var request1 = IPacket.From<OpenConnectionRequest1>(ref reader);
                 var reply1Buffer = new OpenConnectionReply1
                 {
                     Guid = _server.Guid,
@@ -51,7 +51,7 @@ public class UnconnectedRakNet
                 _server.Send(remoteEndPoint, reply1Buffer);
                 return true;
             case (byte)MessageIdentifier.OpenConnectionRequest2:
-                var request2 = IPacket.From<OpenConnectionRequest2>(reader);
+                var request2 = IPacket.From<OpenConnectionRequest2>(ref reader);
                 var mtu = ClampMtu(request2.MTUSize);
 
                 var reply2Buffer = new OpenConnectionReply2
@@ -74,6 +74,18 @@ public class UnconnectedRakNet
                 if (_server.Connections.Count >= _server.MaxConnections)
                 {
                     _server.Logger?.Warning($"Rejected connection from {remoteEndPoint}: server full.");
+                    return true;
+                }
+
+                if (_server.CountSessionsByAddress(remoteEndPoint.Address) >= _server.MaxConnectionsPerAddress)
+                {
+                    _server.Logger?.Warning($"Rejected connection from {remoteEndPoint}: too many connections from this address.");
+                    return true;
+                }
+
+                if (!_server.TryConsumeConnectionAttempt(remoteEndPoint.Address))
+                {
+                    _server.Logger?.Debug($"[{remoteEndPoint}] Rate limited (connection attempt).");
                     return true;
                 }
 

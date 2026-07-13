@@ -11,5 +11,5 @@ public class Disconnect : IPacket
         return new byte[] { Id };
     }
 
-    public void Decode(BinaryStream stream) { }
+    public void Decode(ref BinaryStream stream) { }
 }

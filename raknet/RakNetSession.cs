@@ -199,31 +199,31 @@ public class RakNetSession
                 break;
             case (byte)MessageIdentifier.Ack:
                 Server.Logger?.Debug($"[{EndPoint}] Received ACK.");
-                HandleAck(reader);
+                HandleAck(ref reader);
                 break;
             case (byte)MessageIdentifier.Nack:
                 Server.Logger?.Debug($"[{EndPoint}] Received NACK.");
-                HandleNack(reader);
+                HandleNack(ref reader);
                 break;
             case (byte)BitFlags.Valid:
-                HandleIncomingFrameSet(reader);
+                HandleIncomingFrameSet(ref reader);
                 break;
         }
         reader.Dispose();
     }
 
-    public void HandleAck(BinaryStream reader)
+    public void HandleAck(ref BinaryStream reader)
     {
-        var ack = IPacket.From<ACK>(reader);
+        var ack = IPacket.From<ACK>(ref reader);
         foreach (var sequence in ack.Sequences)
         {
             OutputBackup.Remove(sequence);
         }
     }
 
-    public void HandleNack(BinaryStream reader)
+    public void HandleNack(ref BinaryStream reader)
     {
-        var nack = IPacket.From<NACK>(reader);
+        var nack = IPacket.From<NACK>(ref reader);
         foreach (var sequence in nack.Sequences)
         {
             if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
@@ -234,10 +234,10 @@ public class RakNetSession
         }
     }
 
-    private void HandleIncomingFrameSet(BinaryStream reader)
+    private void HandleIncomingFrameSet(ref BinaryStream reader)
     {
         var frameSet = new FrameSet();
-        frameSet.Decode(reader);
+        frameSet.Decode(ref reader);
 
         if (ReceivedFrameSequences.Contains(frameSet.Sequence)) return; // TODO: duplicate framesets
 
@@ -327,7 +327,7 @@ public class RakNetSession
         switch (pid)
         {
             case (byte)MessageIdentifier.ConnectedPing:
-                var connectedPing = IPacket.From<ConnectedPing>(reader);
+                var connectedPing = IPacket.From<ConnectedPing>(ref reader);
 
                 var connectedPong = new ConnectedPong
                 {
@@ -343,7 +343,7 @@ public class RakNetSession
                 }, Priority.Normal);
                 return true;
             case (byte)MessageIdentifier.ConnectionRequest:
-                var connectionRequest = IPacket.From<ConnectionRequest>(reader);
+                var connectionRequest = IPacket.From<ConnectionRequest>(ref reader);
 
                 var connectionRequestAccepted = new ConnectionRequestAccepted
                 {
@@ -365,7 +365,7 @@ public class RakNetSession
                 reader.Dispose();
                 return true;
             case (byte)MessageIdentifier.Game:
-                return Server.SessionListener?.HandleGamePacket(this, reader) ?? false;
+                return Server.SessionListener?.HandleGamePacket(this, ref reader) ?? false;
         }
 
         Server.Logger?.Debug($"[{EndPoint}] Unhandled {pid}");

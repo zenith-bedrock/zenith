@@ -1,7 +1,7 @@
 using Zenith.Raknet.Stream;
-using zenith.Network.Protocol;
+using Zenith.Network.Protocol;
 
-namespace zenith.Session.Handler;
+namespace Zenith.Session.Handler;
 
 /// <summary>
 /// Representa um estado no ciclo de vida de conexão de uma <see cref="NetworkSession"/>
@@ -17,7 +17,7 @@ interface ISessionHandler
     /// Tenta tratar o pacote recebido. Retorna false se esse handler não sabe lidar com o id
     /// do pacote (a sessão loga como "unhandled" nesse caso).
     /// </summary>
-    bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, BinaryStream stream);
+    bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream);
 
     /// <summary>Chamado assim que esse handler se torna o handler ativo da sessão.</summary>
     void OnEnable(NetworkSession session) { }

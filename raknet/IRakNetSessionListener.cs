@@ -14,5 +14,5 @@ public interface IRakNetSessionListener
     /// </summary>
     void OnSessionClose(RakNetSession session, DisconnectReason reason) { }
 
-    bool HandleGamePacket(RakNetSession session, BinaryStream stream);
+    bool HandleGamePacket(RakNetSession session, ref BinaryStream stream);
 }

@@ -11,7 +11,7 @@ public class UnconnectedPing : IPacket
     public byte[] Magic { get; set; } // 16 bytes
     public ulong ClientGuid { get; set; }
 
-    void IPacket.Decode(BinaryStream stream)
+    void IPacket.Decode(ref BinaryStream stream)
     {
         Time = stream.ReadULong();
         Magic = stream.ReadMagic();

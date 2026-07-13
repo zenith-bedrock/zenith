@@ -1,7 +1,7 @@
 using Zenith.Raknet.Stream;
-using zenith.Network.Protocol;
+using Zenith.Network.Protocol;
 
-namespace zenith.Session.Handler;
+namespace Zenith.Session.Handler;
 
 /// <summary>
 /// Negociação de resource packs. Ao receber STATUS_COMPLETED, manda o StartGamePacket e
@@ -9,12 +9,12 @@ namespace zenith.Session.Handler;
 /// </summary>
 class ResourcePacksSessionHandler : ISessionHandler
 {
-    public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, BinaryStream stream)
+    public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
     {
         if (header.Id != (int)ProtocolInfo.RESOURCE_PACK_CLIENT_RESPONSE_PACKET) return false;
 
-        var response = DataPacket.From<ResourcePackClientResponsePacket>(stream);
-        Console.WriteLine($"ResourcePackClientResponsePacket: {response.Status}");
+        var response = DataPacket.From<ResourcePackClientResponsePacket>(ref stream);
+        session.Context.Logger.Debug($"ResourcePackClientResponsePacket: {response.Status}");
 
         switch (response.Status)
         {

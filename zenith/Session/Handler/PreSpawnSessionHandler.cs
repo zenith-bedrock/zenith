@@ -1,7 +1,7 @@
 using Zenith.Raknet.Stream;
-using zenith.Network.Protocol;
+using Zenith.Network.Protocol;
 
-namespace zenith.Session.Handler;
+namespace Zenith.Session.Handler;
 
 /// <summary>
 /// Placeholder pro estado entre "cliente carregou os dados do StartGamePacket" e
@@ -12,8 +12,8 @@ class PreSpawnSessionHandler : ISessionHandler
 {
     public void OnEnable(NetworkSession session)
     {
-        Console.WriteLine("Session entered pre-spawn stage (not yet implemented).");
+        session.Context.Logger.Info($"{session.Player?.Username} entered pre-spawn stage (not yet implemented).");
     }
 
-    public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, BinaryStream stream) => false;
+    public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream) => false;
 }

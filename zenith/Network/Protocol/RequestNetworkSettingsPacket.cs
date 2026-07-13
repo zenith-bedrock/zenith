@@ -1,6 +1,6 @@
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 class RequestNetworkSettingsPacket : DataPacket
 {
@@ -8,7 +8,7 @@ class RequestNetworkSettingsPacket : DataPacket
 
     public int ProtocolVersion { get; set; }
 
-    public override void Decode(BinaryStream stream)
+    public override void Decode(ref BinaryStream stream)
     {
         ProtocolVersion = stream.ReadInt();
     }

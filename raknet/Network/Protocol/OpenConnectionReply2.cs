@@ -25,5 +25,5 @@ public class OpenConnectionReply2 : IPacket
         return stream.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream) { }
+    public void Decode(ref BinaryStream stream) { }
 }

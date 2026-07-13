@@ -4,30 +4,36 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 class LoginPacket : DataPacket
 {
-    public class JwtChain
+    public class AuthenticationInfo
     {
-        [JsonPropertyName("chain")]
-        public List<string> Chain { get; set; } = new();
+        [JsonPropertyName("AuthenticationType")]
+        public int AuthenticationType { get; set; }
+
+        [JsonPropertyName("Certificate")]
+        public string? Certificate { get; set; }
+
+        [JsonPropertyName("Token")]
+        public string Token { get; set; } = string.Empty;
     }
 
     public override int Id => (int)ProtocolInfo.LOGIN_PACKET;
 
     public int Protocol { get; set; }
-    public JwtChain ChainDataJwt { get; set; }
+    public AuthenticationInfo AuthInfo { get; set; }
     public string ClientDataJwt { get; set; }
 
-    public override void Decode(BinaryStream stream)
+    public override void Decode(ref BinaryStream stream)
     {
         Protocol = stream.ReadInt();
         var _ = stream.ReadVarInt();
 
         var chainDataJsonLength = stream.ReadInt(BinaryStream.Endianess.Little);
         var x = Encoding.UTF8.GetString(stream.ReadSpan(chainDataJsonLength));
-        ChainDataJwt = JsonSerializer.Deserialize<JwtChain>(x)!;
+        AuthInfo = JsonSerializer.Deserialize<AuthenticationInfo>(x)!;
 
         // foreach (var chain in ChainDataJwt.Chain)
         // {

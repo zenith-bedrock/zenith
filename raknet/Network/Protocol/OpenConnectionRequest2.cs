@@ -12,7 +12,7 @@ public class OpenConnectionRequest2 : IPacket
     public ushort MTUSize { get; set; }
     public ulong ClientGuid { get; set; }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         Magic = stream.ReadMagic();
         ServerAddress = stream.ReadIPEndPoint();

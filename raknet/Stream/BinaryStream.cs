@@ -3,7 +3,17 @@ using System.Text;
 
 namespace Zenith.Raknet.Stream;
 
-public class BinaryStream : IDisposable
+/// <summary>
+/// ref struct de propósito duplo: leitura sobre um array existente (dispatch de pacote) e
+/// escrita crescendo por dobragem (encode). Por ser ref struct, <c>new BinaryStream(buffer)</c>
+/// não aloca nenhum objeto no heap - só um valor na stack - o que importa porque isso acontece
+/// uma vez por pacote recebido. Efeitos colaterais dessa escolha (documentados nos pontos que
+/// importam): não pode virar campo de classe, não pode ser capturado em lambda/async, e todo
+/// método que precisa que a posição de leitura avançada seja visível pra quem chamou (ex:
+/// header primeiro, payload depois) precisa receber por <c>ref</c> - do contrário cada chamada
+/// mexe só na própria cópia local e quem chamou nunca vê o avanço.
+/// </summary>
+public ref struct BinaryStream : IDisposable
 {
     public enum Endianess : byte
     {
@@ -11,24 +21,50 @@ public class BinaryStream : IDisposable
         Little
     }
 
+    private const int MinGrowth = 64;
+
     public int Offset { get; set; }
+
+    /// <summary>
+    /// Backing array. Em modo de escrita pode estar sobre-alocado (capacidade > dados
+    /// válidos); use <see cref="Length"/> pra saber quantos bytes são válidos, nunca
+    /// <c>Buffer.Length</c>. Em modo de leitura (buffer passado no construtor) os dois
+    /// sempre coincidem.
+    /// </summary>
     public byte[] Buffer { get; private set; }
 
-    public int Length => Buffer.Length;
+    /// <summary>Quantidade de bytes válidos no buffer. Distinto de <c>Buffer.Length</c> quando em modo de escrita.</summary>
+    public int Length { get; private set; }
 
-    public bool IsEndOfFile => Offset >= Buffer.Length;
+    public bool IsEndOfFile => Offset >= Length;
 
+    /// <summary>
+    /// Finaliza um buffer de escrita e devolve exatamente os bytes válidos (sem cópia extra:
+    /// é só um slice sobre o array já alocado). Chame só quando terminar de escrever.
+    /// </summary>
     public Span<byte> GetBufferDisposing()
     {
-        var buffer = Buffer;
-        Dispose();
-        return buffer.AsSpan();
+        var span = new Span<byte>(Buffer, 0, Length);
+        Buffer = Array.Empty<byte>();
+        Length = 0;
+        Offset = 0;
+        return span;
     }
 
-    public BinaryStream(byte[]? buffer = null, int offset = 0)
+    /// <summary>Modo de escrita: começa vazio e cresce conforme Write/WriteX são chamados.</summary>
+    public BinaryStream()
     {
-        Buffer = buffer ?? Array.Empty<byte>();
-        Offset = offset;
+        Buffer = Array.Empty<byte>();
+        Length = 0;
+        Offset = 0;
+    }
+
+    /// <summary>Modo de leitura: envelopa um array já existente, sem copiar.</summary>
+    public BinaryStream(byte[] buffer)
+    {
+        Buffer = buffer;
+        Length = buffer.Length;
+        Offset = 0;
     }
 
     public void Rewind() => Offset = 0;
@@ -42,7 +78,7 @@ public class BinaryStream : IDisposable
             case 0:
                 return Span<byte>.Empty;
         }
-        var remaining = Buffer.Length - Offset;
+        var remaining = Length - Offset;
         if (remaining < len)
         {
             throw new InvalidOperationException($"Not enough bytes left in buffer: need {len}, have {remaining}");
@@ -55,36 +91,56 @@ public class BinaryStream : IDisposable
 
     public Span<byte> ReadRemaining()
     {
-        if (Offset >= Buffer.Length)
+        if (Offset >= Length)
         {
             throw new InvalidOperationException("No bytes left to read");
         }
 
-        var remainingSpan = new Span<byte>(Buffer, Offset, Buffer.Length - Offset);
-        Offset = Buffer.Length;
+        var remainingSpan = new Span<byte>(Buffer, Offset, Length - Offset);
+        Offset = Length;
         return remainingSpan;
     }
 
-    public void Write(ReadOnlySpan<byte> data)
+    /// <summary>
+    /// Garante espaço pra mais <paramref name="additional"/> bytes, crescendo a capacidade
+    /// por dobragem (igual List&lt;T&gt;) em vez de realocar exatamente o necessário toda
+    /// vez. Isso troca um realloc+copy por Write (O(n²) no total) por um número logarítmico
+    /// de reallocs (O(n) amortizado).
+    /// </summary>
+    private void EnsureCapacity(int additional)
     {
-        var newBuffer = new byte[Buffer.Length + data.Length];
-        Buffer.AsSpan().CopyTo(newBuffer.AsSpan());
-        data.CopyTo(newBuffer.AsSpan(Buffer.Length));
+        var required = Length + additional;
+        if (required <= Buffer.Length) return;
+
+        var newCapacity = Math.Max(Buffer.Length * 2, MinGrowth);
+        if (newCapacity < required) newCapacity = required;
+
+        var newBuffer = new byte[newCapacity];
+        System.Buffer.BlockCopy(Buffer, 0, newBuffer, 0, Length);
         Buffer = newBuffer;
+    }
+
+    public void Write(scoped ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0) return;
+
+        EnsureCapacity(data.Length);
+        data.CopyTo(Buffer.AsSpan(Length));
+        Length += data.Length;
     }
 
     public bool ReadBool() => ReadSpan(1)[0] != 0;
 
-    public void WriteBool(bool v) => Write(new[] { v ? (byte)1 : (byte)0 });
+    public void WriteBool(bool v) => WriteByte(v ? (byte)1 : (byte)0);
 
     public byte ReadByte() => ReadSpan(1)[0];
 
+    /// <summary>Escreve um único byte sem alocar nenhum array temporário.</summary>
     public void WriteByte(byte v)
     {
-        unsafe
-        {
-            Write(new ReadOnlySpan<byte>(&v, 1));
-        }
+        EnsureCapacity(1);
+        Buffer[Length] = v;
+        Length += 1;
     }
 
     public void WriteString(string value)
@@ -116,35 +172,27 @@ public class BinaryStream : IDisposable
     }
 
     public short ReadShort(Endianess end = Endianess.Big) =>
-        end == Endianess.Little ? BitConverter.ToInt16(ReadSpan(2).ToArray(), 0) :
+        end == Endianess.Little ? BinaryPrimitives.ReadInt16LittleEndian(ReadSpan(2)) :
         BinaryPrimitives.ReadInt16BigEndian(ReadSpan(2));
 
     public void WriteShort(short v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-            Write(BitConverter.GetBytes(v));
-        else
-        {
-            var buffer = new byte[2];
-            BinaryPrimitives.WriteInt16BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[2];
+        if (end == Endianess.Little) BinaryPrimitives.WriteInt16LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteInt16BigEndian(buffer, v);
+        Write(buffer);
     }
 
     public ushort ReadUShort(Endianess end = Endianess.Big) =>
-        end == Endianess.Little ? BitConverter.ToUInt16(ReadSpan(2).ToArray(), 0) :
+        end == Endianess.Little ? BinaryPrimitives.ReadUInt16LittleEndian(ReadSpan(2)) :
         BinaryPrimitives.ReadUInt16BigEndian(ReadSpan(2));
 
     public void WriteUShort(ushort v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-            Write(BitConverter.GetBytes(v));
-        else
-        {
-            var buffer = new byte[2];
-            BinaryPrimitives.WriteUInt16BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[2];
+        if (end == Endianess.Little) BinaryPrimitives.WriteUInt16LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteUInt16BigEndian(buffer, v);
+        Write(buffer);
     }
 
     public uint ReadTriad(Endianess end = Endianess.Big)
@@ -182,109 +230,89 @@ public class BinaryStream : IDisposable
     }
 
     public int ReadInt(Endianess end = Endianess.Big) =>
-        end == Endianess.Little ? BitConverter.ToInt32(ReadSpan(4).ToArray(), 0) :
+        end == Endianess.Little ? BinaryPrimitives.ReadInt32LittleEndian(ReadSpan(4)) :
         BinaryPrimitives.ReadInt32BigEndian(ReadSpan(4));
 
     public void WriteInt(int v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-            Write(BitConverter.GetBytes(v));
-        else
-        {
-            var buffer = new byte[4];
-            BinaryPrimitives.WriteInt32BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[4];
+        if (end == Endianess.Little) BinaryPrimitives.WriteInt32LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteInt32BigEndian(buffer, v);
+        Write(buffer);
     }
 
     public uint ReadUInt(Endianess end = Endianess.Big) =>
-        end == Endianess.Little ? BitConverter.ToUInt32(ReadSpan(4).ToArray(), 0) :
+        end == Endianess.Little ? BinaryPrimitives.ReadUInt32LittleEndian(ReadSpan(4)) :
         BinaryPrimitives.ReadUInt32BigEndian(ReadSpan(4));
 
     public void WriteUInt(uint v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-        {
-            Write(BitConverter.GetBytes(v));
-        }
-        else
-        {
-            var buffer = new byte[4];
-            BinaryPrimitives.WriteUInt32BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[4];
+        if (end == Endianess.Little) BinaryPrimitives.WriteUInt32LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteUInt32BigEndian(buffer, v);
+        Write(buffer);
     }
+
     public float ReadFloat(Endianess end = Endianess.Big)
     {
-        var bytes = ReadSpan(4).ToArray();
-        return end == Endianess.Little
-            ? BitConverter.ToSingle(bytes, 0)
-            : BitConverter.ToSingle(bytes.Reverse().ToArray(), 0);
+        var span = ReadSpan(4);
+        if (end == Endianess.Little) return BinaryPrimitives.ReadSingleLittleEndian(span);
+
+        Span<byte> reversed = stackalloc byte[4];
+        span.CopyTo(reversed);
+        reversed.Reverse();
+        return BinaryPrimitives.ReadSingleLittleEndian(reversed);
     }
 
     public void WriteFloat(float v, Endianess end = Endianess.Big)
     {
-        var buffer = BitConverter.GetBytes(v);
-        if (end == Endianess.Big)
-        {
-            Array.Reverse(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[4];
+        BinaryPrimitives.WriteSingleLittleEndian(buffer, v);
+        if (end == Endianess.Big) buffer.Reverse();
         Write(buffer);
     }
 
     public double ReadDouble(Endianess end = Endianess.Big)
     {
-        var bytes = ReadSpan(8).ToArray();
-        return end == Endianess.Little
-            ? BitConverter.ToDouble(bytes, 0)
-            : BitConverter.ToDouble(bytes.Reverse().ToArray(), 0);
+        var span = ReadSpan(8);
+        if (end == Endianess.Little) return BinaryPrimitives.ReadDoubleLittleEndian(span);
+
+        Span<byte> reversed = stackalloc byte[8];
+        span.CopyTo(reversed);
+        reversed.Reverse();
+        return BinaryPrimitives.ReadDoubleLittleEndian(reversed);
     }
 
     public void WriteDouble(double v, Endianess end = Endianess.Big)
     {
-        var buffer = BitConverter.GetBytes(v);
-        if (end == Endianess.Little)
-            Write(buffer);
-        else
-        {
-            Array.Reverse(buffer);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[8];
+        BinaryPrimitives.WriteDoubleLittleEndian(buffer, v);
+        if (end == Endianess.Big) buffer.Reverse();
+        Write(buffer);
     }
 
     public long ReadLong(Endianess end = Endianess.Big) =>
-        end == Endianess.Little ? BitConverter.ToInt64(ReadSpan(8).ToArray(), 0) :
+        end == Endianess.Little ? BinaryPrimitives.ReadInt64LittleEndian(ReadSpan(8)) :
         BinaryPrimitives.ReadInt64BigEndian(ReadSpan(8));
 
     public void WriteLong(long v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-            Write(BitConverter.GetBytes(v));
-        else
-        {
-            var buffer = new byte[8];
-            BinaryPrimitives.WriteInt64BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[8];
+        if (end == Endianess.Little) BinaryPrimitives.WriteInt64LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteInt64BigEndian(buffer, v);
+        Write(buffer);
     }
 
-    public ulong ReadULong(Endianess end = Endianess.Big)
-    {
-        if (end == Endianess.Little)
-            return BitConverter.ToUInt64(ReadSpan(8).ToArray(), 0);
-        return BinaryPrimitives.ReadUInt64BigEndian(ReadSpan(8));
-    }
+    public ulong ReadULong(Endianess end = Endianess.Big) =>
+        end == Endianess.Little ? BinaryPrimitives.ReadUInt64LittleEndian(ReadSpan(8)) :
+        BinaryPrimitives.ReadUInt64BigEndian(ReadSpan(8));
 
     public void WriteULong(ulong v, Endianess end = Endianess.Big)
     {
-        if (end == Endianess.Little)
-            Write(BitConverter.GetBytes(v));
-        else
-        {
-            var buffer = new byte[8];
-            BinaryPrimitives.WriteUInt64BigEndian(buffer, v);
-            Write(buffer);
-        }
+        Span<byte> buffer = stackalloc byte[8];
+        if (end == Endianess.Little) BinaryPrimitives.WriteUInt64LittleEndian(buffer, v);
+        else BinaryPrimitives.WriteUInt64BigEndian(buffer, v);
+        Write(buffer);
     }
 
     public int ReadUnsignedVarInt()
@@ -294,7 +322,10 @@ public class BinaryStream : IDisposable
         byte byteRead;
         do
         {
-            if (Offset >= Buffer.Length)
+            if (shift >= 35)
+                throw new InvalidOperationException("Unsigned varint is too long (malformed packet).");
+
+            if (Offset >= Length)
                 throw new InvalidOperationException("Not enough bytes to read unsigned varint.");
 
             byteRead = ReadSpan(1)[0];
@@ -306,12 +337,13 @@ public class BinaryStream : IDisposable
 
     public void WriteUnsignedVarInt(int v)
     {
-        while (v >= 0x80)
+        var value = (uint)v;
+        while (value >= 0x80)
         {
-            Write(new[] { (byte)((v & 0x7F) | 0x80) });
-            v >>= 7;
+            WriteByte((byte)((value & 0x7F) | 0x80));
+            value >>= 7;
         }
-        Write(new[] { (byte)v });
+        WriteByte((byte)value);
     }
 
     public long ReadUnsignedVarLong()
@@ -321,7 +353,10 @@ public class BinaryStream : IDisposable
         byte byteRead;
         do
         {
-            if (Offset >= Buffer.Length)
+            if (shift >= 70)
+                throw new InvalidOperationException("Unsigned varlong is too long (malformed packet).");
+
+            if (Offset >= Length)
                 throw new InvalidOperationException("Not enough bytes to read unsigned varlong.");
 
             byteRead = ReadSpan(1)[0];
@@ -333,12 +368,13 @@ public class BinaryStream : IDisposable
 
     public void WriteUnsignedVarLong(long v)
     {
-        while (v >= 0x80)
+        var value = (ulong)v;
+        while (value >= 0x80)
         {
-            Write(new[] { (byte)((v & 0x7F) | 0x80) });
-            v >>= 7;
+            WriteByte((byte)((value & 0x7F) | 0x80));
+            value >>= 7;
         }
-        Write(new[] { (byte)v });
+        WriteByte((byte)value);
     }
 
     public int ReadVarInt() => ZigzagDecode(ReadUnsignedVarInt());
@@ -364,6 +400,7 @@ public class BinaryStream : IDisposable
     public void Dispose()
     {
         Buffer = Array.Empty<byte>();
+        Length = 0;
         Offset = 0;
     }
 }

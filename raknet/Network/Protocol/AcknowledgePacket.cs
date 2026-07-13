@@ -72,7 +72,7 @@ public abstract class AcknowledgePacket : IPacket
         return stream.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         var count = stream.ReadShort();
 

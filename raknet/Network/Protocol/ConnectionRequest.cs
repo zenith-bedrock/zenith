@@ -10,7 +10,7 @@ public class ConnectionRequest : IPacket
     public ulong SendPingTime { get; set; }
     public bool UseSecurity { get; set; }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         ClientGuid = stream.ReadULong();
         SendPingTime = stream.ReadULong();

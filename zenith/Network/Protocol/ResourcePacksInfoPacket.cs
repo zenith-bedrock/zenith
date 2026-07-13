@@ -1,6 +1,6 @@
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 class ResourcePacksInfoPacket : DataPacket
 {
@@ -12,6 +12,7 @@ class ResourcePacksInfoPacket : DataPacket
     public bool MustAccept { get; set; }
     public bool HasAddons { get; set; }
     public bool HasScripts { get; set; }
+    public bool ForceDisableVibrantVisuals { get; set; }
     // public string WorldTemplateUuid { get; set; }
     public string WorldTemplateVersion { get; set; }
 
@@ -22,12 +23,13 @@ class ResourcePacksInfoPacket : DataPacket
         writer.WriteBool(MustAccept);
         writer.WriteBool(HasAddons);
         writer.WriteBool(HasScripts);
+        writer.WriteBool(ForceDisableVibrantVisuals);
         writer.WriteULong(0); // TODO: hack to work but this is a uuid
         writer.WriteULong(0); // TODO: hack to work but this is a uuid
-        writer.WriteVarInt(0);
+        writer.WriteVarString(WorldTemplateVersion);
         writer.WriteShort(0, BinaryStream.Endianess.Little);
         return writer.GetBufferDisposing();
     }
 
-    public override void Decode(BinaryStream stream) { }
+    public override void Decode(ref BinaryStream stream) { }
 }

@@ -1,6 +1,6 @@
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 abstract class DataPacket
 {
@@ -16,7 +16,7 @@ abstract class DataPacket
         public int SenderSubId = 0;
         public int RecipientSubId = 0;
 
-        public void Decode(BinaryStream stream)
+        public void Decode(ref BinaryStream stream)
         {
             var header = stream.ReadUnsignedVarInt();
             Id = header & PID_MASK;
@@ -39,12 +39,12 @@ abstract class DataPacket
         return Array.Empty<byte>();
     }
 
-    public abstract void Decode(BinaryStream stream);
+    public abstract void Decode(ref BinaryStream stream);
 
-    public static T From<T>(BinaryStream stream) where T : DataPacket
+    public static T From<T>(ref BinaryStream stream) where T : DataPacket
     {
         var packet = (T)Activator.CreateInstance(typeof(T))!;
-        packet.Decode(stream);
+        packet.Decode(ref stream);
         stream.Dispose();
         return packet;
     }

@@ -20,13 +20,13 @@ public class FrameSet
         return writer.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         Sequence = stream.ReadTriad(BinaryStream.Endianess.Little);
         while (!stream.IsEndOfFile)
         {
             var packet = new Frame();
-            packet.Decode(stream);
+            packet.Decode(ref stream);
             Packets.Add(packet);
         }
     }

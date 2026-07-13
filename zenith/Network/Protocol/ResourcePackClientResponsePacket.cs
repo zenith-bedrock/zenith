@@ -1,6 +1,6 @@
 using Zenith.Raknet.Stream;
 
-namespace zenith.Network.Protocol;
+namespace Zenith.Network.Protocol;
 
 class ResourcePackClientResponsePacket : DataPacket
 {
@@ -15,7 +15,7 @@ class ResourcePackClientResponsePacket : DataPacket
 
     // TODO: decode pack ids
 
-    public override void Decode(BinaryStream stream)
+    public override void Decode(ref BinaryStream stream)
     {
         Status = stream.ReadByte();
     }

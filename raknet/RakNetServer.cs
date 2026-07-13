@@ -21,6 +21,12 @@ public class RakNetServer
 
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
 
+    // Rate limit generoso pra pings/handshake em geral (motd no server list, etc.) e um bem
+    // mais restrito especificamente pra completar o handshake (criar sessão de verdade),
+    // já que isso é o recurso mais caro de consumir.
+    private readonly IpRateLimiter _unconnectedPacketLimiter = new(capacity: 30, refillPerSecond: 15);
+    private readonly IpRateLimiter _connectionAttemptLimiter = new(capacity: 5, refillPerSecond: 1);
+
     private int _tickCount = 0;
     private int _nextSessionId = -1;
 
@@ -28,6 +34,11 @@ public class RakNetServer
     public IPEndPoint RemoteEndPoint { get; init; }
     public List<RakNetSession> Connections => _sessions.Values.ToList();
     public uint MaxConnections { get; init; } = 20;
+
+    /// <summary>Máximo de sessões simultâneas por IP, independente do MaxConnections global.
+    /// Evita que um único host consuma todas as vagas de conexão do servidor.</summary>
+    public uint MaxConnectionsPerAddress { get; init; } = 3;
+
     public ILogger? Logger { get; init; }
     public IRakNetSessionListener? SessionListener { get; set; } = null;
 
@@ -87,6 +98,13 @@ public class RakNetServer
 
     public bool HasSession(IPEndPoint endPoint) => _sessions.ContainsKey(endPoint.ToUInt64());
 
+    public bool TryConsumeUnconnectedPacket(IPAddress address) => _unconnectedPacketLimiter.TryConsume(address);
+
+    public bool TryConsumeConnectionAttempt(IPAddress address) => _connectionAttemptLimiter.TryConsume(address);
+
+    public int CountSessionsByAddress(IPAddress address) =>
+        _sessions.Values.Count(s => s.EndPoint.Address.Equals(address));
+
     public async Task StartAsync()
     {
         Logger?.Debug("Starting RakNet connection...");
@@ -130,6 +148,12 @@ public class RakNetServer
 
                 if (offline)
                 {
+                    if (!TryConsumeUnconnectedPacket(result.RemoteEndPoint.Address))
+                    {
+                        Logger?.Debug($"[{result.RemoteEndPoint}] Rate limited (unconnected packet).");
+                        continue;
+                    }
+
                     _unconnected.Handle(result.RemoteEndPoint, buffer);
                     continue;
                 }
@@ -187,6 +211,13 @@ public class RakNetServer
             }
 
             _tickCount++;
+
+            if (_tickCount % (RAKNET_TPS * 10) == 0)
+            {
+                _unconnectedPacketLimiter.Cleanup(maxIdleMs: 60_000);
+                _connectionAttemptLimiter.Cleanup(maxIdleMs: 60_000);
+            }
+
             var elapsed = DateTime.UtcNow - startTime;
 
             var delay = RAKNET_TICK - elapsed;

@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Log;
 
-namespace zenith.Log;
+namespace Zenith.Log;
 
 public partial class Logger : ILogger
 {

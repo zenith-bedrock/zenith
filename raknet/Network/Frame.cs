@@ -118,7 +118,7 @@ public class Frame
         return writer.GetBufferDisposing();
     }
 
-    public void Decode(BinaryStream stream)
+    public void Decode(ref BinaryStream stream)
     {
         var flags = stream.ReadByte();
         Reliability = (Reliability)((flags & RELIABILITY_FLAGS) >> RELIABILITY_SHIFT);
