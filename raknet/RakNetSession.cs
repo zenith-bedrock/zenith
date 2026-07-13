@@ -28,15 +28,32 @@ public class RakNetSession
     protected readonly uint[] InputHighestSequenceIndex = new uint[32];
     protected readonly Dictionary<short, Dictionary<int, Frame>> FragmentsQueue = new();
 
-    protected readonly int[] InputOrderIndex = new int[32];
+    protected readonly uint[] InputOrderIndex = new uint[32];
     protected readonly Dictionary<byte, Dictionary<uint, Frame>> InputOrderingQueue = new();
     protected int LastInputSequence = -1;
+
+    // Janela deslizante de dedup para qualquer frame reliable (Reliable, ReliableOrdered,
+    // ReliableSequenced, ...), independente de reliability específica. Um frame reliable pode
+    // ser retransmitido dentro de um FrameSet novo (sequence diferente) quando o servidor
+    // não confirma a tempo; sem isso, o mesmo MessageIndex é processado de novo e pode
+    // duplicar efeitos do lado do jogo (ex: LoginPacket reprocessado -> PlayerManager.TryAdd
+    // falha achando que já tem alguém logado -> Disconnect indevido). Espelha
+    // reliableWindowStart/End/reliableWindow do RakLib (ReceiveReliabilityLayer.php).
+    private const uint RELIABLE_WINDOW_SIZE = 2048;
+    protected uint ReliableWindowStart;
+    protected uint ReliableWindowEnd = RELIABLE_WINDOW_SIZE;
+    protected readonly HashSet<uint> ReliableWindow = new();
 
     protected readonly uint[] OutputOrderIndex = new uint[32];
     protected readonly uint[] OutputSequenceIndex = new uint[32];
 
     protected readonly HashSet<Frame> OutputFrames = new();
     protected readonly Dictionary<uint, List<Frame>> OutputBackup = new();
+
+    // Mantido em paralelo a OutputFrames em vez de recalculado via LINQ Sum a cada
+    // QueueFrame: eram O(n) por chamada (O(n²) num burst de frames), e esse é
+    // literalmente o hot path de todo Send/SendFrame.
+    private int _outputFramesByteLength;
 
     protected uint OutputSequence;
     protected int OutputSplitIndex;
@@ -127,7 +144,11 @@ public class RakNetSession
 
         OutputBackup[frameSet.Sequence] = frameSet.Packets;
 
-        foreach (var frame in frameSet.Packets) OutputFrames.Remove(frame);
+        foreach (var frame in frameSet.Packets)
+        {
+            OutputFrames.Remove(frame);
+            _outputFramesByteLength -= frame.GetByteLength();
+        }
 
         Server.Send(EndPoint, frameSet.Encode());
     }
@@ -148,21 +169,26 @@ public class RakNetSession
         var maxSize = Math.Max(MTU - 36, 1);
         var splitSize = (int)Math.Ceiling((double)frame.Buffer.Length / maxSize);
 
-        frame.MessageIndex = OutputReliableIndex++;
-
         if (frame.Buffer.Length > maxSize)
         {
+            // Cada fragmento é um frame reliable próprio no fio (tem seu próprio ACK/NACK
+            // e seu próprio slot na janela de dedup reliable do peer), então cada um precisa
+            // de um MessageIndex único - reusar um só entre todos os fragmentos faz o peer
+            // (que faz a mesma dedup por MessageIndex) descartar todos menos o primeiro como
+            // retransmissão duplicada.
             var splitId = (short)(OutputSplitIndex++ % 65_536);
             for (var i = 0; i < frame.Buffer.Length; i += maxSize)
             {
+                var chunkLength = Math.Min(maxSize, frame.Buffer.Length - i);
                 var newFrame = new Frame
                 {
                     Reliability = frame.Reliability,
+                    MessageIndex = OutputReliableIndex++,
                     SequenceIndex = frame.SequenceIndex,
                     OrderIndex = frame.OrderIndex,
                     OrderChannel = frame.OrderChannel,
                     SplitInfo = new Frame.SplitPacketInfo(splitSize, splitId, i / maxSize),
-                    Buffer = frame.Buffer.Skip(i).Take(maxSize).ToArray()
+                    Buffer = frame.Buffer.AsSpan(i, chunkLength).ToArray()
                 };
 
                 QueueFrame(newFrame, priority);
@@ -170,17 +196,19 @@ public class RakNetSession
         }
         else
         {
+            frame.MessageIndex = OutputReliableIndex++;
             QueueFrame(frame, priority);
         }
     }
 
     private void QueueFrame(Frame frame, Priority priority)
     {
-        var length = DGRAM_HEADER_SIZE + OutputFrames.Sum(outputFrame => outputFrame.GetByteLength());
+        var length = DGRAM_HEADER_SIZE + _outputFramesByteLength;
 
         if (length + frame.GetByteLength() > MTU + DGRAM_MTU_OVERHEAD) SendQueue(OutputFrames.Count);
 
         OutputFrames.Add(frame);
+        _outputFramesByteLength += frame.GetByteLength();
         if (priority == Priority.Immediate) SendQueue(1);
     }
 
@@ -264,6 +292,36 @@ public class RakNetSession
         }
     }
 
+    /// <summary>
+    /// Janela deslizante de MessageIndex já vistos, pra descartar retransmissões de frames
+    /// reliable já processados (o mesmo MessageIndex pode chegar de novo dentro de um
+    /// FrameSet com Sequence diferente, se o ACK anterior se perdeu ou chegou tarde).
+    /// Fora da janela (mais velho que o início ou longe demais à frente) também é
+    /// descartado - nesse segundo caso seria um MessageIndex implausível vindo de um
+    /// peer malicioso/quebrado, não vale a pena guardar. Espelha reliableWindowStart/
+    /// reliableWindowEnd/reliableWindow do RakLib (ReceiveReliabilityLayer::handleEncapsulatedPacket).
+    /// </summary>
+    private bool TryAcceptReliableMessage(uint messageIndex)
+    {
+        if (messageIndex < ReliableWindowStart || messageIndex > ReliableWindowEnd || ReliableWindow.Contains(messageIndex))
+        {
+            return false;
+        }
+
+        ReliableWindow.Add(messageIndex);
+
+        if (messageIndex == ReliableWindowStart)
+        {
+            while (ReliableWindow.Remove(ReliableWindowStart))
+            {
+                ReliableWindowStart++;
+                ReliableWindowEnd++;
+            }
+        }
+
+        return true;
+    }
+
     // Limites de fragmentação: sem isso, um cliente malicioso pode declarar um SplitInfo.Count
     // gigante e nunca completar a mensagem, ou abrir fragmentos com IDs diferentes em paralelo
     // sem limite, acumulando memória na sessão indefinidamente (leak/DoS por exaustão de RAM).
@@ -301,7 +359,7 @@ public class RakNetSession
             };
 
             FragmentsQueue.Remove(splitInfo.Id);
-            return HandleFrame(newFrame);
+            return DispatchFrame(newFrame);
         }
 
         if (FragmentsQueue.Count >= MAX_CONCURRENT_FRAGMENTED_MESSAGES)
@@ -373,10 +431,41 @@ public class RakNetSession
         return false;
     }
 
+    /// <summary>
+    /// Ponto de entrada por frame recebido dentro de um FrameSet. Faz a dedup de mensagens
+    /// reliable (ver <see cref="ReliableWindow"/>) uma única vez por frame de fio - split
+    /// parts incluídos, já que cada parte carrega seu próprio MessageIndex reliable de
+    /// verdade. A reconstrução de split (<see cref="HandleFragment"/>) recicla o
+    /// MessageIndex da última parte só pra fins de reliability/ordering do pacote
+    /// remontado; por isso ela chama <see cref="DispatchFrame"/> diretamente em vez de
+    /// voltar aqui, senão essa mesma mensagem seria rejeitada como duplicata dela mesma.
+    /// </summary>
     private bool HandleFrame(Frame frame)
     {
-        if (frame.IsSplit()) return HandleFragment(frame);
+        // OrderChannel vem do fio como um byte cru (0-255), mas os arrays de tracking
+        // (InputOrderIndex, InputHighestSequenceIndex) têm exatamente Frame.MAX_ORDER_CHANNELS
+        // slots. Sem essa validação, um frame malformado/hostil com OrderChannel >= 32 derruba
+        // a sessão inteira com IndexOutOfRangeException assim que qualquer código abaixo tenta
+        // indexar por ele. RakLib rejeita a mesma condição (ver ReceiveReliabilityLayer, "bad
+        // order channel").
+        if (Frame.IsSequencedOrOrdered(frame.Reliability) && frame.OrderChannel >= Frame.MAX_ORDER_CHANNELS)
+        {
+            Server.Logger?.Warning($"[{EndPoint}] Dropped frame with invalid order channel {frame.OrderChannel}.");
+            return false;
+        }
 
+        if (Frame.IsReliable(frame.Reliability) && !TryAcceptReliableMessage(frame.MessageIndex))
+        {
+            return false; // duplicate/out-of-range retransmit of a reliable frame, already handled
+        }
+
+        return frame.IsSplit() ? HandleFragment(frame) : DispatchFrame(frame);
+    }
+
+    /// <summary>Roteamento por reliability (sequenced/ordered/plain), assumindo que a dedup
+    /// reliable já rodou (via <see cref="HandleFrame"/>) ou não se aplica (frame remontado).</summary>
+    private bool DispatchFrame(Frame frame)
+    {
         if (Frame.IsSequenced(frame.Reliability))
         {
             if (frame.SequenceIndex < InputHighestSequenceIndex[frame.OrderChannel] || frame.OrderIndex < InputOrderIndex[frame.OrderChannel])
@@ -390,22 +479,22 @@ public class RakNetSession
 
         if (!Frame.IsOrdered(frame.Reliability)) return HandleIncomingBatch(frame.Buffer);
         
-        if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel]!)
+        if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel])
         {
             InputHighestSequenceIndex[frame.OrderChannel] = 0;
-            InputOrderIndex[frame.OrderChannel] = frame.OrderChannel + 1;
+            InputOrderIndex[frame.OrderChannel] = frame.OrderIndex + 1;
 
             HandleIncomingBatch(frame.Buffer);
             var index = InputOrderIndex[frame.OrderChannel];
 
             var outOfOrderQueue = InputOrderingQueue[frame.OrderChannel];
 
-            for (; outOfOrderQueue.ContainsKey((uint)index); index++)
+            for (; outOfOrderQueue.ContainsKey(index); index++)
             {
-                if (outOfOrderQueue.TryGetValue((uint)index, out var frameQueue))
+                if (outOfOrderQueue.TryGetValue(index, out var frameQueue))
                 {
                     HandleIncomingBatch(frameQueue.Buffer);
-                    outOfOrderQueue.Remove((uint)index);
+                    outOfOrderQueue.Remove(index);
                 }
                 else break;
             }
@@ -415,10 +504,9 @@ public class RakNetSession
             return true;
         }
 
-        if (frame.OrderIndex <= InputOrderIndex[frame.OrderChannel]) return false;
+        if (frame.OrderIndex <= InputOrderIndex[frame.OrderChannel]) return false; // old/duplicate, discard
         if (!InputOrderingQueue.TryGetValue(frame.OrderChannel, out var unordered)) return true;
-        HandleIncomingBatch(frame.Buffer);
-        unordered[frame.OrderIndex] = frame;
+        unordered[frame.OrderIndex] = frame; // out of order: hold it until the gap is filled, don't handle yet
         return true;
 
     }

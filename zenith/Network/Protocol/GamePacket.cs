@@ -33,9 +33,9 @@ class GamePacket : IPacket
         if (Compression == PacketCompression.ZLIB)
         {
             using var ms = new MemoryStream();
-            using (var zlib = new ZLibStream(ms, CompressionLevel.Fastest))
+            using (var deflate = new DeflateStream(ms, CompressionLevel.Fastest))
             {
-                zlib.Write(uncompressed);
+                deflate.Write(uncompressed);
             }
             writer.Write(ms.ToArray());
         }

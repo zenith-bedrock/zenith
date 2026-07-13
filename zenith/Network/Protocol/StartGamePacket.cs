@@ -26,100 +26,126 @@ class StartGamePacket : DataPacket
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarLong(1);
-        writer.WriteVarLong(1);
-        writer.WriteVarInt(GameMode);
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // x
-        writer.WriteFloat(8, BinaryStream.Endianess.Little); // y
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // z
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // yaw
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // pitch
-        //Level settings
-        writer.WriteLong(Seed);
-        //Spawn settings
-        writer.WriteShort(BiomeType, BinaryStream.Endianess.Little);
-        writer.WriteVarString(BiomeName);
-        writer.WriteVarInt(Dimension);
-        //End of Spawn settings
-        writer.WriteVarInt(Generator);
-        writer.WriteVarInt(GameType);
-        writer.WriteBool(false); //hardcore
-        writer.WriteVarInt(Difficulty);
+        
+        // Entity / Player settings
+        writer.WriteVarLong(EntityId);
+        writer.WriteUnsignedVarLong(EntityId); // EntityRuntimeID
+        writer.WriteVarInt(GameMode); // PlayerGameMode
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // PlayerPosition x
+        writer.WriteFloat(8, BinaryStream.Endianess.Little); // PlayerPosition y
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // PlayerPosition z
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // Pitch
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // Yaw
+        
+        // Level settings
+        writer.WriteLong(Seed, BinaryStream.Endianess.Little); // WorldSeed
+        writer.WriteShort(BiomeType, BinaryStream.Endianess.Little); // SpawnBiomeType
+        writer.WriteVarString(BiomeName); // UserDefinedBiomeName
+        writer.WriteVarInt(Dimension); // Dimension
+        writer.WriteVarInt(Generator); // Generator
+        writer.WriteVarInt(GameType); // WorldGameMode
+        writer.WriteBool(false); // Hardcore
+        writer.WriteVarInt(Difficulty); // Difficulty
+        
+        // WorldSpawn (BlockPos)
         writer.WriteVarInt(SpawnBlockX);
         writer.WriteVarInt(SpawnBlockY);
         writer.WriteVarInt(SpawnBlockZ);
-        writer.WriteBool(false); //achievements
-        writer.WriteBool(false);
-        writer.WriteBool(false); //editorCreated
-        writer.WriteBool(false); //editorExported
-        writer.WriteVarInt(StopTime);
-        writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteVarString("");
-        writer.WriteFloat(0);
-        writer.WriteFloat(0);
-        writer.WriteBool(true); //platform content
-        writer.WriteBool(true); //multiplayer?
-        writer.WriteBool(true); //lan?
-        writer.WriteVarInt(0); //xbox broadcast settings
-        writer.WriteVarInt(0); //platform broadcast settings
-        writer.WriteBool(true); //commands?
-        writer.WriteBool(false); //texture packs?
-        writer.WriteVarInt(0); //game rules
-        writer.WriteInt(0); //experiments
-        writer.WriteBool(false);
-        writer.WriteBool(false); //bonus chest
-        writer.WriteBool(false); //map
-        writer.WriteByte(2); //permission level
-        writer.WriteInt(0); //chunk tick range
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteVarString("1.21.51");
-        writer.WriteInt(0);
-        writer.WriteInt(0);
-        writer.WriteBool(false);
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteBool(false);
-        writer.WriteByte(0);
-        writer.WriteBool(false);
-        //End of Level settings
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString(LevelName); //level name?
-        writer.WriteVarString("");
-        writer.WriteBool(false); //trial //ok
-                                 //synced movement settings
-        writer.WriteVarInt(0); //0 server auth off, need fix
-        writer.WriteVarInt(80);
-        writer.WriteBool(true);
-        //end of synced movement settings
-        writer.WriteLong(0);
-        writer.WriteVarInt(0);
-        writer.WriteVarInt(0); //block
-        writer.WriteVarInt(0); //item
-        writer.WriteVarString("");
-        writer.WriteBool(true); //new inventory
-        writer.WriteVarString("1.21.51");
-        writer.WriteByte(0x0a); // nbt
-        writer.WriteByte(0); // nbt
-        writer.WriteByte(0); // nbt
-        writer.WriteLong(0); //blockstate checksum
-        writer.WriteLong(0); // uuid
-        writer.WriteLong(0); // uuid
-        writer.WriteBool(false);
-        writer.WriteBool(true); //we use hashed block ids
-        writer.WriteBool(true);
+        
+        writer.WriteBool(false); // AchievementsDisabled
+        writer.WriteVarInt(EditorType); // EditorWorldType
+        writer.WriteBool(false); // CreatedInEditor
+        writer.WriteBool(false); // ExportedFromEditor
+        writer.WriteVarInt(StopTime); // DayCycleLockTime
+        writer.WriteVarInt(0); // EducationEditionOffer
+        writer.WriteBool(false); // EducationFeaturesEnabled
+        writer.WriteVarString(""); // EducationProductID
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // RainLevel
+        writer.WriteFloat(0, BinaryStream.Endianess.Little); // LightningLevel
+        writer.WriteBool(true); // ConfirmedPlatformLockedContent
+        writer.WriteBool(true); // MultiPlayerGame
+        writer.WriteBool(true); // LANBroadcastEnabled
+        writer.WriteVarInt(0); // XBLBroadcastMode
+        writer.WriteVarInt(0); // PlatformBroadcastMode
+        writer.WriteBool(true); // CommandsEnabled
+        writer.WriteBool(false); // TexturePackRequired
+        
+        // GameRules slice (length 0)
+        writer.WriteUnsignedVarInt(0);
+        // Experiments slice (length 0)
+        writer.WriteUInt(0, BinaryStream.Endianess.Little); // SliceUint32Length
+        writer.WriteBool(false); // ExperimentsPreviouslyToggled
+        writer.WriteBool(false); // BonusChestEnabled
+        writer.WriteBool(false); // StartWithMapEnabled
+        writer.WriteVarInt(2); // PlayerPermissions (Operator)
+        writer.WriteInt(4, BinaryStream.Endianess.Little); // ServerChunkTickRadius
+        writer.WriteBool(false); // HasLockedBehaviourPack
+        writer.WriteBool(false); // HasLockedTexturePack
+        writer.WriteBool(false); // FromLockedWorldTemplate
+        writer.WriteBool(true); // MSAGamerTagsOnly
+        writer.WriteBool(false); // FromWorldTemplate
+        writer.WriteBool(false); // WorldTemplateSettingsLocked
+        writer.WriteBool(false); // OnlySpawnV1Villagers
+        writer.WriteBool(false); // PersonaDisabled
+        writer.WriteBool(false); // CustomSkinsDisabled
+        writer.WriteBool(false); // EmoteChatMuted
+        writer.WriteVarString("1.26.33"); // BaseGameVersion
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // LimitedWorldWidth
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // LimitedWorldDepth
+        writer.WriteBool(false); // NewNether
+        
+        // EducationSharedResourceURI
+        writer.WriteVarString(""); // ButtonName
+        writer.WriteVarString(""); // LinkURI
+        
+        // ForceExperimentalGameplay Optional[bool]
+        writer.WriteBool(false); // has value = false
+        
+        writer.WriteByte(0); // ChatRestrictionLevel
+        writer.WriteBool(false); // DisablePlayerInteractions
+        writer.WriteVarInt(0); // ServerEditorConnectionPolicy
+        writer.WriteBool(false); // AllowAnonymousBlockDropsInEditorWorlds
+        writer.WriteVarString(""); // LevelID
+        writer.WriteVarString(LevelName); // WorldName
+        writer.WriteVarString(""); // TemplateContentIdentity
+        writer.WriteBool(false); // Trial
+        
+        // PlayerMovementSettings
+        writer.WriteVarInt(0); // RewindHistorySize
+        writer.WriteBool(false); // ServerAuthoritativeBlockBreaking
+        
+        writer.WriteLong(0, BinaryStream.Endianess.Little); // Time
+        writer.WriteVarInt(0); // EnchantmentSeed
+        
+        // Blocks Slice
+        writer.WriteUnsignedVarInt(0); // length 0
+        
+        writer.WriteVarString(""); // MultiPlayerCorrelationID
+        writer.WriteBool(false); // ServerAuthoritativeInventory
+        writer.WriteVarString("1.26.33"); // GameVersion
+        
+        // PropertyData (NBT compound)
+        writer.WriteByte(0x0a); // Compound
+        writer.WriteVarString(""); // Name
+        writer.WriteByte(0x00); // End
+        
+        writer.WriteULong(0, BinaryStream.Endianess.Little); // ServerBlockStateChecksum
+        writer.WriteLong(0, BinaryStream.Endianess.Little); // WorldTemplateID pt 1
+        writer.WriteLong(0, BinaryStream.Endianess.Little); // WorldTemplateID pt 2
+        
+        writer.WriteBool(false); // ClientSideGeneration
+        writer.WriteBool(false); // UseBlockNetworkIDHashes
+        writer.WriteBool(false); // ServerAuthoritativeSound
+        writer.WriteBool(false); // IsLoggingChat
+        
+        // ServerJoinInformation Optional
+        writer.WriteBool(false); // has value = false
+        
+        writer.WriteVarString(""); // ServerID
+        writer.WriteVarString(""); // ScenarioID
+        writer.WriteVarString(""); // WorldID
+        writer.WriteVarString(""); // OwnerID
+        
         return writer.GetBufferDisposing();
     }
 

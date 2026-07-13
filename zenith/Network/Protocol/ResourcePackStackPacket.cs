@@ -20,7 +20,6 @@ class ResourcePackStackPacket : DataPacket
         writer.WriteUnsignedVarInt(Id);
         writer.WriteBool(MustAccept);
         writer.WriteUnsignedVarInt(0);
-        writer.WriteUnsignedVarInt(0);
         writer.WriteVarString(GameVersion);
         writer.WriteInt(0, BinaryStream.Endianess.Little);
         writer.WriteBool(ExperimentsPreviouslyToggled);
