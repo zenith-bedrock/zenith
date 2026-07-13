@@ -4,7 +4,7 @@ namespace zenith.Network.Protocol;
 
 class ResourcePackClientResponsePacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET;
+    public override int Id => (int)ProtocolInfo.RESOURCE_PACK_CLIENT_RESPONSE_PACKET;
 
     public const byte STATUS_REFUSED = 1;
     public const byte STATUS_SEND_PACKS = 2;

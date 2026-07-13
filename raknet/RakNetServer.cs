@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Extension;
 using Zenith.Raknet.Log;
@@ -21,13 +22,21 @@ public class RakNetServer
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
 
     private int _tickCount = 0;
+    private int _nextSessionId = -1;
 
-    public ulong Guid { get; init; } = (ulong)new Random().Next(0, int.MaxValue);
+    public ulong Guid { get; init; } = GenerateGuid();
     public IPEndPoint RemoteEndPoint { get; init; }
     public List<RakNetSession> Connections => _sessions.Values.ToList();
     public uint MaxConnections { get; init; } = 20;
     public ILogger? Logger { get; init; }
     public IRakNetSessionListener? SessionListener { get; set; } = null;
+
+    private static ulong GenerateGuid()
+    {
+        Span<byte> bytes = stackalloc byte[8];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        return BitConverter.ToUInt64(bytes);
+    }
 
     public RakNetServer(int port)
     {
@@ -73,8 +82,10 @@ public class RakNetServer
 
     public int NextSessionId()
     {
-        return _sessions.Values.Count > 0 ? _sessions.Values.Max(s => s.Id) + 1 : 0;
+        return Interlocked.Increment(ref _nextSessionId);
     }
+
+    public bool HasSession(IPEndPoint endPoint) => _sessions.ContainsKey(endPoint.ToUInt64());
 
     public async Task StartAsync()
     {
@@ -160,7 +171,14 @@ public class RakNetServer
             {
                 foreach (var session in _sessions)
                 {
-                    session.Value.Tick();
+                    try
+                    {
+                        session.Value.Tick();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.Error($"Error ticking session {session.Value.EndPoint}: {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)

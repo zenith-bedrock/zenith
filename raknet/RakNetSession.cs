@@ -42,6 +42,8 @@ public class RakNetSession
     protected int OutputSplitIndex;
     protected uint OutputReliableIndex;
 
+    private bool _closed;
+
     public RakNetSession()
     {
         for (byte index = 0; index < 32; index++)
@@ -50,7 +52,7 @@ public class RakNetSession
         }
     }
 
-    public void Disconnect()
+    public void Disconnect(DisconnectReason reason = DisconnectReason.ServerDisconnect)
     {
         var disconnect = new Disconnect();
 
@@ -63,6 +65,21 @@ public class RakNetSession
 
         SendFrame(frame, Priority.Immediate);
 
+        Close(reason);
+    }
+
+    /// <summary>
+    /// Marca a sessão como encerrada, avisa o listener e remove do servidor. Idempotente:
+    /// só dispara o hook e a remoção na primeira chamada, então é seguro chamar de múltiplos
+    /// lugares (timeout no Tick, pacote de disconnect do cliente, Disconnect() explícito)
+    /// sem disparar OnSessionClose mais de uma vez pra mesma sessão.
+    /// </summary>
+    private void Close(DisconnectReason reason)
+    {
+        if (_closed) return;
+        _closed = true;
+
+        Server.SessionListener?.OnSessionClose(this, reason);
         Server.RemoveSession(this);
     }
 
@@ -71,7 +88,7 @@ public class RakNetSession
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (LastSeen + 15000 < now)
         {
-            Disconnect();
+            Disconnect(DisconnectReason.Timeout);
             return;
         }
 
@@ -128,7 +145,7 @@ public class RakNetSession
             OutputSequenceIndex[frame.OrderChannel] = 0;
         }
 
-        var maxSize = MTU - 36;
+        var maxSize = Math.Max(MTU - 36, 1);
         var splitSize = (int)Math.Ceiling((double)frame.Buffer.Length / maxSize);
 
         frame.MessageIndex = OutputReliableIndex++;
@@ -247,15 +264,29 @@ public class RakNetSession
         }
     }
 
+    // Limites de fragmentação: sem isso, um cliente malicioso pode declarar um SplitInfo.Count
+    // gigante e nunca completar a mensagem, ou abrir fragmentos com IDs diferentes em paralelo
+    // sem limite, acumulando memória na sessão indefinidamente (leak/DoS por exaustão de RAM).
+    private const int MAX_CONCURRENT_FRAGMENTED_MESSAGES = 32;
+    private const int MAX_FRAGMENT_COUNT_PER_MESSAGE = 512;
+
     private bool HandleFragment(Frame frame)
     {
         if (!frame.IsSplit()) return false;
 
-        if (FragmentsQueue.TryGetValue(frame.SplitInfo!.Id, out var fragment))
-        {
-            fragment[frame.SplitInfo.Index] = frame;
+        var splitInfo = frame.SplitInfo!;
 
-            if (fragment.Count != frame.SplitInfo.Count) return false;
+        if (splitInfo.Count <= 0 || splitInfo.Count > MAX_FRAGMENT_COUNT_PER_MESSAGE || splitInfo.Index < 0 || splitInfo.Index >= splitInfo.Count)
+        {
+            Server.Logger?.Warning($"[{EndPoint}] Dropped fragment with invalid split info (count={splitInfo.Count}, index={splitInfo.Index}).");
+            return false;
+        }
+
+        if (FragmentsQueue.TryGetValue(splitInfo.Id, out var fragment))
+        {
+            fragment[splitInfo.Index] = frame;
+
+            if (fragment.Count != splitInfo.Count) return false;
             var stream = new BinaryStream();
             foreach (var frag in fragment) stream.Write(frag.Value.Buffer);
 
@@ -269,12 +300,19 @@ public class RakNetSession
                 Buffer = stream.GetBufferDisposing().ToArray()
             };
 
-            FragmentsQueue.Remove(frame.SplitInfo.Id);
+            FragmentsQueue.Remove(splitInfo.Id);
             return HandleFrame(newFrame);
         }
-        FragmentsQueue[frame.SplitInfo.Id] = new()
+
+        if (FragmentsQueue.Count >= MAX_CONCURRENT_FRAGMENTED_MESSAGES)
         {
-            [frame.SplitInfo.Index] = frame
+            Server.Logger?.Warning($"[{EndPoint}] Too many concurrent fragmented messages, dropping fragment.");
+            return false;
+        }
+
+        FragmentsQueue[splitInfo.Id] = new()
+        {
+            [splitInfo.Index] = frame
         };
         return false;
     }
@@ -323,7 +361,7 @@ public class RakNetSession
                 }, Priority.Normal);
                 return true;
             case (byte)MessageIdentifier.Disconnect:
-                Server.RemoveSession(this);
+                Close(DisconnectReason.ClientDisconnect);
                 reader.Dispose();
                 return true;
             case (byte)MessageIdentifier.Game:

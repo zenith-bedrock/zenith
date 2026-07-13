@@ -1,6 +1,7 @@
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
+using zenith.Session;
 
 namespace zenith.Network.Protocol;
 
@@ -8,14 +9,14 @@ class GamePacket : IPacket
 {
     public byte Id => (byte)MessageIdentifier.Game;
 
-    public byte Compression = SessionListener.NOT_PRESENT;
+    public byte Compression = PacketCompression.NOT_PRESENT;
     public List<byte[]> Buffers = new();
 
     public Span<byte> Encode()
     {
         var writer = new BinaryStream();
         writer.WriteByte(Id);
-        if (Compression != SessionListener.NOT_PRESENT) writer.WriteByte(Compression);
+        if (Compression != PacketCompression.NOT_PRESENT) writer.WriteByte(Compression);
         foreach (var buffer in Buffers)
         {
             writer.WriteUnsignedVarInt(buffer.Length);

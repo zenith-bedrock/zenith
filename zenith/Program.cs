@@ -1,11 +1,4 @@
-using zenith.Network;
-using zenith.Log;
-using Zenith.Raknet;
+using zenith.Server;
 
-var raknet = new RakNetServer(19132)
-{
-    Logger = new Logger(),
-    SessionListener = new SessionListener()
-};
-raknet.StartAsync()
-    .Wait();
+var server = new ZenithServer(19132);
+await server.StartAsync();
