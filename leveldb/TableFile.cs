@@ -1,19 +1,18 @@
 namespace Zenith.LevelDB;
 
 /// <summary>
-/// Tabela imutável ordenada em disco (formato Zenith — não compatível com LevelDB.Standard/NuGet).
+/// Snapshot on-disk ordenado (formato Zenith ZLDB — não compatível com LevelDB.Standard/NuGet).
 /// Header: magic "ZLDB" | version u32=1 | count u32 | entries: u32 klen | key | u32 vlen | value.
-/// Tombstone: vlen = <see cref="Tombstone"/>.
+/// Tombstones não são gravados no snapshot compactado (só live keys).
 /// </summary>
 static class TableFile
 {
     private static readonly byte[] Magic = "ZLDB"u8.ToArray();
     private const uint Version = 1;
-    public const uint Tombstone = uint.MaxValue;
 
-    public static void Write(string path, IEnumerable<KeyValuePair<byte[], byte[]?>> entries)
+    public static void Write(string path, IEnumerable<KeyValuePair<byte[], byte[]>> liveEntries, bool sync)
     {
-        var list = new List<KeyValuePair<byte[], byte[]?>>(entries);
+        var list = new List<KeyValuePair<byte[], byte[]>>(liveEntries);
         list.Sort((a, b) => ByteComparer.Instance.Compare(a.Key, b.Key));
 
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -25,49 +24,21 @@ static class TableFile
         {
             writer.Write(key.Length);
             writer.Write(key);
-            if (value is null)
-            {
-                writer.Write(Tombstone);
-            }
-            else
-            {
-                writer.Write((uint)value.Length);
-                writer.Write(value);
-            }
-        }
-    }
-
-    public static bool TryGet(string path, byte[] key, out byte[]? value, out bool deleted)
-    {
-        value = null;
-        deleted = false;
-        foreach (var (k, v) in ScanFrom(path, key))
-        {
-            var cmp = ByteComparer.Compare(k, key);
-            if (cmp == 0)
-            {
-                deleted = v is null;
-                value = v;
-                return true;
-            }
-
-            if (cmp > 0) break;
+            writer.Write((uint)value.Length);
+            writer.Write(value);
         }
 
-        return false;
+        writer.Flush();
+        stream.Flush(sync);
     }
 
-    /// <summary>
-    /// Yields entries with key &gt;= seekKey in sorted order, streaming from disk.
-    /// </summary>
-    public static IEnumerable<(byte[] Key, byte[]? Value)> ScanFrom(string path, byte[] seekKey)
+    public static void LoadInto(string path, MemTable mem)
     {
-        ArgumentNullException.ThrowIfNull(seekKey);
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var reader = new BinaryReader(stream);
         var magic = reader.ReadBytes(4);
         if (magic.Length != 4 || !magic.AsSpan().SequenceEqual(Magic))
-            yield break;
+            throw new InvalidDataException($"leveldb: bad table magic in {path}");
 
         var version = reader.ReadUInt32();
         if (version != Version)
@@ -83,27 +54,16 @@ static class TableFile
             if (keyLen < 0) throw new InvalidDataException($"leveldb: bad key length in {path}");
             var key = reader.ReadBytes(keyLen);
             var valLen = reader.ReadUInt32();
-            byte[]? value;
-            if (valLen == Tombstone)
+            if (valLen == uint.MaxValue)
             {
-                value = null;
-            }
-            else
-            {
-                if (valLen > int.MaxValue) throw new InvalidDataException($"leveldb: value too large in {path}");
-                value = reader.ReadBytes((int)valLen);
-            }
-
-            if (ByteComparer.Compare(key, seekKey) < 0)
+                // Legacy tombstone in older snapshots — treat as delete.
+                mem.Delete(key);
                 continue;
+            }
 
-            yield return (key, value);
+            if (valLen > int.MaxValue) throw new InvalidDataException($"leveldb: value too large in {path}");
+            var value = reader.ReadBytes((int)valLen);
+            mem.Put(key, value);
         }
-    }
-
-    public static IEnumerable<KeyValuePair<byte[], byte[]?>> ReadAll(string path)
-    {
-        foreach (var (k, v) in ScanFrom(path, []))
-            yield return new KeyValuePair<byte[], byte[]?>(k, v);
     }
 }

@@ -1,26 +1,20 @@
 namespace Zenith.LevelDB;
 
 /// <summary>
-/// Iterador ordenado. <see cref="Seek"/> / <see cref="Next"/> mesclam memtable (snapshot)
-/// com scan streaming da tabela em disco — não materializa o DB inteiro em uma lista.
+/// Iterador ordenado sobre um snapshot em memória do dataset (rota B: fonte única = RAM).
 /// </summary>
 public sealed class Iterator : IDisposable
 {
-    private readonly SortedDictionary<byte[], byte[]?> _mem;
-    private readonly string? _tablePath;
-    private IEnumerator<(byte[] Key, byte[]? Value)>? _table;
-    private IEnumerator<KeyValuePair<byte[], byte[]?>>? _memEnum;
-    private bool _tableValid;
-    private bool _memValid;
+    private readonly SortedDictionary<byte[], byte[]> _data;
+    private IEnumerator<KeyValuePair<byte[], byte[]>>? _enum;
+    private bool _valid;
     private byte[]? _key;
     private byte[]? _value;
-    private bool _valid;
     private bool _disposed;
 
-    internal Iterator(SortedDictionary<byte[], byte[]?> memSnapshot, string? tablePath)
+    internal Iterator(SortedDictionary<byte[], byte[]> dataSnapshot)
     {
-        _mem = memSnapshot;
-        _tablePath = tablePath;
+        _data = dataSnapshot;
     }
 
     public bool IsValid() => _valid;
@@ -34,34 +28,22 @@ public sealed class Iterator : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(target);
 
-        DisposeEnum(_table);
-        DisposeEnum(_memEnum);
-        _table = null;
-        _memEnum = null;
-        _tableValid = false;
-        _memValid = false;
+        DisposeEnum();
         _valid = false;
         _key = null;
         _value = null;
 
-        if (_tablePath is not null && File.Exists(_tablePath))
+        _enum = _data.GetEnumerator();
+        while (_enum.MoveNext())
         {
-            _table = TableFile.ScanFrom(_tablePath, target).GetEnumerator();
-            _tableValid = _table.MoveNext();
-        }
-
-        _memEnum = _mem.GetEnumerator();
-        // Advance mem to first key >= target
-        while (_memEnum.MoveNext())
-        {
-            if (ByteComparer.Instance.Compare(_memEnum.Current.Key, target) >= 0)
+            if (ByteComparer.Instance.Compare(_enum.Current.Key, target) >= 0)
             {
-                _memValid = true;
-                break;
+                _key = _enum.Current.Key;
+                _value = _enum.Current.Value;
+                _valid = true;
+                return;
             }
         }
-
-        AdvanceMerged();
     }
 
     public void SeekToFirst() => Seek([]);
@@ -69,63 +51,19 @@ public sealed class Iterator : IDisposable
     public void Next()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!_valid) return;
-        AdvanceMerged();
-    }
+        if (!_valid || _enum is null) return;
 
-    private void AdvanceMerged()
-    {
-        while (true)
+        if (_enum.MoveNext())
         {
-            byte[]? tableKey = _tableValid ? _table!.Current.Key : null;
-            byte[]? memKey = _memValid ? _memEnum!.Current.Key : null;
-
-            if (tableKey is null && memKey is null)
-            {
-                _valid = false;
-                _key = null;
-                _value = null;
-                return;
-            }
-
-            int cmp;
-            if (tableKey is null) cmp = 1;
-            else if (memKey is null) cmp = -1;
-            else cmp = ByteComparer.Instance.Compare(tableKey, memKey);
-
-            if (cmp < 0)
-            {
-                // table only
-                var (k, v) = _table!.Current;
-                _tableValid = _table.MoveNext();
-                if (v is null) continue; // skip tombstone
-                _key = k;
-                _value = v;
-                _valid = true;
-                return;
-            }
-
-            if (cmp > 0)
-            {
-                // mem only
-                var kv = _memEnum!.Current;
-                _memValid = _memEnum.MoveNext();
-                if (kv.Value is null) continue;
-                _key = kv.Key;
-                _value = kv.Value;
-                _valid = true;
-                return;
-            }
-
-            // same key: mem wins; skip table entry
-            var memKv = _memEnum!.Current;
-            _memValid = _memEnum.MoveNext();
-            _tableValid = _table!.MoveNext();
-            if (memKv.Value is null) continue;
-            _key = memKv.Key;
-            _value = memKv.Value;
+            _key = _enum.Current.Key;
+            _value = _enum.Current.Value;
             _valid = true;
-            return;
+        }
+        else
+        {
+            _valid = false;
+            _key = null;
+            _value = null;
         }
     }
 
@@ -133,14 +71,14 @@ public sealed class Iterator : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        DisposeEnum(_table);
-        DisposeEnum(_memEnum);
+        DisposeEnum();
         _valid = false;
     }
 
-    private static void DisposeEnum<T>(IEnumerator<T>? e)
+    private void DisposeEnum()
     {
-        if (e is IDisposable d)
+        if (_enum is IDisposable d)
             d.Dispose();
+        _enum = null;
     }
 }

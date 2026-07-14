@@ -126,12 +126,48 @@ public class LevelDbTests
             batch.Put(Encoding.UTF8.GetBytes("sync"), Encoding.UTF8.GetBytes("durable"));
             batch.Put(Encoding.UTF8.GetBytes("x"), Encoding.UTF8.GetBytes("y"));
             db.Write(batch, new WriteOptions { Sync = true });
-            // Dispose closes + flushes; Sync already fsynced the WAL before return.
             db.Dispose();
 
             using var reopened = new DB(new Options { CreateIfMissing = false }, dir);
             Assert.Equal("durable", Encoding.UTF8.GetString(reopened.Get(Encoding.UTF8.GetBytes("sync"))!));
             Assert.Equal("y", Encoding.UTF8.GetString(reopened.Get(Encoding.UTF8.GetBytes("x"))!));
+        }
+        finally
+        {
+            TryDelete(dir);
+        }
+    }
+
+    [Fact]
+    public void Open_recovers_when_orphan_ldb_exists_but_CURRENT_points_at_old()
+    {
+        var dir = NewDir();
+        try
+        {
+            var keyA = Encoding.UTF8.GetBytes("k");
+            var valA = Encoding.UTF8.GetBytes("A");
+            using (var db = new DB(new Options { CreateIfMissing = true }, dir))
+            {
+                db.Put(keyA, valA);
+            }
+
+            var currentName = File.ReadAllText(Path.Combine(dir, "CURRENT")).Trim();
+            Assert.False(string.IsNullOrEmpty(currentName));
+            Assert.True(File.Exists(Path.Combine(dir, currentName)));
+
+            // Simulate crash after writing a new snapshot but before CURRENT publish.
+            var orphanPath = Path.Combine(dir, "999999.ldb");
+            TableFile.Write(
+                orphanPath,
+                [new KeyValuePair<byte[], byte[]>(Encoding.UTF8.GetBytes("k"), Encoding.UTF8.GetBytes("B"))],
+                sync: true);
+            Assert.True(File.Exists(orphanPath));
+            Assert.Equal(currentName, File.ReadAllText(Path.Combine(dir, "CURRENT")).Trim());
+
+            using var reopened = new DB(new Options { CreateIfMissing = false }, dir);
+            Assert.Equal("A", Encoding.UTF8.GetString(reopened.Get(keyA)!));
+            // Orphan must not be source of truth; GC may delete it on Open.
+            Assert.False(File.Exists(orphanPath));
         }
         finally
         {

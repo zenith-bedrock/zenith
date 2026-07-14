@@ -1,8 +1,15 @@
 # Zenith.LevelDB
 
-Managed key/value store used by Zenith chunk overlay storage (`c:` / `ov:` keys). Own on-disk format (ZLDB) — **not** binary-compatible with `LevelDB.Standard`, Mojang Bedrock worlds, or RocksDB.
+Managed key/value store for Zenith chunk overlay storage (`c:` / `ov:` keys). Own on-disk format (ZLDB) — **not** binary-compatible with `LevelDB.Standard`, Mojang Bedrock worlds, or RocksDB.
 
-## API (v1+)
+## Constraint (read this first)
+
+**The entire dataset must fit in RAM while the database is open.**  
+On open, the snapshot is loaded into a `SortedDictionary` that is the runtime source of truth; Get/Iterator never stream cold SSTs from disk. That is a conscious trade for Zenith’s sparse `c:`/`ov:` overlays in a single process — not “we forgot Bloom filters.” If you need datasets larger than host memory, this store is the wrong tool (revisit streaming/LSM then).
+
+Recreate `world.path` after format changes; no migration from NuGet LevelDB dirs.
+
+## API
 
 ```csharp
 using var db = new DB(new Options { CreateIfMissing = true }, path);
@@ -13,40 +20,34 @@ db.Delete(key);
 var batch = new WriteBatch();
 batch.Put(keyA, valueA);
 batch.Delete(keyB);
-db.Write(batch, new WriteOptions { Sync = true }); // optional fsync of WAL
+db.Write(batch, new WriteOptions { Sync = true }); // fsync WAL
 
 using var it = db.CreateIterator();
 it.Seek(prefix);
 while (it.IsValid()) { /* ... */ it.Next(); }
 
-db.Close();
+db.Close(); // fsync snapshot, publish CURRENT, rotate WAL
 ```
 
-- **WriteBatch / `DB.Write`**: one journal record, then all ops applied to the memtable (atomic under the DB lock).
-- **WriteOptions.Sync**: after WAL append, `FileStream.Flush(true)` before return.
-- **Put / Delete**: one-op batches via `Write` (LevelDB-classic shape).
-
-## Architecture today
+## Architecture (route B — simple KV)
 
 ```
-memtable (SortedDictionary) + WAL (*.log) + single immutable table (*.ldb)
-Flush = merge whole table + mem → new .ldb (full rewrite)
+RAM SortedDictionary  =  source of truth (full dataset)
+WAL (*.log)           =  durability for writes since last snapshot
+Snapshot (*.ldb)      =  one live file named in CURRENT
 ```
 
-Journal still accepts legacy single-op records (type 1/2) for replay; new writes use type 3 batch.
+Flush/Close: write live keys → **fsync** `.ldb` → publish `CURRENT` → rotate WAL → best-effort delete orphan `.ldb` / old `.log`.
 
-## Gaps vs classic LevelDB / RocksDB (backlog)
+`WriteOptions.Sync=true` fsyncs the **WAL** after append. Snapshot fsync happens on flush/Close (and when the write buffer forces a flush).
 
-Lições práticas do RocksDB aplicadas a um store de overlays esparsos — **sem** P/Invoke nativo.
+Crash mid-flush (new `.ldb` written, `CURRENT` still old): Open trusts `CURRENT` only; orphan `.ldb` is ignored and GC’d.
 
-| Prioridade | Gap Zenith | Lição RocksDB / clássico | Ação futura |
-|------------|------------|--------------------------|-------------|
-| P0 (feito) | WriteBatch / Sync semantics | Group commit começa no batch | — |
-| P1 | WAL sem CRC / framing | Torn write silencioso | Journal framed + CRC; abort replay no bad record |
-| P1 | Flush = rewrite da tabela inteira | Write stall | L0 append-only + merge-on-read; MANIFEST lista arquivos |
-| P2 | Sem imm memtable / bg flush | Stall no `_gate` | Promote mem→imm; ThreadPool flush |
-| P2 | Scan linear no `.ldb` | Seek/Get caros com muitos `ov:` | Index/restart points + Bloom (~10 bits) |
-| P3 | Compaction 1 nível | Compaction storm / CF | Size-tiered; **sem** column families (prefix `c:`/`ov:` basta) |
-| Defer | Formato Mojang / PInvoke RocksDB | — | Fora: formato ZLDB managed |
+## Why not a full LSM + compaction?
 
-Para Zenith, o próximo ganho real de escala é **L0 multi-file** (fim do full-rewrite), não Bloom nem column families.
+Zenith only needs a trustworthy KV for two key families, one world, one process — no Mojang decode. A theatrical LSM without multi-level compaction was complexity without proven need (`ARCHITECTURE.md` rule 7). Steady-state already was a single rewritten table; adding L0/MANIFEST/compaction would buy risk, not product.
+
+## Optional later (not P1)
+
+- WAL framing + CRC (torn last record)
+- Periodic background snapshot without write-path stall under lock

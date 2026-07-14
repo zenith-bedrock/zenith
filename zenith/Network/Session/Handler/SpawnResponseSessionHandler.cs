@@ -42,6 +42,7 @@ class SpawnResponseSessionHandler : ISessionHandler
 
         // Fan-out de visibilidade antes de marcar IsInGame / trocar handler.
         PlayerVisibility.AnnounceJoin(player, session.Context.PlayerManager.Online);
+        session.Protocol.Inventory.SendHotbarContent(player.Inventory);
         session.SetHandler(new InGameSessionHandler());
     }
 }

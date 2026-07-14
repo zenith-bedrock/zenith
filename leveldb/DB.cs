@@ -1,18 +1,20 @@
 namespace Zenith.LevelDB;
 
 /// <summary>
-/// Banco key/value managed (LSM mínimo: memtable + journal + tabela imutável).
-/// Formato on-disk próprio — mundos escritos pelo NuGet LevelDB.Standard precisam ser recriados.
+/// Key/value managed: dataset completo em RAM + WAL + snapshot único em disco.
+/// Formato ZLDB próprio — não compatível com NuGet LevelDB / mundos Mojang.
+/// Constraint: o dataset inteiro precisa caber em memória enquanto o DB está aberto.
 /// </summary>
 public sealed class DB : IDisposable
 {
     private readonly string _dir;
     private readonly Options _opts;
     private readonly object _gate = new();
-    private MemTable _mem = new();
+    private readonly MemTable _mem = new();
     private JournalWriter? _journal;
     private string? _tablePath;
     private ulong _nextFileNum = 1;
+    private long _dirtyBytes;
     private bool _closed;
 
     public DB(Options options, string directory)
@@ -57,6 +59,7 @@ public sealed class DB : IDisposable
                 _tablePath = Path.Combine(_dir, name);
                 if (!File.Exists(_tablePath))
                     throw new InvalidDataException($"leveldb: CURRENT points to missing table {_tablePath}");
+                TableFile.LoadInto(_tablePath, _mem);
             }
         }
         else if (!_opts.CreateIfMissing)
@@ -65,16 +68,35 @@ public sealed class DB : IDisposable
         }
 
         ReplayJournals();
+        _dirtyBytes = 0;
 
-        // Persist replayed journal entries before rotating logs, so a crash after
-        // RemoveOldJournals cannot lose unrecovered writes.
-        if (_mem.Count > 0)
-            FlushMemtableUnlocked();
+        // Persist non-empty WAL onto snapshot before rotating logs (crash safety).
+        if (HasNonEmptyJournalFiles())
+            FlushSnapshotUnlocked(sync: true);
 
         var journalNum = _nextFileNum++;
         _journal = new JournalWriter(Path.Combine(_dir, JournalName(journalNum)), append: false);
-        WriteCurrentManifest(journalNum);
+        WriteCurrentManifest();
         RemoveOldJournals(keep: journalNum);
+        RemoveOrphanTables();
+    }
+
+    private bool HasNonEmptyJournalFiles()
+    {
+        foreach (var path in Directory.EnumerateFiles(_dir, "*.log"))
+        {
+            try
+            {
+                if (new FileInfo(path).Length > 0)
+                    return true;
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        return false;
     }
 
     private void RecoverFileNumbers()
@@ -107,15 +129,13 @@ public sealed class DB : IDisposable
             JournalWriter.Replay(Path.Combine(_dir, JournalName(n)), _mem);
     }
 
-    private void WriteCurrentManifest(ulong journalNum)
+    private void WriteCurrentManifest()
     {
-        // CURRENT = table name (may be empty line if none) — journal tracked only for cleanup.
         var tableName = _tablePath is null ? "" : Path.GetFileName(_tablePath);
         var tmp = Path.Combine(_dir, "CURRENT.tmp");
         File.WriteAllText(tmp, tableName + Environment.NewLine);
         var current = Path.Combine(_dir, "CURRENT");
         File.Move(tmp, current, overwrite: true);
-        _ = journalNum;
     }
 
     private void RemoveOldJournals(ulong keep)
@@ -127,6 +147,19 @@ public sealed class DB : IDisposable
             {
                 try { File.Delete(path); } catch { /* best effort */ }
             }
+        }
+    }
+
+    /// <summary>Best-effort delete of .ldb files not named in CURRENT (mid-flush orphans).</summary>
+    private void RemoveOrphanTables()
+    {
+        var live = _tablePath is null ? null : Path.GetFileName(_tablePath);
+        foreach (var path in Directory.EnumerateFiles(_dir, "*.ldb"))
+        {
+            var name = Path.GetFileName(path);
+            if (live is not null && string.Equals(name, live, StringComparison.OrdinalIgnoreCase))
+                continue;
+            try { File.Delete(path); } catch { /* best effort */ }
         }
     }
 
@@ -142,13 +175,9 @@ public sealed class DB : IDisposable
         lock (_gate)
         {
             EnsureOpen();
-            if (_mem.TryGet(key, out var memValue, out var deleted))
-                return deleted ? null : memValue is null ? null : (byte[])memValue.Clone();
-
-            if (_tablePath is not null && TableFile.TryGet(_tablePath, key, out var tableValue, out var tableDeleted))
-                return tableDeleted ? null : tableValue is null ? null : (byte[])tableValue.Clone();
-
-            return null;
+            if (!_mem.TryGet(key, out var value, out var deleted) || deleted)
+                return null;
+            return value is null ? null : (byte[])value.Clone();
         }
     }
 
@@ -175,9 +204,6 @@ public sealed class DB : IDisposable
 
     public void Write(WriteBatch batch) => Write(batch, WriteOptions.Default);
 
-    /// <summary>
-    /// Aplica o batch atomicamente: um record no journal, depois todas as ops no memtable.
-    /// </summary>
     public void Write(WriteBatch batch, WriteOptions options)
     {
         ArgumentNullException.ThrowIfNull(batch);
@@ -191,8 +217,9 @@ public sealed class DB : IDisposable
             _journal!.AppendBatch(encoded);
             _journal.Flush(options.Sync);
             WriteBatch.ApplyEncoded(encoded, _mem);
-            if (_mem.ApproxSize >= _opts.WriteBufferSize)
-                FlushMemtableUnlocked();
+            _dirtyBytes += encoded.Length;
+            if (_dirtyBytes >= _opts.WriteBufferSize)
+                FlushSnapshotUnlocked(sync: true);
         }
     }
 
@@ -204,51 +231,42 @@ public sealed class DB : IDisposable
         lock (_gate)
         {
             EnsureOpen();
-            // Snapshot: copy mem entries (values) + table path for streaming Seek.
-            var memSnap = new SortedDictionary<byte[], byte[]?>(ByteComparer.Instance);
-            foreach (var (k, v) in _mem.Entries)
-                memSnap[k] = v is null ? null : (byte[])v.Clone();
-            return new Iterator(memSnap, _tablePath);
+            var snap = new SortedDictionary<byte[], byte[]>(ByteComparer.Instance);
+            foreach (var (k, v) in _mem.LiveEntries())
+                snap[(byte[])k.Clone()] = (byte[])v.Clone();
+            return new Iterator(snap);
         }
     }
 
-    private void FlushMemtableUnlocked()
+    /// <summary>
+    /// Writes live dict → new .ldb (fsync) → publish CURRENT → rotate WAL.
+    /// Mem keeps live keys; tombstones dropped. Orphans deleted best-effort.
+    /// </summary>
+    private void FlushSnapshotUnlocked(bool sync)
     {
-        if (_mem.Count == 0) return;
-
-        // Merge table + mem into one new table (mem wins).
-        var merged = new SortedDictionary<byte[], byte[]?>(ByteComparer.Instance);
-        if (_tablePath is not null && File.Exists(_tablePath))
-        {
-            foreach (var kv in TableFile.ReadAll(_tablePath))
-                merged[kv.Key] = kv.Value;
-        }
-
-        foreach (var (k, v) in _mem.Entries)
-            merged[k] = v;
-
-        // Drop tombstones from durable snapshot.
-        var live = merged.Where(kv => kv.Value is not null).ToList();
+        _mem.DropTombstones();
+        var live = _mem.LiveEntries();
 
         var fileNum = _nextFileNum++;
         var newPath = Path.Combine(_dir, TableName(fileNum));
-        TableFile.Write(newPath, live);
+        TableFile.Write(newPath, live, sync);
 
         var oldPath = _tablePath;
         _tablePath = newPath;
+        WriteCurrentManifest();
 
         var journalNum = _nextFileNum++;
         _journal?.Dispose();
         _journal = new JournalWriter(Path.Combine(_dir, JournalName(journalNum)), append: false);
-        WriteCurrentManifest(journalNum);
-        _mem.Clear();
+        RemoveOldJournals(keep: journalNum);
 
         if (oldPath is not null && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
         {
             try { File.Delete(oldPath); } catch { /* best effort */ }
         }
 
-        RemoveOldJournals(keep: journalNum);
+        RemoveOrphanTables();
+        _dirtyBytes = 0;
     }
 
     public void Close()
@@ -258,8 +276,8 @@ public sealed class DB : IDisposable
             if (_closed) return;
             try
             {
-                if (_mem.Count > 0)
-                    FlushMemtableUnlocked();
+                if (_dirtyBytes > 0)
+                    FlushSnapshotUnlocked(sync: true);
             }
             finally
             {

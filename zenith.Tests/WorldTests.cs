@@ -153,6 +153,43 @@ public class PlayerInventoryTests
         Assert.True(inv.TryConsumeOne(0));
         Assert.Equal(63, inv.Get(0).Count);
     }
+
+    [Fact]
+    public void TryAdd_stacks_onto_same_runtime_then_empty_slot()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 60));
+        Assert.True(inv.TryAdd(Blocks.Stone, 5));
+        Assert.Equal(64, inv.Get(0).Count);
+        Assert.Equal(Blocks.Stone, inv.Get(1).RuntimeId);
+        Assert.Equal(1, inv.Get(1).Count);
+
+        Assert.True(inv.TryAdd(Blocks.GrassBlock, 3));
+        Assert.Equal(Blocks.GrassBlock, inv.Get(2).RuntimeId);
+        Assert.Equal(3, inv.Get(2).Count);
+    }
+
+    [Fact]
+    public void Break_into_inventory_matches_BlockSystem_economy()
+    {
+        Blocks.EnsureLoaded();
+        var world = new World.World(new InMemoryChunkStorage());
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 1));
+
+        // Place: consume one
+        Assert.True(inv.TryConsumeOne(0));
+        world.SetBlock(0, Blocks.FlatGrassY, 0, Blocks.Stone);
+        Assert.True(inv.Get(0).IsEmpty);
+
+        // Break: give previous block back
+        var previous = world.GetBlock(0, Blocks.FlatGrassY, 0);
+        Assert.Equal(Blocks.Stone, previous);
+        Assert.True(inv.TryAdd(previous));
+        world.SetBlock(0, Blocks.FlatGrassY, 0, Blocks.Air);
+        Assert.Equal(1, inv.Get(0).Count);
+        Assert.Equal(Blocks.Stone, inv.Get(0).RuntimeId);
+    }
 }
 
 public class ChunkPayloadsTests

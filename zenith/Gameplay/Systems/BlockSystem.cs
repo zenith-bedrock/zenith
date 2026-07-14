@@ -7,7 +7,7 @@ namespace Zenith.Gameplay.Systems;
 /// <summary>
 /// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
 /// Mutação de mundo: overlay esparso permanente (nunca reescreve subchunk).
-/// Place consome 1 do hotbar no tick.
+/// Place consome 1 do hotbar; break dá o bloco ao inventário (sem item actor no chão).
 /// </summary>
 sealed class BlockSystem : IGameSystem
 {
@@ -29,13 +29,24 @@ sealed class BlockSystem : IGameSystem
         {
             if (!player.TryConsumeBlockEdit(out var edit)) continue;
 
+            var inventoryChanged = false;
             if (edit.BlockRuntimeId != World.World.AirRuntimeId)
             {
                 if (!player.Inventory.TryConsumeOne(player.SelectedHotbarSlot))
                     continue;
+                inventoryChanged = true;
+            }
+            else
+            {
+                var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
+                if (previous != World.World.AirRuntimeId && player.Inventory.TryAdd(previous))
+                    inventoryChanged = true;
             }
 
             _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+
+            if (inventoryChanged)
+                player.Session.Protocol.Inventory.SendHotbarContent(player.Inventory);
 
             foreach (var peer in _players.Online)
             {

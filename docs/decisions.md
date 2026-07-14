@@ -87,6 +87,14 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Keeps the core share-alike story while remaining practical for linking — a signal that Zenith is meant as infrastructure others build on, not a closed appliance.
 
+### 11. Zenith.LevelDB = snapshot + WAL in RAM, not a full LSM
+
+**Choice:** Collapse the early “mini-LSM” (mem + journal + merge iterator) into: **full dataset in a `SortedDictionary`**, WAL for durability, one fsynced snapshot named by `CURRENT`. Public API (`DB` / `WriteBatch` / `Iterator`) unchanged.
+
+**Why:** Callers only need trustworthy `c:` / `ov:` KV in one process — not Mojang decode or RocksDB-scale compaction. Steady-state already rewrote a single table; adding L0/compaction would be storage-engine risk without a proven product need (`ARCHITECTURE.md` rule 7).
+
+**Explicit constraint:** the **entire dataset must fit in RAM** while open. Documented in [`leveldb/README.md`](../leveldb/README.md). Crash mid-flush (new `.ldb`, old `CURRENT`) recovers by trusting `CURRENT` only; orphans are GC’d.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
@@ -94,6 +102,7 @@ Recorded so we don't “accidentally” implement them:
 - Plugin API / DI container
 - `/` commands and permissions
 - Mojang LevelDB world format
+- Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 
