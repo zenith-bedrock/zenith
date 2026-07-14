@@ -4,16 +4,22 @@ using Zenith.Raknet.Extension;
 
 namespace Zenith.Network.Protocol;
 
-/// <summary>Transmite chat. Sem comandos; higiene de flood/tamanho neste módulo.</summary>
+/// <summary>Transmite chat. Sem comandos; higiene de flood/tamanho da config.</summary>
 sealed class ChatProtocol
 {
-    public const int MaxMessageLength = 512;
-
     private readonly NetworkSession _session;
-    private readonly TokenBucketRateLimiter<Guid> _rateLimiter =
-        new(capacity: 8, refillPerSecond: 4);
+    private readonly TokenBucketRateLimiter<Guid> _rateLimiter;
+    private readonly int _maxMessageLength;
 
-    public ChatProtocol(NetworkSession session) => _session = session;
+    public ChatProtocol(NetworkSession session)
+    {
+        _session = session;
+        var chat = session.Context.Config.Chat;
+        _maxMessageLength = chat.MaxLength;
+        _rateLimiter = new TokenBucketRateLimiter<Guid>(chat.RateCapacity, chat.RateRefillPerSecond);
+    }
+
+    public int MaxMessageLength => _maxMessageLength;
 
     public void SendChat(string sourceName, string message, string xboxUserId = "") =>
         _session.SendDataPacket(CreateChatPacket(sourceName, message, xboxUserId));
@@ -26,7 +32,7 @@ sealed class ChatProtocol
     {
         accepted = message.Trim();
         if (accepted.Length == 0) return false;
-        if (accepted.Length > MaxMessageLength) return false;
+        if (accepted.Length > _maxMessageLength) return false;
         if (!_rateLimiter.TryConsume(playerUuid)) return false;
         return true;
     }
@@ -43,11 +49,11 @@ sealed class ChatProtocol
             FilteredMessage = null
         };
 
-    public static string ClampMessage(string message)
+    public static string ClampMessage(string message, int maxLength = 512)
     {
         if (string.IsNullOrEmpty(message)) return "";
-        return message.Length <= MaxMessageLength
+        return message.Length <= maxLength
             ? message
-            : message[..MaxMessageLength];
+            : message[..maxLength];
     }
 }

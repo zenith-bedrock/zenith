@@ -32,7 +32,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // esse status só depois de publicar chunks (mesmo que falsos).
                 var player = session.Player!;
                 session.Protocol.World.SendStartGame(
-                    levelName: "world",
+                    levelName: session.Context.Config.World.Name,
                     entityRuntimeId: player.RuntimeId,
                     x: player.PositionX,
                     y: player.PositionY,

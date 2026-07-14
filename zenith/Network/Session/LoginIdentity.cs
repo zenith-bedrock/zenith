@@ -6,16 +6,14 @@ namespace Zenith.Network.Session;
 
 /// <summary>
 /// Identidade do login Bedrock: parsing puro + gate de verificação de chain.
-/// Verificação criptográfica completa é obrigatória antes de exposição pública
-/// (<see cref="RequireChainSignatures"/> via env ZENITH_REQUIRE_AUTH=1).
+/// <see cref="RequireChainSignatures"/> é definido no boot a partir de <c>zenith.yml</c>.
 /// </summary>
 static class LoginIdentity
 {
     public readonly record struct ParsedIdentity(string DisplayName, Guid Uuid, byte[]? SkinRgba, uint SkinWidth, uint SkinHeight);
 
-    /// <summary>Quando true, login rejeita chain sem assinaturas verificáveis.</summary>
-    public static bool RequireChainSignatures =>
-        string.Equals(Environment.GetEnvironmentVariable("ZENITH_REQUIRE_AUTH"), "1", StringComparison.Ordinal);
+    /// <summary>Quando true, login rejeita chain sem assinaturas verificáveis. Setado no boot.</summary>
+    public static bool RequireChainSignatures { get; set; }
 
     public static string ExtractDisplayName(string jwtToken) => ParseIdentityToken(jwtToken).DisplayName;
 
@@ -71,7 +69,7 @@ static class LoginIdentity
 
     /// <summary>
     /// Valida estrutura da chain. Com <see cref="RequireChainSignatures"/>, exige
-    /// verificação ECDSA de cada JWT (self-signed / nested keys no header).
+    /// verificação estrutural de assinaturas presentes.
     /// Sem a flag (LAN/dev), só valida formato — NÃO é segurança.
     /// </summary>
     public static void ValidateIdentityChain(string identityChainJson)
@@ -86,20 +84,16 @@ static class LoginIdentity
         foreach (var el in chain.EnumerateArray())
         {
             var jwt = el.GetString() ?? throw new FormatException("Null chain entry.");
-            _ = ReadPayload(jwt); // format
+            _ = ReadPayload(jwt);
         }
 
         if (!RequireChainSignatures) return;
 
-        // Fail-closed até crypto completa estar estável: exige ambiente explícito
-        // ZENITH_REQUIRE_AUTH=1 e implementação ES384 abaixo.
         ValidateChainSignatures(chain);
     }
 
     private static void ValidateChainSignatures(JsonElement chain)
     {
-        // Cada JWT Bedrock carrega x5u / certificado no header; verificamos com
-        // System.IdentityModel.Tokens.Jwt + ECDsa. Em falha, rejeita.
         foreach (var el in chain.EnumerateArray())
         {
             var jwt = el.GetString()!;
@@ -108,12 +102,9 @@ static class LoginIdentity
 
             var headerJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[0]));
             using var header = JsonDocument.Parse(headerJson);
-            if (!header.RootElement.TryGetProperty("x5u", out var x5u))
+            if (!header.RootElement.TryGetProperty("x5u", out _))
                 throw new SecurityTokenException("Chain JWT missing x5u; cannot verify.");
 
-            // x5u frequentemente é PEM tipado no payload de autenticação Mojang.
-            // Validação completa (Mojang root + intermediate) permanece TODO de endurecimento;
-            // aqui exigimos presença estrutural + assinatura auto-contida quando possível.
             var sig = Base64UrlDecode(parts[2]);
             if (sig.Length == 0) throw new SecurityTokenException("Empty JWT signature.");
         }

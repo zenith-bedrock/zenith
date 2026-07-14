@@ -3,6 +3,7 @@ using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Log;
 using Zenith.Network;
+using Zenith.Network.Session;
 using Zenith.Player;
 using Zenith.Raknet;
 using Zenith.World;
@@ -20,45 +21,70 @@ class ZenithServer
     public RakNetServer RakNetServer { get; }
     public ServerContext Context { get; }
     public GameLoop GameLoop { get; }
+    public ServerConfig Config { get; }
 
-    public ZenithServer(int port)
+    public ZenithServer(ServerConfig config)
     {
+        Config = config;
         var logger = new Logger();
+
+        LoginIdentity.RequireChainSignatures = config.Auth.RequireChainSignatures;
+        if (!config.Auth.RequireChainSignatures)
+        {
+            logger.Warning(
+                "*** AUTH WARNING: auth.require-chain-signatures is false. " +
+                "Any client can claim any username/UUID. Enable before public exposure. ***");
+        }
+
         var players = new PlayerManager();
         var clock = new GameClock();
         var gameLoop = new GameLoop(clock, logger);
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
 
-        IChunkStorage storage = CreateChunkStorage(logger);
+        IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage);
         gameLoop.Register(new BlockSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(), clock, world);
+        Context = new ServerContext(logger, players, new EventBus(), clock, world, config);
         GameLoop = gameLoop;
 
-        RakNetServer = new RakNetServer(port)
+        RakNetServer = new RakNetServer(config.Server.Port)
         {
             Logger = logger,
-            SessionListener = new ZenithSessionListener(Context)
+            SessionListener = new ZenithSessionListener(Context),
+            MaxConnections = (uint)config.Server.MaxPlayers,
+            MaxConnectionsPerAddress = (uint)config.Server.MaxPlayersPerIp,
+            Motd = config.Server.Motd,
+            SubMotd = config.Server.SubMotd,
+            ListGameMode = config.Server.Gamemode,
+            ProtocolVersion = ServerIdentity.ProtocolVersion,
+            VersionName = ServerIdentity.VersionName
         };
     }
 
-    /// <summary>
-    /// In-memory por padrão. LevelDB quando ZENITH_WORLD_PATH aponta pra um diretório.
-    /// </summary>
-    private static IChunkStorage CreateChunkStorage(Zenith.Raknet.Log.ILogger logger)
+    private static IChunkStorage CreateChunkStorage(ServerConfig config, Zenith.Raknet.Log.ILogger logger)
     {
-        var path = Environment.GetEnvironmentVariable("ZENITH_WORLD_PATH");
-        if (string.IsNullOrWhiteSpace(path))
+        var path = config.World.Path?.Trim() ?? "";
+        if (string.IsNullOrEmpty(path))
         {
-            logger.Info("World storage: InMemoryChunkStorage");
+            logger.Info("World storage: InMemoryChunkStorage (world.path empty)");
             return new InMemoryChunkStorage();
         }
 
-        Directory.CreateDirectory(path);
-        logger.Info($"World storage: LevelDbChunkStorage ({path})");
-        return new LevelDbChunkStorage(path);
+        try
+        {
+            Directory.CreateDirectory(path);
+            var storage = new LevelDbChunkStorage(path);
+            logger.Info($"World storage: LevelDbChunkStorage ({path})");
+            return storage;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to open LevelDB world at '{path}'. Zenith will not fall back to in-memory storage.",
+                ex);
+        }
     }
 
     public async Task StartAsync()

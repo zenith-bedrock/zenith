@@ -94,8 +94,11 @@ zenith/
 - PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite.
 - Mutação de bloco: overlay esparso em `World` + `UpdateBlock` (não CoW de coluna nesta fase).
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
-- JWT: parse + skin opcional; `ZENITH_REQUIRE_AUTH=1` endurece gate de chain (ver Roadmap).
+- **Config:** `zenith.yml` é a fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
+- JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
+- **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.
+- **LevelDB:** `LevelDbChunkStorage` já existe (seam antecipada vs. roadmap Fase 4); `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback.
 
 ## Smoke manual
 
@@ -103,12 +106,14 @@ zenith/
 2. AuthInput: servidor atualiza `Player` position.
 3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
 4. Movimento de A visível em B (`MoveActorAbsolute`).
-5. Chat A→B (`TextPacket`).
+5. Chat A↔B (`TextPacket`).
 6. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
 
 ## Roadmap
 
 Espinha: **Chat → World in-memory → Inventory/blocks → LevelDB**, skins cosméticas em paralelo. Não espelhar Actor→Events; Zenith já usa `GameLoop` + pending input.
+
+Config operacional (`zenith.yml`) **não** é uma “fase de gameplay”; entra cedo para não depender de env. i18n fica **depois** de haver mensagens de jogador estáveis.
 
 ```mermaid
 flowchart LR
@@ -122,6 +127,8 @@ flowchart LR
   Skin[Skin_parse_cosmetico]
   Skin -.-> P1
   JwtGate[JWT_chain_verify]
+  Cfg[zenith_yml]
+  Cfg -.-> P1
 ```
 
 `JwtGate` fica fora da cadeia de gameplay: gate de **exposição pública** (LAN ≠ público), independente da fase.
@@ -144,9 +151,10 @@ flowchart LR
 - Bounds de coordenada e hotbar no handler.
 - Publicação de mutação: **overlay esparso** (não CoW de coluna inteira). CoW granular continua opção futura se o overlay não bastar.
 
-### Fase 4 — LevelDB — bootstrap neste marco
+### Fase 4 — LevelDB — bootstrap antecipado + config
 
-- `LevelDbChunkStorage` + env `ZENITH_WORLD_PATH`; default permanece InMemory.
+- `LevelDbChunkStorage` já no tree; ativar com `world.path` no `zenith.yml` (antes: `ZENITH_WORLD_PATH`).
+- Path vazio = InMemory; falha ao abrir LevelDB **não** cai em InMemory silenciosamente.
 - Chaves Zenith (não formato vanilla Mojang). Vanilla decode = conteúdo futuro.
 
 ### Identidade
@@ -155,7 +163,7 @@ flowchart LR
 |------|----------|--------|
 | Parse de skin | Cosmético | Paralelo (ClientData) |
 | UUID do JWT `identity` | Identidade | No login |
-| Verificação de assinatura da chain | Segurança | `ZENITH_REQUIRE_AUTH=1`; **obrigatório antes de exposição pública** |
+| Verificação de assinatura da chain | Segurança | `auth.require-chain-signatures: true` no YAML; **obrigatório antes de exposição pública** |
 
 ### Explicitamente fora da sequência curta
 
@@ -163,3 +171,4 @@ flowchart LR
 - Anti-cheat, Snappy zero-copy
 - DI container, Plugin API
 - Commands / Permission (`/` adiado de propósito)
+- i18n runtime (ver nota TOML acima)

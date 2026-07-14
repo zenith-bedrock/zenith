@@ -17,18 +17,21 @@ class ServerContext
     public EventBus EventBus { get; }
     public GameClock Clock { get; }
     public World.World World { get; }
+    public ServerConfig Config { get; }
 
     public ServerContext(
         ILogger logger,
         PlayerManager playerManager,
         EventBus eventBus,
         GameClock clock,
-        World.World world)
+        World.World world,
+        ServerConfig config)
     {
         Logger = logger;
         PlayerManager = playerManager;
         EventBus = eventBus;
         Clock = clock;
         World = world;
+        Config = config;
     }
 }

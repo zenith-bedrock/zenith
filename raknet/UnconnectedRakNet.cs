@@ -32,11 +32,16 @@ public class UnconnectedRakNet
         {
             case (byte)MessageIdentifier.UnconnectedPing:
                 var ping = IPacket.From<UnconnectedPing>(ref reader);
+                var online = _server.Connections.Count;
+                var max = _server.MaxConnections;
+                var port = _server.RemoteEndPoint.Port;
                 var pongBuffer = new UnconnectedPong
                 {
                     Time = ping.Time,
                     ServerGuid = _server.Guid,
-                    Message = $"MCPE;Zenith Bedrock;766;1.21.50;8192;18192;{_server.Guid};Test;Survival;1;19132;19132;"
+                    Message =
+                        $"MCPE;{_server.Motd};{_server.ProtocolVersion};{_server.VersionName};" +
+                        $"{online};{max};{_server.Guid};{_server.SubMotd};{_server.ListGameMode};1;{port};{port};"
                 }.Encode();
                 _server.Send(remoteEndPoint, pongBuffer);
                 return true;

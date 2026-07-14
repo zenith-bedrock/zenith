@@ -50,9 +50,9 @@ public class ChatProtocolTests
     [Fact]
     public void ClampMessage_truncates_to_max()
     {
-        var longMsg = new string('a', ChatProtocol.MaxMessageLength + 10);
-        var clamped = ChatProtocol.ClampMessage(longMsg);
-        Assert.Equal(ChatProtocol.MaxMessageLength, clamped.Length);
+        var longMsg = new string('a', 512 + 10);
+        var clamped = ChatProtocol.ClampMessage(longMsg, maxLength: 512);
+        Assert.Equal(512, clamped.Length);
     }
 
     [Fact]

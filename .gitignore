@@ -43,6 +43,7 @@ node_modules/
 ## Configuration Files
 appsettings.json
 appsettings.*.json
+zenith.yml
 
 ## Publish Output
 publish/

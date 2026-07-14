@@ -11,8 +11,6 @@ namespace Zenith.Network.Session.Handler;
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
-    private const int SpawnChunkRadius = 4;
-
     public void OnEnable(NetworkSession session)
     {
         session.Context.Logger.Info($"{session.Player?.Username} entered pre-spawn stage, waiting for chunk radius request.");
@@ -43,7 +41,8 @@ class PreSpawnSessionHandler : ISessionHandler
     private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)
     {
         var request = DataPacket.From<RequestChunkRadiusPacket>(ref stream);
-        var radius = Math.Min(request.Radius, SpawnChunkRadius);
+        var cap = session.Context.Config.World.SpawnChunkRadius;
+        var radius = Math.Min(request.Radius, cap);
 
         session.Context.Logger.Debug($"RequestChunkRadiusPacket: requested={request.Radius}, using={radius}");
 

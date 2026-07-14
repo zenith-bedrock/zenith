@@ -31,7 +31,7 @@ class LoginSessionHandler : ISessionHandler
 
         session.CompressionAlgorithm = PacketCompression.ZLIB;
         session.Protocol.Login.SendNetworkSettings(
-            compressionThreshold: 256,
+            compressionThreshold: (short)session.Context.Config.Network.CompressionThreshold,
             compressionAlgorithm: PacketCompression.ZLIB,
             enableClientThrottling: false,
             clientThrottleThreshold: 0,
