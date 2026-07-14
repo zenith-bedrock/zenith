@@ -1,0 +1,87 @@
+using Zenith.Network.Packets;
+using Zenith.Network.Session;
+
+namespace Zenith.Network.Protocol;
+
+/// <summary>
+/// Coluna de chunk já decidida pelo gameplay/handler — Protocol só empacota e transmite.
+/// </summary>
+readonly record struct ChunkColumn(int X, int Z, int DimensionId, int SubChunkCount, byte[] ExtraPayload);
+
+/// <summary>Transmite intenções de mundo/spawn/chunks. Não seleciona visibilidade nem grade.</summary>
+sealed class WorldProtocol
+{
+    private readonly NetworkSession _session;
+
+    public WorldProtocol(NetworkSession session) => _session = session;
+
+    public void SendStartGame(string levelName, long entityRuntimeId)
+    {
+        _session.SendDataPacket(new StartGamePacket
+        {
+            LevelName = levelName,
+            EntityId = entityRuntimeId
+        });
+    }
+
+    public void SendChunkRadiusUpdated(int radius)
+    {
+        _session.SendDataPacket(new ChunkRadiusUpdatedPacket { Radius = radius });
+    }
+
+    public void PublishChunks(IReadOnlyList<ChunkColumn> columns)
+    {
+        if (columns.Count == 0) return;
+
+        var packets = new DataPacket[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            packets[i] = new LevelChunkPacket
+            {
+                ChunkX = column.X,
+                ChunkZ = column.Z,
+                DimensionId = column.DimensionId,
+                SubChunkCount = column.SubChunkCount,
+                ExtraPayload = column.ExtraPayload
+            };
+        }
+
+        _session.SendDataPacket(packets);
+    }
+
+    public void SendChunkPublisher(int blockX, int blockY, int blockZ, int radiusBlocks)
+    {
+        _session.SendDataPacket(new NetworkChunkPublisherUpdatePacket
+        {
+            BlockX = blockX,
+            BlockY = blockY,
+            BlockZ = blockZ,
+            Radius = radiusBlocks
+        });
+    }
+
+    public void SendSpawnPosition(int spawnType, int x, int y, int z)
+    {
+        _session.SendDataPacket(new SetSpawnPositionPacket
+        {
+            SpawnType = spawnType,
+            X = x,
+            Y = y,
+            Z = z
+        });
+    }
+
+    public void SendWorldSpawnPosition(int x, int y, int z) =>
+        SendSpawnPosition(SetSpawnPositionPacket.TYPE_WORLD_SPAWN, x, y, z);
+
+    public void SendSpawnComplete()
+    {
+        _session.SendDataPacket(new PlayStatusPacket { Status = 3 }); // PLAYER_SPAWN
+    }
+
+    public void SendTime(int worldTime)
+    {
+        _session.SendDataPacket(new SetTimePacket { Time = worldTime });
+    }
+}

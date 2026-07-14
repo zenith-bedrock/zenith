@@ -1,6 +1,6 @@
 using Zenith.Server;
-using Zenith.Session;
-using Zenith.Session.Handler;
+using Zenith.Network.Session;
+using Zenith.Network.Session.Handler;
 using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Stream;
