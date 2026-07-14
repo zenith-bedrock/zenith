@@ -171,6 +171,40 @@ public ref struct BinaryStream : IDisposable
         return Encoding.UTF8.GetString(bytes);
     }
 
+    /// <summary>
+    /// Blob Bedrock length-prefixed (unsigned varint + bytes). Diferente de
+    /// <see cref="WriteVarString"/>: não passa por UTF-8.
+    /// </summary>
+    public void WriteByteArray(scoped ReadOnlySpan<byte> data)
+    {
+        WriteUnsignedVarInt(data.Length);
+        Write(data);
+    }
+
+    /// <summary>
+    /// UUID Bedrock: bytes RFC 4122 com cada metade de 8 bytes invertida no wire.
+    /// </summary>
+    public void WriteUuid(Guid uuid)
+    {
+        Span<byte> rfc = stackalloc byte[16];
+        Span<byte> mixed = stackalloc byte[16];
+        uuid.TryWriteBytes(mixed);
+
+        rfc[0] = mixed[3];
+        rfc[1] = mixed[2];
+        rfc[2] = mixed[1];
+        rfc[3] = mixed[0];
+        rfc[4] = mixed[5];
+        rfc[5] = mixed[4];
+        rfc[6] = mixed[7];
+        rfc[7] = mixed[6];
+        mixed[8..].CopyTo(rfc[8..]);
+
+        rfc[..8].Reverse();
+        rfc[8..].Reverse();
+        Write(rfc);
+    }
+
     public short ReadShort(Endianess end = Endianess.Big) =>
         end == Endianess.Little ? BinaryPrimitives.ReadInt16LittleEndian(ReadSpan(2)) :
         BinaryPrimitives.ReadInt16BigEndian(ReadSpan(2));

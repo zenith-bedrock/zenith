@@ -24,7 +24,7 @@ class PlayerListPacket : DataPacket
 
         foreach (var entry in Entries)
         {
-            BedrockWire.WriteUuid(ref writer, entry.Uuid);
+            writer.WriteUuid(entry.Uuid);
             if (Type != TypeAdd) continue;
 
             writer.WriteVarLong(entry.ActorUniqueId);
@@ -32,7 +32,7 @@ class PlayerListPacket : DataPacket
             writer.WriteVarString(entry.XboxUserId);
             writer.WriteVarString(entry.PlatformChatId);
             writer.WriteInt(entry.BuildPlatform, BinaryStream.Endianess.Little);
-            BedrockWire.WritePlaceholderSkin(ref writer, entry.SkinId);
+            SkinWire.WritePlaceholder(ref writer, entry.SkinId);
             writer.WriteBool(entry.IsTeacher);
             writer.WriteBool(entry.IsHost);
             writer.WriteBool(entry.IsSubClient);
