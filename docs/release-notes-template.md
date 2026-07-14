@@ -26,7 +26,9 @@
 | Trap | Reality |
 |------|---------|
 | `world.path` empty | **InMemory** — world wiped on restart, **no warning** |
-| Docker volumes | Mount `./data/zenith.yml:/app/zenith.yml` **and** `./data/worlds:/app/worlds`. Do **not** mount `./data:/app` (overwrites the DLL). |
+| Relative `world.path` | Resolved under the DLL directory (`AppContext.BaseDirectory`), **not** the shell cwd. Prefer `.` or an absolute root (`/app`). |
+| `world.path: ./worlds` | Wrong — `worlds/<name>/` is appended under the root; you get `…/worlds/worlds/<name>`. |
+| Docker volumes | Mount `./deploy/zenith.yml:/app/zenith.yml` **and** `./deploy/worlds:/app/worlds`. Do **not** mount a host folder over `/app` (overwrites the DLL). |
 | Layout | LevelDB at `{world.path}/worlds/{world.name}/` (compose sample: `/app/worlds/world`) |
 | `players/` | **Not shipped** — session RAM only |
 | Auth | Default sample leaves chain signatures off for LAN; enable before public exposure |
@@ -34,8 +36,8 @@
 ### Run (Docker)
 
 ```bash
-mkdir -p data/worlds
-# ensure data/zenith.yml exists (repo sample under data/zenith.yml)
+mkdir -p deploy/worlds
+# ensure deploy/zenith.yml exists (repo sample)
 docker compose up --build
 ```
 

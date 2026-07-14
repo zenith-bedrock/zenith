@@ -63,6 +63,7 @@ Desktop.ini
 *.lock
 tmp-log.txt
 worlds/
+deploy/worlds/
 .cursor/
 
 artifacts/

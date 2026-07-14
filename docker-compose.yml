@@ -1,12 +1,12 @@
-# Minimal LAN alpha compose (ADR §20).
-# Mount config beside the DLL; mount worlds/ under the data root (/app).
-# Sample zenith.yml must set world.path: /app (non-empty) or the world is InMemory and lost on restart.
+# Docker/compose ops sample only — not used by `dotnet run`.
+# Local runtime lives next to the DLL (AppContext.BaseDirectory).
+# Embedded game palettes stay in src/zenith/data/.
 services:
   zenith:
     build: .
     ports:
       - "19132:19132/udp"
     volumes:
-      - ./data/zenith.yml:/app/zenith.yml
-      - ./data/worlds:/app/worlds
+      - ./deploy/zenith.yml:/app/zenith.yml
+      - ./deploy/worlds:/app/worlds
     restart: unless-stopped

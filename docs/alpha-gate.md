@@ -24,13 +24,13 @@ dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 ## Docker / compose
 
 ```bash
-mkdir -p data/worlds
-# use repo sample data/zenith.yml (world.path: /app)
+mkdir -p deploy/worlds
+# use repo sample deploy/zenith.yml (world.path: /app)
 docker compose up --build
 ```
 
 - [ ] UDP `19132` listens
-- [ ] LevelDB appears under `./data/worlds/world` (or configured name)
+- [ ] LevelDB appears under `./deploy/worlds/world` (or configured name)
 - [ ] Empty `world.path` trap documented in release notes (InMemory, no warning)
 
 ## Tag & publish

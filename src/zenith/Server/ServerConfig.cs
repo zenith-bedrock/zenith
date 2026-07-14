@@ -29,7 +29,10 @@ sealed class ServerConfig
 
         /// <summary>
         /// Server data root. Empty = InMemory (volatile). Non-empty ⇒ LevelDB at
-        /// <c>{Path}/worlds/{Name}/</c> (ADR §20).
+        /// <c>{Path}/worlds/{Name}/</c> (ADR §20). Relative paths resolve against
+        /// <see cref="AppContext.BaseDirectory"/> (next to the DLL), not the process cwd.
+        /// Use <c>.</c> for persistence beside the binary; Docker sample uses <c>/app</c>.
+        /// Do not set this to <c>./worlds</c> — that folder is created under the root.
         /// </summary>
         public string Path { get; set; } = "";
 

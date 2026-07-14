@@ -92,4 +92,23 @@ public class ServerConfigLoaderTests
         var config = new ServerConfig();
         Assert.True(string.IsNullOrEmpty(config.World.Path));
     }
+
+    [Fact]
+    public void ResolveDataRoot_relative_uses_BaseDirectory_not_cwd()
+    {
+        var expected = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "."));
+        Assert.Equal(expected, ZenithServer.ResolveDataRoot("."));
+
+        var nested = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "worlds"));
+        Assert.Equal(nested, ZenithServer.ResolveDataRoot("./worlds"));
+        Assert.StartsWith(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            ZenithServer.ResolveDataRoot("./worlds"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ResolveDataRoot_absolute_unchanged()
+    {
+        var abs = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "zenith-data-root"));
+        Assert.Equal(abs, ZenithServer.ResolveDataRoot(abs));
+    }
 }

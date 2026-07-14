@@ -88,16 +88,25 @@ class ZenithServer
             return new InMemoryChunkStorage();
         }
 
+        var dataRoot = ResolveDataRoot(path);
         var name = string.IsNullOrWhiteSpace(config.World.Name) ? "world" : config.World.Name.Trim();
-        var storageDir = Path.Combine(path, "worlds", name);
+        var storageDir = Path.Combine(dataRoot, "worlds", name);
 
-        WarnIfOrphanedFlatLevelDb(path, storageDir, logger);
+        if (LooksLikeWorldsFolderMisconfig(path, dataRoot))
+        {
+            logger.Warning(
+                $"*** WORLD PATH: '{path}' looks like a worlds/ folder, not the server data root. " +
+                $"LevelDB will live at '{storageDir}' (…/worlds/<name>/ under the root). " +
+                "Use world.path: . (next to the binary) or an absolute data root such as /app — not './worlds'.");
+        }
+
+        WarnIfOrphanedFlatLevelDb(dataRoot, storageDir, logger);
 
         try
         {
             Directory.CreateDirectory(storageDir);
             var storage = new LevelDbChunkStorage(storageDir);
-            logger.Info($"World storage: LevelDbChunkStorage ({storageDir}) [root={path}, name={name}]");
+            logger.Info($"World storage: LevelDbChunkStorage ({storageDir}) [root={dataRoot}, name={name}]");
             return storage;
         }
         catch (Exception ex)
@@ -106,6 +115,26 @@ class ZenithServer
                 $"Failed to open LevelDB world at '{storageDir}'. Zenith will not fall back to in-memory storage.",
                 ex);
         }
+    }
+
+    /// <summary>
+    /// Relative <c>world.path</c> is always under <see cref="AppContext.BaseDirectory"/> (next to the DLL),
+    /// never the process cwd — same rule as <c>zenith.yml</c> (ADR §5 / §20).
+    /// </summary>
+    internal static string ResolveDataRoot(string path)
+    {
+        if (Path.IsPathRooted(path))
+            return Path.GetFullPath(path);
+        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, path));
+    }
+
+    private static bool LooksLikeWorldsFolderMisconfig(string configured, string resolvedRoot)
+    {
+        var leaf = Path.GetFileName(resolvedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.Equals(leaf, "worlds", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var trimmed = configured.Trim().TrimEnd('/', '\\');
+        return trimmed.EndsWith("worlds", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

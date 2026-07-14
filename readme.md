@@ -31,6 +31,7 @@ src/
     data/        Embedded palettes (block_palette.nbt, item_palette.json, …)
   raknet/        Reliable UDP transport
   *.Tests/
+deploy/          Docker compose host sample (zenith.yml + worlds mount) — not used by dotnet run
 docs/            Narrative documentation
 workspace/       Local agent/dev scratch (not product)
 ```
@@ -46,11 +47,11 @@ dotnet run --project src/zenith
 ### Docker (LAN alpha)
 
 ```bash
-mkdir -p data/worlds
+mkdir -p deploy/worlds
 docker compose up --build
 ```
 
-Mounts: `./data/zenith.yml:/app/zenith.yml` and `./data/worlds:/app/worlds`. Sample config uses `world.path: /app` → LevelDB at `/app/worlds/world`. Empty `world.path` = InMemory (volatile). Product version: `0.0.1-alpha` (`ServerIdentity.ProductVersion`). Gate: [`docs/alpha-gate.md`](docs/alpha-gate.md).
+Mounts: `./deploy/zenith.yml:/app/zenith.yml` and `./deploy/worlds:/app/worlds` (ops sample only — not used by `dotnet run`). Sample config uses `world.path: /app` → LevelDB at `/app/worlds/world`. Empty `world.path` = InMemory (volatile). Product version: `0.0.1-alpha` (`ServerIdentity.ProductVersion`). Gate: [`docs/alpha-gate.md`](docs/alpha-gate.md).
 
 ### Benchmarks (optional)
 
