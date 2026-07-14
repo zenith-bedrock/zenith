@@ -175,10 +175,14 @@ LAN pode usar `auth.require-chain-signatures: false` (aviso no boot). **Exposiç
 
 ### Fase 4 — LevelDB
 
-- `LevelDbChunkStorage`; `world.path` no `zenith.yml`.
+- `LevelDbChunkStorage`; `world.path` no `zenith.yml` = data root; LevelDB em `{path}/worlds/{world.name}/` (ADR §20).
 - Path vazio = InMemory; falha ao abrir LevelDB **não** cai em InMemory silenciosamente.
 - Chaves Zenith `c:` + `ov:` (não formato vanilla Mojang).
+- Product release version: `ServerIdentity.ProductVersion` (≠ protocol `VersionName`).
 
+### Extensão futura (forma)
+
+Quando extensibilidade externa existir: `EventBus.Subscribe<T>` primeiro — não `GameLoop.Register` público nem hooks em `Protocol.Send*` (ADR §21). Plugin API continua frozen.
 ### Identidade
 
 | Item | Natureza | Quando |

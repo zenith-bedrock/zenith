@@ -24,10 +24,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <Version>0.0.1-alpha</Version>
+    <InformationalVersion>0.0.1-alpha</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="zenith.Tests" />
+    <InternalsVisibleTo Include="zenith.Benchmarks" />
   </ItemGroup>
 
 </Project>

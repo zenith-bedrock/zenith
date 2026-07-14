@@ -43,6 +43,23 @@ dotnet test zenith.sln
 dotnet run --project src/zenith
 ```
 
+### Docker (LAN alpha)
+
+```bash
+mkdir -p data/worlds
+docker compose up --build
+```
+
+Mounts: `./data/zenith.yml:/app/zenith.yml` and `./data/worlds:/app/worlds`. Sample config uses `world.path: /app` → LevelDB at `/app/worlds/world`. Empty `world.path` = InMemory (volatile). Product version: `0.0.1-alpha` (`ServerIdentity.ProductVersion`). Gate: [`docs/alpha-gate.md`](docs/alpha-gate.md).
+
+### Benchmarks (optional)
+
+```bash
+dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
+```
+
+Numbers live in [`docs/dx.md`](docs/dx.md).
+
 Optional pack of leaf libraries (not published):
 
 ```bash

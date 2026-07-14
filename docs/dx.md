@@ -85,6 +85,25 @@ Plugin → raw packet decode → mutate World on RakNet thread
 
 That antipattern is how Bedrock stacks become un-upgradable across protocol bumps.
 
+## Measured (optional)
+
+Baseline dated **2026-07-14**, host Windows 11 / .NET 10.0.9 / Ryzen 5 3600 — ShortRun (`-j short -m`). Refresh with:
+
+```bash
+dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
+```
+
+| Method | Params | Mean | Allocated |
+|--------|--------|------|-----------|
+| `BinaryStream` WriteVarIntsAndInts (64 pairs) | — | ~489 ns | 1056 B |
+| `BinaryStream` ReadVarIntsAndInts (64 pairs) | — | ~175 ns | 0 B |
+| `GamePacket` EncodeSmallBatch (3× PlayStatus) | — | ~160 ns | 440 B |
+| `EventBus.Publish` | 0 listeners | ~3.5 ns | 0 B |
+| `EventBus.Publish` | 1 listener | ~15 ns | 0 B |
+| `EventBus.Publish` | 8 listeners | ~38 ns | 0 B |
+
+ShortRun margins are wide; treat as order-of-magnitude / alloc signal, not a CI gate (ADR §24).
+
 ## Related
 
 - [Comparison](comparison.md) — when Zenith DX wins vs plugin ecosystems  

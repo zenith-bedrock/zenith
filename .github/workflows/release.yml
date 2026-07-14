@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Test
+        run: dotnet test zenith.sln -c Release --nologo
+
+      - name: Publish linux-x64
+        run: |
+          dotnet publish src/zenith/zenith.csproj -c Release -r linux-x64 --self-contained false -o artifacts/linux-x64
+          cd artifacts/linux-x64
+          zip -r ../zenith-${{ github.ref_name }}-linux-x64.zip .
+
+      - name: Release notes
+        run: |
+          NOTES=artifacts/RELEASE_NOTES.md
+          {
+            echo "# Zenith ${{ github.ref_name }}"
+            echo
+            if [ -f docs/release-notes-template.md ]; then
+              cat docs/release-notes-template.md
+            else
+              echo "See docs/release-notes-template.md in the repo."
+            fi
+          } > "$NOTES"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/zenith-*-linux-x64.zip
+          body_path: artifacts/RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

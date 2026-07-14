@@ -1,0 +1,10 @@
+**/.git
+**/bin
+**/obj
+**/.vs
+**/BenchmarkDotNet.Artifacts
+**/zenith.Benchmarks-*/**
+docs/
+workspace/
+*.md
+!readme.md

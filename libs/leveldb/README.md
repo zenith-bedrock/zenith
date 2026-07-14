@@ -43,6 +43,16 @@ Flush/Close: write live keys → **fsync** `.ldb` → publish `CURRENT` → rota
 
 Crash mid-flush (new `.ldb` written, `CURRENT` still old): Open trusts `CURRENT` only; orphan `.ldb` is ignored and GC’d.
 
+## Verified by tests (`libs/leveldb.Tests`)
+
+| Scenario | Coverage |
+|----------|----------|
+| Crash mid-flush (orphan `.ldb`, `CURRENT` old) | Manual orphan (CURRENT only → old value) + `AfterTableWriteBeforeCurrent` (CURRENT frozen; WAL still recovers Puts; orphan GC’d) |
+| `CURRENT` missing + `CreateIfMissing=false` | Fails with clear message |
+| `CURRENT` garbage / missing table | Treated as stale; empty start when create allowed |
+| Truncated WAL suffix | Complete records kept; torn batch skipped (**no CRC yet**) |
+| Put after Close | `ObjectDisposedException` (API not concurrent Put+Close) |
+
 ## Why not a full LSM + compaction?
 
 Zenith only needs a trustworthy KV for two key families, one world, one process — no Mojang decode. A theatrical LSM without multi-level compaction was complexity without proven need (`ARCHITECTURE.md` rule 7). Steady-state already was a single rewritten table; adding L0/MANIFEST/compaction would buy risk, not product.

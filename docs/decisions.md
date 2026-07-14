@@ -167,6 +167,48 @@ When held sync + §17 smoke are stable:
 4. Break: dump all-or-nothing `TryAdd` else abort.
 5. Out: double-chest, Mojang BlockActor, hopper, forge, CreativeContent.
 
+### 20. First release artifacts + on-disk layout (`v0.0.1-alpha`)
+
+**Choice:** Ship a product version separate from Bedrock wire: `ServerIdentity.ProductVersion` (e.g. `"0.0.1-alpha"`). Docker: `WORKDIR /app`; mount `./data/zenith.yml:/app/zenith.yml` and `./data/worlds:/app/worlds`. On-disk world = `{world.path}/worlds/{world.name}/` LevelDB (path empty ⇒ InMemory). Sample compose uses `world.path: /app`, `world.name: world`. Multi-world load stays a non-goal; folder convention only.
+
+**Why:** No published channel existed for external feedback (Vedrock already had Docker + tag). `zenith.yml` resolves via `AppContext.BaseDirectory` next to the DLL — config cannot live solely under a PMMP-style `/data` that replaces `/app`. Separating `players/` is wrong until playerdata persists (session RAM only today).
+
+**Known debt / principle:** Reinterpreting a former flat LevelDB directory as a data root creates `{path}/worlds/{name}/` empty while orphaning old `CURRENT`/`.ldb` at the root — silent empty world. Detect and **Warning** at boot if root looks like ZLDB and the new world dir is empty/new. Future path-semantics changes must warn loudly, never reinterpret silently (ops visibility vs silent fallback).
+
+**Deferred:** Multi-world load, migrator flat→`worlds/<name>`, `players/` volume, Docker Hub automation.
+
+### 21. Future extension surface form (not a schedule)
+
+**Choice:** When (if) external extension opens, the first surface is **`EventBus.Subscribe<T>`** — already typed, exception-isolated, used for login/quit. Do **not** expose `GameLoop.Register` to foreign assemblies or hook `Protocol.Send*`.
+
+**Why:** Keeps decide≠transmit; avoids early plugin loader / DI. `ChunkStreamSystem` / block+inventory systems stay internal composition-root concerns.
+
+**Deferred:** Domain event types beyond login/quit; `Unsubscribe`; priority; real plugin API (still frozen).
+
+### 22. Protocol churn process (human checklist)
+
+**Choice:** Manual review on a trimestral cadence (or when targeting a new Bedrock client), documented in [`docs/protocol-churn.md`](protocol-churn.md). No scraper / decorative CI.
+
+**Why:** Protocol SSOT already lives in `ServerIdentity`; the gap was process, not another code abstraction.
+
+**Deferred:** Automated CI against remote protocol schemas.
+
+### 23. Zenith.LevelDB robustness tests + flush fault hook
+
+**Choice:** Keep ZLDB / RAM constraint. Add tests for mid-flush (orphan `.ldb`, `CURRENT` still old), missing/corrupt `CURRENT`, truncated WAL, and Close vs Put contract. Internal hook `AfterTableWriteBeforeCurrent` between table write and CURRENT publish for deterministic mid-flush simulation (`InternalsVisibleTo` already present).
+
+**Why:** README already promised crash behavior; six happy-path tests did not prove it.
+
+**Deferred:** WAL CRC framing; subprocess crash tests as primary CI mechanism.
+
+### 24. Measured zero-alloc (BenchmarkDotNet)
+
+**Choice:** Project `src/zenith.Benchmarks` measuring `BinaryStream`, a small `GamePacket` encode path, and `EventBus.Publish`. Package version in `Directory.Packages.props`. Numbers live only in `docs/dx.md` (“Measured”). Optional manual alloc probe — not a CI gate for alpha.
+
+**Why:** Wire zero-alloc work lacked numbers; avoids claiming DX without evidence.
+
+**Deferred:** Full-server load harness as required CI.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

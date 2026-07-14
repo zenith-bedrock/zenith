@@ -24,8 +24,15 @@ sealed class ServerConfig
 
     public sealed class WorldSection
     {
+        /// <summary>World folder name under <c>{Path}/worlds/{Name}/</c> (default <c>world</c>).</summary>
         public string Name { get; set; } = "world";
+
+        /// <summary>
+        /// Server data root. Empty = InMemory (volatile). Non-empty ⇒ LevelDB at
+        /// <c>{Path}/worlds/{Name}/</c> (ADR §20).
+        /// </summary>
         public string Path { get; set; } = "";
+
         public int SpawnChunkRadius { get; set; } = 4;
     }
 

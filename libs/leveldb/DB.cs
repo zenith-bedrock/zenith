@@ -246,6 +246,12 @@ public sealed class DB : IDisposable
     }
 
     /// <summary>
+    /// Test hook: invoked after the new .ldb is written and fsynced, before CURRENT is published.
+    /// Set from leveldb.Tests only (InternalsVisibleTo). Throw to simulate crash mid-flush.
+    /// </summary>
+    internal static Action? AfterTableWriteBeforeCurrent;
+
+    /// <summary>
     /// Writes live dict → new .ldb (fsync) → publish CURRENT → rotate WAL.
     /// Mem keeps live keys; tombstones dropped. Orphans deleted best-effort.
     /// </summary>
@@ -257,6 +263,8 @@ public sealed class DB : IDisposable
         var fileNum = _nextFileNum++;
         var newPath = Path.Combine(_dir, TableName(fileNum));
         TableFile.Write(newPath, live, sync);
+
+        AfterTableWriteBeforeCurrent?.Invoke();
 
         var oldPath = _tablePath;
         _tablePath = newPath;

@@ -66,4 +66,6 @@ worlds/
 .cursor/
 
 artifacts/
+BenchmarkDotNet.Artifacts/
+**/zenith.Benchmarks-*/
 tmp-nbt-dump.csx

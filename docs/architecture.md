@@ -84,6 +84,8 @@ We intentionally **do not** rewrite full subchunks on every place/break. Overlay
 
 Do **not** add for its own sake: Scheduler, Actor model, full ECS, Job system, Service Locator, Runtime Manager, VisibilitySystem, DI container, or plugin API. Introduce a layer only when a real feature hits a wall the current design cannot absorb.
 
+**Future extension form (ADR §21):** when external extensibility opens, first surface is `EventBus.Subscribe<T>` — not public `GameLoop.Register` and not hooks on `Protocol.Send*`.
+
 Fan-out to all online players is acceptable at this stage; visibility culling is a later product need, not an architectural prerequisite.
 
 ## Related

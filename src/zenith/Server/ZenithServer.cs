@@ -27,6 +27,7 @@ class ZenithServer
     {
         Config = config;
         var logger = new Logger();
+        logger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
 
         LoginIdentity.RequireChainSignatures = config.Auth.RequireChainSignatures;
         if (!config.Auth.RequireChainSignatures)
@@ -87,18 +88,52 @@ class ZenithServer
             return new InMemoryChunkStorage();
         }
 
+        var name = string.IsNullOrWhiteSpace(config.World.Name) ? "world" : config.World.Name.Trim();
+        var storageDir = Path.Combine(path, "worlds", name);
+
+        WarnIfOrphanedFlatLevelDb(path, storageDir, logger);
+
         try
         {
-            Directory.CreateDirectory(path);
-            var storage = new LevelDbChunkStorage(path);
-            logger.Info($"World storage: LevelDbChunkStorage ({path})");
+            Directory.CreateDirectory(storageDir);
+            var storage = new LevelDbChunkStorage(storageDir);
+            logger.Info($"World storage: LevelDbChunkStorage ({storageDir}) [root={path}, name={name}]");
             return storage;
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Failed to open LevelDB world at '{path}'. Zenith will not fall back to in-memory storage.",
+                $"Failed to open LevelDB world at '{storageDir}'. Zenith will not fall back to in-memory storage.",
                 ex);
+        }
+    }
+
+    /// <summary>
+    /// Ops visibility: old flat LevelDB at world.path root would be silently abandoned when
+    /// opening a new empty worlds/&lt;name&gt; (ADR §20).
+    /// </summary>
+    private static void WarnIfOrphanedFlatLevelDb(string root, string storageDir, Zenith.Raknet.Log.ILogger logger)
+    {
+        try
+        {
+            if (!Directory.Exists(root)) return;
+            var rootCurrent = Path.Combine(root, "CURRENT");
+            var hasRootArtifact = File.Exists(rootCurrent) ||
+                                  Directory.EnumerateFiles(root, "*.ldb").Any();
+            if (!hasRootArtifact) return;
+
+            var storageLooksNew = !Directory.Exists(storageDir) ||
+                                  (!File.Exists(Path.Combine(storageDir, "CURRENT")) &&
+                                   !Directory.EnumerateFiles(storageDir, "*.ldb").Any());
+            if (!storageLooksNew) return;
+
+            logger.Warning(
+                $"*** WORLD PATH: LevelDB artifacts found at data root '{root}' but storage will open empty at '{storageDir}'. " +
+                "Move or recreate the world under worlds/<name>/ — Zenith will not silently use the old flat directory (ADR §20).");
+        }
+        catch
+        {
+            // Detection is best-effort; boot continues.
         }
     }
 
