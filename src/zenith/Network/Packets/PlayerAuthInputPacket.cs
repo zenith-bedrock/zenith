@@ -167,18 +167,70 @@ class PlayerAuthInputPacket : DataPacket
 
     private static void SkipUseItemTransactionData(ref BinaryStream stream)
     {
-        _ = stream.ReadVarInt(); // action
-        _ = stream.ReadByte(); // trigger
+        // gophertunnel PlayerInventoryAction (UseItemTransactionData embedded in AuthInput).
+        var legacyRequestId = stream.ReadVarInt();
+        if (legacyRequestId < -1 && (legacyRequestId & 1) == 0)
+        {
+            var legacySlotCount = stream.ReadUnsignedVarInt();
+            for (var i = 0; i < legacySlotCount; i++)
+            {
+                _ = stream.ReadByte(); // container id
+                var slotsLen = stream.ReadUnsignedVarInt();
+                if (slotsLen > 0)
+                    stream.ReadSpan(slotsLen);
+            }
+        }
+
+        var actionCount = stream.ReadUnsignedVarInt();
+        for (var i = 0; i < actionCount; i++)
+            SkipInventoryActionOld(ref stream);
+
+        _ = stream.ReadUnsignedVarInt(); // ActionType
+        _ = stream.ReadUnsignedVarInt(); // TriggerType
+        _ = stream.ReadVarInt(); // BlockPos x
         _ = stream.ReadVarInt();
         _ = stream.ReadVarInt();
-        _ = stream.ReadVarInt();
-        _ = stream.ReadByte(); // face
-        _ = stream.ReadVarInt(); // hotbar
-        InventoryTransactionPacket.SkipNetworkItemPublic(ref stream);
+        _ = stream.ReadVarInt(); // BlockFace
+        _ = stream.ReadVarInt(); // HotBarSlot
+        SkipItemInstance(ref stream); // HeldItem (legacy ItemInstance, not ItemInstanceNew)
         for (var i = 0; i < 6; i++)
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
-        _ = stream.ReadUnsignedVarInt();
-        _ = stream.ReadByte();
-        _ = stream.ReadByte();
+        _ = stream.ReadUnsignedVarInt(); // BlockRuntimeID
+        _ = stream.ReadByte(); // ClientPrediction
+        _ = stream.ReadByte(); // ClientCooldownState
+    }
+
+    private const uint InventoryActionSourceContainer = 0;
+    private const uint InventoryActionSourceWorld = 2;
+    private const uint InventoryActionSourceTodo = 99999;
+
+    private static void SkipInventoryActionOld(ref BinaryStream stream)
+    {
+        var sourceType = (uint)stream.ReadUnsignedVarInt();
+        if (sourceType is InventoryActionSourceContainer or InventoryActionSourceTodo)
+            _ = stream.ReadVarInt(); // WindowID
+        else if (sourceType == InventoryActionSourceWorld)
+            _ = stream.ReadUnsignedVarInt(); // SourceFlags
+
+        _ = stream.ReadUnsignedVarInt(); // InventorySlot
+        SkipItemInstance(ref stream);
+        SkipItemInstance(ref stream);
+    }
+
+    /// <summary>gophertunnel ItemInstance (VarInt network id) — AuthInput item interaction.</summary>
+    private static void SkipItemInstance(ref BinaryStream stream)
+    {
+        var networkId = stream.ReadVarInt();
+        if (networkId == 0)
+            return;
+
+        _ = stream.ReadUShort(BinaryStream.Endianess.Little);
+        _ = stream.ReadUnsignedVarInt(); // meta
+        if (stream.ReadBool())
+            _ = stream.ReadVarInt(); // stack network id
+        _ = stream.ReadVarInt(); // block runtime
+        var extraLen = stream.ReadUnsignedVarInt();
+        if (extraLen > 0)
+            stream.ReadSpan(extraLen);
     }
 }

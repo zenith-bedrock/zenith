@@ -103,6 +103,14 @@ public class IntentContractTests
         player.PositionZ = z + 0.5f;
     }
 
+    private static void BeginBreakReady(GameClock clock, World.World world, Player.Player player, int x, int y, int z)
+    {
+        var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
+        player.BeginBreak(x, y, z, clock.CurrentTick);
+        if (need > 0)
+            clock.AdvanceBy(need);
+    }
+
     [Fact]
     public void BlockSystem_drains_fifo_queue_in_one_tick()
     {
@@ -200,6 +208,7 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
@@ -218,11 +227,24 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(1, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void BlockSystem_rejects_survival_break_without_start_break()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("nostart");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
     }
 
     [Fact]

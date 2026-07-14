@@ -259,10 +259,16 @@ class InGameSessionHandler : ISessionHandler
                 case PlayerAuthInputPacket.ActionStartBreak:
                 case PlayerAuthInputPacket.ActionContinueDestroy:
                     player.BeginBreak(action.BlockX, action.BlockY, action.BlockZ, session.Context.Clock.CurrentTick);
+                    var block = session.Context.World.GetBlock(action.BlockX, action.BlockY, action.BlockZ);
+                    session.Protocol.World.SendBlockStartCrack(
+                        action.BlockX, action.BlockY, action.BlockZ, Blocks.BreakTicks(block));
                     session.Context.Logger.Debug(
                         $"AuthInput start/continue break from {player.Username} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
                     break;
                 case PlayerAuthInputPacket.ActionAbortBreak:
+                    if (player.HasBreakTarget)
+                        session.Protocol.World.SendBlockStopCrack(
+                            player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
                     player.AbortBreak();
                     break;
                 case PlayerAuthInputPacket.ActionPredictDestroy:

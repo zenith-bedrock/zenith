@@ -65,12 +65,12 @@ sealed class BlockSystem : IGameSystem
             if (!creative)
             {
                 var need = Blocks.BreakTicks(previous);
-                if (need > 0 && player.HasBreakTarget)
+                if (need > 0)
                 {
-                    if (!player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                    if (!player.HasBreakTarget || !player.IsBreakTarget(edit.X, edit.Y, edit.Z))
                     {
                         player.Session.Context.Logger.Debug(
-                            $"Break rejected (wrong cell) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                            $"Break rejected (no/wrong start_break) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                         return;
                     }
 
@@ -86,6 +86,9 @@ sealed class BlockSystem : IGameSystem
                 }
             }
 
+            if (player.HasBreakTarget)
+                player.Session.Protocol.World.SendBlockStopCrack(
+                    player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
             player.AbortBreak();
 
             if (previous == Blocks.Chest)

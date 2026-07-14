@@ -68,4 +68,68 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(-60, packet.BlockActions[0].BlockY);
         Assert.Equal(20, packet.BlockActions[0].BlockZ);
     }
+
+    [Fact]
+    public void Decode_predict_after_item_interaction_prefix()
+    {
+        var w = new BinaryStream();
+        for (var i = 0; i < 5; i++)
+            w.WriteFloat(1f, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        // Flags 34 (item interaction) + 35 (block actions)
+        // 34 → byte 4 bit 6; 35 → byte 5 bit 0
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80 | (1 << 6)); // bit 34
+        w.WriteByte(0x01); // bit 35
+
+        w.WriteUnsignedVarInt(1);
+        w.WriteUnsignedVarInt(0);
+        w.WriteUnsignedVarInt(1);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteUnsignedVarLong(1);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        // PlayerInventoryAction: legacyRequestId=0, no actions, UseDestroy body, air held
+        w.WriteVarInt(0); // LegacyRequestID
+        w.WriteUnsignedVarInt(0); // Actions empty
+        w.WriteUnsignedVarInt(2); // ActionType destroy
+        w.WriteUnsignedVarInt(0); // TriggerType
+        w.WriteVarInt(3);
+        w.WriteVarInt(4);
+        w.WriteVarInt(5); // block pos
+        w.WriteVarInt(1); // face
+        w.WriteVarInt(0); // hotbar
+        w.WriteVarInt(0); // ItemInstance air
+        for (var i = 0; i < 6; i++)
+            w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteUnsignedVarInt(0); // block runtime
+        w.WriteByte(0);
+        w.WriteByte(0);
+
+        w.WriteVarInt(1);
+        w.WriteVarInt(PlayerAuthInputPacket.ActionPredictDestroy);
+        w.WriteVarInt(3);
+        w.WriteVarInt(4);
+        w.WriteVarInt(5);
+        w.WriteVarInt(1);
+
+        var stream = new BinaryStream(w.GetBufferDisposing().ToArray());
+        var packet = new PlayerAuthInputPacket();
+        packet.Decode(ref stream);
+
+        Assert.Single(packet.BlockActions);
+        Assert.Equal(PlayerAuthInputPacket.ActionPredictDestroy, packet.BlockActions[0].Action);
+        Assert.Equal(3, packet.BlockActions[0].BlockX);
+        Assert.Equal(4, packet.BlockActions[0].BlockY);
+        Assert.Equal(5, packet.BlockActions[0].BlockZ);
+    }
 }

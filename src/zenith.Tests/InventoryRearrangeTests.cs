@@ -11,6 +11,8 @@ public class InventoryContainerMapTests
     [Theory]
     [InlineData(InventoryContainerMap.Hotbar, 0, 0)]
     [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 8, 8)]
+    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 9, 9)]
+    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 35, 35)]
     [InlineData(InventoryContainerMap.Inventory, 0, 9)]
     [InlineData(InventoryContainerMap.Inventory, 26, 35)]
     [InlineData(InventoryContainerMap.Cursor, 0, PlayerInventory.CursorSlot)]
@@ -26,6 +28,7 @@ public class InventoryContainerMapTests
     public void Rejects_invalid_wire_slots()
     {
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Hotbar, 9, out _));
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CombinedHotbarAndInventory, 36, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Inventory, 27, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out _));
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));

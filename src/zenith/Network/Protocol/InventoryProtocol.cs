@@ -29,8 +29,18 @@ static class InventoryContainerMap
         switch (containerId)
         {
             case Hotbar:
-            case CombinedHotbarAndInventory:
                 if (slot >= PlayerInventory.HotbarSize)
+                {
+                    flat = 0;
+                    return false;
+                }
+
+                flat = slot;
+                return true;
+
+            case CombinedHotbarAndInventory:
+                // Combined window: wire slots 0–35 are already flat domain indices.
+                if (slot >= PlayerInventory.FullInventorySize)
                 {
                     flat = 0;
                     return false;

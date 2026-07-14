@@ -142,4 +142,34 @@ sealed class WorldProtocol
             DataLayerId = dataLayerId
         });
     }
+
+    public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0)
+    {
+        _session.SendDataPacket(new LevelEventPacket
+        {
+            EventType = eventType,
+            X = x,
+            Y = y,
+            Z = z,
+            EventData = eventData
+        });
+    }
+
+    public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks)
+    {
+        var data = breakTicks <= 0 ? 65535 : Math.Max(1, 65535 / breakTicks);
+        SendLevelEvent(
+            LevelEventPacket.EventStartBlockCracking,
+            blockX + 0.5f,
+            blockY + 0.5f,
+            blockZ + 0.5f,
+            data);
+    }
+
+    public void SendBlockStopCrack(int blockX, int blockY, int blockZ) =>
+        SendLevelEvent(
+            LevelEventPacket.EventStopBlockCracking,
+            blockX + 0.5f,
+            blockY + 0.5f,
+            blockZ + 0.5f);
 }
