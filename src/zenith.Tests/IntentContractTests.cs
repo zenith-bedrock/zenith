@@ -407,6 +407,54 @@ public class IntentContractTests
         Assert.Equal(3, player.Inventory.Get(9).Count);
     }
 
+    [Fact]
+    public void InventoryStack_queue_full_still_allows_error_resync_call_path()
+    {
+        // Handler sends Error+Content on overflow; here we only assert Submit rejects newest
+        // (Content is same-session Protocol — covered by queue reject + map-fail pattern).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("spammer2");
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 64));
+
+        for (var i = 0; i < Player.Player.MaxPendingInventoryStacks; i++)
+            Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(i, [
+                InventoryStackAction.Swap(0, 1)
+            ])));
+
+        Assert.False(player.SubmitInventoryStack(InventoryStackIntent.Create(99, [
+            InventoryStackAction.Swap(0, 2)
+        ])));
+        // Authoritative bag unchanged until tick drains prior intents
+        Assert.Equal(64, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void EquipmentSystem_fans_out_MobEquipment_when_hotbar_changes()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice");
+        var bob = fx.AddInGamePlayer("bob");
+        Assert.True(alice.Inventory.TrySet(0, Blocks.Stone, 10));
+        Assert.True(alice.Inventory.TrySet(1, Blocks.GrassBlock, 5));
+        alice.SelectedHotbarSlot = 0;
+
+        // Prime fingerprint
+        new EquipmentSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+        var before = fx.Transport.Captured.Count;
+
+        alice.SelectedHotbarSlot = 1;
+        new EquipmentSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.True(fx.Transport.Captured.Count > before,
+            "EquipmentSystem should send MobEquipment to peers when held slot changes.");
+        Assert.Equal(1, alice.LastReplicatedHotbarSlot);
+        Assert.Equal(Blocks.GrassBlock, alice.LastReplicatedHeldRuntimeId);
+        Assert.Equal(5, alice.LastReplicatedHeldCount);
+        _ = bob;
+    }
+
     /// <summary>Priority.Normal queues frames; Tick flushes OutputFrames to Server.Send.</summary>
     private static void FlushRaknet(PlayerManager players)
     {

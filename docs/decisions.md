@@ -147,7 +147,25 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** After §16, drag in the client UI desynced on the next `SendInventoryContent` because moves never reached domain authority. Adding ISR without chests keeps decide≠transmit: domain owns slots/cursor; Protocol owns net IDs and wire. `InventorySystem` exists because there is now intent + tick + transmit (unlike §16’s TryAdd-only expansion).
 
-**Deferred:** chests/containers, creative craft, drop entity, destroy-void, AuthInput-embedded ISR, Normal IT slot moves.
+**Deferred:** creative craft, drop entity, destroy-void, AuthInput-embedded ISR, Normal IT slot moves. (Held peer → §18. Chests → §19 sketch.)
+
+### 18. Held-item peer sync (MobEquipment fan-out)
+
+**Choice:** Handler still only updates `SelectedHotbarSlot` (MobEquipment / IT). `EquipmentSystem` on tick compares held slot + stack fingerprint to last broadcast; if changed, fan-out `MobEquipment` Encode to other in-game peers (same pattern as `MovementSystem`). `AddPlayer` includes held `ItemInstance` (legacy wire) from current hotbar. Stack net IDs omitted on peer view (display only). No armor/offhand.
+
+**Why:** After §17, A’s hotbar is authoritative but peers still saw empty hands — smoke 3–4 incomplete for “looks multiplayer.” Chests can wait; this is cheaper and closes a visible MP gap.
+
+**Deferred:** chests/containers, inventory persist across reconnect, drop entity.
+
+### 19. Chests — deferred sketch (not shipped)
+
+When held sync + §17 smoke are stable:
+
+1. `ChestStore` RAM `dict[(x,y,z)] → slots[27]`; hydrate at World boot; Put `ct:x:y:z` async (never sync Get on open/tick).
+2. Open/close intents; transfers via explicit dual-store APIs (not flat `100+` inside `PlayerInventory`); rollback snapshots both stores.
+3. Wire: ContainerOpen type 0; ISR container **7** ↔ chest 0–26; window-scoped net ids.
+4. Break: dump all-or-nothing `TryAdd` else abort.
+5. Out: double-chest, Mojang BlockActor, hopper, forge, CreativeContent.
 
 ## Explicit non-goals (so far)
 

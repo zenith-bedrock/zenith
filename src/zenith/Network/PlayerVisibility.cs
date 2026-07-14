@@ -54,6 +54,9 @@ static class PlayerVisibility
 
     private static void SendAddPlayer(Player.Player recipient, Player.Player subject)
     {
+        var held = subject.Session.Protocol.Inventory.DescribeSlot(
+            subject.Inventory,
+            subject.SelectedHotbarSlot);
         recipient.Session.Protocol.Entity.SendAddPlayer(
             subject.Uuid,
             subject.Username,
@@ -63,6 +66,7 @@ static class PlayerVisibility
             subject.PositionZ,
             subject.Pitch,
             subject.Yaw,
-            subject.HeadYaw);
+            subject.HeadYaw,
+            held);
     }
 }

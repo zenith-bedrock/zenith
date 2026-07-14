@@ -121,6 +121,13 @@ sealed class InventoryProtocol
         });
     }
 
+    /// <summary>Peer display / AddPlayer — no stack net id allocation.</summary>
+    public NetworkItemStack DescribeSlot(PlayerInventory inventory, int slot)
+    {
+        var stack = inventory.Get(slot);
+        return ToNetworkStack(stack, stackNetworkId: 0);
+    }
+
     public void SendContainerOpen(int blockX, int blockY, int blockZ)
     {
         _session.SendDataPacket(new ContainerOpenPacket

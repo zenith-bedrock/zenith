@@ -117,6 +117,10 @@ src/
 8. A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity.
 9. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
 10. A anda para fora do raio de spawn → novas colunas flat chegam (`ChunkStreamSystem`); chão continua sob os pés.
+11. **§17 rearrange:** abrir inventário → arrastar slot 0↔9 → fechar/reabrir (item permanece); place a partir da hotbar; break com hotbar cheia → item em storage ≥9; sem rubberband após place/break.
+12. **Held peer:** A troca hotbar / segura bloco → B vê o item na mão (`MobEquipment` / `AddPlayer` held).
+
+Gate: se o item 11 falhar, não começar containers/chests.
 
 ## Roadmap
 
@@ -154,7 +158,9 @@ flowchart LR
 - `IChunkStorage` com **`ValueTask`** desde o dia 1 (InMemory sync por baixo) para LevelDB não obrigar rewrite sync na rede.
 - Mutação de coluna CoW **não** resolvida aqui.
 
-### Fase 3 — Inventário / blocs
+### Fase 3 — Inventário / blocs — checklist de autoridade player fechado (§15–17)
+
+Não significa “produto completo”: fecha place/break + inventário 36 + ISR rearrange no domínio do **jogador**.
 
 - Intent pendente → `BlockSystem` → overlay + `UpdateBlock`; place consome hotbar.
 - Bounds de coordenada, slot `0..8` e stack count no handler.
@@ -162,6 +168,10 @@ flowchart LR
 - Tick authority: reach (olhos + `MaxBlockReach`), place só em air, break só se `TryAdd` couber — smoke 6/8 assumem rejeição correta (sem voidar item / sem overwrite ocupado).
 - Storage 9–35 no domínio (`TryAdd` / sync `SendInventoryContent`); place / consume permanece 0–8.
 - Rearrange 0–35 via ISR: intent → `InventorySystem` tick → `ItemStackResponse` (SAI on; net IDs no Protocol).
+
+**Gaps conscientes (ainda abertos):** bag não persiste reconnect; containers/chests deferred (§19); drop/destroy ISR deferred. Held peer sync: §18.
+
+LAN pode usar `auth.require-chain-signatures: false` (aviso no boot). **Exposição pública:** `true` no YAML.
 
 ### Fase 4 — LevelDB
 

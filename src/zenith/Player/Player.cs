@@ -59,6 +59,11 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
+    /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
+    public int LastReplicatedHotbarSlot { get; set; } = -1;
+    public int LastReplicatedHeldRuntimeId { get; set; } = int.MinValue;
+    public int LastReplicatedHeldCount { get; set; } = int.MinValue;
+
     public Player(string username, NetworkSession session, long runtimeId, Guid uuid)
     {
         Username = username;

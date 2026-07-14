@@ -134,8 +134,6 @@ sealed class ItemStackRequestPacket : DataPacket
         {
             case ActionTake:
             case ActionPlace:
-            case ActionPlaceInContainer:
-            case ActionTakeOutContainer:
             {
                 var count = stream.ReadByte();
                 var src = StackRequestSlotInfo.Read(ref stream);
@@ -148,6 +146,15 @@ sealed class ItemStackRequestPacket : DataPacket
                     Destination = dst,
                     Supported = true
                 };
+            }
+            case ActionPlaceInContainer:
+            case ActionTakeOutContainer:
+            {
+                // Supported wire shape, but no chest/container domain yet — reject request.
+                stream.ReadByte();
+                _ = StackRequestSlotInfo.Read(ref stream);
+                _ = StackRequestSlotInfo.Read(ref stream);
+                return Unsupported(type);
             }
             case ActionSwap:
             {

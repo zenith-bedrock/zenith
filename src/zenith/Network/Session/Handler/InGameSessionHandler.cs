@@ -143,6 +143,7 @@ class InGameSessionHandler : ISessionHandler
             {
                 session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
                 session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
+                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
             }
         }
     }

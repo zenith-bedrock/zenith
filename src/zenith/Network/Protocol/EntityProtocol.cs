@@ -61,6 +61,7 @@ sealed class EntityProtocol
         float pitch,
         float yaw,
         float headYaw,
+        NetworkItemStack heldItem,
         int gameMode = 0)
     {
         _session.SendDataPacket(new AddPlayerPacket
@@ -74,7 +75,20 @@ sealed class EntityProtocol
             Pitch = pitch,
             Yaw = yaw,
             HeadYaw = headYaw,
+            HeldItem = heldItem,
             GameMode = gameMode
+        });
+    }
+
+    public void SendMobEquipment(ulong actorRuntimeId, NetworkItemStack item, int hotbarSlot)
+    {
+        _session.SendDataPacket(new MobEquipmentPacket
+        {
+            ActorRuntimeId = (long)actorRuntimeId,
+            Item = item,
+            InventorySlot = hotbarSlot,
+            HotbarSlot = hotbarSlot,
+            WindowId = MobEquipmentPacket.WindowInventory
         });
     }
 

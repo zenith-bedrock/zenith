@@ -1,6 +1,7 @@
 using Zenith.Network.Packets;
 using Zenith.Network.Protocol;
 using Zenith.Player;
+using Zenith.Raknet.Stream;
 using Xunit;
 
 namespace Zenith.Tests;
@@ -81,5 +82,61 @@ public class InventoryPacketEncodeTests
                 ]
             }
         ]).Encode().Length > 1);
+    }
+
+    [Fact]
+    public void MobEquipment_encode_with_held_item_is_non_empty()
+    {
+        var packet = new MobEquipmentPacket
+        {
+            ActorRuntimeId = 2,
+            Item = new NetworkItemStack(1, 10, 100),
+            InventorySlot = 0,
+            HotbarSlot = 0
+        };
+        Assert.True(packet.Encode().Length > 4);
+    }
+
+    [Fact]
+    public void AddPlayer_encode_includes_legacy_held_item()
+    {
+        var air = new AddPlayerPacket { Username = "a", HeldItem = NetworkItemStack.Empty }.Encode();
+        var held = new AddPlayerPacket
+        {
+            Username = "a",
+            HeldItem = new NetworkItemStack(1, 3, 50)
+        }.Encode();
+        Assert.True(held.Length > air.Length);
+    }
+
+    [Fact]
+    public void ItemStackRequest_marks_PlaceInContainer_unsupported()
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(1); // request id
+        writer.WriteUnsignedVarInt(1); // action count
+        writer.WriteByte(ItemStackRequestPacket.ActionPlaceInContainer);
+        writer.WriteByte(1); // count
+        // source FullContainerName + slot + net id
+        writer.WriteByte(7);
+        writer.WriteBool(false);
+        writer.WriteByte(0);
+        writer.WriteVarInt(1);
+        // dest
+        writer.WriteByte(28);
+        writer.WriteBool(false);
+        writer.WriteByte(0);
+        writer.WriteVarInt(2);
+        writer.WriteUnsignedVarInt(0); // filter strings
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
+
+        var buf = writer.GetBufferDisposing().ToArray();
+        var stream = new BinaryStream(buf);
+        var packet = new ItemStackRequestPacket();
+        packet.Decode(ref stream);
+        Assert.Single(packet.Requests);
+        Assert.False(packet.Requests[0].AllSupported);
+        Assert.False(packet.Requests[0].Actions[0].Supported);
     }
 }

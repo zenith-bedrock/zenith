@@ -23,6 +23,7 @@ class AddPlayerPacket : DataPacket
     public int GameMode { get; set; }
     public string DeviceId { get; set; } = "";
     public int BuildPlatform { get; set; } = -1;
+    public NetworkItemStack HeldItem { get; set; } = NetworkItemStack.Empty;
 
     public override Span<byte> Encode()
     {
@@ -41,7 +42,7 @@ class AddPlayerPacket : DataPacket
         writer.WriteFloat(Pitch, BinaryStream.Endianess.Little);
         writer.WriteFloat(Yaw, BinaryStream.Endianess.Little);
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
-        writer.WriteVarInt(0); // item air
+        HeldItem.WriteLegacyItemInstance(ref writer);
         writer.WriteVarInt(GameMode);
         WriteVisibleNameMetadata(ref writer, Username);
         writer.WriteUnsignedVarInt(0); // property sync ints
