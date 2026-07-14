@@ -9,6 +9,11 @@ class StartGamePacket : DataPacket
     public string LevelName;
     public long EntityId = 0;
     public int GameMode = 0;
+    public float PositionX;
+    public float PositionY = 8f;
+    public float PositionZ;
+    public float Pitch;
+    public float Yaw;
     public long Seed = 0;
     public short BiomeType = 0;
     public string BiomeName = "plains";
@@ -31,11 +36,11 @@ class StartGamePacket : DataPacket
         writer.WriteVarLong(EntityId);
         writer.WriteUnsignedVarLong(EntityId); // EntityRuntimeID
         writer.WriteVarInt(GameMode); // PlayerGameMode
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // PlayerPosition x
-        writer.WriteFloat(8, BinaryStream.Endianess.Little); // PlayerPosition y
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // PlayerPosition z
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // Pitch
-        writer.WriteFloat(0, BinaryStream.Endianess.Little); // Yaw
+        writer.WriteFloat(PositionX, BinaryStream.Endianess.Little); // PlayerPosition x
+        writer.WriteFloat(PositionY, BinaryStream.Endianess.Little); // PlayerPosition y
+        writer.WriteFloat(PositionZ, BinaryStream.Endianess.Little); // PlayerPosition z
+        writer.WriteFloat(Pitch, BinaryStream.Endianess.Little); // Pitch
+        writer.WriteFloat(Yaw, BinaryStream.Endianess.Little); // Yaw
         
         // Level settings
         writer.WriteLong(Seed, BinaryStream.Endianess.Little); // WorldSeed

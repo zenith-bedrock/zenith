@@ -12,7 +12,15 @@ class InGameSessionHandler : ISessionHandler
 {
     public void OnEnable(NetworkSession session)
     {
+        if (session.Player is not null)
+            session.Player.IsInGame = true;
         session.Context.Logger.Info($"{session.Player?.Username} is now in-game.");
+    }
+
+    public void OnDisable(NetworkSession session)
+    {
+        if (session.Player is not null)
+            session.Player.IsInGame = false;
     }
 
     public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)

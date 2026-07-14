@@ -35,7 +35,13 @@ class SpawnResponseSessionHandler : ISessionHandler
     private static void HandleSetLocalPlayerAsInitialized(NetworkSession session, ref BinaryStream stream)
     {
         var packet = DataPacket.From<SetLocalPlayerAsInitializedPacket>(ref stream);
-        session.Context.Logger.Info($"{session.Player?.Username} finished spawning (actor {packet.ActorRuntimeId}), entering in-game phase.");
+        var player = session.Player;
+        if (player is null) return;
+
+        session.Context.Logger.Info($"{player.Username} finished spawning (actor {packet.ActorRuntimeId}), entering in-game phase.");
+
+        // Fan-out de visibilidade antes de marcar IsInGame / trocar handler.
+        PlayerVisibility.AnnounceJoin(player, session.Context.PlayerManager.Online);
         session.SetHandler(new InGameSessionHandler());
     }
 }

@@ -40,7 +40,7 @@ sealed class MovementSystem : IGameSystem
 
         foreach (var peer in _players.Online)
         {
-            if (ReferenceEquals(peer, mover)) continue;
+            if (ReferenceEquals(peer, mover) || !peer.IsInGame) continue;
 
             peer.Session.Protocol.Entity.SendMoveAbsolute(
                 actorRuntimeId: (ulong)mover.RuntimeId,

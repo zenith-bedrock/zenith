@@ -92,3 +92,12 @@ zenith/
 - `Player.Session` é aceitável; fan-out via sistemas (TimeSync, MovementSystem), não espalhar `player.Session.Protocol.*` no domínio.
 - Grade de chunks no pre-spawn ainda é decidida no handler (sem `ChunkPublisher` ainda).
 - Sem multi-protocolo, zero-copy, plugins ou EventBus outbound neste momento.
+- Visibilidade join/leave: `PlayerVisibility` (fan-out fino no Network) + `EntityProtocol`; pose mutada só no `MovementSystem`.
+
+## Smoke manual
+
+1. Cliente A: login → InGame.
+2. AuthInput: servidor atualiza `Player` position (log/debug se útil).
+3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
+4. Movimento de A visível em B (`MoveActorAbsolute` após AddPlayer).
+5. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).

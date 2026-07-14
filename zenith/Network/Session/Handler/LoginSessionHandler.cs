@@ -66,7 +66,11 @@ class LoginSessionHandler : ISessionHandler
         // no displayName - hoje qualquer cliente pode se declarar com qualquer nome/uuid.
         // Suficiente pra desenvolvimento local, não serve pra produção exposta.
 
-        var player = new Zenith.Player.Player(username, session, session.Context.PlayerManager.AllocateRuntimeId());
+        var player = new Zenith.Player.Player(
+            username,
+            session,
+            session.Context.PlayerManager.AllocateRuntimeId(),
+            Guid.NewGuid());
         if (!session.Context.PlayerManager.TryAdd(player))
         {
             session.Context.Logger.Warning($"Rejected login: '{username}' already online.");

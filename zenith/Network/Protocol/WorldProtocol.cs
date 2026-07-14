@@ -15,12 +15,24 @@ sealed class WorldProtocol
 
     public WorldProtocol(NetworkSession session) => _session = session;
 
-    public void SendStartGame(string levelName, long entityRuntimeId)
+    public void SendStartGame(
+        string levelName,
+        long entityRuntimeId,
+        float x,
+        float y,
+        float z,
+        float pitch,
+        float yaw)
     {
         _session.SendDataPacket(new StartGamePacket
         {
             LevelName = levelName,
-            EntityId = entityRuntimeId
+            EntityId = entityRuntimeId,
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            Pitch = pitch,
+            Yaw = yaw
         });
     }
 

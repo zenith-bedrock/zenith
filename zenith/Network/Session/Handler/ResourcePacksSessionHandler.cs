@@ -30,9 +30,15 @@ class ResourcePacksSessionHandler : ISessionHandler
             case ResourcePackClientResponsePacket.STATUS_COMPLETED:
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks (mesmo que falsos).
+                var player = session.Player!;
                 session.Protocol.World.SendStartGame(
                     levelName: "world",
-                    entityRuntimeId: session.Player!.RuntimeId);
+                    entityRuntimeId: player.RuntimeId,
+                    x: player.PositionX,
+                    y: player.PositionY,
+                    z: player.PositionZ,
+                    pitch: player.Pitch,
+                    yaw: player.Yaw);
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }

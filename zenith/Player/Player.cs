@@ -17,6 +17,12 @@ class Player
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
     public long RuntimeId { get; }
 
+    /// <summary>UUID de lista/AddPlayer. Hoje gerado no login; claim JWT fica pra depois.</summary>
+    public Guid Uuid { get; }
+
+    /// <summary>True após SetLocalPlayerAsInitialized → InGame. Usado no fan-out de visibilidade.</summary>
+    public bool IsInGame { get; set; }
+
     public float PositionX { get; set; }
     public float PositionY { get; set; } = 8f;
     public float PositionZ { get; set; }
@@ -24,11 +30,12 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
-    public Player(string username, NetworkSession session, long runtimeId)
+    public Player(string username, NetworkSession session, long runtimeId, Guid uuid)
     {
         Username = username;
         Session = session;
         RuntimeId = runtimeId;
+        Uuid = uuid;
     }
 
     /// <summary>Somente handlers de rede. Não aplica posição final.</summary>
