@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Zenith.LevelDB;
 
@@ -6,7 +7,7 @@ namespace Zenith.World;
 /// <summary>
 /// Backend LevelDB (chaves Zenith, não formato vanilla Mojang).
 /// Colunas: <c>c:x:z</c>. Overlay permanente: <c>ov:x:y:z</c> → int32 LE runtime id.
-/// I/O em ThreadPool via <see cref="Task.Run"/> para não bloquear a thread de rede.
+/// Overlay Puts enfileiram e retornam sem esperar disco (worker único sob <c>_gate</c>).
 /// </summary>
 sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 {
@@ -14,12 +15,24 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 
     private readonly DB _db;
     private readonly object _gate = new();
+    private readonly ConcurrentQueue<OverlayWrite> _overlayWrites = new();
+    private readonly AutoResetEvent _overlaySignal = new(false);
+    private readonly Thread _overlayWorker;
+    private volatile bool _stopping;
     private bool _disposed;
+
+    private readonly record struct OverlayWrite(int X, int Y, int Z, int BlockRuntimeId);
 
     public LevelDbChunkStorage(string directory)
     {
         Directory.CreateDirectory(directory);
         _db = new DB(new Options { CreateIfMissing = true }, directory);
+        _overlayWorker = new Thread(OverlayWorkerLoop)
+        {
+            IsBackground = true,
+            Name = "LevelDb-OverlayWriter"
+        };
+        _overlayWorker.Start();
     }
 
     public ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
@@ -59,19 +72,15 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         }, cancellationToken));
     }
 
+    /// <summary>Enfileira o Put; completa quando o item está na fila, não quando o disco terminou.</summary>
     public ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var key = OverlayKey(x, y, z);
-            var value = BitConverter.GetBytes(blockRuntimeId);
-            lock (_gate)
-            {
-                _db.Put(key, value);
-            }
-        }, cancellationToken));
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+
+        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, blockRuntimeId));
+        _overlaySignal.Set();
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default)
@@ -110,6 +119,30 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         }, cancellationToken));
     }
 
+    private void OverlayWorkerLoop()
+    {
+        while (!_stopping)
+        {
+            _overlaySignal.WaitOne(50);
+            DrainOverlayWrites();
+        }
+
+        DrainOverlayWrites();
+    }
+
+    private void DrainOverlayWrites()
+    {
+        while (_overlayWrites.TryDequeue(out var write))
+        {
+            var key = OverlayKey(write.X, write.Y, write.Z);
+            var value = BitConverter.GetBytes(write.BlockRuntimeId);
+            lock (_gate)
+            {
+                _db.Put(key, value);
+            }
+        }
+    }
+
     private static byte[] ColumnKey(ChunkCoord coord) =>
         Encoding.UTF8.GetBytes($"c:{coord.X}:{coord.Z}");
 
@@ -139,8 +172,13 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
+        _stopping = true;
+        _overlaySignal.Set();
+        _overlayWorker.Join(TimeSpan.FromSeconds(5));
+        DrainOverlayWrites();
         lock (_gate) _db.Close();
         _db.Dispose();
+        _overlaySignal.Dispose();
+        _disposed = true;
     }
 }

@@ -59,6 +59,12 @@ public class RakNetSession
     protected int OutputSplitIndex;
     protected uint OutputReliableIndex;
 
+    /// <summary>
+    /// Serializa mutações de saída (OutputFrames, índices, backup) e ACK/NACK de backup
+    /// contra Tick / Incoming / fan-out cross-session no GameLoop.
+    /// </summary>
+    private readonly object _sessionLock = new();
+
     private bool _closed;
 
     public RakNetSession()
@@ -109,30 +115,40 @@ public class RakNetSession
             return;
         }
 
-        if (ReceivedFrameSequences.Count > 0)
+        byte[]? ackPayload = null;
+        byte[]? nackPayload = null;
+
+        lock (_sessionLock)
         {
-            var ack = new ACK
+            if (ReceivedFrameSequences.Count > 0)
             {
-                Sequences = ReceivedFrameSequences.ToList()
-            };
-            ReceivedFrameSequences.Clear();
-            Server.Send(EndPoint, ack.Encode());
+                var ack = new ACK
+                {
+                    Sequences = ReceivedFrameSequences.ToList()
+                };
+                ReceivedFrameSequences.Clear();
+                ackPayload = ack.Encode().ToArray();
+            }
+
+            if (LostFrameSequences.Count > 0)
+            {
+                var nack = new NACK
+                {
+                    Sequences = LostFrameSequences.ToList()
+                };
+                LostFrameSequences.Clear();
+                nackPayload = nack.Encode().ToArray();
+            }
+
+            SendQueueLocked(OutputFrames.Count);
         }
 
-        if (LostFrameSequences.Count > 0)
-        {
-            var nack = new NACK
-            {
-                Sequences = LostFrameSequences.ToList()
-            };
-            LostFrameSequences.Clear();
-            Server.Send(EndPoint, nack.Encode());
-        }
-
-        SendQueue(OutputFrames.Count);
+        if (ackPayload is not null) Server.Send(EndPoint, ackPayload);
+        if (nackPayload is not null) Server.Send(EndPoint, nackPayload);
     }
 
-    private void SendQueue(int count)
+    /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
+    private void SendQueueLocked(int count)
     {
         if (OutputFrames.Count == 0) return;
 
@@ -150,11 +166,29 @@ public class RakNetSession
             _outputFramesByteLength -= frame.GetByteLength();
         }
 
+        // Encode sob o lock; UDP I/O curto mantido aqui para evitar reentrância
+        // frágil com QueueFrame → SendQueue aninhados.
         Server.Send(EndPoint, frameSet.Encode());
     }
 
     public void SendFrame(Frame frame, Priority priority)
     {
+        lock (_sessionLock)
+        {
+            SendFrameLocked(frame, priority);
+        }
+    }
+
+    /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
+    private void SendFrameLocked(Frame frame, Priority priority)
+    {
+        // OrderChannel fora de 0..31 crashava nos arrays de índice.
+        if (frame.OrderChannel > 31)
+        {
+            Server.Logger?.Warning($"[{EndPoint}] Dropped frame with invalid OrderChannel={frame.OrderChannel}.");
+            return;
+        }
+
         if (Frame.IsSequenced(frame.Reliability))
         {
             frame.OrderIndex = OutputOrderIndex[frame.OrderChannel];
@@ -167,7 +201,6 @@ public class RakNetSession
         }
 
         var maxSize = Math.Max(MTU - 36, 1);
-        var splitSize = (int)Math.Ceiling((double)frame.Buffer.Length / maxSize);
 
         if (frame.Buffer.Length > maxSize)
         {
@@ -176,6 +209,7 @@ public class RakNetSession
             // de um MessageIndex único - reusar um só entre todos os fragmentos faz o peer
             // (que faz a mesma dedup por MessageIndex) descartar todos menos o primeiro como
             // retransmissão duplicada.
+            var splitSize = (int)Math.Ceiling((double)frame.Buffer.Length / maxSize);
             var splitId = (short)(OutputSplitIndex++ % 65_536);
             for (var i = 0; i < frame.Buffer.Length; i += maxSize)
             {
@@ -191,25 +225,27 @@ public class RakNetSession
                     Buffer = frame.Buffer.AsSpan(i, chunkLength).ToArray()
                 };
 
-                QueueFrame(newFrame, priority);
+                QueueFrameLocked(newFrame, priority);
             }
         }
         else
         {
             frame.MessageIndex = OutputReliableIndex++;
-            QueueFrame(frame, priority);
+            QueueFrameLocked(frame, priority);
         }
     }
 
-    private void QueueFrame(Frame frame, Priority priority)
+    /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
+    private void QueueFrameLocked(Frame frame, Priority priority)
     {
         var length = DGRAM_HEADER_SIZE + _outputFramesByteLength;
 
-        if (length + frame.GetByteLength() > MTU + DGRAM_MTU_OVERHEAD) SendQueue(OutputFrames.Count);
+        if (length + frame.GetByteLength() > MTU + DGRAM_MTU_OVERHEAD)
+            SendQueueLocked(OutputFrames.Count);
 
         OutputFrames.Add(frame);
         _outputFramesByteLength += frame.GetByteLength();
-        if (priority == Priority.Immediate) SendQueue(1);
+        if (priority == Priority.Immediate) SendQueueLocked(1);
     }
 
     public void Incoming(byte[] buffer)
@@ -243,21 +279,27 @@ public class RakNetSession
     public void HandleAck(ref BinaryStream reader)
     {
         var ack = IPacket.From<ACK>(ref reader);
-        foreach (var sequence in ack.Sequences)
+        lock (_sessionLock)
         {
-            OutputBackup.Remove(sequence);
+            foreach (var sequence in ack.Sequences)
+            {
+                OutputBackup.Remove(sequence);
+            }
         }
     }
 
     public void HandleNack(ref BinaryStream reader)
     {
         var nack = IPacket.From<NACK>(ref reader);
-        foreach (var sequence in nack.Sequences)
+        lock (_sessionLock)
         {
-            if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
-            foreach (var frame in frames)
+            foreach (var sequence in nack.Sequences)
             {
-                SendFrame(frame, Priority.Immediate);
+                if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
+                foreach (var frame in frames)
+                {
+                    SendFrameLocked(frame, Priority.Immediate);
+                }
             }
         }
     }
@@ -267,26 +309,31 @@ public class RakNetSession
         var frameSet = new FrameSet();
         frameSet.Decode(ref reader);
 
-        if (ReceivedFrameSequences.Contains(frameSet.Sequence)) return; // TODO: duplicate framesets
-
-        LostFrameSequences.Remove(frameSet.Sequence);
-
-        if (frameSet.Sequence < LastInputSequence || frameSet.Sequence == LastInputSequence) return; // TODO: out of order
-
-        ReceivedFrameSequences.Add(frameSet.Sequence);
-
-        if (frameSet.Sequence - LastInputSequence > 1)
+        List<Frame>? packets = null;
+        lock (_sessionLock)
         {
-            for (
-                var index = (uint)(LastInputSequence + 1);
-                index < frameSet.Sequence;
-                index++
-            ) LostFrameSequences.Add(index);
+            if (ReceivedFrameSequences.Contains(frameSet.Sequence)) return; // TODO: duplicate framesets
+
+            LostFrameSequences.Remove(frameSet.Sequence);
+
+            if (frameSet.Sequence < LastInputSequence || frameSet.Sequence == LastInputSequence) return; // TODO: out of order
+
+            ReceivedFrameSequences.Add(frameSet.Sequence);
+
+            if (frameSet.Sequence - LastInputSequence > 1)
+            {
+                for (
+                    var index = (uint)(LastInputSequence + 1);
+                    index < frameSet.Sequence;
+                    index++
+                ) LostFrameSequences.Add(index);
+            }
+
+            LastInputSequence = (int)frameSet.Sequence;
+            packets = frameSet.Packets;
         }
 
-        LastInputSequence = (int)frameSet.Sequence;
-
-        foreach (var packet in frameSet.Packets)
+        foreach (var packet in packets!)
         {
             HandleFrame(packet);
         }

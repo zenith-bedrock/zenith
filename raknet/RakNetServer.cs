@@ -234,7 +234,7 @@ public class RakNetServer
         }
     }
 
-    public void Send(IPEndPoint endPoint, byte[] buffer)
+    public virtual void Send(IPEndPoint endPoint, byte[] buffer)
     {
         _listener.Send(buffer, buffer.Length, endPoint);
     }

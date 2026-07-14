@@ -9,10 +9,14 @@ namespace Zenith.Player;
 /// </summary>
 class Player
 {
+    public const int MaxPendingBlockEdits = 8;
+
     private readonly object _movementInputLock = new();
     private MovementInputState _movementInput;
     private readonly object _blockEditLock = new();
-    private BlockEditIntent _blockEdit;
+    private readonly Queue<BlockEditIntent> _blockEdits = new();
+    private readonly object _chatLock = new();
+    private string? _pendingChat;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -78,11 +82,18 @@ class Player
         }
     }
 
-    public void SubmitBlockEdit(in BlockEditIntent intent)
+    /// <summary>
+    /// Enfileira place/break (FIFO). Cap <see cref="MaxPendingBlockEdits"/>;
+    /// overflow rejeita o mais novo (ações já aceites preservam ordem).
+    /// </summary>
+    public bool SubmitBlockEdit(in BlockEditIntent intent)
     {
         lock (_blockEditLock)
         {
-            _blockEdit = intent;
+            if (_blockEdits.Count >= MaxPendingBlockEdits)
+                return false;
+            _blockEdits.Enqueue(intent);
+            return true;
         }
     }
 
@@ -90,14 +101,38 @@ class Player
     {
         lock (_blockEditLock)
         {
-            if (!_blockEdit.HasValue)
+            if (_blockEdits.Count == 0)
             {
                 intent = default;
                 return false;
             }
 
-            intent = _blockEdit;
-            _blockEdit = default;
+            intent = _blockEdits.Dequeue();
+            return true;
+        }
+    }
+
+    /// <summary>Mensagem já validada pelo ChatProtocol; fan-out no ChatSystem.</summary>
+    public void SubmitChat(string message)
+    {
+        lock (_chatLock)
+        {
+            _pendingChat = message;
+        }
+    }
+
+    public bool TryConsumeChat(out string message)
+    {
+        lock (_chatLock)
+        {
+            if (_pendingChat is null)
+            {
+                message = "";
+                return false;
+            }
+
+            message = _pendingChat;
+            _pendingChat = null;
             return true;
         }
     }

@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb", "leveldb\leveldb.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb.Tests", "leveldb.Tests\leveldb.Tests.csproj", "{04FABC4D-6A83-4C63-8AF7-898D3E254982}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet.Tests", "raknet.Tests\raknet.Tests.csproj", "{2D7F3CE5-C277-474D-9194-D124567980C9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,6 +113,18 @@ Global
 		{04FABC4D-6A83-4C63-8AF7-898D3E254982}.Release|x64.Build.0 = Release|Any CPU
 		{04FABC4D-6A83-4C63-8AF7-898D3E254982}.Release|x86.ActiveCfg = Release|Any CPU
 		{04FABC4D-6A83-4C63-8AF7-898D3E254982}.Release|x86.Build.0 = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|x64.Build.0 = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Debug|x86.Build.0 = Debug|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|x64.ActiveCfg = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|x64.Build.0 = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|x86.ActiveCfg = Release|Any CPU
+		{2D7F3CE5-C277-474D-9194-D124567980C9}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

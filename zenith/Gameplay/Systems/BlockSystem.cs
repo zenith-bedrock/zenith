@@ -27,32 +27,36 @@ sealed class BlockSystem : IGameSystem
 
         foreach (var player in _players.Online)
         {
-            if (!player.TryConsumeBlockEdit(out var edit)) continue;
+            while (player.TryConsumeBlockEdit(out var edit))
+                ApplyEdit(player, edit);
+        }
+    }
 
-            var inventoryChanged = false;
-            if (edit.BlockRuntimeId != World.World.AirRuntimeId)
-            {
-                if (!player.Inventory.TryConsumeOne(player.SelectedHotbarSlot))
-                    continue;
+    private void ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit)
+    {
+        var inventoryChanged = false;
+        if (edit.BlockRuntimeId != World.World.AirRuntimeId)
+        {
+            if (!player.Inventory.TryConsumeOne(player.SelectedHotbarSlot))
+                return;
+            inventoryChanged = true;
+        }
+        else
+        {
+            var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
+            if (previous != World.World.AirRuntimeId && player.Inventory.TryAdd(previous))
                 inventoryChanged = true;
-            }
-            else
-            {
-                var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
-                if (previous != World.World.AirRuntimeId && player.Inventory.TryAdd(previous))
-                    inventoryChanged = true;
-            }
+        }
 
-            _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+        _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
 
-            if (inventoryChanged)
-                player.Session.Protocol.Inventory.SendHotbarContent(player.Inventory);
+        if (inventoryChanged)
+            player.Session.Protocol.Inventory.SendHotbarContent(player.Inventory);
 
-            foreach (var peer in _players.Online)
-            {
-                if (!peer.IsInGame) continue;
-                peer.Session.Protocol.World.SendUpdateBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
-            }
+        foreach (var peer in _players.Online)
+        {
+            if (!peer.IsInGame) continue;
+            peer.Session.Protocol.World.SendUpdateBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         }
     }
 }

@@ -61,10 +61,14 @@ sealed class World
 
     public static int AirRuntimeId => Blocks.Air;
 
+    /// <summary>
+    /// Autoridade em RAM no tick. Persistência de overlay é fire-and-forget
+    /// (fila no storage) — o GameLoop nunca espera disco.
+    /// </summary>
     public void SetBlock(int x, int y, int z, int blockRuntimeId)
     {
         _blockOverrides[(x, y, z)] = blockRuntimeId;
-        _storage.PutOverlayAsync(x, y, z, blockRuntimeId).AsTask().GetAwaiter().GetResult();
+        _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
     }
 
     /// <summary>Overlay se existir; senão amostra do terreno base flat.</summary>

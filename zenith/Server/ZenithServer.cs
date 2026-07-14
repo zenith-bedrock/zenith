@@ -41,6 +41,7 @@ class ZenithServer
         var gameLoop = new GameLoop(clock, logger);
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
+        gameLoop.Register(new ChatSystem(players));
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);

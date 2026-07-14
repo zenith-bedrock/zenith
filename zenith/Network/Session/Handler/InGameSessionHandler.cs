@@ -95,11 +95,7 @@ class InGameSessionHandler : ISessionHandler
             return;
         }
 
-        foreach (var peer in session.Context.PlayerManager.Online)
-        {
-            if (!peer.IsInGame) continue;
-            peer.Session.Protocol.Chat.SendChat(player.Username, message);
-        }
+        player.SubmitChat(message);
     }
 
     private static void HandlePlayerAction(NetworkSession session, ref BinaryStream stream)
@@ -155,14 +151,16 @@ class InGameSessionHandler : ISessionHandler
             return;
         }
 
-        player.SubmitBlockEdit(intent);
+        if (!player.SubmitBlockEdit(intent))
+            session.Context.Logger.Debug($"Dropped place from {player.Username}: block-edit queue full.");
     }
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)
     {
         var intent = BlockEditIntent.Set(x, y, z, World.World.AirRuntimeId);
         if (!intent.IsInWorldBounds()) return;
-        player.SubmitBlockEdit(intent);
+        if (!player.SubmitBlockEdit(intent))
+            player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch
