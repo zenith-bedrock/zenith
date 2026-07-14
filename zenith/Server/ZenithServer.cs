@@ -42,14 +42,22 @@ class ZenithServer
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
 
-        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
+        Blocks.Load(blockPalette);
         logger.Info($"Block palette loaded (air={Blocks.Air}, stone={Blocks.Stone}, grass={Blocks.GrassBlock})");
+
+        var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
+        // Boot contract: placeable starter blocks + air must exist in item palette.
+        _ = itemPalette.Require("minecraft:air");
+        _ = itemPalette.Require("minecraft:stone");
+        _ = itemPalette.Require("minecraft:grass_block");
+        logger.Info($"Item palette loaded ({itemPalette.Count} entries)");
 
         IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage);
         gameLoop.Register(new BlockSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config);
+        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(config.Server.Port)

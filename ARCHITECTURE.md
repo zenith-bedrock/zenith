@@ -97,6 +97,7 @@ raknet/
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
+- **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = block runtime; map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 - **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
 - **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.
@@ -109,7 +110,7 @@ raknet/
 4. Movimento de A visível em B (`MoveActorAbsolute`).
 5. Chat A↔B (`TextPacket`).
 6. A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`); hotbar sincroniza (`InventoryContent`).
-7. Terreno flat (stone/grass) visível sob os pés — `UseBlockNetworkIdHashes` alinhado às palettes FNV.
+7. Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame.
 8. A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity.
 9. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
 

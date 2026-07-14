@@ -95,6 +95,20 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Explicit constraint:** the **entire dataset must fit in RAM** while open. Documented in [`leveldb/README.md`](../leveldb/README.md). Crash mid-flush (new `.ldb`, old `CURRENT`) recovers by trusting `CURRENT` only; orphans are GC’d.
 
+### 12. ItemPalette via ServerContext (not Items.Load static)
+
+**Choice:** Load full `item_palette.json` into an immutable `ItemPalette` held on `ServerContext`. Protocols map block runtime → wire item id using `Blocks.TryGetName` + palette. Send `ItemRegistryPacket` (0xa2) after StartGame. Packets hold only `NetworkItemStack` DTOs.
+
+**Why:** Clients need the full registry; hardcoded IDs lied about air (`0` vs `-158`). Injecting the palette keeps dependencies visible — **do not** grow another `Blocks.Load`-style static for items/biomes/mobs.
+
+**Known debt:** `Blocks.*` remains a static façade for gameplay consts (`Blocks.Stone`, etc.). Next registry goes through Context; migrate Blocks when inventory/block domain is next touched.
+
+**Fallback:** boot `Require` air/stone/grass (throw if missing); runtime unknown block → air item id + Warning capped at 64 distinct ids (never fake stone).
+
+**Version SSOT:** `ServerIdentity.VersionName` drives StartGame / ResourcePackStack strings. ItemRegistry wire layout is documented against `ServerIdentity.ProtocolVersion`.
+
+**Deferred:** `creative_items.json` / CreativeContent / behavioral item classes.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
@@ -103,6 +117,7 @@ Recorded so we don't “accidentally” implement them:
 - `/` commands and permissions
 - Mojang LevelDB world format
 - Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
+- CreativeContent / block_state_b64 join (until creative UI is in scope)
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 

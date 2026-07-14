@@ -18,6 +18,8 @@ class ServerContext
     public GameClock Clock { get; }
     public World.World World { get; }
     public ServerConfig Config { get; }
+    public BlockPalette BlockPalette { get; }
+    public ItemPalette ItemPalette { get; }
 
     public ServerContext(
         ILogger logger,
@@ -25,7 +27,9 @@ class ServerContext
         EventBus eventBus,
         GameClock clock,
         World.World world,
-        ServerConfig config)
+        ServerConfig config,
+        BlockPalette blockPalette,
+        ItemPalette itemPalette)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -33,5 +37,7 @@ class ServerContext
         Clock = clock;
         World = world;
         Config = config;
+        BlockPalette = blockPalette;
+        ItemPalette = itemPalette;
     }
 }

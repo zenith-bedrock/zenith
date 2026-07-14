@@ -1,22 +1,11 @@
-using Zenith.Player;
 using Zenith.Raknet.Stream;
-using Zenith.World;
 
 namespace Zenith.Network.Packets;
 
-/// <summary>Network item stack descriptor (InventoryContent / held item wire).</summary>
+/// <summary>Network item stack descriptor (InventoryContent wire).</summary>
 readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0)
 {
     public static NetworkItemStack Empty => new(0, 0, 0);
-
-    public static NetworkItemStack FromBlockSlot(InventorySlot slot)
-    {
-        if (slot.IsEmpty) return Empty;
-        return new NetworkItemStack(
-            Items.NetworkIdForBlock(slot.RuntimeId),
-            (ushort)slot.Count,
-            slot.RuntimeId);
-    }
 
     public void Write(ref BinaryStream writer)
     {

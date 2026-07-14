@@ -1,4 +1,3 @@
-using Zenith.Player;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.Network.Packets;
@@ -11,7 +10,7 @@ sealed class InventoryContentPacket : DataPacket
     public override int Id => (int)ProtocolInfo.INVENTORY_CONTENT_PACKET;
 
     public int WindowId { get; set; } = WindowInventory;
-    public InventorySlot[] Slots { get; set; } = [];
+    public NetworkItemStack[] Slots { get; set; } = [];
 
     public override Span<byte> Encode()
     {
@@ -20,7 +19,7 @@ sealed class InventoryContentPacket : DataPacket
         writer.WriteUnsignedVarInt(WindowId);
         writer.WriteUnsignedVarInt(Slots.Length);
         foreach (var slot in Slots)
-            NetworkItemStack.FromBlockSlot(slot).Write(ref writer);
+            slot.Write(ref writer);
 
         writer.WriteByte(0); // FullContainerName.container_id
         writer.WriteBool(false); // no dynamic id

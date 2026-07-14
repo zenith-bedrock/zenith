@@ -1,5 +1,6 @@
-using Zenith.Raknet.Stream;
 using Zenith.Nbt;
+using Zenith.Raknet.Stream;
+using Zenith.Server;
 
 namespace Zenith.Network.Packets;
 
@@ -98,7 +99,7 @@ class StartGamePacket : DataPacket
         writer.WriteBool(false); // PersonaDisabled
         writer.WriteBool(false); // CustomSkinsDisabled
         writer.WriteBool(false); // EmoteChatMuted
-        writer.WriteVarString("1.26.33"); // BaseGameVersion
+        writer.WriteVarString(ServerIdentity.VersionName); // BaseGameVersion
         writer.WriteInt(0, BinaryStream.Endianess.Little); // LimitedWorldWidth
         writer.WriteInt(0, BinaryStream.Endianess.Little); // LimitedWorldDepth
         writer.WriteBool(false); // NewNether
@@ -131,7 +132,7 @@ class StartGamePacket : DataPacket
         
         writer.WriteVarString(""); // MultiPlayerCorrelationID
         writer.WriteBool(false); // ServerAuthoritativeInventory
-        writer.WriteVarString("1.26.33"); // GameVersion
+        writer.WriteVarString(ServerIdentity.VersionName); // GameVersion
         
         // PropertyData (empty NBT compound, network encoding)
         var propertyData = NbtCodec.Encode(

@@ -1,5 +1,6 @@
-using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
+using Zenith.Raknet.Stream;
+using Zenith.Server;
 using Zenith.World;
 
 namespace Zenith.Network.Session.Handler;
@@ -24,7 +25,7 @@ class ResourcePacksSessionHandler : ISessionHandler
             case ResourcePackClientResponsePacket.STATUS_HAVE_ALL_PACKS:
                 session.Protocol.ResourcePacks.SendStack(
                     mustAccept: false,
-                    gameVersion: "1.26.33",
+                    gameVersion: ServerIdentity.VersionName,
                     experimentsPreviouslyToggled: false,
                     hasEditorPacks: false);
                 break;
@@ -44,6 +45,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                     spawnBlockY: Blocks.FlatSpawnY,
                     spawnBlockZ: 0,
                     useBlockNetworkIdHashes: true);
+                session.Protocol.Inventory.SendItemRegistry();
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }
