@@ -1,17 +1,20 @@
+using Zenith.Raknet.Log;
+
 namespace Zenith.Event;
 
 /// <summary>
-/// Barramento de eventos tipado. Sistemas se inscrevem por tipo de evento (<c>Subscribe&lt;T&gt;</c>)
-/// e o publisher dispara pra todo mundo inscrito (<c>Publish&lt;T&gt;</c>), sem os dois lados se
-/// conhecerem diretamente. Isso é o que falta hoje pra, por exemplo, um sistema de scoreboard
-/// reagir a login/disconnect sem o LoginSessionHandler ter que saber que scoreboard existe.
-///
-/// Deliberadamente sem reflection, sem prioridade de handler, sem cancelamento - só
-/// publish/subscribe puro. Complexidade extra entra depois, se algum caso de uso real pedir.
+/// Barramento tipado publish/subscribe. Infra reservada: login/quit já publicam; ainda sem
+/// consumidores de domínio (scoreboard etc.). Deliberadamente sem prioridade/cancelamento.
 /// </summary>
 class EventBus
 {
     private readonly Dictionary<Type, List<Delegate>> _listeners = new();
+    private readonly ILogger? _logger;
+
+    public EventBus(ILogger? logger = null)
+    {
+        _logger = logger;
+    }
 
     /// <summary>Registra <paramref name="listener"/> pra ser chamado toda vez que um <typeparamref name="T"/> for publicado.</summary>
     public void Subscribe<T>(Action<T> listener)
@@ -25,7 +28,11 @@ class EventBus
         list.Add(listener);
     }
 
-    /// <summary>Dispara <paramref name="event"/> pra todos os listeners inscritos em <typeparamref name="T"/>, em ordem de inscrição.</summary>
+    /// <summary>
+    /// Dispara <paramref name="event"/> pra todos os listeners inscritos em <typeparamref name="T"/>.
+    /// Exceção em um listener é isolada (log + continua) — mesmo padrão do GameLoop por sistema —
+    /// para não derrubar caminhos como <c>NetworkSession.HandleClose</c>.
+    /// </summary>
     public void Publish<T>(T @event)
     {
         if (!_listeners.TryGetValue(typeof(T), out var list)) return;
@@ -36,7 +43,14 @@ class EventBus
         var count = list.Count;
         for (var i = 0; i < count; i++)
         {
-            ((Action<T>)list[i])(@event);
+            try
+            {
+                ((Action<T>)list[i])(@event);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"EventBus listener for {typeof(T).Name} failed: {ex}");
+            }
         }
     }
 }

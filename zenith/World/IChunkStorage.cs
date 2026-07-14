@@ -23,16 +23,22 @@ sealed class ChunkColumnData
 }
 
 /// <summary>
-/// Seam de storage. <see cref="ValueTask"/> desde o dia 1 para a fase LevelDB
-/// não bloquear a thread de rede com Get sync.
+/// Seam de storage. <see cref="ValueTask"/> desde o dia 1.
+/// Overlay esparso (<c>ov:</c>) é o formato permanente de edição — coluna = só terreno base.
 /// </summary>
 interface IChunkStorage
 {
     ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default);
     ValueTask PutAsync(ChunkColumnData column, CancellationToken cancellationToken = default);
+
+    ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default);
+    ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Cache thread-safe; chunks tratados como imutáveis após Put.</summary>
+/// <summary>
+/// Cache thread-safe; chunks tratados como imutáveis após Put.
+/// Overlay em memória só no <see cref="World"/> (InMemory não persiste <c>ov:</c>).
+/// </summary>
 sealed class InMemoryChunkStorage : IChunkStorage
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, ChunkColumnData> _chunks = new();
@@ -48,4 +54,10 @@ sealed class InMemoryChunkStorage : IChunkStorage
         _chunks[column.Coord] = column;
         return ValueTask.CompletedTask;
     }
+
+    public ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
+
+    public ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
 }

@@ -6,7 +6,8 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
-/// Mutação de mundo: overlay esparso em <see cref="World.World"/> (não CoW de coluna).
+/// Mutação de mundo: overlay esparso permanente (nunca reescreve subchunk).
+/// Place consome 1 do hotbar no tick.
 /// </summary>
 sealed class BlockSystem : IGameSystem
 {
@@ -27,6 +28,12 @@ sealed class BlockSystem : IGameSystem
         foreach (var player in _players.Online)
         {
             if (!player.TryConsumeBlockEdit(out var edit)) continue;
+
+            if (edit.BlockRuntimeId != World.World.AirRuntimeId)
+            {
+                if (!player.Inventory.TryConsumeOne(player.SelectedHotbarSlot))
+                    continue;
+            }
 
             _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
 

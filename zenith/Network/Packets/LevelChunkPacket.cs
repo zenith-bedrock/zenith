@@ -3,11 +3,8 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Network.Packets;
 
 /// <summary>
-/// Carries one 16x16 chunk column's terrain data to the client. Zenith has no real
-/// World/Chunk model yet, so every instance sent today wraps a fake, fully empty (air)
-/// column built by <see cref="ChunkUtils.BuildEmptyOverworldPayload"/> - just enough for the
-/// client to stop waiting on the "Loading world" screen. Replace ExtraPayload's source once
-/// a real per-chunk block/biome model exists.
+/// Carries one 16x16 chunk column's terrain data to the client.
+/// Payload vem de <see cref="World.ChunkPayloads"/> (flat base + biomes); edits via UpdateBlock/overlay.
 /// </summary>
 class LevelChunkPacket : DataPacket
 {
@@ -17,13 +14,12 @@ class LevelChunkPacket : DataPacket
     public int ChunkZ { get; set; }
     public int DimensionId { get; set; } = 0;
 
-    /// <summary>Number of block subchunks encoded at the start of ExtraPayload. 0 = fully empty column.</summary>
+    /// <summary>Number of block subchunks encoded at the start of ExtraPayload.</summary>
     public int SubChunkCount { get; set; } = 0;
 
     /// <summary>
-    /// Raw pre-built payload: block subchunks (SubChunkCount of them), then one biome entry
-    /// per subchunk index the dimension expects, then border blocks, then tiles. See
-    /// <see cref="ChunkUtils"/> for the only shape currently produced (fully empty).
+    /// Raw pre-built payload: block subchunks (SubChunkCount of them), then biome entries,
+    /// then border blocks / tiles.
     /// </summary>
     public byte[] ExtraPayload { get; set; } = Array.Empty<byte>();
 

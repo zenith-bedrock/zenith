@@ -1,4 +1,5 @@
 using Zenith.Network.Session;
+using Zenith.World;
 
 namespace Zenith.Player;
 
@@ -28,8 +29,10 @@ class Player
     /// <summary>Hotbar 0–8; selected slot bounds-checked no handler.</summary>
     public int SelectedHotbarSlot { get; set; }
 
-    /// <summary>Runtime id do bloco colocado (creative flat). Air = 0.</summary>
-    public int HeldBlockRuntimeId { get; set; } = 1;
+    public PlayerInventory Inventory { get; } = new();
+
+    /// <summary>Runtime id do bloco no slot selecionado (via inventário).</summary>
+    public int HeldBlockRuntimeId => Inventory.GetRuntimeId(SelectedHotbarSlot);
 
     /// <summary>Skin RGBA opcional parseada do login (senão PlayerList usa placeholder).</summary>
     public byte[]? SkinRgba { get; set; }
@@ -37,7 +40,7 @@ class Player
     public uint SkinHeight { get; set; }
 
     public float PositionX { get; set; }
-    public float PositionY { get; set; } = 8f;
+    public float PositionY { get; set; } = Blocks.FlatSpawnY;
     public float PositionZ { get; set; }
     public float Pitch { get; set; }
     public float Yaw { get; set; }

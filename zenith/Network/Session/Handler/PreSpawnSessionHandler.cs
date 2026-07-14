@@ -1,6 +1,7 @@
+using Zenith.Network.Protocol;
 using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
-using Zenith.Network.Protocol;
+using Zenith.World;
 
 namespace Zenith.Network.Session.Handler;
 
@@ -8,6 +9,7 @@ namespace Zenith.Network.Session.Handler;
 /// Estado entre StartGame e loading completo.
 /// Pede colunas ao <see cref="Server.ServerContext.World"/> (leitura thread-safe);
 /// <see cref="WorldProtocol"/> só transmite.
+/// Por coluna: LevelChunk (base) → UpdateBlock dos overlays — nunca flush global de overlay.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
@@ -46,29 +48,35 @@ class PreSpawnSessionHandler : ISessionHandler
 
         session.Context.Logger.Debug($"RequestChunkRadiusPacket: requested={request.Radius}, using={radius}");
 
-        // Leitura fora do tick: World/IChunkStorage são thread-safe (ValueTask + ConcurrentDictionary).
         var worldColumns = session.Context.World
             .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
             .AsTask()
             .GetAwaiter()
             .GetResult();
 
-        var columns = new List<ChunkColumn>(worldColumns.Count);
+        session.Protocol.World.SendChunkRadiusUpdated(radius);
+
         foreach (var column in worldColumns)
         {
-            columns.Add(new ChunkColumn(
-                column.Coord.X,
-                column.Coord.Z,
-                column.DimensionId,
-                column.SubChunkCount,
-                column.ExtraPayload));
+            ColumnTerrainEmitter.Emit(
+                column,
+                sendLevelChunk: bas => session.Protocol.World.SendLevelChunk(new ChunkColumn(
+                    bas.Coord.X,
+                    bas.Coord.Z,
+                    bas.DimensionId,
+                    bas.SubChunkCount,
+                    bas.ExtraPayload)),
+                sendUpdateBlock: (x, y, z, runtimeId) =>
+                    session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId));
         }
 
-        session.Protocol.World.SendChunkRadiusUpdated(radius);
-        session.Protocol.World.PublishChunks(columns);
-        session.Protocol.World.SendChunkPublisher(blockX: 0, blockY: 8, blockZ: 0, radiusBlocks: radius * 16);
-        session.Protocol.World.SendWorldSpawnPosition(x: 0, y: 8, z: 0);
-        session.Context.Logger.Debug("Chunks published, sending spawn notification and waiting for spawn response");
+        session.Protocol.World.SendChunkPublisher(
+            blockX: 0,
+            blockY: Blocks.FlatSpawnY,
+            blockZ: 0,
+            radiusBlocks: radius * 16);
+        session.Protocol.World.SendWorldSpawnPosition(x: 0, y: Blocks.FlatSpawnY, z: 0);
+        session.Context.Logger.Debug("Chunks published (base + per-column overlays), waiting for spawn response");
         session.Protocol.World.SendSpawnComplete();
 
         session.SetHandler(new SpawnResponseSessionHandler());

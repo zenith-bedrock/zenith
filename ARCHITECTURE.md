@@ -91,23 +91,26 @@ zenith/
 ## Notas deste estágio
 
 - `Player.Session` é aceitável; fan-out via sistemas (TimeSync, Movement, Block), não espalhar `player.Session.Protocol.*` no domínio.
-- PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite.
-- Mutação de bloco: overlay esparso em `World` + `UpdateBlock` (não CoW de coluna nesta fase).
+- PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
+- Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM **não tem bound** (limitação conhecida nesta escala).
+- Terreno base flat (`ChunkPayloads.BuildFlatOverworld`); edits = diff sobre a base.
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` é a fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
+- **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
 - **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.
-- **LevelDB:** `LevelDbChunkStorage` já existe (seam antecipada vs. roadmap Fase 4); `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback.
+- **LevelDB:** `LevelDbChunkStorage`; `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback. Chaves `c:` (base) e `ov:` (edits).
 
 ## Smoke manual
 
-1. Cliente A: login → InGame.
+1. Cliente A: login → InGame (chão flat sob os pés).
 2. AuthInput: servidor atualiza `Player` position.
 3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
 4. Movimento de A visível em B (`MoveActorAbsolute`).
 5. Chat A↔B (`TextPacket`).
-6. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
+6. A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`).
+7. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
 
 ## Roadmap
 
@@ -145,17 +148,17 @@ flowchart LR
 - `IChunkStorage` com **`ValueTask`** desde o dia 1 (InMemory sync por baixo) para LevelDB não obrigar rewrite sync na rede.
 - Mutação de coluna CoW **não** resolvida aqui.
 
-### Fase 3 — Inventário / blocs — bootstrap neste marco
+### Fase 3 — Inventário / blocs
 
-- Intent pendente → `BlockSystem` → `UpdateBlock`.
-- Bounds de coordenada e hotbar no handler.
-- Publicação de mutação: **overlay esparso** (não CoW de coluna inteira). CoW granular continua opção futura se o overlay não bastar.
+- Intent pendente → `BlockSystem` → overlay + `UpdateBlock`; place consome hotbar.
+- Bounds de coordenada, slot `0..8` e stack count no handler.
+- Overlay permanente (não CoW de coluna).
 
-### Fase 4 — LevelDB — bootstrap antecipado + config
+### Fase 4 — LevelDB
 
-- `LevelDbChunkStorage` já no tree; ativar com `world.path` no `zenith.yml` (antes: `ZENITH_WORLD_PATH`).
+- `LevelDbChunkStorage`; `world.path` no `zenith.yml`.
 - Path vazio = InMemory; falha ao abrir LevelDB **não** cai em InMemory silenciosamente.
-- Chaves Zenith (não formato vanilla Mojang). Vanilla decode = conteúdo futuro.
+- Chaves Zenith `c:` + `ov:` (não formato vanilla Mojang).
 
 ### Identidade
 

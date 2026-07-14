@@ -121,7 +121,7 @@ class InGameSessionHandler : ISessionHandler
         if (player is null) return;
         if (packet.TransactionType != InventoryTransactionPacket.TypeUseItem) return;
 
-        if (packet.HotbarSlot is < 0 or > 8)
+        if (!PlayerInventory.IsValidHotbarSlot(packet.HotbarSlot))
         {
             session.Context.Logger.Debug($"Rejected InventoryTransaction: hotbar {packet.HotbarSlot}");
             return;
@@ -137,10 +137,17 @@ class InGameSessionHandler : ISessionHandler
 
         if (packet.UseActionType != InventoryTransactionPacket.UseClickBlock) return;
 
-        var (tx, ty, tz) = FaceOffset(packet.BlockX, packet.BlockY, packet.BlockZ, packet.BlockFace);
-        var runtimeId = packet.HeldBlockRuntimeId != 0 ? packet.HeldBlockRuntimeId : player.HeldBlockRuntimeId;
+        var stack = player.Inventory.Get(packet.HotbarSlot);
+        if (!PlayerInventory.IsValidStackCount(stack.Count) || stack.Count <= 0)
+        {
+            session.Context.Logger.Debug($"Rejected place: invalid/empty stack count {stack.Count}");
+            return;
+        }
+
+        var runtimeId = stack.RuntimeId;
         if (runtimeId == World.World.AirRuntimeId) return;
 
+        var (tx, ty, tz) = FaceOffset(packet.BlockX, packet.BlockY, packet.BlockZ, packet.BlockFace);
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId);
         if (!intent.IsInWorldBounds())
         {

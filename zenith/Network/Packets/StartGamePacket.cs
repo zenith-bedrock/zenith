@@ -10,7 +10,7 @@ class StartGamePacket : DataPacket
     public long EntityId = 0;
     public int GameMode = 0;
     public float PositionX;
-    public float PositionY = 8f;
+    public float PositionY = -60f; // flat spawn; valor real vem de SendStartGame(player.PositionY)
     public float PositionZ;
     public float Pitch;
     public float Yaw;

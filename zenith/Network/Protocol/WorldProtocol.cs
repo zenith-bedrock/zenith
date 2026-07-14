@@ -62,6 +62,19 @@ sealed class WorldProtocol
         _session.SendDataPacket(packets);
     }
 
+    /// <summary>Uma coluna LevelChunk (base). Overlays vêm depois via <see cref="SendUpdateBlock"/>.</summary>
+    public void SendLevelChunk(ChunkColumn column)
+    {
+        _session.SendDataPacket(new LevelChunkPacket
+        {
+            ChunkX = column.X,
+            ChunkZ = column.Z,
+            DimensionId = column.DimensionId,
+            SubChunkCount = column.SubChunkCount,
+            ExtraPayload = column.ExtraPayload
+        });
+    }
+
     public void SendChunkPublisher(int blockX, int blockY, int blockZ, int radiusBlocks)
     {
         _session.SendDataPacket(new NetworkChunkPublisherUpdatePacket

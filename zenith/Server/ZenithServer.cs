@@ -46,7 +46,7 @@ class ZenithServer
         var world = new World.World(storage);
         gameLoop.Register(new BlockSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(), clock, world, config);
+        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(config.Server.Port)
