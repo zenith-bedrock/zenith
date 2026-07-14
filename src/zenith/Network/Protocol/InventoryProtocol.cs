@@ -127,6 +127,11 @@ sealed class InventoryProtocol
         });
     }
 
+    public void SendCreativeContent()
+    {
+        _session.SendDataPacket(CreativeContentPacket.CreateStarter(_session.Context.ItemPalette));
+    }
+
     public void SendInventoryContent(PlayerInventory inventory)
     {
         var slots = inventory.SnapshotMainInventory();

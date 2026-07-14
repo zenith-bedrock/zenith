@@ -26,7 +26,8 @@ sealed class WorldProtocol
         int spawnBlockX = 0,
         int spawnBlockY = 0,
         int spawnBlockZ = 0,
-        bool useBlockNetworkIdHashes = true)
+        bool useBlockNetworkIdHashes = true,
+        int gameMode = 0)
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -40,7 +41,9 @@ sealed class WorldProtocol
             SpawnBlockX = spawnBlockX,
             SpawnBlockY = spawnBlockY,
             SpawnBlockZ = spawnBlockZ,
-            UseBlockNetworkIdHashes = useBlockNetworkIdHashes
+            UseBlockNetworkIdHashes = useBlockNetworkIdHashes,
+            GameMode = gameMode,
+            GameType = gameMode
         });
     }
 

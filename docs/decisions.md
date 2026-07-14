@@ -227,6 +227,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Drop entity wire, merge across cells, despawn timers.
 
+**Known debt:** `FloorDropStore` dict/RAM is unbounded (same pattern as `_blockOverrides` in ARCHITECTURE) — no bound, no new abstraction in this leva.
+
 ### 27. Server-authoritative break timing
 
 **Choice:** Soft blocks use `Blocks.BreakTicks` against AuthInput `start_break`/`continue_destroy` → `Player.BeginBreak` + elapsed GameLoop ticks before `predict_destroy`/`TrySubmitBreak` succeeds. Zero-tick blocks (air) unchanged. Early/wrong-cell breaks rejected with Debug log.
@@ -246,7 +248,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Inventory rearrange (§17) without chests still left Survival “storage furniture” incomplete; dual-store keeps decide≠transmit without stuffing chest into `PlayerInventory`.
 
-**Deferred:** LevelDB hydrate/Put; sneak-to-place-on-chest; double-chest; BlockActor; hopper; CreativeContent; window-scoped net-id isolation beyond protocol arrays.
+**Deferred:** LevelDB hydrate/Put; sneak-to-place-on-chest; double-chest; BlockActor; hopper; full creative item list / `block_state_b64`; window-scoped net-id isolation beyond protocol arrays.
+
+**Known debt:** `ChestStore` dict/RAM is unbounded (same pattern as `_blockOverrides` in ARCHITECTURE) — no bound, no new abstraction in this leva.
 
 ### 29. Crafting 2×2 — RecipeRegistry MVP (no CraftingData yet)
 
@@ -256,13 +260,39 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** `CraftingDataPacket` / recipe book sync; full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags.
 
-### 30. CreativeContent after this spine (conscious yes)
+### 30. CreativeContent after this spine (conscious yes) — superseded by §31
 
-**Choice:** Prioritize `CreativeContent` / creative inventory join for the **next** feedback-facing milestone after place/break + variety smoke on survival. Do **not** ship CreativeContent in this leva. `StartGame` stays Survival; starter hotbar already carries stone/dirt/planks/log/sand/chest for LAN exploration without creative UI.
+**Choice (historical):** Prioritize Creative for the **next** feedback-facing milestone after place/break + variety smoke. Recording **yes-next** avoided another silent Deferred cycle.
 
-**Why:** `v0.0.1-alpha` (§20) exists for external feedback; testers want “place more than one block” first (solved by §25 spawn variety + §15 AuthInput break). Creative UI is high protocol cost (`CreativeContent`, block_state payloads) relative to that spine. Recording **yes-next** avoids another silent Deferred cycle (§12/§14/§16).
+**Status:** Shipped as §31 (Creative mode v1 + short CreativeContent list). Full `creative_items.json` / `block_state_b64` remains Deferred under §31.
 
-**Deferred:** CreativeContent packet + creative gamemode StartGame field; keep survival as default join until that lands.
+### 31. Creative mode v1 (config → join)
+
+**Choice:**
+
+1. `ServerConfig.Validate()` accepts only `"Survival"` / `"Creative"` (loud fail; no silent fallback).
+2. Every joiner gets that single mode: `Player.GameMode` plus both `StartGamePacket.GameMode` (PlayerGameMode) and `GameType` (WorldGameMode) from the same config value. **No** per-player override; **no** runtime switch (commands `/` are out of scope — would be required to change mode in-session).
+3. Creative join: empty hotbar (client Creative UI supplies items). Survival: existing starter seed.
+4. `CreativeContentPacket` after `ItemRegistry`, before empty BiomeDefinitionList — short list from `ItemPalette` (stone/grass/dirt/planks/log/sand/chest). Do **not** parse `creative_items.json` (`block_state_b64`).
+5. `BlockSystem.ApplyEdit` branches: Creative place skips `TryConsumeOne`; Creative break skips timing + inventory/floor loot (still clears chest store). Survival path unchanged.
+
+**Why:** LAN feedback needs Creative UI + infinite place/break without inventing entity wire or admin commands. Uniform config mode is the only source of truth while `/` stays frozen.
+
+**Deferred:** Adventure/Spectator; per-player mode; `/gamemode`; pick-block; rich creative tabs; full creative list / `block_state_b64`; craft ISR quirks unique to Creative.
+
+### 32. Entity coherence — defer WorldEntity
+
+**Choice:** Keep `FloorDropStore` / `ChestStore` without a shared entity concept. **Do not** introduce `WorldEntity` until the named feature **drop-entity wire** (§26 Deferred) is pulled as work. When that feature is pulled: minimal dropped-item entity only (position, runtime id, count, entity id for Add/Remove) — not ECS/mobs.
+
+**Why:** Three RAM workarounds converging is Rule 7 signal, but Creative (§31) and current chests do **not** require entity wire. A generic entity layer “for mobs someday” violates decisions Item 4 / ARCHITECTURE Rule 7.
+
+**Deferred (after minimal dropped-item entity):** mob AI, Mojang BlockActor, entity persistence, collision — each its own ADR.
+
+### 33. Store unbounded honesty + InventoryContent encode-shape
+
+**Choice:** Document Known debt on §26 / §28 (unbounded dicts). Add an **encode-shape** test for outbound `InventoryContentPacket` in the style of existing inventory packet tests — do **not** implement `Decode` (packet remains outbound-only).
+
+**Why:** ARCHITECTURE already documents unbounded `_blockOverrides`; chest/floor stores match that pattern and should say so. Round-trip wording would force useless Decode stubs.
 
 ### OpenInventory / chest UI (note under §28)
 
@@ -276,7 +306,8 @@ Recorded so we don't “accidentally” implement them:
 - `/` commands and permissions
 - Mojang LevelDB world format
 - Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
-- CreativeContent / block_state_b64 join (**scheduled next** after smoke of this spine — see §30; still not in this leva)
+- Full creative catalog / `block_state_b64` decode (short CreativeContent list shipped in §31)
+- WorldEntity / ECS until drop-entity wire is explicitly pulled (§32)
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 

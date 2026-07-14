@@ -117,6 +117,28 @@ public class InventoryPacketEncodeTests
     }
 
     [Fact]
+    public void InventoryContent_encode_shape_matches_slot_count()
+    {
+        var empty = new InventoryContentPacket
+        {
+            WindowId = InventoryContentPacket.WindowInventory,
+            Slots = []
+        }.Encode();
+        var withSlots = new InventoryContentPacket
+        {
+            WindowId = InventoryContentPacket.WindowInventory,
+            Slots =
+            [
+                NetworkItemStack.Empty,
+                new NetworkItemStack(1, 64, 100, StackNetworkId: 2)
+            ]
+        }.Encode();
+
+        Assert.True(empty.Length > 1);
+        Assert.True(withSlots.Length > empty.Length);
+    }
+
+    [Fact]
     public void ItemStackRequest_marks_PlaceInContainer_supported()
     {
         var writer = new BinaryStream();

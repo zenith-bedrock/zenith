@@ -59,11 +59,13 @@ class LoginSessionHandler : ISessionHandler
             return;
         }
 
+        var gameMode = Zenith.Player.GameModeConfig.FromConfig(session.Context.Config.Server.Gamemode);
         var player = new Zenith.Player.Player(
             identity.DisplayName,
             session,
             session.Context.PlayerManager.AllocateRuntimeId(),
-            identity.Uuid)
+            identity.Uuid,
+            gameMode)
         {
             SkinRgba = identity.SkinRgba,
             SkinWidth = identity.SkinWidth,

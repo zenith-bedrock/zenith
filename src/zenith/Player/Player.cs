@@ -39,7 +39,10 @@ class Player
     /// <summary>Hotbar 0–8; selected slot bounds-checked no handler.</summary>
     public int SelectedHotbarSlot { get; set; }
 
-    public PlayerInventory Inventory { get; } = new();
+    public PlayerInventory Inventory { get; }
+
+    /// <summary>Join-time mode from config (ADR §31). Not mutated by handlers.</summary>
+    public GameMode GameMode { get; }
 
     /// <summary>Colunas enviadas / em voo e raio de view (streaming).</summary>
     public PlayerChunkTracker Chunks { get; } = new();
@@ -91,12 +94,19 @@ class Player
     public bool IsBreakTarget(int x, int y, int z) =>
         HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;
 
-    public Player(string username, NetworkSession session, long runtimeId, Guid uuid)
+    public Player(
+        string username,
+        NetworkSession session,
+        long runtimeId,
+        Guid uuid,
+        GameMode gameMode = GameMode.Survival)
     {
         Username = username;
         Session = session;
         RuntimeId = runtimeId;
         Uuid = uuid;
+        GameMode = gameMode;
+        Inventory = new PlayerInventory(seedStarterHotbar: gameMode == GameMode.Survival);
     }
 
     public void SubmitMovementInput(in MovementInputState input)

@@ -67,6 +67,7 @@ static class PlayerVisibility
             subject.Pitch,
             subject.Yaw,
             subject.HeadYaw,
-            held);
+            held,
+            gameMode: (int)subject.GameMode);
     }
 }

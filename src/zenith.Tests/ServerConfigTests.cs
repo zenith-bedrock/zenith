@@ -87,6 +87,27 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
+    public void Validate_rejects_unsupported_gamemode()
+    {
+        var config = new ServerConfig();
+        config.Server.Gamemode = "Adventure";
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("Survival or Creative", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_accepts_Survival_and_Creative()
+    {
+        var survival = new ServerConfig();
+        survival.Server.Gamemode = "Survival";
+        survival.Validate();
+
+        var creative = new ServerConfig();
+        creative.Server.Gamemode = "Creative";
+        creative.Validate();
+    }
+
+    [Fact]
     public void Empty_world_path_is_in_memory_intent()
     {
         var config = new ServerConfig();

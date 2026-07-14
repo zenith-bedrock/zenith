@@ -74,7 +74,7 @@ file sealed class IntentTestFixture
     public InventorySystem CreateInventorySystem() =>
         new(Players, World, Context.Recipes);
 
-    public Player.Player AddInGamePlayer(string name)
+    public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival)
     {
         var rak = new RakNetSession
         {
@@ -84,7 +84,7 @@ file sealed class IntentTestFixture
             MTU = 1400
         };
         var session = new NetworkSession(rak, new StubSessionHandler(), Context);
-        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid())
+        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode)
         {
             IsInGame = true
         };
@@ -531,5 +531,58 @@ public class IntentContractTests
         Assert.Equal(Blocks.OakLog, player.Inventory.Get(0).RuntimeId);
         Assert.Equal(4, player.Inventory.Get(1).Count);
         Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(1).RuntimeId);
+    }
+
+    [Fact]
+    public void Creative_join_has_empty_inventory()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creative", GameMode.Creative);
+        Assert.Equal(GameMode.Creative, player.GameMode);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.Get(i).IsEmpty);
+    }
+
+    [Fact]
+    public void BlockSystem_creative_place_does_not_consume_hotbar()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("cplace", GameMode.Creative);
+        StandNear(player, 2, 64, 2);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(2, 64, 2));
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void BlockSystem_creative_break_instant_without_loot()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("cbreak", GameMode.Creative);
+        StandNear(player, 3, 64, 3);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+
+        fx.World.SetBlock(3, 64, 3, Blocks.Stone);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(3, 64, 3, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(3, 64, 3));
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+        Assert.Equal(0, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void CreativeContent_starter_encode_has_items()
+    {
+        Blocks.EnsureLoaded();
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var packet = CreativeContentPacket.CreateStarter(palette);
+        Assert.Equal(7, packet.Items.Length);
+        Assert.Single(packet.Groups);
+        Assert.True(packet.Encode().Length > 16);
     }
 }

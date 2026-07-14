@@ -41,16 +41,20 @@ sealed class BlockSystem : IGameSystem
         if (!IsWithinReach(player, edit.X, edit.Y, edit.Z))
             return;
 
+        var creative = player.GameMode == GameMode.Creative;
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
             if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
                 return;
 
-            var slot = edit.HotbarSlot;
-            if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
-                return;
-            inventoryChanged = true;
+            if (!creative)
+            {
+                var slot = edit.HotbarSlot;
+                if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
+                    return;
+                inventoryChanged = true;
+            }
         }
         else
         {
@@ -58,24 +62,27 @@ sealed class BlockSystem : IGameSystem
             if (previous == World.World.AirRuntimeId)
                 return;
 
-            var need = Blocks.BreakTicks(previous);
-            if (need > 0 && player.HasBreakTarget)
+            if (!creative)
             {
-                if (!player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                var need = Blocks.BreakTicks(previous);
+                if (need > 0 && player.HasBreakTarget)
                 {
-                    player.Session.Context.Logger.Debug(
-                        $"Break rejected (wrong cell) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    return;
-                }
+                    if (!player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                    {
+                        player.Session.Context.Logger.Debug(
+                            $"Break rejected (wrong cell) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                        return;
+                    }
 
-                var elapsed = clock.CurrentTick >= player.BreakStartedTick
-                    ? clock.CurrentTick - player.BreakStartedTick
-                    : 0;
-                if (elapsed < (ulong)need)
-                {
-                    player.Session.Context.Logger.Debug(
-                        $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
-                    return;
+                    var elapsed = clock.CurrentTick >= player.BreakStartedTick
+                        ? clock.CurrentTick - player.BreakStartedTick
+                        : 0;
+                    if (elapsed < (ulong)need)
+                    {
+                        player.Session.Context.Logger.Debug(
+                            $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
+                        return;
+                    }
                 }
             }
 
@@ -87,23 +94,30 @@ sealed class BlockSystem : IGameSystem
                     open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
                     player.OpenChest = null;
 
-                foreach (var (rid, count) in _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z))
+                var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
+                if (!creative)
                 {
-                    if (!player.Inventory.TryAdd(rid, count))
-                        _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
-                    else
-                        inventoryChanged = true;
+                    foreach (var (rid, count) in dumped)
+                    {
+                        if (!player.Inventory.TryAdd(rid, count))
+                            _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
+                        else
+                            inventoryChanged = true;
+                    }
                 }
             }
 
-            if (!player.Inventory.TryAdd(previous))
+            if (!creative)
             {
-                _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, previous, 1);
-                player.Session.Context.Logger.Debug(
-                    $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                if (!player.Inventory.TryAdd(previous))
+                {
+                    _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, previous, 1);
+                    player.Session.Context.Logger.Debug(
+                        $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                }
+                else
+                    inventoryChanged = true;
             }
-            else
-                inventoryChanged = true;
         }
 
         _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);

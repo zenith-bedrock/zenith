@@ -1,6 +1,6 @@
 # Protocol churn checklist
 
-**Last review:** never (process adopted with ADR §22 — Jul 2026)
+**Last review:** Jul 2026 (CreativeContentPacket §31 — gophertunnel Groups+Items layout, id `0x91`)
 
 Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Manual** — no remote schema scraper.
 
@@ -11,6 +11,7 @@ Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Man
    - `ProtocolInfo`
    - `StartGamePacket`
    - `ItemRegistryPacket`
+   - `CreativeContentPacket` (Groups + CreativeItems; after ItemRegistry in login)
    - `LevelChunkPacket`
    - Inventory / ItemStackRequest paths (SAI on)
 3. Smoke: login → InGame on that client.

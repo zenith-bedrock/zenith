@@ -68,6 +68,9 @@ sealed class ServerConfig
             throw new InvalidOperationException("server.motd must not be empty.");
         if (string.IsNullOrWhiteSpace(Server.Gamemode))
             throw new InvalidOperationException("server.gamemode must not be empty.");
+        if (Server.Gamemode is not ("Survival" or "Creative"))
+            throw new InvalidOperationException(
+                $"server.gamemode must be Survival or Creative (got '{Server.Gamemode}').");
 
         if (World.SpawnChunkRadius is < 0 or > 32)
             throw new InvalidOperationException($"world.spawn-chunk-radius must be 0..32 (got {World.SpawnChunkRadius}).");

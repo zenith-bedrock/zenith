@@ -45,8 +45,10 @@ class ResourcePacksSessionHandler : ISessionHandler
                     spawnBlockX: 0,
                     spawnBlockY: Blocks.FlatSpawnY,
                     spawnBlockZ: 0,
-                    useBlockNetworkIdHashes: true);
+                    useBlockNetworkIdHashes: true,
+                    gameMode: (int)player.GameMode);
                 session.Protocol.Inventory.SendItemRegistry();
+                session.Protocol.Inventory.SendCreativeContent();
                 // Empty BiomeDefinitionList — required once by modern clients (Vedrock/PNX parity).
                 session.Protocol.World.SendEmptyBiomeDefinitionList();
                 session.SetHandler(new PreSpawnSessionHandler());

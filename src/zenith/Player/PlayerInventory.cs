@@ -26,16 +26,27 @@ sealed class PlayerInventory
     private readonly InventorySlot[] _slots = new InventorySlot[FullInventorySize];
     private InventorySlot _cursor = InventorySlot.Empty;
 
-    public PlayerInventory()
+    /// <param name="seedStarterHotbar">
+    /// Survival default seed. Creative joins use empty hotbar (client UI supplies items) — ADR §31.
+    /// </param>
+    public PlayerInventory(bool seedStarterHotbar = true)
     {
-        _slots[0] = new InventorySlot(Blocks.Stone, MaxStack);
-        _slots[1] = new InventorySlot(Blocks.Dirt, MaxStack);
-        _slots[2] = new InventorySlot(Blocks.OakPlanks, MaxStack);
-        _slots[3] = new InventorySlot(Blocks.OakLog, 32);
-        _slots[4] = new InventorySlot(Blocks.Sand, MaxStack);
-        _slots[5] = new InventorySlot(Blocks.Chest, 16);
-        for (var i = 6; i < FullInventorySize; i++)
-            _slots[i] = InventorySlot.Empty;
+        if (seedStarterHotbar)
+        {
+            _slots[0] = new InventorySlot(Blocks.Stone, MaxStack);
+            _slots[1] = new InventorySlot(Blocks.Dirt, MaxStack);
+            _slots[2] = new InventorySlot(Blocks.OakPlanks, MaxStack);
+            _slots[3] = new InventorySlot(Blocks.OakLog, 32);
+            _slots[4] = new InventorySlot(Blocks.Sand, MaxStack);
+            _slots[5] = new InventorySlot(Blocks.Chest, 16);
+            for (var i = 6; i < FullInventorySize; i++)
+                _slots[i] = InventorySlot.Empty;
+        }
+        else
+        {
+            for (var i = 0; i < FullInventorySize; i++)
+                _slots[i] = InventorySlot.Empty;
+        }
     }
 
     public InventorySlot Cursor => _cursor;
