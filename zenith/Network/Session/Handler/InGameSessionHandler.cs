@@ -144,7 +144,7 @@ class InGameSessionHandler : ISessionHandler
         if (runtimeId == World.World.AirRuntimeId) return;
 
         var (tx, ty, tz) = FaceOffset(packet.BlockX, packet.BlockY, packet.BlockZ, packet.BlockFace);
-        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId);
+        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, packet.HotbarSlot);
         if (!intent.IsInWorldBounds())
         {
             session.Context.Logger.Debug($"Rejected place OOB from {player.Username}");

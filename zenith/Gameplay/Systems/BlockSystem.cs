@@ -37,7 +37,8 @@ sealed class BlockSystem : IGameSystem
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
-            if (!player.Inventory.TryConsumeOne(player.SelectedHotbarSlot))
+            var slot = edit.HotbarSlot;
+            if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
                 return;
             inventoryChanged = true;
         }

@@ -9,13 +9,17 @@ readonly struct BlockEditIntent
     public int Z { get; init; }
     public int BlockRuntimeId { get; init; }
 
-    public static BlockEditIntent Set(int x, int y, int z, int blockRuntimeId) => new()
+    /// <summary>Slot do hotbar a consumir no place; ignorado no break (−1).</summary>
+    public int HotbarSlot { get; init; }
+
+    public static BlockEditIntent Set(int x, int y, int z, int blockRuntimeId, int hotbarSlot = -1) => new()
     {
         HasValue = true,
         X = x,
         Y = y,
         Z = z,
-        BlockRuntimeId = blockRuntimeId
+        BlockRuntimeId = blockRuntimeId,
+        HotbarSlot = hotbarSlot
     };
 
     public bool IsInWorldBounds() =>

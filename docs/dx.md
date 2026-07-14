@@ -18,7 +18,7 @@ That maps to folders and types. New contributors can ask “does this class **de
 | `nbt` (`Zenith.Nbt`) | LE / Network / BigEndian NBT round-trips |
 | `leveldb` (`Zenith.LevelDB`) | Put/Get/Delete/WriteBatch/Iterator for Zenith keys |
 
-`dotnet test` on `nbt.Tests` / `leveldb.Tests` / `zenith.Tests` keeps format bugs out of “boot the Bedrock client” loops.
+`dotnet test` on `nbt.Tests` / `leveldb.Tests` / `raknet.Tests` / `zenith.Tests` keeps format and transport bugs out of “boot the Bedrock client” loops.
 
 ### 3. Intent-first handlers
 
@@ -53,7 +53,7 @@ Good DX is saying **no** until the yes is cheap to maintain.
 ## Workflow suggestions
 
 ```text
-1. Read docs/architecture.md + ARCHITECTURE.md
+1. Read docs/architecture.md + ARCHITECTURE.md (+ .cursor/rules for agents)
 2. Touch the smallest leaf (nbt/leveldb/raknet) when possible
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream

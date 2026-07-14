@@ -63,3 +63,4 @@ Desktop.ini
 *.lock
 tmp-log.txt
 worlds/
+.cursor/
