@@ -2,9 +2,10 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Network.Packets;
 
-/// <summary>ContainerOpen (0x2e) — abre UI de inventário do jogador (window 0).</summary>
+/// <summary>ContainerOpen (0x2e) — abre UI de inventário / container.</summary>
 sealed class ContainerOpenPacket : DataPacket
 {
+    public const byte WindowTypeChest = 0;
     public const byte WindowTypeInventory = 0xff;
 
     public override int Id => (int)ProtocolInfo.CONTAINER_OPEN_PACKET;

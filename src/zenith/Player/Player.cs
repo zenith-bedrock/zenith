@@ -64,6 +64,33 @@ class Player
     public int LastReplicatedHeldRuntimeId { get; set; } = int.MinValue;
     public int LastReplicatedHeldCount { get; set; } = int.MinValue;
 
+    /// <summary>Server-authoritative break progress (AuthInput start → predict). Cleared on abort/success.</summary>
+    public int BreakTargetX { get; private set; }
+    public int BreakTargetY { get; private set; }
+    public int BreakTargetZ { get; private set; }
+    public ulong BreakStartedTick { get; private set; }
+    public bool HasBreakTarget { get; private set; }
+
+    /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
+    public (int X, int Y, int Z)? OpenChest { get; set; }
+
+    public void BeginBreak(int x, int y, int z, ulong tick)
+    {
+        BreakTargetX = x;
+        BreakTargetY = y;
+        BreakTargetZ = z;
+        BreakStartedTick = tick;
+        HasBreakTarget = true;
+    }
+
+    public void AbortBreak()
+    {
+        HasBreakTarget = false;
+    }
+
+    public bool IsBreakTarget(int x, int y, int z) =>
+        HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;
+
     public Player(string username, NetworkSession session, long runtimeId, Guid uuid)
     {
         Username = username;

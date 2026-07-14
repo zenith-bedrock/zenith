@@ -7,7 +7,7 @@ using Zenith.World;
 namespace Zenith.Network.Protocol;
 
 /// <summary>
-/// Wire map inventário: container IDs Bedrock → flat 0–35 / cursor.
+/// Wire map inventário: container IDs Bedrock → flat 0–35 / cursor / chest 100+.
 /// Sem lógica de gameplay — só boundary.
 /// </summary>
 static class InventoryContainerMap
@@ -16,6 +16,13 @@ static class InventoryContainerMap
     public const byte Hotbar = 28;
     public const byte Inventory = 29;
     public const byte Cursor = 59;
+    public const byte Chest = 7;
+
+    /// <summary>Flat domínio para slots do baú aberto (não vive em <see cref="PlayerInventory"/>).</summary>
+    public const int ChestBase = 100;
+
+    public static bool IsChestFlat(int flat) =>
+        flat is >= ChestBase and < ChestBase + ChestStore.Size;
 
     public static bool TryMap(byte containerId, byte slot, out int flat)
     {
@@ -46,6 +53,16 @@ static class InventoryContainerMap
                 flat = PlayerInventory.CursorSlot;
                 return true;
 
+            case Chest:
+                if (slot >= ChestStore.Size)
+                {
+                    flat = 0;
+                    return false;
+                }
+
+                flat = ChestBase + slot;
+                return true;
+
             default:
                 flat = 0;
                 return false;
@@ -58,6 +75,13 @@ static class InventoryContainerMap
         {
             containerId = Cursor;
             wireSlot = 0;
+            return true;
+        }
+
+        if (IsChestFlat(flat))
+        {
+            containerId = Chest;
+            wireSlot = (byte)(flat - ChestBase);
             return true;
         }
 
@@ -89,6 +113,7 @@ sealed class InventoryProtocol
     private readonly NetworkSession _session;
     private readonly HashSet<int> _warnedUnknownBlocks = new();
     private readonly int[] _slotNetIds = new int[PlayerInventory.FullInventorySize];
+    private readonly int[] _chestNetIds = new int[ChestStore.Size];
     private int _cursorNetId;
     private int _nextNetId = 1;
 
@@ -121,6 +146,27 @@ sealed class InventoryProtocol
         });
     }
 
+    public void SendChestContent(ChestStore chests, int x, int y, int z)
+    {
+        chests.Ensure(x, y, z);
+        if (!chests.TryGetSlots(x, y, z, out var slots))
+            return;
+
+        var wire = new NetworkItemStack[ChestStore.Size];
+        for (var i = 0; i < ChestStore.Size; i++)
+        {
+            var flat = InventoryContainerMap.ChestBase + i;
+            RefreshNetId(flat, slots[i]);
+            wire[i] = ToNetworkStack(slots[i], _chestNetIds[i]);
+        }
+
+        _session.SendDataPacket(new InventoryContentPacket
+        {
+            WindowId = InventoryContentPacket.WindowChest,
+            Slots = wire
+        });
+    }
+
     /// <summary>Peer display / AddPlayer — no stack net id allocation.</summary>
     public NetworkItemStack DescribeSlot(PlayerInventory inventory, int slot)
     {
@@ -141,6 +187,19 @@ sealed class InventoryProtocol
         });
     }
 
+    public void SendChestOpen(int blockX, int blockY, int blockZ)
+    {
+        _session.SendDataPacket(new ContainerOpenPacket
+        {
+            WindowId = (byte)InventoryContentPacket.WindowChest,
+            WindowType = ContainerOpenPacket.WindowTypeChest,
+            BlockX = blockX,
+            BlockY = blockY,
+            BlockZ = blockZ,
+            ActorUniqueId = -1
+        });
+    }
+
     public void SendContainerClose(byte windowId, byte windowType)
     {
         _session.SendDataPacket(new ContainerClosePacket
@@ -154,7 +213,7 @@ sealed class InventoryProtocol
     public void SendItemStackResponseError(int requestId) =>
         _session.SendDataPacket(ItemStackResponsePacket.Error(requestId));
 
-    public void SendItemStackResponseOk(int requestId, PlayerInventory inventory, IReadOnlyList<int> touchedFlats)
+    public void SendItemStackResponseOk(int requestId, global::Zenith.Player.Player player, IReadOnlyList<int> touchedFlats)
     {
         var byContainer = new Dictionary<byte, List<StackResponseSlotInfo>>();
         foreach (var flat in touchedFlats)
@@ -162,8 +221,8 @@ sealed class InventoryProtocol
             if (!InventoryContainerMap.TryToWire(flat, out var containerId, out var wireSlot))
                 continue;
 
-            RefreshNetId(flat, inventory.Get(flat));
-            var stack = inventory.Get(flat);
+            var stack = ResolveStack(player, flat);
+            RefreshNetId(flat, stack);
             var netId = GetNetId(flat);
             var info = new StackResponseSlotInfo
             {
@@ -196,6 +255,18 @@ sealed class InventoryProtocol
         _session.SendDataPacket(ItemStackResponsePacket.Ok(requestId, containers));
     }
 
+    private InventorySlot ResolveStack(global::Zenith.Player.Player player, int flat)
+    {
+        if (InventoryContainerMap.IsChestFlat(flat))
+        {
+            if (player.OpenChest is not { } pos) return InventorySlot.Empty;
+            return _session.Context.World.Chests.Get(
+                pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase);
+        }
+
+        return player.Inventory.Get(flat);
+    }
+
     private void RefreshNetId(int flat, InventorySlot slot)
     {
         if (slot.IsEmpty)
@@ -209,13 +280,20 @@ sealed class InventoryProtocol
 
     private int AllocateNetId() => _nextNetId++;
 
-    private int GetNetId(int flat) =>
-        flat == PlayerInventory.CursorSlot ? _cursorNetId : _slotNetIds[flat];
+    private int GetNetId(int flat)
+    {
+        if (flat == PlayerInventory.CursorSlot) return _cursorNetId;
+        if (InventoryContainerMap.IsChestFlat(flat))
+            return _chestNetIds[flat - InventoryContainerMap.ChestBase];
+        return _slotNetIds[flat];
+    }
 
     private void SetNetId(int flat, int netId)
     {
         if (flat == PlayerInventory.CursorSlot)
             _cursorNetId = netId;
+        else if (InventoryContainerMap.IsChestFlat(flat))
+            _chestNetIds[flat - InventoryContainerMap.ChestBase] = netId;
         else
             _slotNetIds[flat] = netId;
     }

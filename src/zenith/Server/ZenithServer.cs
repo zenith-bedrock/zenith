@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Log;
@@ -54,15 +55,21 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:air");
         _ = itemPalette.Require("minecraft:stone");
         _ = itemPalette.Require("minecraft:grass_block");
+        _ = itemPalette.Require("minecraft:dirt");
+        _ = itemPalette.Require("minecraft:oak_planks");
+        _ = itemPalette.Require("minecraft:oak_log");
+        _ = itemPalette.Require("minecraft:sand");
+        _ = itemPalette.Require("minecraft:chest");
         logger.Info($"Item palette loaded ({itemPalette.Count} entries)");
 
         IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage);
+        var recipes = RecipeRegistry.CreateDefault();
         gameLoop.Register(new BlockSystem(players, world));
-        gameLoop.Register(new InventorySystem(players));
+        gameLoop.Register(new InventorySystem(players, world, recipes));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette);
+        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(config.Server.Port)

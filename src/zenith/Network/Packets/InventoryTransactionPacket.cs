@@ -79,7 +79,10 @@ class InventoryTransactionPacket : DataPacket
         SkipNetworkItem(ref stream);
     }
 
-    private static void SkipNetworkItem(ref BinaryStream stream)
+    private static void SkipNetworkItem(ref BinaryStream stream) => SkipNetworkItemPublic(ref stream);
+
+    /// <summary>Skip a NetworkItem for AuthInput item-interaction branch.</summary>
+    internal static void SkipNetworkItemPublic(ref BinaryStream stream)
     {
         stream.ReadShort(BinaryStream.Endianess.Little); // id
         stream.ReadUShort(BinaryStream.Endianess.Little); // count

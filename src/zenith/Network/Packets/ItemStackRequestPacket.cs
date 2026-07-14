@@ -49,6 +49,7 @@ readonly struct DecodedStackRequestAction
     public byte Count { get; init; }
     public StackRequestSlotInfo Source { get; init; }
     public StackRequestSlotInfo Destination { get; init; }
+    public uint RecipeNetId { get; init; }
     public bool Supported { get; init; }
 }
 
@@ -60,8 +61,8 @@ readonly struct DecodedItemStackRequest
 }
 
 /// <summary>
-/// ItemStackRequest (0x93) — decode take/place/swap (+ container variants);
-/// outros action types são skipped e marcados unsupported.
+/// ItemStackRequest (0x93) — decode take/place/swap/container + CraftRecipe;
+/// CraftResultsDeprecated skipado como supported (no-op); restantes unsupported.
 /// </summary>
 sealed class ItemStackRequestPacket : DataPacket
 {
@@ -100,6 +101,9 @@ sealed class ItemStackRequestPacket : DataPacket
             list[i] = ReadEntry(ref stream);
         Requests = list;
     }
+
+    /// <summary>Single embedded request inside PlayerAuthInput (no outer request count).</summary>
+    internal static void SkipEmbeddedRequest(ref BinaryStream stream) => ReadEntry(ref stream);
 
     private static DecodedItemStackRequest ReadEntry(ref BinaryStream stream)
     {
@@ -150,11 +154,17 @@ sealed class ItemStackRequestPacket : DataPacket
             case ActionPlaceInContainer:
             case ActionTakeOutContainer:
             {
-                // Supported wire shape, but no chest/container domain yet — reject request.
-                stream.ReadByte();
-                _ = StackRequestSlotInfo.Read(ref stream);
-                _ = StackRequestSlotInfo.Read(ref stream);
-                return Unsupported(type);
+                var count = stream.ReadByte();
+                var src = StackRequestSlotInfo.Read(ref stream);
+                var dst = StackRequestSlotInfo.Read(ref stream);
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    Count = count,
+                    Source = src,
+                    Destination = dst,
+                    Supported = true
+                };
             }
             case ActionSwap:
             {
@@ -193,9 +203,16 @@ sealed class ItemStackRequestPacket : DataPacket
                 stream.ReadVarInt();
                 return Unsupported(type);
             case ActionCraftRecipe:
-                stream.ReadUnsignedVarInt();
-                stream.ReadByte();
-                return Unsupported(type);
+            {
+                var recipeNetId = (uint)stream.ReadUnsignedVarInt();
+                stream.ReadByte(); // times
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    RecipeNetId = recipeNetId,
+                    Supported = true
+                };
+            }
             case ActionCraftRecipeAuto:
             {
                 stream.ReadUnsignedVarInt();
@@ -231,7 +248,11 @@ sealed class ItemStackRequestPacket : DataPacket
                 for (var i = 0; i < n; i++)
                     SkipItemStackWithoutNetId(ref stream);
                 stream.ReadByte();
-                return Unsupported(type);
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    Supported = true
+                };
             }
             default:
                 return Unsupported(type);

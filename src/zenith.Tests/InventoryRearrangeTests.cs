@@ -14,6 +14,8 @@ public class InventoryContainerMapTests
     [InlineData(InventoryContainerMap.Inventory, 0, 9)]
     [InlineData(InventoryContainerMap.Inventory, 26, 35)]
     [InlineData(InventoryContainerMap.Cursor, 0, PlayerInventory.CursorSlot)]
+    [InlineData(InventoryContainerMap.Chest, 0, InventoryContainerMap.ChestBase)]
+    [InlineData(InventoryContainerMap.Chest, 26, InventoryContainerMap.ChestBase + 26)]
     public void Maps_wire_containers_to_flat(byte container, byte slot, int expectedFlat)
     {
         Assert.True(InventoryContainerMap.TryMap(container, slot, out var flat));
@@ -25,6 +27,7 @@ public class InventoryContainerMapTests
     {
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Hotbar, 9, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Inventory, 27, out _));
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out _));
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));
     }
 
@@ -42,6 +45,10 @@ public class InventoryContainerMapTests
         Assert.True(InventoryContainerMap.TryToWire(PlayerInventory.CursorSlot, out var cc, out var sc));
         Assert.Equal(InventoryContainerMap.Cursor, cc);
         Assert.Equal(0, sc);
+
+        Assert.True(InventoryContainerMap.TryToWire(InventoryContainerMap.ChestBase + 3, out var c7, out var s7));
+        Assert.Equal(InventoryContainerMap.Chest, c7);
+        Assert.Equal(3, s7);
     }
 }
 
@@ -110,7 +117,7 @@ public class InventoryPacketEncodeTests
     }
 
     [Fact]
-    public void ItemStackRequest_marks_PlaceInContainer_unsupported()
+    public void ItemStackRequest_marks_PlaceInContainer_supported()
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
@@ -136,7 +143,28 @@ public class InventoryPacketEncodeTests
         var packet = new ItemStackRequestPacket();
         packet.Decode(ref stream);
         Assert.Single(packet.Requests);
-        Assert.False(packet.Requests[0].AllSupported);
-        Assert.False(packet.Requests[0].Actions[0].Supported);
+        Assert.True(packet.Requests[0].AllSupported);
+        Assert.True(packet.Requests[0].Actions[0].Supported);
+    }
+
+    [Fact]
+    public void ItemStackRequest_decodes_CraftRecipe_net_id()
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteVarInt(3);
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteUnsignedVarInt(1); // recipe net id
+        writer.WriteByte(1); // times
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteInt(0, BinaryStream.Endianess.Little);
+
+        var buf = writer.GetBufferDisposing().ToArray();
+        var stream = new BinaryStream(buf);
+        var packet = new ItemStackRequestPacket();
+        packet.Decode(ref stream);
+        Assert.True(packet.Requests[0].AllSupported);
+        Assert.Equal(1u, packet.Requests[0].Actions[0].RecipeNetId);
     }
 }

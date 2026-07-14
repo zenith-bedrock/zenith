@@ -29,7 +29,12 @@ sealed class PlayerInventory
     public PlayerInventory()
     {
         _slots[0] = new InventorySlot(Blocks.Stone, MaxStack);
-        for (var i = 1; i < FullInventorySize; i++)
+        _slots[1] = new InventorySlot(Blocks.Dirt, MaxStack);
+        _slots[2] = new InventorySlot(Blocks.OakPlanks, MaxStack);
+        _slots[3] = new InventorySlot(Blocks.OakLog, 32);
+        _slots[4] = new InventorySlot(Blocks.Sand, MaxStack);
+        _slots[5] = new InventorySlot(Blocks.Chest, 16);
+        for (var i = 6; i < FullInventorySize; i++)
             _slots[i] = InventorySlot.Empty;
     }
 
@@ -89,6 +94,35 @@ sealed class PlayerInventory
             _slots[slot] = InventorySlot.Empty;
         else
             _slots[slot] = s with { Count = s.Count - 1 };
+        return true;
+    }
+
+    /// <summary>Remove <paramref name="count"/> de <paramref name="runtimeId"/> na janela 0–35 (all-or-nothing parcial falha).</summary>
+    public bool TryConsume(int runtimeId, int count)
+    {
+        if (count <= 0 || runtimeId == Blocks.Air) return false;
+
+        var available = 0;
+        for (var i = 0; i < FullInventorySize; i++)
+        {
+            var s = _slots[i];
+            if (!s.IsEmpty && s.RuntimeId == runtimeId)
+                available += s.Count;
+        }
+
+        if (available < count) return false;
+
+        var remaining = count;
+        for (var i = 0; i < FullInventorySize && remaining > 0; i++)
+        {
+            var s = _slots[i];
+            if (s.IsEmpty || s.RuntimeId != runtimeId) continue;
+            var take = Math.Min(s.Count, remaining);
+            var left = s.Count - take;
+            _slots[i] = left == 0 ? InventorySlot.Empty : s with { Count = left };
+            remaining -= take;
+        }
+
         return true;
     }
 

@@ -5,38 +5,36 @@ namespace Zenith.World;
 /// Chamar <see cref="Load"/> / <see cref="EnsureLoaded"/> antes de usar (ex. boot, antes de World).
 /// </summary>
 /// <remarks>
-/// Dívida conhecida: acesso estático tipo service-locator. Novos registries (item, biome, …)
-/// entram via <c>ServerContext</c>; migrar Blocks quando o domínio de inventário/bloco for tocado de novo.
+/// Known debt (ADR §25): ainda estático. Cresceu a set lista mínima de variedade sem migrar
+/// pra <c>ServerContext</c> nesta leva — chest/crafting usam os mesmos ids; migrar o façade
+/// quando recipes/chest store já estabilizarem.
 /// </remarks>
 static class Blocks
 {
     private static int _air;
     private static int _stone;
     private static int _grassBlock;
+    private static int _dirt;
+    private static int _oakPlanks;
+    private static int _oakLog;
+    private static int _sand;
+    private static int _chest;
     private static Dictionary<int, string>? _nameByRuntime;
     private static bool _loaded;
 
-    public static int Air
-    {
-        get { EnsureLoaded(); return _air; }
-    }
-
-    public static int Stone
-    {
-        get { EnsureLoaded(); return _stone; }
-    }
-
-    public static int GrassBlock
-    {
-        get { EnsureLoaded(); return _grassBlock; }
-    }
+    public static int Air { get { EnsureLoaded(); return _air; } }
+    public static int Stone { get { EnsureLoaded(); return _stone; } }
+    public static int GrassBlock { get { EnsureLoaded(); return _grassBlock; } }
+    public static int Dirt { get { EnsureLoaded(); return _dirt; } }
+    public static int OakPlanks { get { EnsureLoaded(); return _oakPlanks; } }
+    public static int OakLog { get { EnsureLoaded(); return _oakLog; } }
+    public static int Sand { get { EnsureLoaded(); return _sand; } }
+    public static int Chest { get { EnsureLoaded(); return _chest; } }
 
     public const int FlatMinY = -64;
     public const int FlatStoneTopY = -62;
     public const int FlatGrassY = -61;
     public const int FlatSpawnY = -60;
-
-    /// <summary>Vedrock <c>player_eye_height</c> — StartGame position is eye, not feet.</summary>
     public const float PlayerEyeHeight = 1.62f;
 
     public static void Load(BlockPalette palette)
@@ -45,16 +43,25 @@ static class Blocks
         _air = palette.Require("minecraft:air");
         _stone = palette.Require("minecraft:stone");
         _grassBlock = palette.Require("minecraft:grass_block");
+        _dirt = palette.Require("minecraft:dirt");
+        _oakPlanks = palette.Require("minecraft:oak_planks");
+        _oakLog = palette.Require("minecraft:oak_log");
+        _sand = palette.Require("minecraft:sand");
+        _chest = palette.Require("minecraft:chest");
         _nameByRuntime = new Dictionary<int, string>
         {
             [_air] = "minecraft:air",
             [_stone] = "minecraft:stone",
-            [_grassBlock] = "minecraft:grass_block"
+            [_grassBlock] = "minecraft:grass_block",
+            [_dirt] = "minecraft:dirt",
+            [_oakPlanks] = "minecraft:oak_planks",
+            [_oakLog] = "minecraft:oak_log",
+            [_sand] = "minecraft:sand",
+            [_chest] = "minecraft:chest",
         };
         _loaded = true;
     }
 
-    /// <summary>Nome conhecido para um block runtime id carregado (air/stone/grass).</summary>
     public static bool TryGetName(int runtimeId, out string name)
     {
         EnsureLoaded();
@@ -64,17 +71,27 @@ static class Blocks
         return false;
     }
 
+    /// <summary>Rough break duration in GameLoop ticks (20 TPS) for empty hand. §27.</summary>
+    public static int BreakTicks(int runtimeId)
+    {
+        EnsureLoaded();
+        if (runtimeId == _air) return 0;
+        if (runtimeId == _dirt || runtimeId == _sand || runtimeId == _grassBlock) return 6;
+        if (runtimeId == _oakPlanks || runtimeId == _oakLog || runtimeId == _chest) return 20;
+        if (runtimeId == _stone) return 40;
+        return 20;
+    }
+
     public static void EnsureLoaded()
     {
         if (_loaded) return;
         Load(BlockPaletteLoader.FromEmbeddedResource());
     }
 
-    /// <summary>Test helper: reset so the next access reloads (or <see cref="Load"/> again).</summary>
     internal static void ResetForTests()
     {
         _loaded = false;
-        _air = _stone = _grassBlock = 0;
+        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _chest = 0;
         _nameByRuntime = null;
     }
 }

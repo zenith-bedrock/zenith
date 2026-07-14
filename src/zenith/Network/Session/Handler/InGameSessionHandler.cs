@@ -96,6 +96,9 @@ class InGameSessionHandler : ISessionHandler
     private static void HandleContainerClose(NetworkSession session, ref BinaryStream stream)
     {
         var packet = DataPacket.From<ContainerClosePacket>(ref stream);
+        var player = session.Player;
+        if (player is not null)
+            player.OpenChest = null;
         session.Protocol.Inventory.SendContainerClose(packet.WindowId, packet.WindowType);
     }
 
@@ -109,15 +112,24 @@ class InGameSessionHandler : ISessionHandler
         {
             if (!request.AllSupported || request.Actions.Length == 0)
             {
-                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
-                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                RejectIsr(session, player, request.RequestId);
                 continue;
             }
 
+            uint? craftNetId = null;
             var baked = new List<InventoryStackAction>(request.Actions.Length);
             var mapOk = true;
             foreach (var action in request.Actions)
             {
+                if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipe)
+                {
+                    craftNetId = action.RecipeNetId;
+                    continue;
+                }
+
+                if (action.ActionType == ItemStackRequestPacket.ActionCraftResultsDeprecated)
+                    continue;
+
                 if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from) ||
                     !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var to))
                 {
@@ -133,19 +145,44 @@ class InGameSessionHandler : ISessionHandler
 
             if (!mapOk)
             {
-                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
-                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                RejectIsr(session, player, request.RequestId);
                 continue;
             }
 
-            var intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
+            // MVP craft (§29): CraftRecipe com netId Zenith → intent craft (ignora moves da mesma request).
+            InventoryStackIntent intent;
+            if (craftNetId is { } rid)
+            {
+                if (!session.Context.Recipes.TryGet(rid, out _, out _, out _))
+                {
+                    RejectIsr(session, player, request.RequestId);
+                    continue;
+                }
+
+                intent = InventoryStackIntent.CreateCraft(request.RequestId, rid);
+            }
+            else if (baked.Count == 0)
+            {
+                RejectIsr(session, player, request.RequestId);
+                continue;
+            }
+            else
+                intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
+
             if (!player.SubmitInventoryStack(intent))
             {
                 session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
-                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
-                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                RejectIsr(session, player, request.RequestId);
             }
         }
+    }
+
+    private static void RejectIsr(NetworkSession session, Player.Player player, int requestId)
+    {
+        session.Protocol.Inventory.SendItemStackResponseError(requestId);
+        session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+        if (player.OpenChest is { } chest)
+            session.Protocol.Inventory.SendChestContent(session.Context.World.Chests, chest.X, chest.Y, chest.Z);
     }
 
     private static void HandleMobEquipment(NetworkSession session, ref BinaryStream stream)
@@ -161,28 +198,6 @@ class InGameSessionHandler : ISessionHandler
         }
 
         player.SelectedHotbarSlot = packet.HotbarSlot;
-    }
-
-    private static void HandleAuthInput(NetworkSession session, ref BinaryStream stream)
-    {
-        var packet = DataPacket.From<PlayerAuthInputPacket>(ref stream);
-        var player = session.Player;
-        if (player is null) return;
-
-        var input = MovementInputState.From(
-            packet.PositionX,
-            packet.PositionY,
-            packet.PositionZ,
-            packet.Pitch,
-            packet.Yaw);
-
-        if (!input.IsSecure())
-        {
-            session.Context.Logger.Warning($"Rejected AuthInput from {player.Username}: non-finite floats.");
-            return;
-        }
-
-        player.SubmitMovementInput(input);
     }
 
     private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)
@@ -216,6 +231,50 @@ class InGameSessionHandler : ISessionHandler
         player.SubmitChat(message);
     }
 
+    private static void HandleAuthInput(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<PlayerAuthInputPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        var input = MovementInputState.From(
+            packet.PositionX,
+            packet.PositionY,
+            packet.PositionZ,
+            packet.Pitch,
+            packet.Yaw);
+
+        if (!input.IsSecure())
+        {
+            session.Context.Logger.Warning($"Rejected AuthInput from {player.Username}: non-finite floats.");
+            return;
+        }
+
+        player.SubmitMovementInput(input);
+
+        foreach (var action in packet.BlockActions)
+        {
+            switch (action.Action)
+            {
+                case PlayerAuthInputPacket.ActionStartBreak:
+                case PlayerAuthInputPacket.ActionContinueDestroy:
+                    player.BeginBreak(action.BlockX, action.BlockY, action.BlockZ, session.Context.Clock.CurrentTick);
+                    session.Context.Logger.Debug(
+                        $"AuthInput start/continue break from {player.Username} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
+                    break;
+                case PlayerAuthInputPacket.ActionAbortBreak:
+                    player.AbortBreak();
+                    break;
+                case PlayerAuthInputPacket.ActionPredictDestroy:
+                case PlayerActionPacket.ActionCreativeDestroy:
+                    session.Context.Logger.Debug(
+                        $"AuthInput break from {player.Username}: action={action.Action} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
+                    TrySubmitBreak(player, action.BlockX, action.BlockY, action.BlockZ);
+                    break;
+            }
+        }
+    }
+
     private static void HandlePlayerAction(NetworkSession session, ref BinaryStream stream)
     {
         var packet = DataPacket.From<PlayerActionPacket>(ref stream);
@@ -223,8 +282,14 @@ class InGameSessionHandler : ISessionHandler
         if (player is null) return;
 
         if (packet.Action is not (PlayerActionPacket.ActionCreativeDestroy or PlayerActionPacket.ActionPredictDestroy))
+        {
+            session.Context.Logger.Debug(
+                $"PlayerAction ignored from {player.Username}: action={packet.Action}");
             return;
+        }
 
+        session.Context.Logger.Debug(
+            $"PlayerAction break from {player.Username}: action={packet.Action} @ {packet.BlockX},{packet.BlockY},{packet.BlockZ}");
         TrySubmitBreak(player, packet.BlockX, packet.BlockY, packet.BlockZ);
     }
 
@@ -245,6 +310,8 @@ class InGameSessionHandler : ISessionHandler
 
         if (packet.UseActionType == InventoryTransactionPacket.UseDestroyBlock)
         {
+            session.Context.Logger.Debug(
+                $"InventoryTransaction destroy from {player.Username} @ {packet.BlockX},{packet.BlockY},{packet.BlockZ}");
             TrySubmitBreak(player, packet.BlockX, packet.BlockY, packet.BlockZ);
             return;
         }
@@ -252,6 +319,15 @@ class InGameSessionHandler : ISessionHandler
         if (packet.UseActionType != InventoryTransactionPacket.UseClickBlock) return;
 
         var stack = player.Inventory.Get(packet.HotbarSlot);
+        var clicked = session.Context.World.GetBlock(packet.BlockX, packet.BlockY, packet.BlockZ);
+
+        // Empty hand on chest → open UI (§28). Sneak+place não modelado ainda.
+        if (clicked == Blocks.Chest && (stack.IsEmpty || stack.Count <= 0))
+        {
+            OpenChestUi(session, player, packet.BlockX, packet.BlockY, packet.BlockZ);
+            return;
+        }
+
         if (!PlayerInventory.IsValidStackCount(stack.Count) || stack.Count <= 0)
         {
             session.Context.Logger.Debug($"Rejected place: invalid/empty stack count {stack.Count}");
@@ -271,6 +347,20 @@ class InGameSessionHandler : ISessionHandler
 
         if (!player.SubmitBlockEdit(intent))
             session.Context.Logger.Debug($"Dropped place from {player.Username}: block-edit queue full.");
+        else
+            session.Context.Logger.Debug(
+                $"Place queued from {player.Username} @ {tx},{ty},{tz} rid={runtimeId}");
+    }
+
+    private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)
+    {
+        session.Context.World.Chests.Ensure(x, y, z);
+        player.OpenChest = (x, y, z);
+        var inv = session.Protocol.Inventory;
+        inv.SendChestOpen(x, y, z);
+        inv.SendChestContent(session.Context.World.Chests, x, y, z);
+        inv.SendInventoryContent(player.Inventory);
+        session.Context.Logger.Debug($"Chest open for {player.Username} @ {x},{y},{z}");
     }
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)
@@ -279,6 +369,9 @@ class InGameSessionHandler : ISessionHandler
         if (!intent.IsInWorldBounds()) return;
         if (!player.SubmitBlockEdit(intent))
             player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
+        else
+            player.Session.Context.Logger.Debug(
+                $"Break queued from {player.Username} @ {x},{y},{z}");
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch

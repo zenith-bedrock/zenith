@@ -122,7 +122,7 @@ class StartGamePacket : DataPacket
         
         // PlayerMovementSettings
         writer.WriteVarInt(0); // RewindHistorySize
-        writer.WriteBool(false); // ServerAuthoritativeBlockBreaking
+        writer.WriteBool(true); // ServerAuthoritativeBlockBreaking — AuthInput BlockActions
         
         writer.WriteLong(0, BinaryStream.Endianess.Little); // Time
         writer.WriteVarInt(0); // EnchantmentSeed

@@ -37,9 +37,20 @@ readonly struct InventoryStackIntent
     public int RequestId { get; init; }
     public InventoryStackAction[] Actions { get; init; }
 
+    /// <summary>Quando set, InventorySystem aplica craft (Actions vazio/ignorado).</summary>
+    public uint? CraftRecipeNetId { get; init; }
+
     public static InventoryStackIntent Create(int requestId, InventoryStackAction[] actions) => new()
     {
         RequestId = requestId,
-        Actions = actions
+        Actions = actions,
+        CraftRecipeNetId = null
+    };
+
+    public static InventoryStackIntent CreateCraft(int requestId, uint recipeNetId) => new()
+    {
+        RequestId = requestId,
+        Actions = [],
+        CraftRecipeNetId = recipeNetId
     };
 }

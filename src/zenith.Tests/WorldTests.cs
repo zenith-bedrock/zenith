@@ -298,6 +298,9 @@ public class PlayerInventoryTests
     public void TryAdd_stacks_onto_same_runtime_then_empty_slot()
     {
         var inv = new PlayerInventory();
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(inv.TrySet(i, Blocks.Air, 0));
+
         Assert.True(inv.TrySet(0, Blocks.Stone, 60));
         Assert.True(inv.TryAdd(Blocks.Stone, 5));
         Assert.Equal(64, inv.Get(0).Count);

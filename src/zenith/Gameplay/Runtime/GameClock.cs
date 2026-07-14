@@ -36,4 +36,11 @@ sealed class GameClock
             _windowStartTimestamp = now;
         }
     }
+
+    /// <summary>Test helper: advance many ticks without sleeping.</summary>
+    internal void AdvanceBy(int ticks)
+    {
+        for (var i = 0; i < ticks; i++)
+            Advance();
+    }
 }

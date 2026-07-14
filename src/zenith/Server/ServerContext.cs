@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Raknet.Log;
@@ -20,6 +21,7 @@ class ServerContext
     public ServerConfig Config { get; }
     public BlockPalette BlockPalette { get; }
     public ItemPalette ItemPalette { get; }
+    public RecipeRegistry Recipes { get; }
 
     public ServerContext(
         ILogger logger,
@@ -29,7 +31,8 @@ class ServerContext
         World.World world,
         ServerConfig config,
         BlockPalette blockPalette,
-        ItemPalette itemPalette)
+        ItemPalette itemPalette,
+        RecipeRegistry recipes)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -39,5 +42,6 @@ class ServerContext
         Config = config;
         BlockPalette = blockPalette;
         ItemPalette = itemPalette;
+        Recipes = recipes;
     }
 }

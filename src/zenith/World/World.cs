@@ -11,6 +11,8 @@ sealed class World
     private readonly byte[] _flatOverworldPayload;
     private readonly int _flatSubChunkCount;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
+    public FloorDropStore FloorDrops { get; } = new();
+    public ChestStore Chests { get; } = new();
 
     public World(IChunkStorage storage)
     {

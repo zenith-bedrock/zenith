@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net;
 using Zenith.Event;
+using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Network.Packets;
+using Zenith.Network.Protocol;
 using Zenith.Network.Session;
 using Zenith.Network.Session.Handler;
 using Zenith.Player;
@@ -65,8 +67,12 @@ file sealed class IntentTestFixture
             World,
             new ServerConfig(),
             blockPalette,
-            itemPalette);
+            itemPalette,
+            RecipeRegistry.CreateDefault());
     }
+
+    public InventorySystem CreateInventorySystem() =>
+        new(Players, World, Context.Recipes);
 
     public Player.Player AddInGamePlayer(string name)
     {
@@ -203,7 +209,7 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void BlockSystem_rejects_break_when_inventory_full()
+    public void BlockSystem_break_full_inventory_floor_drops()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("fullbag");
@@ -215,7 +221,8 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
-        Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(1, fx.World.FloorDrops.Count);
     }
 
     [Fact]
@@ -342,7 +349,7 @@ public class IntentContractTests
 
         var intent = InventoryStackIntent.Create(42, [InventoryStackAction.Swap(0, 9)]);
         Assert.True(player.SubmitInventoryStack(intent));
-        new InventorySystem(fx.Players).Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock);
 
         Assert.Equal(Blocks.GrassBlock, player.Inventory.Get(0).RuntimeId);
         Assert.Equal(2, player.Inventory.Get(0).Count);
@@ -361,14 +368,14 @@ public class IntentContractTests
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(0, PlayerInventory.CursorSlot, 3)
         ])));
-        new InventorySystem(fx.Players).Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock);
         Assert.Equal(5, player.Inventory.Get(0).Count);
         Assert.Equal(3, player.Inventory.Cursor.Count);
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(2, [
             InventoryStackAction.Transfer(PlayerInventory.CursorSlot, 9, 3)
         ])));
-        new InventorySystem(fx.Players).Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock);
         Assert.True(player.Inventory.Cursor.IsEmpty);
         Assert.Equal(3, player.Inventory.Get(9).Count);
     }
@@ -401,7 +408,7 @@ public class IntentContractTests
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(7, [
             InventoryStackAction.Transfer(0, 9, 1)
         ])));
-        new InventorySystem(fx.Players).Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock);
 
         Assert.Equal(5, player.Inventory.Get(0).Count);
         Assert.Equal(3, player.Inventory.Get(9).Count);
@@ -473,5 +480,56 @@ public class IntentContractTests
 
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(9, 64, 9));
+    }
+
+    [Fact]
+    public void BlockSystem_place_chest_ensures_store()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chestor");
+        StandNear(player, 4, 64, 4);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Chest, 2));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, Blocks.Chest, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Chest, fx.World.GetBlock(4, 64, 4));
+        Assert.True(fx.World.Chests.TryGetSlots(4, 64, 4, out _));
+    }
+
+    [Fact]
+    public void InventorySystem_transfers_to_open_chest_flat()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("loot");
+        fx.World.Chests.Ensure(1, 70, 1);
+        player.OpenChest = (1, 70, 1);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 10));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(6, player.Inventory.Get(0).Count);
+        Assert.Equal(4, fx.World.Chests.Get(1, 70, 1, 0).Count);
+        Assert.Equal(Blocks.Dirt, fx.World.Chests.Get(1, 70, 1, 0).RuntimeId);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_oak_log_to_planks()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("crafter");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(0, Blocks.OakLog, 2));
+
+        Assert.True(player.SubmitInventoryStack(
+            InventoryStackIntent.CreateCraft(9, RecipeRegistry.OakLogToPlanks)));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(Blocks.OakLog, player.Inventory.Get(0).RuntimeId);
+        Assert.Equal(4, player.Inventory.Get(1).Count);
+        Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(1).RuntimeId);
     }
 }

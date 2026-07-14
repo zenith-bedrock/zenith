@@ -6,9 +6,8 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
-/// Mutação de mundo: overlay esparso permanente (nunca reescreve subchunk).
-/// Place consome 1 do hotbar; break dá o bloco ao inventário (sem item actor no chão).
-/// Autoridade: reach / célula / inventario antes de SetBlock.
+/// Break timing (§27): exige progresso AuthInput when BreakTicks &gt; 0.
+/// Floor drops (§26): se TryAdd falha, bloco quebra e cai em <see cref="FloorDropStore"/>.
 /// </summary>
 sealed class BlockSystem : IGameSystem
 {
@@ -23,17 +22,18 @@ sealed class BlockSystem : IGameSystem
 
     public void Tick(GameClock clock)
     {
-        _ = clock;
         if (_players.Count == 0) return;
 
         foreach (var player in _players.Online)
         {
             while (player.TryConsumeBlockEdit(out var edit))
-                ApplyEdit(player, edit);
+                ApplyEdit(player, edit, clock);
         }
+
+        PickupFloorDrops(clock);
     }
 
-    private void ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit)
+    private void ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit, GameClock clock)
     {
         if (!edit.IsInWorldBounds())
             return;
@@ -44,7 +44,6 @@ sealed class BlockSystem : IGameSystem
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
-            // Place: target must be air, then consume, then mutate.
             if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
                 return;
 
@@ -55,16 +54,62 @@ sealed class BlockSystem : IGameSystem
         }
         else
         {
-            // Break: must hit a real block; TryAdd must succeed or world stays intact.
             var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
             if (previous == World.World.AirRuntimeId)
                 return;
+
+            var need = Blocks.BreakTicks(previous);
+            if (need > 0 && player.HasBreakTarget)
+            {
+                if (!player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break rejected (wrong cell) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    return;
+                }
+
+                var elapsed = clock.CurrentTick >= player.BreakStartedTick
+                    ? clock.CurrentTick - player.BreakStartedTick
+                    : 0;
+                if (elapsed < (ulong)need)
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
+                    return;
+                }
+            }
+
+            player.AbortBreak();
+
+            if (previous == Blocks.Chest)
+            {
+                if (player.OpenChest is { } open &&
+                    open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
+                    player.OpenChest = null;
+
+                foreach (var (rid, count) in _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z))
+                {
+                    if (!player.Inventory.TryAdd(rid, count))
+                        _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
+                    else
+                        inventoryChanged = true;
+                }
+            }
+
             if (!player.Inventory.TryAdd(previous))
-                return;
-            inventoryChanged = true;
+            {
+                _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, previous, 1);
+                player.Session.Context.Logger.Debug(
+                    $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+            }
+            else
+                inventoryChanged = true;
         }
 
         _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+
+        if (edit.BlockRuntimeId == Blocks.Chest)
+            _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
 
         if (inventoryChanged)
             player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
@@ -76,7 +121,27 @@ sealed class BlockSystem : IGameSystem
         }
     }
 
-    /// <summary>Euclidean reach from eye position to block center.</summary>
+    private void PickupFloorDrops(GameClock clock)
+    {
+        _ = clock;
+        const float reachSq = 1.5f * 1.5f;
+        foreach (var (pos, runtimeId, count) in _world.FloorDrops.Snapshot())
+        {
+            foreach (var player in _players.Online)
+            {
+                if (!player.IsInGame) continue;
+                var dx = player.PositionX - (pos.X + 0.5f);
+                var dy = player.PositionY - (pos.Y + 0.5f);
+                var dz = player.PositionZ - (pos.Z + 0.5f);
+                if (dx * dx + dy * dy + dz * dz > reachSq) continue;
+                if (!player.Inventory.TryAdd(runtimeId, count)) continue;
+                if (!_world.FloorDrops.TryTake(pos.X, pos.Y, pos.Z, out _, out _)) continue;
+                player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                break;
+            }
+        }
+    }
+
     internal static bool IsWithinReach(global::Zenith.Player.Player player, int x, int y, int z)
     {
         var eyeX = player.PositionX;

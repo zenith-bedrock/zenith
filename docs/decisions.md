@@ -133,6 +133,8 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Deferred:** AuthInput block path, sound/animate peer fan-out, food/effects. (Inventory storage closed in §16.)
 
+**Adendo (jul 2026 — break path):** Survival destroy arrives via `PlayerAuthInputPacket.BlockActions` when `ServerAuthoritativeBlockBreaking=true` in StartGame. Decode past the position prefix (bitset + flags → `PlayerBlockAction`); map `predict_destroy` (26) → `TrySubmitBreak` / `BlockEditIntent` air. Keep `PlayerAction` (13/26) and `InventoryTransaction` UseDestroy as fallbacks. Progress actions (`start_break` / `crack_break` / `continue_destroy`) ignored until §27.
+
 ### 16. Main inventory 36 slots; place stays hotbar-only
 
 **Choice:** `PlayerInventory` owns one `_slots[36]` array (`FullInventorySize`). Hotbar helpers remain `IsValidHotbarSlot` 0–8 for place / MobEquipment / `TryConsumeOne`. `IsValidInventorySlot` 0–35 for Get/TrySet/TryAdd. `TryAdd` stacks then fills across the full window. Rename `SendHotbarContent` → `SendInventoryContent` (already sent window 0 length 36). No InventorySystem, CreativeContent, deep InventoryTransaction place, Actor, or effects.
@@ -157,9 +159,9 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Deferred:** chests/containers, inventory persist across reconnect, drop entity.
 
-### 19. Chests — deferred sketch (not shipped)
+### 19. Chests — deferred sketch (shipped as §28 MVP)
 
-When held sync + §17 smoke are stable:
+When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28** — RAM store + container 7 + flat `100+` outside `PlayerInventory`; LevelDB `ct:` / double-chest still out.)
 
 1. `ChestStore` RAM `dict[(x,y,z)] → slots[27]`; hydrate at World boot; Put `ct:x:y:z` async (never sync Get on open/tick).
 2. Open/close intents; transfers via explicit dual-store APIs (not flat `100+` inside `PlayerInventory`); rollback snapshots both stores.
@@ -209,6 +211,63 @@ When held sync + §17 smoke are stable:
 
 **Deferred:** Full-server load harness as required CI.
 
+### 25. Blocks façade stays static (known debt)
+
+**Choice:** Keep `Blocks` as a static Load/EnsureLoaded façade over `block_palette.nbt` network ids, even after dirt/planks/log/sand/chest variety. Do **not** migrate to `ServerContext` in the same leva as chest/craft.
+
+**Why:** Every hot path (`PlayerInventory` defaults, `BreakTicks`, wire name lookup) already calls the façade; injecting palette refs everywhere is a refactor without product gain while recipes/chest stabilize.
+
+**Deferred:** Inject runtime-id table via `ServerContext` when a second palette / dimension forces it.
+
+### 26. Floor drops without item entities
+
+**Choice:** When break `TryAdd` fails, still break the block and deposit `(runtimeId,count)` in `World.FloorDrops` (sparse cell map). `BlockSystem` picks up within 1.5 blocks on tick via `TryAdd`. No Bedrock item entities, no physics.
+
+**Why:** Full hotbar must not soft-lock survival break; entity actors stay frozen.
+
+**Deferred:** Drop entity wire, merge across cells, despawn timers.
+
+### 27. Server-authoritative break timing
+
+**Choice:** Soft blocks use `Blocks.BreakTicks` against AuthInput `start_break`/`continue_destroy` → `Player.BeginBreak` + elapsed GameLoop ticks before `predict_destroy`/`TrySubmitBreak` succeeds. Zero-tick blocks (air) unchanged. Early/wrong-cell breaks rejected with Debug log.
+
+**Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Timing is intentionally coarse (empty-hand table only).
+
+**Deferred:** Tool speed, efficiency enchant, crack particles / LevelEvent fan-out.
+
+### 28. Chests — RAM store + ISR container 7 (MVP)
+
+**Choice:** Ship the §19 sketch minimally:
+
+1. `ChestStore` dict `(x,y,z) → InventorySlot[27]`; `Ensure` on place; `RemoveAndDump` on break (contents → `TryAdd` else floor drops). No LevelDB `ct:` keys yet.
+2. `Player.OpenChest` nullable; set on empty-hand UseClickBlock on chest; clear on `ContainerClose`. Wire: `ContainerOpen` type **0**, window id **2** (≠ `0xff`); `InventoryContent` for chest + player.
+3. Flat ISR slots `100+` map from container **7**; `PlayerInventory` does not own chest. `InventorySystem` dual-store transfer/swap with snapshot rollback of player + chest.
+4. `PlaceInContainer` / `TakeOutContainer` decode as supported (same shape as take/place).
+
+**Why:** Inventory rearrange (§17) without chests still left Survival “storage furniture” incomplete; dual-store keeps decide≠transmit without stuffing chest into `PlayerInventory`.
+
+**Deferred:** LevelDB hydrate/Put; sneak-to-place-on-chest; double-chest; BlockActor; hopper; CreativeContent; window-scoped net-id isolation beyond protocol arrays.
+
+### 29. Crafting 2×2 — RecipeRegistry MVP (no CraftingData yet)
+
+**Choice:** `RecipeRegistry` on `ServerContext` (`CreateDefault`: 1 oak_log → 4 oak_planks; 8 oak_planks → 1 chest; shapeless exact `TryMatch`). Static Zenith recipe net ids `1`/`2`. ISR `CraftRecipe` supported (unsigned varint netId + times); `CraftResultsDeprecated` skip = supported no-op. Handler submits `InventoryStackIntent.CreateCraft` when netId known → tick `TryCraft` (consume + `TryAdd`, snapshot rollback).
+
+**Why:** Wire vanilla recipe ids require `CraftingDataPacket` to remint; shipping registry + tick path proves gameplay without stalling on Mojang recipe book ids. Client 2×2 with empty CraftingData will not hit our net ids until that packet lands.
+
+**Deferred:** `CraftingDataPacket` / recipe book sync; full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags.
+
+### 30. CreativeContent after this spine (conscious yes)
+
+**Choice:** Prioritize `CreativeContent` / creative inventory join for the **next** feedback-facing milestone after place/break + variety smoke on survival. Do **not** ship CreativeContent in this leva. `StartGame` stays Survival; starter hotbar already carries stone/dirt/planks/log/sand/chest for LAN exploration without creative UI.
+
+**Why:** `v0.0.1-alpha` (§20) exists for external feedback; testers want “place more than one block” first (solved by §25 spawn variety + §15 AuthInput break). Creative UI is high protocol cost (`CreativeContent`, block_state payloads) relative to that spine. Recording **yes-next** avoids another silent Deferred cycle (§12/§14/§16).
+
+**Deferred:** CreativeContent packet + creative gamemode StartGame field; keep survival as default join until that lands.
+
+### OpenInventory / chest UI (note under §28)
+
+Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→Protocol (same-session UI), not GameLoop intents. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`. Opening a window is transmit of a decided view, not world mutation.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
@@ -217,7 +276,7 @@ Recorded so we don't “accidentally” implement them:
 - `/` commands and permissions
 - Mojang LevelDB world format
 - Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
-- CreativeContent / block_state_b64 join (until creative UI is in scope)
+- CreativeContent / block_state_b64 join (**scheduled next** after smoke of this spine — see §30; still not in this leva)
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 
