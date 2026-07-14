@@ -10,11 +10,17 @@ namespace Zenith.Player;
 class Player
 {
     public const int MaxPendingBlockEdits = 8;
+    public const int MaxPendingInventoryStacks = 8;
+
+    /// <summary>Euclidean interact reach (blocks) from eye to target center — Fase 3 simple authority.</summary>
+    public const float MaxBlockReach = 6f;
 
     private readonly object _movementInputLock = new();
     private MovementInputState _movementInput;
     private readonly object _blockEditLock = new();
     private readonly Queue<BlockEditIntent> _blockEdits = new();
+    private readonly object _inventoryStackLock = new();
+    private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
     private readonly object _chatLock = new();
     private string? _pendingChat;
 
@@ -111,6 +117,36 @@ class Player
             }
 
             intent = _blockEdits.Dequeue();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Enfileira rearrange ISR (FIFO). Cap <see cref="MaxPendingInventoryStacks"/>;
+    /// overflow rejeita o mais novo.
+    /// </summary>
+    public bool SubmitInventoryStack(in InventoryStackIntent intent)
+    {
+        lock (_inventoryStackLock)
+        {
+            if (_inventoryStacks.Count >= MaxPendingInventoryStacks)
+                return false;
+            _inventoryStacks.Enqueue(intent);
+            return true;
+        }
+    }
+
+    public bool TryConsumeInventoryStack(out InventoryStackIntent intent)
+    {
+        lock (_inventoryStackLock)
+        {
+            if (_inventoryStacks.Count == 0)
+            {
+                intent = default;
+                return false;
+            }
+
+            intent = _inventoryStacks.Dequeue();
             return true;
         }
     }

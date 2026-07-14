@@ -170,19 +170,120 @@ public class PlayerInventoryTests
         Assert.False(PlayerInventory.IsValidHotbarSlot(-1));
         Assert.False(PlayerInventory.IsValidHotbarSlot(9));
         Assert.True(PlayerInventory.IsValidHotbarSlot(0));
+        Assert.True(PlayerInventory.IsValidInventorySlot(9));
+        Assert.True(PlayerInventory.IsValidInventorySlot(35));
+        Assert.False(PlayerInventory.IsValidInventorySlot(36));
         Assert.False(PlayerInventory.IsValidStackCount(-1));
         Assert.False(PlayerInventory.IsValidStackCount(65));
         Assert.True(PlayerInventory.IsValidStackCount(64));
     }
 
     [Fact]
+    public void TrySet_accepts_storage_slots()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(9, Blocks.Stone, 3));
+        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+        Assert.Equal(3, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void TryConsumeOne_rejects_storage_slot()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(9, Blocks.Stone, 5));
+        Assert.False(inv.TryConsumeOne(9));
+        Assert.Equal(5, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void TryAdd_uses_storage_when_hotbar_full()
+    {
+        var inv = new PlayerInventory();
+        for (var i = 0; i < PlayerInventory.HotbarSize; i++)
+            Assert.True(inv.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+
+        Assert.True(inv.TryAdd(Blocks.Stone, 1));
+        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+        Assert.Equal(1, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void SnapshotMainInventory_reflects_all_36_slots()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(9, Blocks.Stone, 2));
+        Assert.True(inv.TrySet(35, Blocks.GrassBlock, 4));
+        var snap = inv.SnapshotMainInventory();
+        Assert.Equal(PlayerInventory.FullInventorySize, snap.Length);
+        Assert.Equal(Blocks.Stone, snap[9].RuntimeId);
+        Assert.Equal(2, snap[9].Count);
+        Assert.Equal(Blocks.GrassBlock, snap[35].RuntimeId);
+        Assert.Equal(4, snap[35].Count);
+    }
+
+    [Fact]
     public void TrySet_rejects_out_of_range_before_mutating()
     {
         var inv = new PlayerInventory();
-        Assert.False(inv.TrySet(-1, Blocks.Stone, 1));
+        Assert.False(inv.TrySet(-2, Blocks.Stone, 1));
+        Assert.False(inv.TrySet(36, Blocks.Stone, 1));
         Assert.False(inv.TrySet(0, Blocks.Stone, -3));
         Assert.False(inv.TrySet(0, Blocks.Stone, 99));
         Assert.Equal(64, inv.Get(0).Count);
+    }
+
+    [Fact]
+    public void TryTransfer_and_TrySwap_move_between_hotbar_and_storage()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 10));
+        Assert.True(inv.TryTransfer(0, 9, 4));
+        Assert.Equal(6, inv.Get(0).Count);
+        Assert.Equal(4, inv.Get(9).Count);
+        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+
+        Assert.True(inv.TrySwap(0, 9));
+        Assert.Equal(4, inv.Get(0).Count);
+        Assert.Equal(6, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void TryTransfer_rejects_different_runtime_on_dest()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 5));
+        Assert.True(inv.TrySet(9, Blocks.GrassBlock, 3));
+        Assert.False(inv.TryTransfer(0, 9, 1));
+        Assert.Equal(5, inv.Get(0).Count);
+        Assert.Equal(3, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void Cursor_round_trip_via_transfer()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 8));
+        Assert.True(inv.TryTransfer(0, PlayerInventory.CursorSlot, 3));
+        Assert.Equal(5, inv.Get(0).Count);
+        Assert.Equal(3, inv.Cursor.Count);
+        Assert.True(inv.TryTransfer(PlayerInventory.CursorSlot, 9, 3));
+        Assert.True(inv.Cursor.IsEmpty);
+        Assert.Equal(3, inv.Get(9).Count);
+    }
+
+    [Fact]
+    public void Snapshot_restore_round_trip()
+    {
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Stone, 2));
+        Assert.True(inv.TrySet(PlayerInventory.CursorSlot, Blocks.GrassBlock, 1));
+        var snap = inv.CaptureSnapshot();
+        Assert.True(inv.TrySet(0, Blocks.Air, 0));
+        Assert.True(inv.TrySet(PlayerInventory.CursorSlot, Blocks.Air, 0));
+        inv.RestoreSnapshot(snap);
+        Assert.Equal(2, inv.Get(0).Count);
+        Assert.Equal(1, inv.Cursor.Count);
     }
 
     [Fact]

@@ -159,6 +159,9 @@ flowchart LR
 - Intent pendente → `BlockSystem` → overlay + `UpdateBlock`; place consome hotbar.
 - Bounds de coordenada, slot `0..8` e stack count no handler.
 - Overlay permanente (não CoW de coluna).
+- Tick authority: reach (olhos + `MaxBlockReach`), place só em air, break só se `TryAdd` couber — smoke 6/8 assumem rejeição correta (sem voidar item / sem overwrite ocupado).
+- Storage 9–35 no domínio (`TryAdd` / sync `SendInventoryContent`); place / consume permanece 0–8.
+- Rearrange 0–35 via ISR: intent → `InventorySystem` tick → `ItemStackResponse` (SAI on; net IDs no Protocol).
 
 ### Fase 4 — LevelDB
 

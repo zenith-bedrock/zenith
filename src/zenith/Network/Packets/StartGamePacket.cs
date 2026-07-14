@@ -131,7 +131,7 @@ class StartGamePacket : DataPacket
         writer.WriteUnsignedVarInt(0); // length 0
         
         writer.WriteVarString(""); // MultiPlayerCorrelationID
-        writer.WriteBool(false); // ServerAuthoritativeInventory
+        writer.WriteBool(true); // ServerAuthoritativeInventory
         writer.WriteVarString(ServerIdentity.VersionName); // GameVersion
         
         // PropertyData (empty NBT compound, network encoding)

@@ -1,13 +1,15 @@
+using System.Collections.Generic;
 using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
+using Zenith.Network.Protocol;
 using Zenith.Player;
 using Zenith.World;
 
 namespace Zenith.Network.Session.Handler;
 
 /// <summary>
-/// Handler in-game. AuthInput/chat/blocos só registram intenção ou transmitem —
-/// posição/blocos finais no GameLoop.
+/// Handler in-game. AuthInput/chat/blocos/ISR só registram intenção ou transmitem same-session —
+/// posição/blocos/inventário finais no GameLoop.
 /// </summary>
 class InGameSessionHandler : ISessionHandler
 {
@@ -44,6 +46,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleInventoryTransaction(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET:
+                HandleItemStackRequest(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET:
                 HandleRequestChunkRadius(session, ref stream);
                 return true;
@@ -52,7 +58,19 @@ class InGameSessionHandler : ISessionHandler
                 return true;
 
             case (int)ProtocolInfo.MOB_EQUIPMENT_PACKET:
+                HandleMobEquipment(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.INTERACT_PACKET:
+                HandleInteract(session, ref stream);
+                return true;
+
+            case (int)ProtocolInfo.CONTAINER_CLOSE_PACKET:
+                HandleContainerClose(session, ref stream);
+                return true;
+
+            case (int)ProtocolInfo.ANIMATE_PACKET:
+            case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
                 return true;
@@ -60,6 +78,88 @@ class InGameSessionHandler : ISessionHandler
             default:
                 return false;
         }
+    }
+
+    private static void HandleInteract(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<InteractPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+        if (packet.Action != InteractPacket.ActionOpenInventory) return;
+
+        session.Protocol.Inventory.SendContainerOpen(
+            (int)MathF.Floor(player.PositionX),
+            (int)MathF.Floor(player.PositionY),
+            (int)MathF.Floor(player.PositionZ));
+    }
+
+    private static void HandleContainerClose(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<ContainerClosePacket>(ref stream);
+        session.Protocol.Inventory.SendContainerClose(packet.WindowId, packet.WindowType);
+    }
+
+    private static void HandleItemStackRequest(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<ItemStackRequestPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        foreach (var request in packet.Requests)
+        {
+            if (!request.AllSupported || request.Actions.Length == 0)
+            {
+                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
+                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                continue;
+            }
+
+            var baked = new List<InventoryStackAction>(request.Actions.Length);
+            var mapOk = true;
+            foreach (var action in request.Actions)
+            {
+                if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from) ||
+                    !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var to))
+                {
+                    mapOk = false;
+                    break;
+                }
+
+                if (action.ActionType == ItemStackRequestPacket.ActionSwap)
+                    baked.Add(InventoryStackAction.Swap(from, to));
+                else
+                    baked.Add(InventoryStackAction.Transfer(from, to, action.Count));
+            }
+
+            if (!mapOk)
+            {
+                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
+                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                continue;
+            }
+
+            var intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
+            if (!player.SubmitInventoryStack(intent))
+            {
+                session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
+                session.Protocol.Inventory.SendItemStackResponseError(request.RequestId);
+            }
+        }
+    }
+
+    private static void HandleMobEquipment(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<MobEquipmentPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        if (!PlayerInventory.IsValidHotbarSlot(packet.HotbarSlot))
+        {
+            session.Context.Logger.Debug($"Rejected MobEquipment: hotbar {packet.HotbarSlot}");
+            return;
+        }
+
+        player.SelectedHotbarSlot = packet.HotbarSlot;
     }
 
     private static void HandleAuthInput(NetworkSession session, ref BinaryStream stream)
