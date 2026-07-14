@@ -5,6 +5,7 @@ using Zenith.Log;
 using Zenith.Network;
 using Zenith.Player;
 using Zenith.Raknet;
+using Zenith.World;
 
 namespace Zenith.Server;
 
@@ -29,7 +30,11 @@ class ZenithServer
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
 
-        Context = new ServerContext(logger, players, new EventBus(), clock);
+        IChunkStorage storage = CreateChunkStorage(logger);
+        var world = new World.World(storage);
+        gameLoop.Register(new BlockSystem(players, world));
+
+        Context = new ServerContext(logger, players, new EventBus(), clock, world);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(port)
@@ -37,6 +42,23 @@ class ZenithServer
             Logger = logger,
             SessionListener = new ZenithSessionListener(Context)
         };
+    }
+
+    /// <summary>
+    /// In-memory por padrão. LevelDB quando ZENITH_WORLD_PATH aponta pra um diretório.
+    /// </summary>
+    private static IChunkStorage CreateChunkStorage(Zenith.Raknet.Log.ILogger logger)
+    {
+        var path = Environment.GetEnvironmentVariable("ZENITH_WORLD_PATH");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            logger.Info("World storage: InMemoryChunkStorage");
+            return new InMemoryChunkStorage();
+        }
+
+        Directory.CreateDirectory(path);
+        logger.Info($"World storage: LevelDbChunkStorage ({path})");
+        return new LevelDbChunkStorage(path);
     }
 
     public async Task StartAsync()

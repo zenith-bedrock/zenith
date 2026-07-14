@@ -32,7 +32,10 @@ class PlayerListPacket : DataPacket
             writer.WriteVarString(entry.XboxUserId);
             writer.WriteVarString(entry.PlatformChatId);
             writer.WriteInt(entry.BuildPlatform, BinaryStream.Endianess.Little);
-            SkinWire.WritePlaceholder(ref writer, entry.SkinId);
+            if (entry.SkinRgba is { Length: > 0 } pixels && entry.SkinWidth > 0 && entry.SkinHeight > 0)
+                SkinWire.Write(ref writer, entry.SkinId, pixels, entry.SkinWidth, entry.SkinHeight);
+            else
+                SkinWire.WritePlaceholder(ref writer, entry.SkinId);
             writer.WriteBool(entry.IsTeacher);
             writer.WriteBool(entry.IsHost);
             writer.WriteBool(entry.IsSubClient);
@@ -60,13 +63,16 @@ readonly struct PlayerListEntry
     public string PlatformChatId { get; init; }
     public int BuildPlatform { get; init; }
     public string SkinId { get; init; }
+    public byte[]? SkinRgba { get; init; }
+    public uint SkinWidth { get; init; }
+    public uint SkinHeight { get; init; }
     public bool IsTeacher { get; init; }
     public bool IsHost { get; init; }
     public bool IsSubClient { get; init; }
     public uint Color { get; init; }
     public bool Verified { get; init; }
 
-    public static PlayerListEntry ForAdd(Guid uuid, long uniqueId, string username) => new()
+    public static PlayerListEntry ForAdd(Guid uuid, long uniqueId, string username, byte[]? skinRgba = null, uint skinWidth = 0, uint skinHeight = 0) => new()
     {
         Uuid = uuid,
         ActorUniqueId = uniqueId,
@@ -75,6 +81,9 @@ readonly struct PlayerListEntry
         PlatformChatId = "",
         BuildPlatform = -1,
         SkinId = $"{username}.Zenith",
+        SkinRgba = skinRgba,
+        SkinWidth = skinWidth,
+        SkinHeight = skinHeight,
         Color = 0xffffffff,
         Verified = false
     };

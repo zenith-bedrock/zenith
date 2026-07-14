@@ -46,7 +46,10 @@ static class PlayerVisibility
         recipient.Session.Protocol.Entity.SendPlayerListAdd(
             subject.Uuid,
             subject.RuntimeId,
-            subject.Username);
+            subject.Username,
+            subject.SkinRgba,
+            subject.SkinWidth,
+            subject.SkinHeight);
     }
 
     private static void SendAddPlayer(Player.Player recipient, Player.Player subject)

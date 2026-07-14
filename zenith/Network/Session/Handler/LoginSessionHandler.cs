@@ -5,11 +5,7 @@ using Zenith.Network.Packets;
 namespace Zenith.Network.Session.Handler;
 
 /// <summary>
-/// Primeiro estado de toda conexão: negociação de network settings e login. Handler inicial
-/// atribuído a toda <see cref="NetworkSession"/> nova. Ao final do login com sucesso, troca
-/// pra <see cref="ResourcePacksSessionHandler"/>.
-///
-/// Parsing de identidade fica em <see cref="LoginIdentity"/> — este handler só orquestra o fluxo.
+/// Primeiro estado de toda conexão: negociação de network settings e login.
 /// </summary>
 class LoginSessionHandler : ISessionHandler
 {
@@ -33,9 +29,6 @@ class LoginSessionHandler : ISessionHandler
         var packet = DataPacket.From<RequestNetworkSettingsPacket>(ref stream);
         session.Context.Logger.Debug($"RequestNetworkSettingsPacket: {packet.ProtocolVersion}");
 
-        // TODO: recusar a conexão aqui se packet.ProtocolVersion não for suportado,
-        // em vez de deixar seguir com um protocolo desconhecido.
-
         session.CompressionAlgorithm = PacketCompression.ZLIB;
         session.Protocol.Login.SendNetworkSettings(
             compressionThreshold: 256,
@@ -50,30 +43,36 @@ class LoginSessionHandler : ISessionHandler
         var packet = DataPacket.From<LoginPacket>(ref stream);
         session.Context.Logger.Debug($"LoginPacket: {packet.Protocol}");
 
-        string username;
+        LoginIdentity.ParsedIdentity identity;
         try
         {
-            username = LoginIdentity.ExtractDisplayName(packet.AuthInfo.Token);
+            if (!string.IsNullOrWhiteSpace(packet.AuthInfo.Certificate))
+                LoginIdentity.ValidateIdentityChain(packet.AuthInfo.Certificate);
+
+            identity = LoginIdentity.ParseIdentityToken(packet.AuthInfo.Token);
+            identity = LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
         }
         catch (Exception ex)
         {
-            session.Context.Logger.Warning($"Failed to parse identity chain: {ex.Message}");
+            session.Context.Logger.Warning($"Failed to parse/validate identity: {ex.Message}");
             session.Disconnect();
             return;
         }
 
-        // TODO: validar a assinatura da chain contra a chave raiz da Mojang antes de confiar
-        // no displayName - hoje qualquer cliente pode se declarar com qualquer nome/uuid.
-        // Suficiente pra desenvolvimento local, não serve pra produção exposta.
-
         var player = new Zenith.Player.Player(
-            username,
+            identity.DisplayName,
             session,
             session.Context.PlayerManager.AllocateRuntimeId(),
-            Guid.NewGuid());
+            identity.Uuid)
+        {
+            SkinRgba = identity.SkinRgba,
+            SkinWidth = identity.SkinWidth,
+            SkinHeight = identity.SkinHeight
+        };
+
         if (!session.Context.PlayerManager.TryAdd(player))
         {
-            session.Context.Logger.Warning($"Rejected login: '{username}' already online.");
+            session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
             session.Disconnect();
             return;
         }

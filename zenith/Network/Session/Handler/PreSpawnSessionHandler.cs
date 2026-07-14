@@ -5,18 +5,12 @@ using Zenith.Network.Protocol;
 namespace Zenith.Network.Session.Handler;
 
 /// <summary>
-/// Estado entre "cliente recebeu o StartGame" e "cliente saiu da tela de loading".
-///
-/// Decide raio/grade de chunks (temporariamente aqui até existir ChunkPublisher de domínio);
-/// <see cref="WorldProtocol"/> apenas transmite as colunas e os pacotes de spawn já decididos.
+/// Estado entre StartGame e loading completo.
+/// Pede colunas ao <see cref="Server.ServerContext.World"/> (leitura thread-safe);
+/// <see cref="WorldProtocol"/> só transmite.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
-    /// <summary>
-    /// Raio hardcoded (em chunks) da grade de chunks vazios enviada ao redor do spawn,
-    /// independente do que o cliente pedir. Suficiente pra desbloquear o loading screen sem
-    /// esperar um PlayerChunkLoader / World de verdade existir.
-    /// </summary>
     private const int SpawnChunkRadius = 4;
 
     public void OnEnable(NetworkSession session)
@@ -53,18 +47,24 @@ class PreSpawnSessionHandler : ISessionHandler
 
         session.Context.Logger.Debug($"RequestChunkRadiusPacket: requested={request.Radius}, using={radius}");
 
-        // Decisão de gameplay (temporária neste handler): quais colunas enviar.
-        var emptyColumn = ChunkUtils.BuildEmptyOverworldPayload();
-        var columns = new List<ChunkColumn>();
-        for (var x = -radius; x <= radius; x++)
+        // Leitura fora do tick: World/IChunkStorage são thread-safe (ValueTask + ConcurrentDictionary).
+        var worldColumns = session.Context.World
+            .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+
+        var columns = new List<ChunkColumn>(worldColumns.Count);
+        foreach (var column in worldColumns)
         {
-            for (var z = -radius; z <= radius; z++)
-            {
-                columns.Add(new ChunkColumn(x, z, DimensionId: 0, SubChunkCount: 0, emptyColumn));
-            }
+            columns.Add(new ChunkColumn(
+                column.Coord.X,
+                column.Coord.Z,
+                column.DimensionId,
+                column.SubChunkCount,
+                column.ExtraPayload));
         }
 
-        // Protocol só transmite. Spawn do StartGame é (0, 8, 0).
         session.Protocol.World.SendChunkRadiusUpdated(radius);
         session.Protocol.World.PublishChunks(columns);
         session.Protocol.World.SendChunkPublisher(blockX: 0, blockY: 8, blockZ: 0, radiusBlocks: radius * 16);

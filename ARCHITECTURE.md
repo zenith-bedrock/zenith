@@ -69,7 +69,7 @@ Fan-out a “todos online” (ex. TimeSync / movimento) é aceitável neste est�
 - GameLoop é **single-threaded** até existir necessidade real de paralelismo.
 - Tick de **jogo** ≠ tick de **RakNet** (transporte).
 
-Proibido no GameLoop: entidades, inventário, combate, IA, blocos, chat, fan-out de sync.
+Proibido no GameLoop como *orquestração genérica*: DI de pacotes, chat fan-out, session wiring. Sistemas (`MovementSystem`, `BlockSystem`) mutam estado de domínio no tick — isso é o contrato inbound da regra 6.
 
 ## Layout
 
@@ -77,10 +77,11 @@ Proibido no GameLoop: entidades, inventário, combate, IA, blocos, chat, fan-out
 zenith/
   Gameplay/
     Runtime/     # GameLoop, GameClock, IGameSystem
-    Systems/     # TimeSyncSystem, MovementSystem, …
+    Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
+  World/         # IChunkStorage (ValueTask), InMemory / LevelDB, World
   Network/
     Session/     # NetworkSession, handlers, LoginIdentity
-    Protocol/    # BedrockProtocol façade + Login/World/Entity/…
+    Protocol/    # BedrockProtocol façade + Login/World/Entity/Chat/…
     Packets/     # DataPacket, ProtocolInfo, PacketCompression, *Packet
     ZenithSessionListener.cs
   Server/        # Composition root (ZenithServer, ServerContext)
@@ -89,15 +90,76 @@ zenith/
 
 ## Notas deste estágio
 
-- `Player.Session` é aceitável; fan-out via sistemas (TimeSync, MovementSystem), não espalhar `player.Session.Protocol.*` no domínio.
-- Grade de chunks no pre-spawn ainda é decidida no handler (sem `ChunkPublisher` ainda).
-- Sem multi-protocolo, zero-copy, plugins ou EventBus outbound neste momento.
-- Visibilidade join/leave: `PlayerVisibility` (fan-out fino no Network) + `EntityProtocol`; pose mutada só no `MovementSystem`.
+- `Player.Session` é aceitável; fan-out via sistemas (TimeSync, Movement, Block), não espalhar `player.Session.Protocol.*` no domínio.
+- PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite.
+- Mutação de bloco: overlay esparso em `World` + `UpdateBlock` (não CoW de coluna nesta fase).
+- Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
+- JWT: parse + skin opcional; `ZENITH_REQUIRE_AUTH=1` endurece gate de chain (ver Roadmap).
+- Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 
 ## Smoke manual
 
 1. Cliente A: login → InGame.
-2. AuthInput: servidor atualiza `Player` position (log/debug se útil).
+2. AuthInput: servidor atualiza `Player` position.
 3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
-4. Movimento de A visível em B (`MoveActorAbsolute` após AddPlayer).
-5. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
+4. Movimento de A visível em B (`MoveActorAbsolute`).
+5. Chat A→B (`TextPacket`).
+6. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
+
+## Roadmap
+
+Espinha: **Chat → World in-memory → Inventory/blocks → LevelDB**, skins cosméticas em paralelo. Não espelhar Actor→Events; Zenith já usa `GameLoop` + pending input.
+
+```mermaid
+flowchart LR
+  subgraph phases [Ordem_Zenith]
+    P1[Chat_mais_testes]
+    P2[World_read_IChunkStorage]
+    P3[Inventory_blocks_bounds]
+    P4[LevelDB_impl]
+  end
+  P1 --> P2 --> P3 --> P4
+  Skin[Skin_parse_cosmetico]
+  Skin -.-> P1
+  JwtGate[JWT_chain_verify]
+```
+
+`JwtGate` fica fora da cadeia de gameplay: gate de **exposição pública** (LAN ≠ público), independente da fase.
+
+### Fase 1 — Chat (+ testes + higiene) — feita neste marco
+
+- `TextPacket` + `ChatProtocol`; rate limit por `Player` (`TokenBucketRateLimiter`) + tamanho máximo.
+- Projeto `zenith.Tests` cobre `LoginIdentity` e formatação/`TextPacket` roundtrip.
+- Comandos `/` **fora**.
+
+### Fase 2 — World in-memory — feita neste marco
+
+- Mundo **read-only** para colunas: leitura fora do tick (PreSpawn) via `ConcurrentDictionary` + chunk imutável após `Put`.
+- `IChunkStorage` com **`ValueTask`** desde o dia 1 (InMemory sync por baixo) para LevelDB não obrigar rewrite sync na rede.
+- Mutação de coluna CoW **não** resolvida aqui.
+
+### Fase 3 — Inventário / blocs — bootstrap neste marco
+
+- Intent pendente → `BlockSystem` → `UpdateBlock`.
+- Bounds de coordenada e hotbar no handler.
+- Publicação de mutação: **overlay esparso** (não CoW de coluna inteira). CoW granular continua opção futura se o overlay não bastar.
+
+### Fase 4 — LevelDB — bootstrap neste marco
+
+- `LevelDbChunkStorage` + env `ZENITH_WORLD_PATH`; default permanece InMemory.
+- Chaves Zenith (não formato vanilla Mojang). Vanilla decode = conteúdo futuro.
+
+### Identidade
+
+| Item | Natureza | Quando |
+|------|----------|--------|
+| Parse de skin | Cosmético | Paralelo (ClientData) |
+| UUID do JWT `identity` | Identidade | No login |
+| Verificação de assinatura da chain | Segurança | `ZENITH_REQUIRE_AUTH=1`; **obrigatório antes de exposição pública** |
+
+### Explicitamente fora da sequência curta
+
+- Actor / job channel, framework EventHandlers, VisibilitySystem, ECS
+- Anti-cheat, Snappy zero-copy
+- DI container, Plugin API
+- Commands / Permission (`/` adiado de propósito)

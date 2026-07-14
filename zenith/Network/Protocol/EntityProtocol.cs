@@ -33,12 +33,12 @@ sealed class EntityProtocol
         });
     }
 
-    public void SendPlayerListAdd(Guid uuid, long actorUniqueId, string username)
+    public void SendPlayerListAdd(Guid uuid, long actorUniqueId, string username, byte[]? skinRgba = null, uint skinWidth = 0, uint skinHeight = 0)
     {
         _session.SendDataPacket(new PlayerListPacket
         {
             Type = PlayerListPacket.TypeAdd,
-            Entries = [PlayerListEntry.ForAdd(uuid, actorUniqueId, username)]
+            Entries = [PlayerListEntry.ForAdd(uuid, actorUniqueId, username, skinRgba, skinWidth, skinHeight)]
         });
     }
 

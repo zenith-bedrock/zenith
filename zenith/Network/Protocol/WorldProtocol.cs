@@ -96,4 +96,17 @@ sealed class WorldProtocol
     {
         _session.SendDataPacket(new SetTimePacket { Time = worldTime });
     }
+
+    public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, int flags = UpdateBlockPacket.FlagNetwork, int dataLayerId = 0)
+    {
+        _session.SendDataPacket(new UpdateBlockPacket
+        {
+            X = x,
+            Y = y,
+            Z = z,
+            BlockRuntimeId = blockRuntimeId,
+            Flags = flags,
+            DataLayerId = dataLayerId
+        });
+    }
 }

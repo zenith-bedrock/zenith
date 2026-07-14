@@ -2,6 +2,7 @@ using Zenith.Event;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Raknet.Log;
+using Zenith.World;
 
 namespace Zenith.Server;
 
@@ -15,12 +16,19 @@ class ServerContext
     public PlayerManager PlayerManager { get; }
     public EventBus EventBus { get; }
     public GameClock Clock { get; }
+    public World.World World { get; }
 
-    public ServerContext(ILogger logger, PlayerManager playerManager, EventBus eventBus, GameClock clock)
+    public ServerContext(
+        ILogger logger,
+        PlayerManager playerManager,
+        EventBus eventBus,
+        GameClock clock,
+        World.World world)
     {
         Logger = logger;
         PlayerManager = playerManager;
         EventBus = eventBus;
         Clock = clock;
+        World = world;
     }
 }

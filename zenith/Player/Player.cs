@@ -10,6 +10,8 @@ class Player
 {
     private readonly object _movementInputLock = new();
     private MovementInputState _movementInput;
+    private readonly object _blockEditLock = new();
+    private BlockEditIntent _blockEdit;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -17,11 +19,22 @@ class Player
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
     public long RuntimeId { get; }
 
-    /// <summary>UUID de lista/AddPlayer. Hoje gerado no login; claim JWT fica pra depois.</summary>
+    /// <summary>UUID de lista/AddPlayer.</summary>
     public Guid Uuid { get; }
 
-    /// <summary>True após SetLocalPlayerAsInitialized → InGame. Usado no fan-out de visibilidade.</summary>
+    /// <summary>True após SetLocalPlayerAsInitialized → InGame.</summary>
     public bool IsInGame { get; set; }
+
+    /// <summary>Hotbar 0–8; selected slot bounds-checked no handler.</summary>
+    public int SelectedHotbarSlot { get; set; }
+
+    /// <summary>Runtime id do bloco colocado (creative flat). Air = 0.</summary>
+    public int HeldBlockRuntimeId { get; set; } = 1;
+
+    /// <summary>Skin RGBA opcional parseada do login (senão PlayerList usa placeholder).</summary>
+    public byte[]? SkinRgba { get; set; }
+    public uint SkinWidth { get; set; }
+    public uint SkinHeight { get; set; }
 
     public float PositionX { get; set; }
     public float PositionY { get; set; } = 8f;
@@ -38,7 +51,6 @@ class Player
         Uuid = uuid;
     }
 
-    /// <summary>Somente handlers de rede. Não aplica posição final.</summary>
     public void SubmitMovementInput(in MovementInputState input)
     {
         lock (_movementInputLock)
@@ -47,7 +59,6 @@ class Player
         }
     }
 
-    /// <summary>Somente MovementSystem no tick.</summary>
     public bool TryConsumeMovementInput(out MovementInputState input)
     {
         lock (_movementInputLock)
@@ -60,6 +71,30 @@ class Player
 
             input = _movementInput;
             _movementInput = default;
+            return true;
+        }
+    }
+
+    public void SubmitBlockEdit(in BlockEditIntent intent)
+    {
+        lock (_blockEditLock)
+        {
+            _blockEdit = intent;
+        }
+    }
+
+    public bool TryConsumeBlockEdit(out BlockEditIntent intent)
+    {
+        lock (_blockEditLock)
+        {
+            if (!_blockEdit.HasValue)
+            {
+                intent = default;
+                return false;
+            }
+
+            intent = _blockEdit;
+            _blockEdit = default;
             return true;
         }
     }

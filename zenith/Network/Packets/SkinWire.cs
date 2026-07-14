@@ -9,28 +9,43 @@ static class SkinWire
     private const uint Height = 64;
     private static readonly byte[] WhitePixels = CreateWhiteRgba();
 
-    public static void WritePlaceholder(ref BinaryStream writer, string skinId)
+    public static void WritePlaceholder(ref BinaryStream writer, string skinId) =>
+        Write(ref writer, skinId, WhitePixels, Width, Height);
+
+    public static void Write(
+        ref BinaryStream writer,
+        string skinId,
+        ReadOnlySpan<byte> rgba,
+        uint width,
+        uint height)
     {
+        if (rgba.IsEmpty || width == 0 || height == 0 || rgba.Length != width * height * 4)
+        {
+            rgba = WhitePixels;
+            width = Width;
+            height = Height;
+        }
+
         writer.WriteVarString(skinId);
-        writer.WriteVarString(""); // playFabId
+        writer.WriteVarString("");
         writer.WriteVarString("""{"geometry":{"default":"geometry.humanoid.custom"}}""");
-        WriteImage(ref writer, Width, Height, WhitePixels);
-        writer.WriteUInt(0, BinaryStream.Endianess.Little); // animations
-        WriteImage(ref writer, 0, 0, ReadOnlySpan<byte>.Empty); // cape
-        writer.WriteVarString(""); // geometryData
-        writer.WriteVarString(""); // geometryDataVersion
-        writer.WriteVarString(""); // animationData
-        writer.WriteVarString(""); // capeId
-        writer.WriteVarString(skinId); // fullSkinId
+        WriteImage(ref writer, width, height, rgba);
+        writer.WriteUInt(0, BinaryStream.Endianess.Little);
+        WriteImage(ref writer, 0, 0, ReadOnlySpan<byte>.Empty);
+        writer.WriteVarString("");
+        writer.WriteVarString("");
+        writer.WriteVarString("");
+        writer.WriteVarString("");
+        writer.WriteVarString(skinId);
         writer.WriteVarString("wide");
         writer.WriteVarString("#0");
-        writer.WriteUInt(0, BinaryStream.Endianess.Little); // personaPieces
-        writer.WriteUInt(0, BinaryStream.Endianess.Little); // pieceTintColors
-        writer.WriteBool(false); // premium
-        writer.WriteBool(false); // persona
-        writer.WriteBool(false); // capeOnClassic
-        writer.WriteBool(true); // isPrimaryUser
-        writer.WriteBool(true); // override
+        writer.WriteUInt(0, BinaryStream.Endianess.Little);
+        writer.WriteUInt(0, BinaryStream.Endianess.Little);
+        writer.WriteBool(false);
+        writer.WriteBool(false);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteBool(true);
     }
 
     private static void WriteImage(ref BinaryStream writer, uint width, uint height, ReadOnlySpan<byte> pixels)
