@@ -67,14 +67,14 @@ sealed class CreativeContentPacket : DataPacket
         {
             writer.WriteInt(group.Category, BinaryStream.Endianess.Little);
             writer.WriteVarString(group.Name);
-            group.Icon.Write(ref writer);
+            group.Icon.WriteItem(ref writer);
         }
 
         writer.WriteUnsignedVarInt(Items.Length);
         foreach (var item in Items)
         {
             writer.WriteUnsignedVarInt((int)item.CreativeItemNetworkId);
-            item.Item.Write(ref writer);
+            item.Item.WriteItem(ref writer);
             writer.WriteUnsignedVarInt((int)item.GroupIndex);
         }
 

@@ -26,6 +26,41 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         writer.WriteUnsignedVarInt(0); // raw_extra_data length
     }
 
+    /// <summary>
+    /// ItemStack (gophertunnel <c>Item</c>) — CreativeContent groups/items.
+    /// Not the same as <see cref="Write"/> / ItemInstanceNew.
+    /// </summary>
+    public void WriteItem(ref BinaryStream writer)
+    {
+        if (NetworkId == 0)
+        {
+            writer.WriteVarInt(0);
+            return;
+        }
+
+        writer.WriteVarInt(NetworkId);
+        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(Meta);
+        writer.WriteVarInt(BlockRuntimeId);
+
+        // Extra blob: int16 NBT length 0 + empty can_place/can_break uint32 lists (gophertunnel Item).
+        Span<byte> extra = stackalloc byte[10];
+        extra[0] = 0;
+        extra[1] = 0; // int16 LE length
+        // uint32 LE can_place count = 0
+        extra[2] = 0;
+        extra[3] = 0;
+        extra[4] = 0;
+        extra[5] = 0;
+        // uint32 LE can_break count = 0
+        extra[6] = 0;
+        extra[7] = 0;
+        extra[8] = 0;
+        extra[9] = 0;
+        writer.WriteUnsignedVarInt(extra.Length);
+        writer.Write(extra);
+    }
+
     /// <summary>ItemInstance legacy — AddPlayer held field (VarInt network id first).</summary>
     public void WriteLegacyItemInstance(ref BinaryStream writer)
     {

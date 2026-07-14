@@ -585,4 +585,23 @@ public class IntentContractTests
         Assert.Single(packet.Groups);
         Assert.True(packet.Encode().Length > 16);
     }
+
+    [Fact]
+    public void CreativeContent_empty_icon_is_varint_air_not_item_instance_new()
+    {
+        // Empty ItemStack = single VarInt 0 after group header — not ItemInstanceNew short LE.
+        var emptyPk = new CreativeContentPacket
+        {
+            Groups = [new CreativeGroupEntry(1, "", NetworkItemStack.Empty)],
+            Items = []
+        };
+        var bytes = emptyPk.Encode().ToArray();
+        // packet id UVInt + groups UVInt(1) + category i32 + name UVInt(0) + Item VarInt(0) + items UVInt(0)
+        Assert.True(bytes.Length < 20);
+
+        var writer = new BinaryStream();
+        NetworkItemStack.Empty.WriteItem(ref writer);
+        var air = writer.GetBufferDisposing().ToArray();
+        Assert.Equal(new byte[] { 0 }, air); // VarInt 0
+    }
 }
