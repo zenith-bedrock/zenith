@@ -14,9 +14,9 @@ That maps to folders and types. New contributors can ask “does this class **de
 
 | Project | Use without the full server |
 |---------|------------------------------|
-| `raknet` | Reliable UDP + `BinaryStream` |
-| `nbt` (`Zenith.Nbt`) | LE / Network / BigEndian NBT round-trips |
-| `leveldb` (`Zenith.LevelDB`) | Put/Get/Delete/WriteBatch/Iterator for Zenith keys |
+| `src/raknet` | Reliable UDP + `BinaryStream` |
+| `libs/nbt` (`Zenith.Nbt`) | LE / Network / BigEndian NBT round-trips |
+| `libs/leveldb` (`Zenith.LevelDB`) | Put/Get/Delete/WriteBatch/Iterator for Zenith keys |
 
 `dotnet test` on `nbt.Tests` / `leveldb.Tests` / `raknet.Tests` / `zenith.Tests` keeps format and transport bugs out of “boot the Bedrock client” loops.
 
@@ -37,7 +37,7 @@ LGPL-3.0: share improvements to the library; build applications on top with a cl
 
 ### 6. Docs that admit trade-offs
 
-[`ARCHITECTURE.md`](../ARCHITECTURE.md), this `docs/` tree, and [`leveldb/README.md`](../leveldb/README.md) document **non-goals** (unbounded overlays, single-table flush rewrite, no plugins yet). Surprises are worse DX than incomplete features.
+[`ARCHITECTURE.md`](../ARCHITECTURE.md), this `docs/` tree, and [`libs/leveldb/README.md`](../libs/leveldb/README.md) document **non-goals** (unbounded overlays, single-table flush rewrite, no plugins yet). Surprises are worse DX than incomplete features.
 
 ## What we deliberately do **not** ship as DX yet
 
@@ -54,7 +54,7 @@ Good DX is saying **no** until the yes is cheap to maintain.
 
 ```text
 1. Read docs/architecture.md + ARCHITECTURE.md (+ .cursor/rules for agents)
-2. Touch the smallest leaf (nbt/leveldb/raknet) when possible
+2. Touch the smallest leaf (`libs/nbt`, `libs/leveldb`, `src/raknet`) when possible
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream
 5. If you need a new abstraction (Factory, ECS, Scheduler): justify against freeze list

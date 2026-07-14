@@ -17,17 +17,37 @@ Zenith is a modern Bedrock Edition server written in **C# / .NET**, built around
 | [docs/dx.md](docs/dx.md) | Developer experience |
 | [docs/why-zenith.md](docs/why-zenith.md) | Long-term bet |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Living engineering rules (constraints) |
-| [leveldb/README.md](leveldb/README.md) | `Zenith.LevelDB` notes |
+| [libs/leveldb/README.md](libs/leveldb/README.md) | `Zenith.LevelDB` notes |
 
 ## Solution layout
 
 ```
-zenith/     Game server (Gameplay, Network, World, …)
-raknet/     Reliable UDP transport
-nbt/        Zenith.Nbt
-leveldb/    Zenith.LevelDB
-*.Tests/    xUnit projects
-docs/       Narrative documentation
+libs/
+  nbt/           Zenith.Nbt (reusable leaf)
+  leveldb/       Zenith.LevelDB (reusable leaf)
+  *.Tests/
+src/
+  zenith/        Game server (Gameplay, Network, World, …)
+    data/        Embedded palettes (block_palette.nbt, item_palette.json, …)
+  raknet/        Reliable UDP transport
+  *.Tests/
+docs/            Narrative documentation
+workspace/       Local agent/dev scratch (not product)
+```
+
+## Build / run
+
+```bash
+dotnet build zenith.sln
+dotnet test zenith.sln
+dotnet run --project src/zenith
+```
+
+Optional pack of leaf libraries (not published):
+
+```bash
+dotnet pack libs/nbt/nbt.csproj -c Release -o artifacts
+dotnet pack libs/leveldb/leveldb.csproj -c Release -o artifacts
 ```
 
 ## License

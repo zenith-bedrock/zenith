@@ -3,21 +3,25 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zenith", "zenith\zenith.csproj", "{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "libs", "libs", "{A1111111-1111-1111-1111-111111111111}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet", "raknet\raknet.csproj", "{997A2160-941A-4695-B7F5-2BF6793639FE}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B2222222-2222-2222-2222-222222222222}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zenith.Tests", "zenith.Tests\zenith.Tests.csproj", "{6BF5A4E7-076A-42F0-B826-D188D3F95CBB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zenith", "src\zenith\zenith.csproj", "{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nbt", "nbt\nbt.csproj", "{568A6EE1-5724-497B-9B7F-9F478BA8892B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet", "src\raknet\raknet.csproj", "{997A2160-941A-4695-B7F5-2BF6793639FE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nbt.Tests", "nbt.Tests\nbt.Tests.csproj", "{6F1694C1-ACB8-4A5F-9CC9-C8CC2D473246}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zenith.Tests", "src\zenith.Tests\zenith.Tests.csproj", "{6BF5A4E7-076A-42F0-B826-D188D3F95CBB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb", "leveldb\leveldb.csproj", "{0266E156-E77E-4372-9ABC-3323727A2F9D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nbt", "libs\nbt\nbt.csproj", "{568A6EE1-5724-497B-9B7F-9F478BA8892B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb.Tests", "leveldb.Tests\leveldb.Tests.csproj", "{04FABC4D-6A83-4C63-8AF7-898D3E254982}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nbt.Tests", "libs\nbt.Tests\nbt.Tests.csproj", "{6F1694C1-ACB8-4A5F-9CC9-C8CC2D473246}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet.Tests", "raknet.Tests\raknet.Tests.csproj", "{2D7F3CE5-C277-474D-9194-D124567980C9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb", "libs\leveldb\leveldb.csproj", "{0266E156-E77E-4372-9ABC-3323727A2F9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "leveldb.Tests", "libs\leveldb.Tests\leveldb.Tests.csproj", "{04FABC4D-6A83-4C63-8AF7-898D3E254982}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "raknet.Tests", "src\raknet.Tests\raknet.Tests.csproj", "{2D7F3CE5-C277-474D-9194-D124567980C9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -128,5 +132,15 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{568A6EE1-5724-497B-9B7F-9F478BA8892B} = {A1111111-1111-1111-1111-111111111111}
+		{6F1694C1-ACB8-4A5F-9CC9-C8CC2D473246} = {A1111111-1111-1111-1111-111111111111}
+		{0266E156-E77E-4372-9ABC-3323727A2F9D} = {A1111111-1111-1111-1111-111111111111}
+		{04FABC4D-6A83-4C63-8AF7-898D3E254982} = {A1111111-1111-1111-1111-111111111111}
+		{6AB797CE-9083-40FE-ADDB-B4C4696CFB9F} = {B2222222-2222-2222-2222-222222222222}
+		{997A2160-941A-4695-B7F5-2BF6793639FE} = {B2222222-2222-2222-2222-222222222222}
+		{6BF5A4E7-076A-42F0-B826-D188D3F95CBB} = {B2222222-2222-2222-2222-222222222222}
+		{2D7F3CE5-C277-474D-9194-D124567980C9} = {B2222222-2222-2222-2222-222222222222}
 	EndGlobalSection
 EndGlobal

@@ -76,15 +76,18 @@ Proibido no GameLoop como *orquestração genérica*: DI de pacotes, chat fan-ou
 ## Layout
 
 ```
-zenith/
-  Gameplay/
-    Runtime/     # GameLoop, GameClock, IGameSystem
-    Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
-  World/         # IChunkStorage, World, BlockPalette (gzip→LE NBT)
-  Network/
-    ...
-nbt/             # Zenith.Nbt — formato NBT puro (LE + Network); sem ref a zenith/raknet
-raknet/
+libs/
+  nbt/             # Zenith.Nbt — formato NBT puro (LE + Network); sem ref a zenith/raknet
+  leveldb/         # Zenith.LevelDB — KV managed; dataset ⊆ RAM
+src/
+  zenith/
+    Gameplay/
+      Runtime/     # GameLoop, GameClock, IGameSystem
+      Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
+    World/         # IChunkStorage, World, BlockPalette (gzip→LE NBT)
+    Network/
+    data/          # block_palette.nbt, item_palette.json, creative_items.json (EmbeddedResource)
+  raknet/
 ```
 
 ## Notas deste estágio
@@ -92,8 +95,8 @@ raknet/
 - PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
 - Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM **não tem bound** (limitação conhecida nesta escala).
 - Terreno base flat (`ChunkPayloads.BuildFlatOverworld`); edits = diff sobre a base.
-- **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
-- **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves `c:` / `ov:`. Detalhes: [`leveldb/README.md`](leveldb/README.md).
+- **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `src/zenith/data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
+- **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves `c:` / `ov:`. Detalhes: [`libs/leveldb/README.md`](libs/leveldb/README.md).
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).

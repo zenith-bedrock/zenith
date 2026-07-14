@@ -14,7 +14,7 @@ public class BlockPaletteTests
     [Fact]
     public void Block_palette_file_resolves_air_stone_grass_network_ids()
     {
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "data", "block_palette.nbt"));
+        var path = Path.Combine(FindRepoRoot(), "src", "zenith", "data", "block_palette.nbt");
         Assert.True(File.Exists(path), $"Missing palette at {path}");
         var palette = BlockPaletteLoader.FromGzipFile(path);
         Assert.Equal(ExpectedAir, palette.Require("minecraft:air"));
@@ -42,5 +42,19 @@ public class BlockPaletteTests
         var decoded = NbtCodec.Decode(bytes, NbtEncoding.Network);
         Assert.Equal("", decoded.Root.Name);
         Assert.Equal(0, decoded.Root.Tag.AsCompound().Count);
+    }
+
+    /// <summary>Walk up from the test output dir until zenith.sln is found.</summary>
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "zenith.sln")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate zenith.sln from test BaseDirectory.");
     }
 }

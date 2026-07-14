@@ -13,7 +13,7 @@ Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHI
 
 Library-specific notes:
 
-- [`leveldb/README.md`](../leveldb/README.md) — `Zenith.LevelDB` API and LSM backlog
+- [`libs/leveldb/README.md`](../libs/leveldb/README.md) — `Zenith.LevelDB` API and LSM backlog
 - Root [`readme.md`](../readme.md) — project one-pager
 
 **Status:** early development. Prefer these docs over marketing claims; if code and docs disagree, code + `ARCHITECTURE.md` win.

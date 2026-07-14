@@ -93,7 +93,7 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Callers only need trustworthy `c:` / `ov:` KV in one process — not Mojang decode or RocksDB-scale compaction. Steady-state already rewrote a single table; adding L0/compaction would be storage-engine risk without a proven product need (`ARCHITECTURE.md` rule 7).
 
-**Explicit constraint:** the **entire dataset must fit in RAM** while open. Documented in [`leveldb/README.md`](../leveldb/README.md). Crash mid-flush (new `.ldb`, old `CURRENT`) recovers by trusting `CURRENT` only; orphans are GC’d.
+**Explicit constraint:** the **entire dataset must fit in RAM** while open. Documented in [`libs/leveldb/README.md`](../libs/leveldb/README.md). Crash mid-flush (new `.ldb`, old `CURRENT`) recovers by trusting `CURRENT` only; orphans are GC’d.
 
 ### 12. ItemPalette via ServerContext (not Items.Load static)
 

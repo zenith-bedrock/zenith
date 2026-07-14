@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Zenith.LevelDB</RootNamespace>
+    <AssemblyName>Zenith.LevelDB</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <PackageId>Zenith.LevelDB</PackageId>
+    <Description>Managed LevelDB-style KV (mem + WAL + snapshot) for Zenith keys — leaf library, dataset fits in RAM.</Description>
+    <Authors>Zenith</Authors>
+    <PackageLicenseExpression>LGPL-3.0-only</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="leveldb.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using Microsoft.IdentityModel.Tokens;
 
 namespace Zenith.Network.Session;
 
@@ -98,15 +97,15 @@ static class LoginIdentity
         {
             var jwt = el.GetString()!;
             var parts = jwt.Split('.');
-            if (parts.Length != 3) throw new SecurityTokenException("Malformed JWT in chain.");
+            if (parts.Length != 3) throw new FormatException("Malformed JWT in chain.");
 
             var headerJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[0]));
             using var header = JsonDocument.Parse(headerJson);
             if (!header.RootElement.TryGetProperty("x5u", out _))
-                throw new SecurityTokenException("Chain JWT missing x5u; cannot verify.");
+                throw new FormatException("Chain JWT missing x5u; cannot verify.");
 
             var sig = Base64UrlDecode(parts[2]);
-            if (sig.Length == 0) throw new SecurityTokenException("Empty JWT signature.");
+            if (sig.Length == 0) throw new FormatException("Empty JWT signature.");
         }
     }
 

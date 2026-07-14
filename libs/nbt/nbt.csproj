@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Zenith.Nbt</RootNamespace>
+    <AssemblyName>Zenith.Nbt</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <PackageId>Zenith.Nbt</PackageId>
+    <Description>Named Binary Tag (NBT) codec for LE, Network, and BigEndian encodings — Zenith leaf library.</Description>
+    <Authors>Zenith</Authors>
+    <PackageLicenseExpression>LGPL-3.0-only</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="nbt.Tests" />
+  </ItemGroup>
+
+</Project>

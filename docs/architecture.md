@@ -90,4 +90,4 @@ Fan-out to all online players is acceptable at this stage; visibility culling is
 
 - [Decision history](decisions.md) — how we arrived here
 - [Comparison](comparison.md) — how this differs from PocketMine-class stacks
-- [`leveldb/README.md`](../leveldb/README.md) — KV internals and backlog
+- [`libs/leveldb/README.md`](../libs/leveldb/README.md) — KV internals and backlog
