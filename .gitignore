@@ -61,3 +61,4 @@ Desktop.ini
 ## Other System Files
 *.swp
 *.lock
+tmp-log.txt

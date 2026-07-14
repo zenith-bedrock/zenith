@@ -1,4 +1,5 @@
 using Zenith.Raknet.Stream;
+using Zenith.Nbt;
 
 namespace Zenith.Network.Packets;
 
@@ -26,6 +27,9 @@ class StartGamePacket : DataPacket
     public int SpawnBlockZ = 0;
     public int EditorType = 0;
     public int StopTime = 0;
+
+    /// <summary>Must be true when chunk palettes use FNV network_id hashes (Vedrock flat).</summary>
+    public bool UseBlockNetworkIdHashes { get; set; } = true;
 
     public override Span<byte> Encode()
     {
@@ -129,17 +133,17 @@ class StartGamePacket : DataPacket
         writer.WriteBool(false); // ServerAuthoritativeInventory
         writer.WriteVarString("1.26.33"); // GameVersion
         
-        // PropertyData (NBT compound)
-        writer.WriteByte(0x0a); // Compound
-        writer.WriteVarString(""); // Name
-        writer.WriteByte(0x00); // End
-        
+        // PropertyData (empty NBT compound, network encoding)
+        var propertyData = NbtCodec.Encode(
+            new NbtNamedTag("", NbtTag.Compound(new NbtCompound())),
+            NbtEncoding.Network);
+        writer.Write(propertyData);        
         writer.WriteULong(0, BinaryStream.Endianess.Little); // ServerBlockStateChecksum
         writer.WriteLong(0, BinaryStream.Endianess.Little); // WorldTemplateID pt 1
         writer.WriteLong(0, BinaryStream.Endianess.Little); // WorldTemplateID pt 2
         
         writer.WriteBool(false); // ClientSideGeneration
-        writer.WriteBool(false); // UseBlockNetworkIDHashes
+        writer.WriteBool(UseBlockNetworkIdHashes);
         writer.WriteBool(false); // ServerAuthoritativeSound
         writer.WriteBool(false); // IsLoggingChat
         

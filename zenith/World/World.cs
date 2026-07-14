@@ -59,7 +59,7 @@ sealed class World
         return list;
     }
 
-    public const int AirRuntimeId = Blocks.Air;
+    public static int AirRuntimeId => Blocks.Air;
 
     public void SetBlock(int x, int y, int z, int blockRuntimeId)
     {

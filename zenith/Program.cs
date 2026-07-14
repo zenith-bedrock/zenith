@@ -1,13 +1,14 @@
 using Zenith.Server;
 
+var configPath = Path.Combine(AppContext.BaseDirectory, ServerConfigLoader.DefaultFileName);
 ServerConfig config;
 try
 {
-    config = ServerConfigLoader.LoadOrCreate(ServerConfigLoader.DefaultFileName);
+    config = ServerConfigLoader.LoadOrCreate(configPath);
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"Fatal: failed to load {ServerConfigLoader.DefaultFileName}: {ex.Message}");
+    Console.Error.WriteLine($"Fatal: failed to load {configPath}: {ex.Message}");
     if (ex.InnerException is not null)
         Console.Error.WriteLine(ex.InnerException.Message);
     Environment.Exit(1);

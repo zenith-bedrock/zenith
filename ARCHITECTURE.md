@@ -78,29 +78,26 @@ zenith/
   Gameplay/
     Runtime/     # GameLoop, GameClock, IGameSystem
     Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
-  World/         # IChunkStorage (ValueTask), InMemory / LevelDB, World
+  World/         # IChunkStorage, World, BlockPalette (gzip→LE NBT)
   Network/
-    Session/     # NetworkSession, handlers, LoginIdentity
-    Protocol/    # BedrockProtocol façade + Login/World/Entity/Chat/…
-    Packets/     # DataPacket, ProtocolInfo, PacketCompression, *Packet
-    ZenithSessionListener.cs
-  Server/        # Composition root (ZenithServer, ServerContext)
-  Player/
+    ...
+nbt/             # Zenith.Nbt — formato NBT puro (LE + Network); sem ref a zenith/raknet
+raknet/
 ```
 
 ## Notas deste estágio
 
-- `Player.Session` é aceitável; fan-out via sistemas (TimeSync, Movement, Block), não espalhar `player.Session.Protocol.*` no domínio.
 - PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
 - Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM **não tem bound** (limitação conhecida nesta escala).
 - Terreno base flat (`ChunkPayloads.BuildFlatOverworld`); edits = diff sobre a base.
+- **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
+- **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **não** lê mundos vanilla Mojang nem DBs escritos pelo NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback. Chaves `c:` (base) e `ov:` (edits). Path antigo do NuGet = recriar mundo.
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
-- **Config:** `zenith.yml` é a fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
+- **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 - **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
 - **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.
-- **LevelDB:** `LevelDbChunkStorage`; `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback. Chaves `c:` (base) e `ov:` (edits).
 
 ## Smoke manual
 
@@ -110,7 +107,8 @@ zenith/
 4. Movimento de A visível em B (`MoveActorAbsolute`).
 5. Chat A↔B (`TextPacket`).
 6. A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`).
-7. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
+7. Terreno flat (stone/grass) visível sob os pés — `UseBlockNetworkIdHashes` alinhado às palettes FNV.
+8. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
 
 ## Roadmap
 

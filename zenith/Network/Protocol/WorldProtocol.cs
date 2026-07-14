@@ -22,7 +22,11 @@ sealed class WorldProtocol
         float y,
         float z,
         float pitch,
-        float yaw)
+        float yaw,
+        int spawnBlockX = 0,
+        int spawnBlockY = 0,
+        int spawnBlockZ = 0,
+        bool useBlockNetworkIdHashes = true)
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -32,7 +36,11 @@ sealed class WorldProtocol
             PositionY = y,
             PositionZ = z,
             Pitch = pitch,
-            Yaw = yaw
+            Yaw = yaw,
+            SpawnBlockX = spawnBlockX,
+            SpawnBlockY = spawnBlockY,
+            SpawnBlockZ = spawnBlockZ,
+            UseBlockNetworkIdHashes = useBlockNetworkIdHashes
         });
     }
 

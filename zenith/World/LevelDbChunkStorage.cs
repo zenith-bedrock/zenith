@@ -1,5 +1,5 @@
 using System.Text;
-using LevelDB;
+using Zenith.LevelDB;
 
 namespace Zenith.World;
 

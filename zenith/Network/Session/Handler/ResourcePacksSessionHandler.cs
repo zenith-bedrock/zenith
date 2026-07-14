@@ -1,5 +1,6 @@
 using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
+using Zenith.World;
 
 namespace Zenith.Network.Session.Handler;
 
@@ -29,7 +30,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 break;
             case ResourcePackClientResponsePacket.STATUS_COMPLETED:
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
-                // esse status só depois de publicar chunks (mesmo que falsos).
+                // esse status só depois de publicar chunks.
                 var player = session.Player!;
                 session.Protocol.World.SendStartGame(
                     levelName: session.Context.Config.World.Name,
@@ -38,7 +39,11 @@ class ResourcePacksSessionHandler : ISessionHandler
                     y: player.PositionY,
                     z: player.PositionZ,
                     pitch: player.Pitch,
-                    yaw: player.Yaw);
+                    yaw: player.Yaw,
+                    spawnBlockX: 0,
+                    spawnBlockY: Blocks.FlatSpawnY,
+                    spawnBlockZ: 0,
+                    useBlockNetworkIdHashes: true);
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }

@@ -42,6 +42,9 @@ class ZenithServer
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
 
+        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        logger.Info($"Block palette loaded (air={Blocks.Air}, stone={Blocks.Stone}, grass={Blocks.GrassBlock})");
+
         IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage);
         gameLoop.Register(new BlockSystem(players, world));
