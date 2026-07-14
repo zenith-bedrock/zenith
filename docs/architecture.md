@@ -1,0 +1,93 @@
+# Architecture
+
+> One-line philosophy: **who decides ≠ who transmits ≠ who serializes.**
+
+This page explains the shape of Zenith. The authoritative constraint list is [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+
+## System map
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ zenith (game server)                                            │
+│  Gameplay (decide)  →  Protocols (transmit)  →  Packets (wire)  │
+│  Handlers (session SM)     GameLoop / Systems (tick)            │
+│  World / Inventory / Player                                     │
+└───────────────┬─────────────────────────────┬───────────────────┘
+                │                             │
+         ┌──────▼──────┐               ┌──────▼──────┐
+         │ Zenith.Nbt  │               │Zenith.LevelDB│
+         │ LE/Network/ │               │ mem+WAL+SST  │
+         │ BigEndian   │               │ c: / ov: keys│
+         └─────────────┘               └─────────────┘
+                │
+         ┌──────▼──────┐
+         │   raknet    │  UDP reliable transport (BinaryStream ref struct)
+         └─────────────┘
+```
+
+Dependency direction is always **down**: gameplay never references `DataPacket`; packets never reference `Player`/`World`; Nbt and LevelDB have **no** references to zenith or raknet.
+
+## Roles
+
+| Role | Responsibility |
+|------|----------------|
+| **Gameplay** | Decisions: world, inventory, entities, rules. Owns runtime (`GameLoop`, systems). |
+| **Handler** | Connection/inbound state machine. Decodes, validates (NaN/Inf), records **intent only**. |
+| **Protocol** | Turns already-decided intents into sends. Does not pick visibility or chunk sets as policy. |
+| **Packets** | Bedrock wire models + serialize/deserialize. |
+| **RakNet** | Reliable UDP. Separate “network tick” from game tick. |
+
+## Inbound vs outbound
+
+### Outbound
+
+```
+Gameplay → Protocol → Packets → (compression) → RakNet
+```
+
+### Inbound (gameplay-affecting)
+
+```
+RakNet thread
+  → Handler
+  → pending intent (e.g. movement / place)
+  → GameLoop Tick
+  → System (MovementSystem, BlockSystem, …)
+  → Protocol → RakNet
+```
+
+The network thread **must not** mutate authoritative gameplay state (final position, inventory, world). Mutation happens on the tick so behavior stays deterministic and debuggable.
+
+## GameLoop
+
+- Target **20 TPS**; advances `GameClock`; invokes `IGameSystem` in **registration order**.
+- Exception in one system is logged; the loop continues (same isolation idea as EventBus listeners).
+- **Single-threaded** until a concrete feature forces parallelism — no Scheduler / Actor / ECS “for cleanliness.”
+
+## Persistence model (world)
+
+| Concern | Approach |
+|---------|----------|
+| Base terrain | Flat overworld payloads (`ChunkPayloads`), FNV `network_id` hashes |
+| Edits | Sparse overlays in LevelDB (`ov:x:y:z`) + in-RAM map; `UpdateBlock` to clients |
+| Columns | Optional `c:x:z` blobs in LevelDB; `IChunkStorage` is `ValueTask`-first |
+| StartGame | `UseBlockNetworkIdHashes = true` so client decodes palette hashes correctly |
+
+We intentionally **do not** rewrite full subchunks on every place/break. Overlay-first matches early-scale needs and keeps PreSpawn simple: `LevelChunk` (base) then overlay `UpdateBlock`s.
+
+## Config and identity
+
+- Operational config: `zenith.yml` next to the executable (`AppContext.BaseDirectory`), not cwd or env soup.
+- Auth chain signature verification is a **YAML gate** for public exposure — LAN defaults can be softer with a boot warning.
+
+## Frozen infrastructure
+
+Do **not** add for its own sake: Scheduler, Actor model, full ECS, Job system, Service Locator, Runtime Manager, VisibilitySystem, DI container, or plugin API. Introduce a layer only when a real feature hits a wall the current design cannot absorb.
+
+Fan-out to all online players is acceptable at this stage; visibility culling is a later product need, not an architectural prerequisite.
+
+## Related
+
+- [Decision history](decisions.md) — how we arrived here
+- [Comparison](comparison.md) — how this differs from PocketMine-class stacks
+- [`leveldb/README.md`](../leveldb/README.md) — KV internals and backlog

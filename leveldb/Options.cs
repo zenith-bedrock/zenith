@@ -10,15 +10,20 @@ public sealed class Options
     public int WriteBufferSize { get; set; } = 4 * 1024 * 1024;
 }
 
-/// <summary>Opções de leitura (reservado; v1 ignora verify).</summary>
+/// <summary>Opções de leitura (v1 ignora verify_checksums).</summary>
 public sealed class ReadOptions
 {
     public static ReadOptions Default { get; } = new();
 }
 
-/// <summary>Opções de escrita (reservado; v1 sempre faz append no journal).</summary>
+/// <summary>Opções de escrita no journal (WAL).</summary>
 public sealed class WriteOptions
 {
     public static WriteOptions Default { get; } = new();
+
+    /// <summary>
+    /// Se true, após append no journal chama <c>FileStream.Flush(true)</c> (fsync)
+    /// antes de retornar. Default false = flush OS buffer apenas.
+    /// </summary>
     public bool Sync { get; set; }
 }

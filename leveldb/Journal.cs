@@ -1,13 +1,16 @@
 namespace Zenith.LevelDB;
 
 /// <summary>
-/// WAL append-only. Record: u8 type | u32 keyLen | key | u32 valLen | value (valLen=0 se delete).
-/// Type: 1=put, 2=delete.
+/// WAL append-only.
+/// Record types: 1=put, 2=delete (legacy single-op), 3=batch (payload = WriteBatch.Encode).
+/// Legacy: u8 type | i32 keyLen | key | i32 valLen | value.
+/// Batch: u8 type=3 | i32 payloadLen | payload.
 /// </summary>
 sealed class JournalWriter : IDisposable
 {
     public const byte TypePut = 1;
     public const byte TypeDelete = 2;
+    public const byte TypeBatch = 3;
 
     private readonly FileStream _stream;
     private readonly BinaryWriter _writer;
@@ -33,6 +36,13 @@ sealed class JournalWriter : IDisposable
         _writer.Write(key.Length);
         _writer.Write(key);
         _writer.Write(0);
+    }
+
+    public void AppendBatch(ReadOnlySpan<byte> encodedBatch)
+    {
+        _writer.Write(TypeBatch);
+        _writer.Write(encodedBatch.Length);
+        _writer.Write(encodedBatch);
     }
 
     public void Flush(bool sync)
@@ -62,6 +72,24 @@ sealed class JournalWriter : IDisposable
             catch (EndOfStreamException)
             {
                 break;
+            }
+
+            if (type == TypeBatch)
+            {
+                if (stream.Position + 4 > stream.Length) break;
+                var payloadLen = reader.ReadInt32();
+                if (payloadLen < 0 || stream.Position + payloadLen > stream.Length) break;
+                var payload = reader.ReadBytes(payloadLen);
+                try
+                {
+                    WriteBatch.ApplyEncoded(payload, mem);
+                }
+                catch (InvalidDataException)
+                {
+                    break;
+                }
+
+                continue;
             }
 
             if (stream.Position + 4 > stream.Length) break;

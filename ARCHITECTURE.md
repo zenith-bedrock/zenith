@@ -2,6 +2,8 @@
 
 Filosofia em uma linha: **quem decide ≠ quem transmite ≠ quem serializa**.
 
+Documentação narrativa (comparações, DX, histórico de decisões): [`docs/`](docs/README.md). Este arquivo é a **fonte de restrições** do dia a dia.
+
 ## Papéis
 
 | Papel | Responsabilidade |
@@ -91,7 +93,7 @@ raknet/
 - Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM **não tem bound** (limitação conhecida nesta escala).
 - Terreno base flat (`ChunkPayloads.BuildFlatOverworld`); edits = diff sobre a base.
 - **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
-- **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **não** lê mundos vanilla Mojang nem DBs escritos pelo NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback. Chaves `c:` (base) e `ov:` (edits). Path antigo do NuGet = recriar mundo.
+- **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **não** lê mundos vanilla Mojang nem DBs escritos pelo NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML liga InMemory (vazio) ou LevelDB (path). Sem silent fallback. Chaves `c:` (base) e `ov:` (edits). Path antigo do NuGet = recriar mundo. Detalhes/API/gaps: [`leveldb/README.md`](leveldb/README.md).
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).

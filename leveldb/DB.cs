@@ -158,15 +158,9 @@ public sealed class DB : IDisposable
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(value);
-        lock (_gate)
-        {
-            EnsureOpen();
-            _journal!.AppendPut(key, value);
-            _journal.Flush(options.Sync);
-            _mem.Put(key, value);
-            if (_mem.ApproxSize >= _opts.WriteBufferSize)
-                FlushMemtableUnlocked();
-        }
+        var batch = new WriteBatch();
+        batch.Put(key, value);
+        Write(batch, options);
     }
 
     public void Delete(byte[] key) => Delete(WriteOptions.Default, key);
@@ -174,12 +168,29 @@ public sealed class DB : IDisposable
     public void Delete(WriteOptions options, byte[] key)
     {
         ArgumentNullException.ThrowIfNull(key);
+        var batch = new WriteBatch();
+        batch.Delete(key);
+        Write(batch, options);
+    }
+
+    public void Write(WriteBatch batch) => Write(batch, WriteOptions.Default);
+
+    /// <summary>
+    /// Aplica o batch atomicamente: um record no journal, depois todas as ops no memtable.
+    /// </summary>
+    public void Write(WriteBatch batch, WriteOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        ArgumentNullException.ThrowIfNull(options);
+        if (batch.Count == 0) return;
+
         lock (_gate)
         {
             EnsureOpen();
-            _journal!.AppendDelete(key);
+            var encoded = batch.Encode(seq: 0);
+            _journal!.AppendBatch(encoded);
             _journal.Flush(options.Sync);
-            _mem.Delete(key);
+            WriteBatch.ApplyEncoded(encoded, _mem);
             if (_mem.ApproxSize >= _opts.WriteBufferSize)
                 FlushMemtableUnlocked();
         }
