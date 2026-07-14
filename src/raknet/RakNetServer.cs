@@ -42,7 +42,7 @@ public class RakNetServer
     public string Motd { get; init; } = "Zenith Bedrock";
     public string SubMotd { get; init; } = "Test";
     public string ListGameMode { get; init; } = "Survival";
-    public int ProtocolVersion { get; init; } = 766;
+    public int ProtocolVersion { get; init; } = 1001;
     public string VersionName { get; init; } = "1.21.50";
 
     public ILogger? Logger { get; init; }

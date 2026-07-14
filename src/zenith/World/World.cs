@@ -32,7 +32,7 @@ sealed class World
         var existing = await _storage.GetAsync(coord, ct).ConfigureAwait(false);
 
         ChunkColumnData bas;
-        if (existing is not null && existing.SubChunkCount > 0)
+        if (existing is not null && existing.SubChunkCount > 0 && LooksLikeTerrainPayload(existing))
         {
             bas = existing;
         }
@@ -100,6 +100,16 @@ sealed class World
         if (y >= Blocks.FlatMinY && y <= Blocks.FlatStoneTopY) return Blocks.Stone;
         if (y == Blocks.FlatGrassY) return Blocks.GrassBlock;
         return Blocks.Air;
+    }
+
+    /// <summary>
+    /// SubChunkCount&gt;0 with a tiny payload is almost always corrupt legacy / empty biomes-only
+    /// leftovers — regenerate flat so clients never get all-air columns that stick in LevelDB.
+    /// </summary>
+    private static bool LooksLikeTerrainPayload(ChunkColumnData column)
+    {
+        // Flat: at least version + layers + one palette header byte.
+        return column.ExtraPayload.Length >= 3 && column.ExtraPayload[0] == 8;
     }
 
     private static int ToChunk(int block) => block >> 4;

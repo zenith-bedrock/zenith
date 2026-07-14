@@ -1,15 +1,16 @@
+using Zenith.Network;
 using Zenith.Network.Protocol;
-using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
+using Zenith.Player;
+using Zenith.Raknet.Stream;
 using Zenith.World;
 
 namespace Zenith.Network.Session.Handler;
 
 /// <summary>
 /// Estado entre StartGame e loading completo.
-/// Pede colunas ao <see cref="Server.ServerContext.World"/> (leitura thread-safe);
-/// <see cref="WorldProtocol"/> só transmite.
-/// Por coluna: LevelChunk (base) → UpdateBlock dos overlays — nunca flush global de overlay.
+/// Ordem Vedrock/PNX: ChunkRadiusUpdated → NetworkChunkPublisherUpdate → LevelChunks (batched) → PlayStatus.
+/// gophertunnel: sem publisher o cliente ignora terrain independentemente dos LevelChunks.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
@@ -48,37 +49,90 @@ class PreSpawnSessionHandler : ISessionHandler
 
         session.Context.Logger.Debug($"RequestChunkRadiusPacket: requested={request.Radius}, using={radius}");
 
-        var worldColumns = session.Context.World
-            .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
+        if (session.Player is not null)
+            session.Player.Chunks.Radius = radius;
 
         session.Protocol.World.SendChunkRadiusUpdated(radius);
 
-        foreach (var column in worldColumns)
+        if (Interlocked.Exchange(ref session.PreSpawnLoadStarted, 1) != 0)
         {
-            ColumnTerrainEmitter.Emit(
-                column,
-                sendLevelChunk: bas => session.Protocol.World.SendLevelChunk(new ChunkColumn(
+            session.Context.Logger.Debug("Ignoring duplicate RequestChunkRadius during PreSpawn load.");
+            return;
+        }
+
+        // Fire-and-forget: não bloquear a receive thread com storage I/O.
+        _ = CompleteSpawnAsync(session, radius);
+    }
+
+    private static async Task CompleteSpawnAsync(NetworkSession session, int radius)
+    {
+        try
+        {
+            var worldColumns = await session.Context.World
+                .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
+                .ConfigureAwait(false);
+
+            if (session.Player is null)
+                return;
+
+            // Publisher BEFORE LevelChunks (Vedrock/PNX). Radius in blocks.
+            session.Protocol.World.SendChunkPublisher(
+                blockX: 0,
+                blockY: Blocks.FlatSpawnY,
+                blockZ: 0,
+                radiusBlocks: radius * 16);
+
+            var remembered = new List<(int X, int Z)>(worldColumns.Count);
+            var batch = new List<ChunkColumn>(WorldProtocol.LevelChunkBatchSize);
+
+            void FlushBatch()
+            {
+                if (batch.Count == 0) return;
+                session.Protocol.World.PublishChunks(batch);
+                batch.Clear();
+            }
+
+            foreach (var column in worldColumns)
+            {
+                var bas = column.Base;
+                batch.Add(new ChunkColumn(
                     bas.Coord.X,
                     bas.Coord.Z,
                     bas.DimensionId,
                     bas.SubChunkCount,
-                    bas.ExtraPayload)),
-                sendUpdateBlock: (x, y, z, runtimeId) =>
-                    session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId));
+                    bas.ExtraPayload));
+                remembered.Add((bas.Coord.X, bas.Coord.Z));
+
+                if (batch.Count >= WorldProtocol.LevelChunkBatchSize)
+                    FlushBatch();
+            }
+
+            FlushBatch();
+
+            // Overlays after base terrain (same order as ColumnTerrainEmitter).
+            foreach (var column in worldColumns)
+            {
+                var overlays = column.Overlays;
+                for (var i = 0; i < overlays.Count; i++)
+                {
+                    var o = overlays[i];
+                    session.Protocol.World.SendUpdateBlock(o.X, o.Y, o.Z, o.BlockRuntimeId);
+                }
+            }
+
+            session.Player.Chunks.RememberMany(remembered);
+            session.Player.Chunks.PublisherCenterChanged(0, 0);
+
+            session.Protocol.World.SendWorldSpawnPosition(x: 0, y: Blocks.FlatSpawnY, z: 0);
+            session.Context.Logger.Debug("Chunks published (publisher → batched LevelChunks → overlays), waiting for spawn response");
+            session.Protocol.World.SendSpawnComplete();
+
+            session.SetHandler(new SpawnResponseSessionHandler());
         }
-
-        session.Protocol.World.SendChunkPublisher(
-            blockX: 0,
-            blockY: Blocks.FlatSpawnY,
-            blockZ: 0,
-            radiusBlocks: radius * 16);
-        session.Protocol.World.SendWorldSpawnPosition(x: 0, y: Blocks.FlatSpawnY, z: 0);
-        session.Context.Logger.Debug("Chunks published (base + per-column overlays), waiting for spawn response");
-        session.Protocol.World.SendSpawnComplete();
-
-        session.SetHandler(new SpawnResponseSessionHandler());
+        catch (Exception ex)
+        {
+            session.Context.Logger.Error($"PreSpawn chunk load failed: {ex.Message}");
+            session.Disconnect();
+        }
     }
 }

@@ -10,14 +10,22 @@ class GamePacket : IPacket
 {
     public byte Id => (byte)MessageIdentifier.Game;
 
+    /// <summary>
+    /// Wire compression algorithm preference. After NetworkSettings, typically
+    /// <see cref="PacketCompression.ZLIB"/>; under-threshold batches use
+    /// <see cref="PacketCompression.NONE"/> (0xff) like Vedrock.
+    /// </summary>
     public byte Compression = PacketCompression.NOT_PRESENT;
+
+    /// <summary>Batch size at which ZLIB/flate kicks in (from NetworkSettings).</summary>
+    public int CompressionThreshold = 256;
+
     public List<DataPacket> Packets = new();
 
     public Span<byte> Encode()
     {
         var writer = new BinaryStream();
         writer.WriteByte(Id);
-        if (Compression != PacketCompression.NOT_PRESENT) writer.WriteByte(Compression);
 
         var payloadWriter = new BinaryStream();
         foreach (var packet in Packets)
@@ -29,17 +37,31 @@ class GamePacket : IPacket
 
         var uncompressed = payloadWriter.GetBufferDisposing();
 
-        if (Compression == PacketCompression.ZLIB)
+        if (Compression == PacketCompression.NOT_PRESENT)
         {
+            // Pré-NetworkSettings: sem byte de algoritmo.
+            writer.Write(uncompressed);
+        }
+        else if (Compression == PacketCompression.ZLIB && uncompressed.Length < CompressionThreshold)
+        {
+            // Vedrock batch.v: below threshold → algorithm 0xff + raw batch.
+            writer.WriteByte(PacketCompression.NONE);
+            writer.Write(uncompressed);
+        }
+        else if (Compression == PacketCompression.ZLIB)
+        {
+            writer.WriteByte(PacketCompression.ZLIB);
             using var ms = new MemoryStream();
             using (var deflate = new DeflateStream(ms, CompressionLevel.Fastest))
             {
                 deflate.Write(uncompressed);
             }
+
             writer.Write(ms.ToArray());
         }
         else
         {
+            writer.WriteByte(Compression);
             writer.Write(uncompressed);
         }
 

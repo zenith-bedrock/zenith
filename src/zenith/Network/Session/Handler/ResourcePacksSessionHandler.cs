@@ -33,11 +33,12 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
+                // StartGame position = eyes (Vedrock spawn_y + player_eye_height).
                 session.Protocol.World.SendStartGame(
                     levelName: session.Context.Config.World.Name,
                     entityRuntimeId: player.RuntimeId,
                     x: player.PositionX,
-                    y: player.PositionY,
+                    y: player.PositionY + Blocks.PlayerEyeHeight,
                     z: player.PositionZ,
                     pitch: player.Pitch,
                     yaw: player.Yaw,
@@ -46,6 +47,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                     spawnBlockZ: 0,
                     useBlockNetworkIdHashes: true);
                 session.Protocol.Inventory.SendItemRegistry();
+                // Empty BiomeDefinitionList — required once by modern clients (Vedrock/PNX parity).
+                session.Protocol.World.SendEmptyBiomeDefinitionList();
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }

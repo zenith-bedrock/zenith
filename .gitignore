@@ -66,3 +66,4 @@ worlds/
 .cursor/
 
 artifacts/
+tmp-nbt-dump.csx

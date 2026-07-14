@@ -3,9 +3,9 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Network.Packets;
 
 /// <summary>
-/// Tells the client which area around a block position now has usable chunk data. Together
-/// with enough <see cref="LevelChunkPacket"/>s already having been sent for that area, this
-/// is what actually makes the client stop showing the "Loading world" screen.
+/// Tells the client which area around a block position now has usable chunk data.
+/// gophertunnel: if this packet is never sent, no chunks are shown regardless of LevelChunks.
+/// Vedrock/PNX send this before LevelChunks on spawn; Zenith PreSpawn matches that order.
 /// </summary>
 class NetworkChunkPublisherUpdatePacket : DataPacket
 {

@@ -57,6 +57,7 @@ class ZenithServer
         IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage);
         gameLoop.Register(new BlockSystem(players, world));
+        gameLoop.Register(new ChunkStreamSystem(players, world));
 
         Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette);
         GameLoop = gameLoop;

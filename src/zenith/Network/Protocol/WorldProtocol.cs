@@ -49,6 +49,15 @@ sealed class WorldProtocol
         _session.SendDataPacket(new ChunkRadiusUpdatedPacket { Radius = radius });
     }
 
+    /// <summary>Empty BiomeDefinitionList (0x7a) — Vedrock sends after ItemRegistry.</summary>
+    public void SendEmptyBiomeDefinitionList()
+    {
+        _session.SendDataPacket(new BiomeDefinitionListPacket());
+    }
+
+    /// <summary>Vedrock flush cadence: several LevelChunks per GamePacket batch.</summary>
+    public const int LevelChunkBatchSize = 4;
+
     public void PublishChunks(IReadOnlyList<ChunkColumn> columns)
     {
         if (columns.Count == 0) return;

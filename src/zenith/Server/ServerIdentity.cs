@@ -6,7 +6,11 @@ namespace Zenith.Server;
 /// </summary>
 static class ServerIdentity
 {
-    public const int ProtocolVersion = 766;
+    /// <summary>
+    /// Bedrock protocol number (client <c>RequestNetworkSettings</c> / MOTD).
+    /// Encode de StartGame / LevelChunk segue o layout 1001 (refs Vedrock / gophertunnel).
+    /// </summary>
+    public const int ProtocolVersion = 1001;
 
     /// <summary>String de versão de jogo no wire (StartGame / ResourcePackStack). SSOT.</summary>
     public const string VersionName = "1.26.33";

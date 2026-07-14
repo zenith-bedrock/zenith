@@ -73,7 +73,7 @@ The network thread **must not** mutate authoritative gameplay state (final posit
 | Columns | Optional `c:x:z` blobs in LevelDB; `IChunkStorage` is `ValueTask`-first |
 | StartGame | `UseBlockNetworkIdHashes = true` so client decodes palette hashes correctly |
 
-We intentionally **do not** rewrite full subchunks on every place/break. Overlay-first matches early-scale needs and keeps PreSpawn simple: `LevelChunk` (base) then overlay `UpdateBlock`s.
+We intentionally **do not** rewrite full subchunks on every place/break. Overlay-first matches early-scale needs and keeps PreSpawn simple: `LevelChunk` (base) then overlay `UpdateBlock`s. After spawn, `ChunkStreamSystem` fills the player's view as they move (still flat + overlays).
 
 ## Config and identity
 

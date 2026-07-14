@@ -29,6 +29,9 @@ class NetworkSession
     public Player.Player? Player { get; set; }
     public byte CompressionAlgorithm { get; set; } = PacketCompression.NONE;
 
+    /// <summary>Evita dois CompleteSpawnAsync se o cliente reenviar RequestChunkRadius.</summary>
+    public int PreSpawnLoadStarted;
+
     private ISessionHandler _handler;
 
     public NetworkSession(RakNetSession rakSession, ISessionHandler initialHandler, ServerContext context)
@@ -48,6 +51,12 @@ class NetworkSession
         _handler.OnEnable(this);
     }
 
+    /// <summary>
+    /// Bedrock game packets must be ordered: StartGame (hash flag) before LevelChunk,
+    /// or the client decodes FNV palette ids as legacy runtime ids → empty skybox.
+    /// </summary>
+    internal const Reliability GamePacketReliability = Reliability.ReliableOrdered;
+
     /// <summary>Envelope de envio usado apenas pelos módulos <c>*Protocol</c> nesta assembly.</summary>
     internal void SendDataPacket(params DataPacket[] packets) =>
         SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, packets);
@@ -57,12 +66,13 @@ class NetworkSession
         var gamePacket = new GamePacket
         {
             Compression = compression,
+            CompressionThreshold = Context.Config.Network.CompressionThreshold,
             Packets = new List<DataPacket>(packets)
         };
 
         var frame = new Frame
         {
-            Reliability = Reliability.Reliable,
+            Reliability = GamePacketReliability,
             OrderChannel = 0,
             Buffer = gamePacket.Encode().ToArray()
         };

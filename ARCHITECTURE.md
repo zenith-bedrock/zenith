@@ -116,6 +116,7 @@ src/
 7. Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame.
 8. A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity.
 9. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
+10. A anda para fora do raio de spawn → novas colunas flat chegam (`ChunkStreamSystem`); chão continua sob os pés.
 
 ## Roadmap
 

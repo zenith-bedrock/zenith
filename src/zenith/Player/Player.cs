@@ -35,6 +35,9 @@ class Player
 
     public PlayerInventory Inventory { get; } = new();
 
+    /// <summary>Colunas enviadas / em voo e raio de view (streaming).</summary>
+    public PlayerChunkTracker Chunks { get; } = new();
+
     /// <summary>Runtime id do bloco no slot selecionado (via inventário).</summary>
     public int HeldBlockRuntimeId => Inventory.GetRuntimeId(SelectedHotbarSlot);
 

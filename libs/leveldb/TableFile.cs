@@ -34,36 +34,47 @@ static class TableFile
 
     public static void LoadInto(string path, MemTable mem)
     {
+        if (!TryLoadInto(path, mem))
+            throw new InvalidDataException($"leveldb: bad or unsupported table in {path}");
+    }
+
+    /// <summary>
+    /// Loads a ZLDB snapshot. Returns false if the file is not Zenith format
+    /// (e.g. leftover native LevelDB MANIFEST) so callers can recover empty.
+    /// </summary>
+    public static bool TryLoadInto(string path, MemTable mem)
+    {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var reader = new BinaryReader(stream);
         var magic = reader.ReadBytes(4);
         if (magic.Length != 4 || !magic.AsSpan().SequenceEqual(Magic))
-            throw new InvalidDataException($"leveldb: bad table magic in {path}");
+            return false;
 
         var version = reader.ReadUInt32();
         if (version != Version)
-            throw new InvalidDataException($"leveldb: unsupported table version {version} in {path}");
+            return false;
 
         var count = reader.ReadInt32();
         if (count < 0)
-            throw new InvalidDataException($"leveldb: bad table count in {path}");
+            return false;
 
         for (var i = 0; i < count; i++)
         {
             var keyLen = reader.ReadInt32();
-            if (keyLen < 0) throw new InvalidDataException($"leveldb: bad key length in {path}");
+            if (keyLen < 0) return false;
             var key = reader.ReadBytes(keyLen);
             var valLen = reader.ReadUInt32();
             if (valLen == uint.MaxValue)
             {
-                // Legacy tombstone in older snapshots — treat as delete.
                 mem.Delete(key);
                 continue;
             }
 
-            if (valLen > int.MaxValue) throw new InvalidDataException($"leveldb: value too large in {path}");
+            if (valLen > int.MaxValue) return false;
             var value = reader.ReadBytes((int)valLen);
             mem.Put(key, value);
         }
+
+        return true;
     }
 }

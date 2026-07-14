@@ -44,6 +44,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleInventoryTransaction(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET:
+                HandleRequestChunkRadius(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.MOVE_PLAYER_PACKET:
                 return true;
 
@@ -78,6 +82,19 @@ class InGameSessionHandler : ISessionHandler
         }
 
         player.SubmitMovementInput(input);
+    }
+
+    private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)
+    {
+        var request = DataPacket.From<RequestChunkRadiusPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        var cap = session.Context.Config.World.SpawnChunkRadius;
+        var radius = Math.Min(request.Radius, cap);
+        player.Chunks.Radius = radius;
+        session.Protocol.World.SendChunkRadiusUpdated(radius);
+        session.Context.Logger.Debug($"In-game chunk radius updated for {player.Username}: {radius}");
     }
 
     private static void HandleText(NetworkSession session, ref BinaryStream stream)

@@ -58,8 +58,15 @@ public sealed class DB : IDisposable
             {
                 _tablePath = Path.Combine(_dir, name);
                 if (!File.Exists(_tablePath))
-                    throw new InvalidDataException($"leveldb: CURRENT points to missing table {_tablePath}");
-                TableFile.LoadInto(_tablePath, _mem);
+                {
+                    // Stale CURRENT (e.g. leftover NuGet LevelDB MANIFEST) — reset empty.
+                    _tablePath = null;
+                }
+                else if (!TableFile.TryLoadInto(_tablePath, _mem))
+                {
+                    // Not a Zenith ZLDB snapshot (old native LevelDB residue). Start empty.
+                    _tablePath = null;
+                }
             }
         }
         else if (!_opts.CreateIfMissing)

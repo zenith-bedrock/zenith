@@ -36,6 +36,9 @@ static class Blocks
     public const int FlatGrassY = -61;
     public const int FlatSpawnY = -60;
 
+    /// <summary>Vedrock <c>player_eye_height</c> — StartGame position is eye, not feet.</summary>
+    public const float PlayerEyeHeight = 1.62f;
+
     public static void Load(BlockPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);

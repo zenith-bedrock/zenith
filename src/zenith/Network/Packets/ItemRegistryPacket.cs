@@ -7,7 +7,7 @@ namespace Zenith.Network.Packets;
 
 /// <summary>
 /// ItemRegistry (0xa2) — full item palette for the client after StartGame.
-/// Wire layout valid for <see cref="ServerIdentity.ProtocolVersion"/> (766 / Bedrock ~1.26.33).
+/// Wire layout valid for <see cref="ServerIdentity.ProtocolVersion"/> (1001 / Bedrock ~1.26.33).
 /// On protocol bump, review this packet before changing World/Inventory domain rules.
 /// </summary>
 sealed class ItemRegistryPacket : DataPacket
