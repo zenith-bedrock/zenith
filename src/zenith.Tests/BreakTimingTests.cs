@@ -25,9 +25,9 @@ public class BreakTimingTests
     [Fact]
     public void CrackEventData_matches_progress_per_tick_scale()
     {
-        Assert.Equal(65535, Blocks.CrackEventData(0));
-        Assert.Equal(4369, Blocks.CrackEventData(15)); // round(65535/15)
-        Assert.Equal(437, Blocks.CrackEventData(150)); // round(65535/150)
+        Assert.Equal(Blocks.CrackProgressMax, Blocks.CrackEventData(0));
+        Assert.Equal(4369, Blocks.CrackEventData(15)); // round(CrackProgressMax/15)
+        Assert.Equal(437, Blocks.CrackEventData(150)); // round(CrackProgressMax/150)
     }
 
     [Fact]

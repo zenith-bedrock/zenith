@@ -46,7 +46,7 @@ static class AbilityData
         writer.WriteULong((ulong)uniqueId, BinaryStream.Endianess.Little);
         writer.WriteByte(AbilityBits.PlayerPermissionMember);
         writer.WriteByte(AbilityBits.CommandPermissionNormal);
-        writer.WriteByte(1); // layer count
+        writer.WriteByte(AbilityBits.LayerCount); // layer count
         writer.WriteUShort(AbilityBits.LayerBase, BinaryStream.Endianess.Little);
         writer.WriteUInt(allSet, BinaryStream.Endianess.Little);
         writer.WriteUInt(values, BinaryStream.Endianess.Little);

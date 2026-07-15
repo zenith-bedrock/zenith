@@ -6,6 +6,9 @@ class DisconnectPacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.DISCONNECT_PACKET;
 
+    /// <summary>Bedrock DisconnectFailReason base (iota 0). More values when outbound kick needs them.</summary>
+    public const int ReasonUnknown = 0;
+
     public int Reason;
     public bool HideDisconnectionScreen;
     public string Message = "";

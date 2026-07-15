@@ -28,7 +28,7 @@ sealed class WorldProtocol
         int spawnBlockY = 0,
         int spawnBlockZ = 0,
         bool useBlockNetworkIdHashes = true,
-        int gameMode = 0)
+        int gameMode = AbilityBits.WireGameModeSurvival)
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -131,7 +131,7 @@ sealed class WorldProtocol
         _session.SendDataPacket(new SetTimePacket { Time = worldTime });
     }
 
-    public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, int flags = UpdateBlockPacket.FlagNetwork, int dataLayerId = 0)
+    public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, int flags = UpdateBlockPacket.FlagNeighborsAndNetwork, int dataLayerId = 0)
     {
         _session.SendDataPacket(new UpdateBlockPacket
         {

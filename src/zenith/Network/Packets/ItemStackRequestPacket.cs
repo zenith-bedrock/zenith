@@ -280,27 +280,27 @@ sealed class ItemStackRequestPacket : DataPacket
         var descriptorType = stream.ReadByte();
         switch (descriptorType)
         {
-            case 0: // invalid
+            case ItemDescriptorType.Invalid:
                 break;
-            case 1: // default
+            case ItemDescriptorType.Default:
             {
                 var networkId = stream.ReadShort(BinaryStream.Endianess.Little);
                 if (networkId != 0)
                     stream.ReadShort(BinaryStream.Endianess.Little);
                 break;
             }
-            case 2: // molang
+            case ItemDescriptorType.Molang:
                 stream.ReadVarString();
                 stream.ReadByte();
                 break;
-            case 3: // item tag
+            case ItemDescriptorType.ItemTag:
                 stream.ReadVarString();
                 break;
-            case 4: // deferred
+            case ItemDescriptorType.Deferred:
                 stream.ReadVarString();
                 stream.ReadShort(BinaryStream.Endianess.Little);
                 break;
-            case 5: // complex alias
+            case ItemDescriptorType.ComplexAlias:
                 stream.ReadVarString();
                 break;
         }

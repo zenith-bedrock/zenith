@@ -77,7 +77,7 @@ sealed class EntityProtocol
         float yaw,
         float headYaw,
         NetworkItemStack heldItem,
-        int gameMode = 0)
+        int gameMode = AbilityBits.WireGameModeSurvival)
     {
         _session.SendDataPacket(new AddPlayerPacket
         {

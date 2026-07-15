@@ -11,6 +11,9 @@ static class ChunkPayloads
     private const int PlainsBiomeId = 1;
     private const int SubChunkVersion = 8;
     private const int BlockStorageLayers = 1;
+    private const byte BiomeNetworkPaletteHeader = 1;
+    private const byte BorderBlocksEmpty = 0;
+    private const int NetworkBit = 1;
 
     /// <summary>Coluna vazia (só biomes) — legado; novos miss usam <see cref="BuildFlatOverworld"/>.</summary>
     public static byte[] BuildEmptyOverworld()
@@ -50,11 +53,11 @@ static class ChunkPayloads
     {
         for (var i = 0; i < OverworldSubChunkCount; i++)
         {
-            writer.WriteByte(1); // bits=0 network palette
+            writer.WriteByte(BiomeNetworkPaletteHeader);
             writer.WriteVarInt(PlainsBiomeId);
         }
 
-        writer.WriteByte(0); // border blocks
+        writer.WriteByte(BorderBlocksEmpty);
     }
 
     private static void WriteSubChunk(ref BinaryStream writer, int[] ids)
@@ -83,7 +86,7 @@ static class ChunkPayloads
         }
 
         var bitsPerBlock = BitsPerBlockFor(palette.Count);
-        writer.WriteByte((byte)((bitsPerBlock << 1) | 1));
+        writer.WriteByte((byte)((bitsPerBlock << 1) | NetworkBit));
         if (bitsPerBlock > 0)
         {
             var blocksPerWord = 32 / bitsPerBlock;

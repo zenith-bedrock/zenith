@@ -200,7 +200,7 @@ public class RakNetSession
             OutputSequenceIndex[frame.OrderChannel] = 0;
         }
 
-        var maxSize = Math.Max(MTU - 36, 1);
+        var maxSize = Math.Max(MTU - DGRAM_MTU_OVERHEAD, 1);
 
         if (frame.Buffer.Length > maxSize)
         {

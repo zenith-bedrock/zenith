@@ -18,7 +18,7 @@ class SetSpawnPositionPacket : DataPacket
     public int X { get; set; }
     public int Y { get; set; }
     public int Z { get; set; }
-    public int Dimension { get; set; } = 0;
+    public int Dimension { get; set; } = DimensionId.Overworld;
 
     public override Span<byte> Encode()
     {

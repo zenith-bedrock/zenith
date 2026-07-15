@@ -19,6 +19,8 @@ sealed class MovePlayerPacket : DataPacket
     public const int TeleportCauseCommand = 3;
     public const int TeleportCauseBehaviour = 4;
 
+    public const int TeleportSourceEntityTypeNone = 0;
+
     public override int Id => (int)ProtocolInfo.MOVE_PLAYER_PACKET;
 
     public ulong EntityRuntimeId { get; set; }
@@ -56,7 +58,7 @@ sealed class MovePlayerPacket : DataPacket
             Mode = ModeTeleport,
             OnGround = true,
             TeleportCause = TeleportCauseCommand,
-            TeleportSourceEntityType = 0,
+            TeleportSourceEntityType = TeleportSourceEntityTypeNone,
             Tick = tick
         };
 

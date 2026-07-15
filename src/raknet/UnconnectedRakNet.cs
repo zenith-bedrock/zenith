@@ -7,10 +7,10 @@ namespace Zenith.Raknet;
 
 public class UnconnectedRakNet
 {
-    // Abaixo de ~50 bytes não sobra espaço útil depois do overhead de frame (36 bytes) +
+    // Abaixo de ~50 bytes não sobra espaço útil depois do overhead de frame (DGRAM_MTU_OVERHEAD) +
     // datagram header (4 bytes); acima de 1492 estoura o MTU padrão de Ethernet (1500) com
     // folga pra headers IP/UDP. Um MTU malicioso fora desse range não é só "ineficiente",
-    // é uma DoS: com MTU <= 36, `MTU - 36` fica <= 0 e o split loop do SendFrame trava
+    // é uma DoS: com MTU <= DGRAM_MTU_OVERHEAD, o split loop do SendFrame trava
     // o servidor inteiro num loop infinito.
     private const ushort MIN_MTU = 400;
     private const ushort MAX_MTU = 1492;

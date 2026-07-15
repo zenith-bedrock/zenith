@@ -93,11 +93,13 @@ static class Blocks
         return 60;
     }
 
-    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to 65535 (PM/Geyser).</summary>
+    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to <see cref="CrackProgressMax"/> (PM/Geyser).</summary>
+    public const int CrackProgressMax = 65535;
+
     public static int CrackEventData(int breakTicks)
     {
-        if (breakTicks <= 0) return 65535;
-        return Math.Max(1, (int)Math.Round(65535.0 / breakTicks));
+        if (breakTicks <= 0) return CrackProgressMax;
+        return Math.Max(1, (int)Math.Round(CrackProgressMax / (double)breakTicks));
     }
 
     public static void EnsureLoaded()

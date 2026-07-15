@@ -494,7 +494,7 @@ class InGameSessionHandler : ISessionHandler
         var need = Blocks.BreakTicks(block);
         player.BeginBreak(x, y, z, session.Context.Clock.CurrentTick, need);
 
-        // Always cue crack for breakable cells — data 65535 = one-tick snap for soft blocks.
+        // Always cue crack for breakable cells — CrackProgressMax = one-tick snap for soft blocks.
         BlockCrackFanout.Start(session.Context.PlayerManager, session, x, y, z, need);
 
         var label = action switch

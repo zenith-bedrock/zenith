@@ -7,7 +7,6 @@ sealed class ShapelessCraftingRecipe
 {
     public const int TypeShapeless = 0;
     public const byte UnlockAlways = 1; // RecipeUnlockContextAlwaysUnlocked
-    public const byte DescriptorDefault = 1;
 
     public string RecipeId { get; set; } = "";
     public DefaultDescriptorInput[] Inputs { get; set; } = [];
@@ -24,7 +23,7 @@ sealed class ShapelessCraftingRecipe
         writer.WriteUnsignedVarInt(Inputs.Length);
         foreach (var input in Inputs)
         {
-            writer.WriteByte(DescriptorDefault);
+            writer.WriteByte(ItemDescriptorType.Default);
             writer.WriteShort(input.NetworkId, BinaryStream.Endianess.Little);
             if (input.NetworkId != 0)
                 writer.WriteShort(input.Metadata, BinaryStream.Endianess.Little);

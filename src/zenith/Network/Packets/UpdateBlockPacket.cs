@@ -4,7 +4,9 @@ namespace Zenith.Network.Packets;
 
 class UpdateBlockPacket : DataPacket
 {
-    public const int FlagNetwork = 3;
+    public const int FlagNeighbors = 1;
+    public const int FlagNetwork = 2;
+    public const int FlagNeighborsAndNetwork = FlagNeighbors | FlagNetwork; // 3 — default wire
 
     public override int Id => (int)ProtocolInfo.UPDATE_BLOCK_PACKET;
 
@@ -12,7 +14,7 @@ class UpdateBlockPacket : DataPacket
     public int Y { get; set; }
     public int Z { get; set; }
     public int BlockRuntimeId { get; set; }
-    public int Flags { get; set; } = FlagNetwork;
+    public int Flags { get; set; } = FlagNeighborsAndNetwork;
     public int DataLayerId { get; set; }
 
     public override Span<byte> Encode()

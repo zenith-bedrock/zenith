@@ -19,10 +19,14 @@ static class AbilityBits
 
     public const int Count = 19;
     public const ushort LayerBase = 1;
+    /// <summary>Number of ability layers written — distinct from <see cref="LayerBase"/> (layer type id).</summary>
+    public const byte LayerCount = 1;
 
     public const byte PlayerPermissionMember = 1;
+    public const byte PlayerPermissionOperator = 2;
     public const byte CommandPermissionNormal = 0;
 
+    public const int WireGameModeSurvival = 0;
     public const int WireGameModeCreative = 1;
 
     public static uint Bit(int index) => 1u << index;

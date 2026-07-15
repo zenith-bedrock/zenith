@@ -12,7 +12,7 @@ class LevelChunkPacket : DataPacket
 
     public int ChunkX { get; set; }
     public int ChunkZ { get; set; }
-    public int DimensionId { get; set; } = 0;
+    public int DimensionId { get; set; } = global::Zenith.Network.Packets.DimensionId.Overworld;
 
     /// <summary>Number of block subchunks encoded at the start of ExtraPayload.</summary>
     public int SubChunkCount { get; set; } = 0;

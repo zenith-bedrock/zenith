@@ -10,6 +10,9 @@ namespace Zenith.World;
 /// </summary>
 sealed class World
 {
+    /// <summary>Wire Overworld — keep equal to Network.Packets.DimensionId.Overworld (dual layer SSOT).</summary>
+    internal const int OverworldDimensionId = 0;
+
     internal const int OverrideWarnThreshold = 10_000;
 
     private readonly IChunkStorage _storage;
@@ -80,7 +83,7 @@ sealed class World
         }
         else
         {
-            bas = new ChunkColumnData(coord, dimensionId: 0, _flatSubChunkCount, _flatOverworldPayload);
+            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, _flatSubChunkCount, _flatOverworldPayload);
             await _storage.PutAsync(bas, ct).ConfigureAwait(false);
             bas = (await _storage.GetAsync(coord, ct).ConfigureAwait(false)) ?? bas;
         }
