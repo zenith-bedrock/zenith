@@ -133,7 +133,35 @@ sealed class WorldProtocol
 
     public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, int flags = UpdateBlockPacket.FlagNeighborsAndNetwork, int dataLayerId = 0)
     {
-        _session.SendDataPacket(new UpdateBlockPacket
+        _session.SendDataPacket(CreateUpdateBlock(x, y, z, blockRuntimeId, flags, dataLayerId));
+    }
+
+    /// <summary>One GamePacket envelope for N UpdateBlocks (ADR §44).</summary>
+    public void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates)
+    {
+        if (updates.Count == 0) return;
+        if (updates.Count == 1)
+        {
+            var u = updates[0];
+            SendUpdateBlock(u.X, u.Y, u.Z, u.BlockRuntimeId);
+            return;
+        }
+
+        var packets = new DataPacket[updates.Count];
+        for (var i = 0; i < updates.Count; i++)
+        {
+            var u = updates[i];
+            packets[i] = CreateUpdateBlock(u.X, u.Y, u.Z, u.BlockRuntimeId);
+        }
+
+        _session.SendDataPacket(packets);
+    }
+
+    private static UpdateBlockPacket CreateUpdateBlock(
+        int x, int y, int z, int blockRuntimeId,
+        int flags = UpdateBlockPacket.FlagNeighborsAndNetwork,
+        int dataLayerId = 0) =>
+        new()
         {
             X = x,
             Y = y,
@@ -141,8 +169,7 @@ sealed class WorldProtocol
             BlockRuntimeId = blockRuntimeId,
             Flags = flags,
             DataLayerId = dataLayerId
-        });
-    }
+        };
 
     public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0)
     {

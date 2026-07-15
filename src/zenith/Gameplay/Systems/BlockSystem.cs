@@ -24,35 +24,50 @@ sealed class BlockSystem : IGameSystem
     {
         if (_players.Count == 0) return;
 
-        foreach (var player in _players.Online)
+        var online = _players.Online;
+        var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
+        foreach (var player in online)
         {
             while (player.TryConsumeBlockEdit(out var edit))
-                ApplyEdit(player, edit, clock);
+            {
+                if (ApplyEdit(player, edit, clock))
+                    updates.Add((edit.X, edit.Y, edit.Z, edit.BlockRuntimeId));
+            }
         }
 
-        PickupFloorDrops(clock);
+        if (updates.Count > 0)
+        {
+            foreach (var peer in online)
+            {
+                if (!peer.IsInGame) continue;
+                peer.Session.Protocol.World.PublishUpdateBlocks(updates);
+            }
+        }
+
+        PickupFloorDrops(clock, online);
     }
 
-    private void ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit, GameClock clock)
+    /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
+    private bool ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit, GameClock clock)
     {
         if (!edit.IsInWorldBounds())
-            return;
+            return false;
 
         if (!IsWithinReach(player, edit.X, edit.Y, edit.Z))
-            return;
+            return false;
 
         var creative = player.GameMode == GameMode.Creative;
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
             if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
-                return;
+                return false;
 
             if (!creative)
             {
                 var slot = edit.HotbarSlot;
                 if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
-                    return;
+                    return false;
                 inventoryChanged = true;
             }
         }
@@ -60,7 +75,7 @@ sealed class BlockSystem : IGameSystem
         {
             var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
             if (previous == World.World.AirRuntimeId)
-                return;
+                return false;
 
             if (!creative)
             {
@@ -73,7 +88,7 @@ sealed class BlockSystem : IGameSystem
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break rejected (no/wrong start_break) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                        return;
+                        return false;
                     }
 
                     var elapsed = clock.CurrentTick >= player.BreakStartedTick
@@ -83,7 +98,7 @@ sealed class BlockSystem : IGameSystem
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
-                        return;
+                        return false;
                     }
                 }
             }
@@ -146,20 +161,16 @@ sealed class BlockSystem : IGameSystem
             _world.PersistInventory(player.Uuid, player.Inventory);
         }
 
-        foreach (var peer in _players.Online)
-        {
-            if (!peer.IsInGame) continue;
-            peer.Session.Protocol.World.SendUpdateBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
-        }
+        return true;
     }
 
-    private void PickupFloorDrops(GameClock clock)
+    private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
         const float reachSq = 1.5f * 1.5f;
         foreach (var (pos, runtimeId, count) in _world.FloorDrops.Snapshot())
         {
-            foreach (var player in _players.Online)
+            foreach (var player in online)
             {
                 if (!player.IsInGame) continue;
                 var dx = player.PositionX - (pos.X + 0.5f);

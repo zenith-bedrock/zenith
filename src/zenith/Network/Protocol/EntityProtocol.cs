@@ -3,6 +3,18 @@ using Zenith.Network.Session;
 
 namespace Zenith.Network.Protocol;
 
+/// <summary>Pose for batched MoveActorAbsolute (Gameplay fills; Protocol serializes).</summary>
+readonly struct AbsoluteActorPose
+{
+    public ulong ActorRuntimeId { get; init; }
+    public float X { get; init; }
+    public float Y { get; init; }
+    public float Z { get; init; }
+    public float Pitch { get; init; }
+    public float Yaw { get; init; }
+    public float HeadYaw { get; init; }
+}
+
 /// <summary>Transmite intenções de entidade. Sem lógica de gameplay.</summary>
 sealed class EntityProtocol
 {
@@ -20,7 +32,40 @@ sealed class EntityProtocol
         float headYaw,
         byte flags = 0)
     {
-        _session.SendDataPacket(new MoveActorAbsolutePacket
+        _session.SendDataPacket(CreateMoveAbsolute(actorRuntimeId, x, y, z, pitch, yaw, headYaw, flags));
+    }
+
+    /// <summary>One GamePacket envelope for N Absolute moves (ADR §44).</summary>
+    public void SendMoveAbsolutes(IReadOnlyList<AbsoluteActorPose> poses)
+    {
+        if (poses.Count == 0) return;
+        if (poses.Count == 1)
+        {
+            var p = poses[0];
+            SendMoveAbsolute(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw);
+            return;
+        }
+
+        var packets = new DataPacket[poses.Count];
+        for (var i = 0; i < poses.Count; i++)
+        {
+            var p = poses[i];
+            packets[i] = CreateMoveAbsolute(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw);
+        }
+
+        _session.SendDataPacket(packets);
+    }
+
+    private static MoveActorAbsolutePacket CreateMoveAbsolute(
+        ulong actorRuntimeId,
+        float x,
+        float y,
+        float z,
+        float pitch,
+        float yaw,
+        float headYaw,
+        byte flags = 0) =>
+        new()
         {
             ActorRuntimeId = actorRuntimeId,
             Flags = flags,
@@ -30,8 +75,7 @@ sealed class EntityProtocol
             Pitch = pitch,
             Yaw = yaw,
             HeadYaw = headYaw
-        });
-    }
+        };
 
     /// <summary>Local camera snap — MovePlayer Teleport (ADR §41). Not for peers.</summary>
     public void SendMovePlayerTeleport(

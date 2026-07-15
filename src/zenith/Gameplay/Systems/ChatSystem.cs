@@ -17,11 +17,12 @@ sealed class ChatSystem : IGameSystem
         _ = clock;
         if (_players.Count == 0) return;
 
-        foreach (var player in _players.Online)
+        var online = _players.Online;
+        foreach (var player in online)
         {
             if (!player.TryConsumeChat(out var message)) continue;
 
-            foreach (var peer in _players.Online)
+            foreach (var peer in online)
             {
                 if (!peer.IsInGame) continue;
                 peer.Session.Protocol.Chat.SendChat(player.Username, message);

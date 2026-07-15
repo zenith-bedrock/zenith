@@ -81,8 +81,14 @@ sealed class World
         {
             bas = existing;
         }
+        else if (existing is null)
+        {
+            // ADR §45: miss → in-memory flat only (do not materialize identical c:x:z blobs).
+            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, _flatSubChunkCount, _flatOverworldPayload);
+        }
         else
         {
+            // Legacy empty/corrupt c: — regenerate flat and Put so disk self-heals.
             bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, _flatSubChunkCount, _flatOverworldPayload);
             await _storage.PutAsync(bas, ct).ConfigureAwait(false);
             bas = (await _storage.GetAsync(coord, ct).ConfigureAwait(false)) ?? bas;

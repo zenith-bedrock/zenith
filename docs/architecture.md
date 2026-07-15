@@ -70,7 +70,7 @@ The network thread **must not** mutate authoritative gameplay state (final posit
 |---------|----------|
 | Base terrain | Flat overworld payloads (`ChunkPayloads`), FNV `network_id` hashes |
 | Edits | Sparse overlays in LevelDB (`ov:x:y:z`) + in-RAM map; warn-once at overlay/chest thresholds; floor SoftCap refuse (ADR §36); `UpdateBlock` to clients |
-| Columns | Optional `c:x:z` blobs in LevelDB; `IChunkStorage` is `ValueTask`-first |
+| Columns | Optional `c:x:z` — miss não materializa flat (ADR §45); legacy empty ainda migra via Put; `IChunkStorage` is `ValueTask`-first |
 | StartGame | `UseBlockNetworkIdHashes = true` so client decodes palette hashes correctly |
 
 We intentionally **do not** rewrite full subchunks on every place/break. Overlay-first matches early-scale needs and keeps PreSpawn simple: `LevelChunk` (base) then overlay `UpdateBlock`s. After spawn, `ChunkStreamSystem` fills the player's view as they move (still flat + overlays).
@@ -86,7 +86,7 @@ Do **not** add for its own sake: Scheduler, Actor model, full ECS, Job system, S
 
 **Future extension form (ADR §21):** when external extensibility opens, first surface is `EventBus.Subscribe<T>` — not public `GameLoop.Register` and not hooks on `Protocol.Send*`.
 
-Fan-out to all online players is acceptable at this stage; visibility culling is a later product need, not an architectural prerequisite.
+Fan-out to all online players is acceptable at this stage when pose is **dirty** (ADR §44); Absolute/UpdateBlock tick egress batches per peer into one GamePacket. Visibility culling is a later product need, not an architectural prerequisite.
 
 ## Related
 

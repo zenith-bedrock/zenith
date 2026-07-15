@@ -13,7 +13,11 @@ class PlayerManager
 
     public int Count => _players.Count;
 
-    public IReadOnlyCollection<Player> Online => _players.Values.ToArray();
+    /// <summary>
+    /// Snapshot of who is online (allocates). Capture once per Tick and reuse the list;
+    /// do not read <see cref="Online"/> inside a nested loop.
+    /// </summary>
+    public IReadOnlyList<Player> Online => _players.Values.ToArray();
 
     /// <summary>Próximo runtime entity id estável (sem EntityManager).</summary>
     public long AllocateRuntimeId() => Interlocked.Increment(ref _nextRuntimeId);

@@ -71,6 +71,14 @@ class Player
     public int LastReplicatedHeldRuntimeId { get; set; } = int.MinValue;
     public int LastReplicatedHeldCount { get; set; } = int.MinValue;
 
+    /// <summary>Última pose enviada a peers via MoveActorAbsolute (MovementSystem dirty-check).</summary>
+    public float LastReplicatedX { get; set; }
+    public float LastReplicatedY { get; set; }
+    public float LastReplicatedZ { get; set; }
+    public float LastReplicatedPitch { get; set; }
+    public float LastReplicatedYaw { get; set; }
+    public float LastReplicatedHeadYaw { get; set; }
+
     /// <summary>Server-authoritative break progress (AuthInput start → predict). Cleared on abort/success.</summary>
     public int BreakTargetX { get; private set; }
     public int BreakTargetY { get; private set; }

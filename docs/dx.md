@@ -58,6 +58,7 @@ Good DX is saying **no** until the yes is cheap to maintain.
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream
 5. If you need a new abstraction (Factory, ECS, Scheduler): justify against freeze list
+6. `PlayerManager.Online` allocates a snapshot — capture once per Tick (`var online = _players.Online`); do not read Online inside a nested loop
 ```
 
 Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live in [`ARCHITECTURE.md`](../ARCHITECTURE.md).

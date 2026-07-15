@@ -55,6 +55,9 @@ sealed class InMemoryChunkStorage : IChunkStorage
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), byte[]> _chests = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
 
+    /// <summary>Column Put count — tests for ADR §45 sparse flat.</summary>
+    public int PutCount { get; private set; }
+
     public ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
     {
         _chunks.TryGetValue(coord, out var column);
@@ -63,6 +66,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
 
     public ValueTask PutAsync(ChunkColumnData column, CancellationToken cancellationToken = default)
     {
+        PutCount++;
         _chunks[column.Coord] = column;
         return ValueTask.CompletedTask;
     }

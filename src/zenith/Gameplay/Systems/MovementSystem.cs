@@ -1,11 +1,12 @@
 using Zenith.Gameplay.Runtime;
+using Zenith.Network.Protocol;
 using Zenith.Player;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
 
 /// <summary>
-/// Aplica <see cref="MovementInputState"/> no tick e replica pose aos peers.
+/// Aplica <see cref="MovementInputState"/> no tick e replica pose aos peers quando dirty (ADR §44).
 /// Void soft-rescue (ADR §40): teleport to flat spawn without death/Respawn wire.
 /// </summary>
 sealed class MovementSystem : IGameSystem
@@ -14,6 +15,8 @@ sealed class MovementSystem : IGameSystem
     public const float VoidRescueMargin = 8f;
 
     private readonly PlayerManager _players;
+    private readonly List<global::Zenith.Player.Player> _dirty = new();
+    private readonly List<AbsoluteActorPose> _posesForPeer = new();
 
     public MovementSystem(PlayerManager players) => _players = players;
 
@@ -24,7 +27,10 @@ sealed class MovementSystem : IGameSystem
         _ = clock;
         if (_players.Count == 0) return;
 
-        foreach (var player in _players.Online)
+        var online = _players.Online;
+        _dirty.Clear();
+
+        foreach (var player in online)
         {
             if (!player.TryConsumeMovementInput(out var input)) continue;
 
@@ -38,16 +44,63 @@ sealed class MovementSystem : IGameSystem
             if (player.PositionY < VoidRescueY)
                 SoftRescueFromVoid(player);
 
-            ReplicateToPeers(player);
+            if (!IsPoseDirty(player))
+                continue;
+
+            _dirty.Add(player);
         }
+
+        if (_dirty.Count == 0) return;
+
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame) continue;
+
+            _posesForPeer.Clear();
+            foreach (var mover in _dirty)
+            {
+                if (ReferenceEquals(mover, peer)) continue;
+                _posesForPeer.Add(new AbsoluteActorPose
+                {
+                    ActorRuntimeId = (ulong)mover.RuntimeId,
+                    X = mover.PositionX,
+                    Y = mover.PositionY,
+                    Z = mover.PositionZ,
+                    Pitch = mover.Pitch,
+                    Yaw = mover.Yaw,
+                    HeadYaw = mover.HeadYaw
+                });
+            }
+
+            peer.Session.Protocol.Entity.SendMoveAbsolutes(_posesForPeer);
+        }
+
+        foreach (var mover in _dirty)
+            RememberReplicatedPose(mover);
+    }
+
+    private static bool IsPoseDirty(global::Zenith.Player.Player player) =>
+        player.PositionX != player.LastReplicatedX ||
+        player.PositionY != player.LastReplicatedY ||
+        player.PositionZ != player.LastReplicatedZ ||
+        player.Pitch != player.LastReplicatedPitch ||
+        player.Yaw != player.LastReplicatedYaw ||
+        player.HeadYaw != player.LastReplicatedHeadYaw;
+
+    private static void RememberReplicatedPose(global::Zenith.Player.Player player)
+    {
+        player.LastReplicatedX = player.PositionX;
+        player.LastReplicatedY = player.PositionY;
+        player.LastReplicatedZ = player.PositionZ;
+        player.LastReplicatedPitch = player.Pitch;
+        player.LastReplicatedYaw = player.Yaw;
+        player.LastReplicatedHeadYaw = player.HeadYaw;
     }
 
     private static void SoftRescueFromVoid(global::Zenith.Player.Player player)
     {
         player.PositionY = Blocks.FlatSpawnY;
         player.Pitch = 0;
-        // Keep XZ — land on flat at same column when possible.
-        // Local camera needs MovePlayer Teleport; Absolute alone does not snap own client (ADR §41).
         player.Session.Protocol.Entity.SendMovePlayerTeleport(
             entityRuntimeId: (ulong)player.RuntimeId,
             x: player.PositionX,
@@ -56,24 +109,5 @@ sealed class MovementSystem : IGameSystem
             pitch: player.Pitch,
             yaw: player.Yaw,
             headYaw: player.HeadYaw);
-    }
-
-    private void ReplicateToPeers(global::Zenith.Player.Player mover)
-    {
-        if (_players.Count < 2) return;
-
-        foreach (var peer in _players.Online)
-        {
-            if (ReferenceEquals(peer, mover) || !peer.IsInGame) continue;
-
-            peer.Session.Protocol.Entity.SendMoveAbsolute(
-                actorRuntimeId: (ulong)mover.RuntimeId,
-                x: mover.PositionX,
-                y: mover.PositionY,
-                z: mover.PositionZ,
-                pitch: mover.Pitch,
-                yaw: mover.Yaw,
-                headYaw: mover.HeadYaw);
-        }
     }
 }

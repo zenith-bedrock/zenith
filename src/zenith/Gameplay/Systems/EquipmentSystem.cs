@@ -18,7 +18,8 @@ sealed class EquipmentSystem : IGameSystem
         _ = clock;
         if (_players.Count == 0) return;
 
-        foreach (var player in _players.Online)
+        var online = _players.Online;
+        foreach (var player in online)
         {
             if (!player.IsInGame) continue;
 
@@ -39,10 +40,10 @@ sealed class EquipmentSystem : IGameSystem
             player.LastReplicatedHeldRuntimeId = runtimeId;
             player.LastReplicatedHeldCount = count;
 
-            if (_players.Count < 2) continue;
+            if (online.Count < 2) continue;
 
             var wire = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, slot);
-            foreach (var peer in _players.Online)
+            foreach (var peer in online)
             {
                 if (ReferenceEquals(peer, player) || !peer.IsInGame) continue;
                 peer.Session.Protocol.Entity.SendMobEquipment(
