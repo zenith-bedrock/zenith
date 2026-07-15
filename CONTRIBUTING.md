@@ -6,8 +6,9 @@ Thanks for helping. Zenith is early alpha — small, reviewable PRs beat large �
 
 1. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) (constraints) and [`docs/architecture.md`](docs/architecture.md).
 2. Skim [`AGENTS.md`](AGENTS.md) for folder layout (`Packets` / `Protocol` / `Session` — **do not recreate `Network/`**).
-3. Check [`docs/decisions.md`](docs/decisions.md). New layers or freeze-list items need an ADR **first**.
-4. Prefer the leaf that owns the bug (`src/raknet`, `libs/nbt`, `libs/leveldb`) when possible.
+3. Check [`docs/roadmap.md`](docs/roadmap.md) for **which horizon** your idea belongs to (alpha gate vs after-alpha leaves).
+4. Check [`docs/decisions.md`](docs/decisions.md). New layers or freeze-list items need an ADR **first**.
+5. Prefer the leaf that owns the bug (`src/raknet`, `libs/nbt`, `libs/leveldb`) when possible.
 
 Philosophy in one line: **who decides ≠ who transmits ≠ who serializes.**
 

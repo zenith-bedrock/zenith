@@ -1,3 +1,4 @@
+using Zenith.Packets;
 using Zenith.Player;
 
 namespace Zenith.Session;
@@ -69,5 +70,17 @@ static class PlayerVisibility
             subject.HeadYaw,
             held,
             gameMode: (int)subject.GameMode);
+        // ADR §44 dirty-check suppresses Absolute while pose is unchanged. New viewers only
+        // get AddPlayer until the subject moves — Bedrock often leaves the entity mid-air
+        // until the first Absolute settles. Mirror Vedrock: Absolute (on-ground) right after Add.
+        recipient.Session.Protocol.Entity.SendMoveAbsolute(
+            (ulong)subject.RuntimeId,
+            subject.PositionX,
+            subject.PositionY,
+            subject.PositionZ,
+            subject.Pitch,
+            subject.Yaw,
+            subject.HeadYaw,
+            flags: MoveActorAbsolutePacket.FLAG_ON_GROUND);
     }
 }

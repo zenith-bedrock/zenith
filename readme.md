@@ -15,6 +15,7 @@ Zenith is a modern Bedrock Edition server written in **C# / .NET**, built around
 | [AGENTS.md](AGENTS.md) | Folder layout (humans & agents) |
 | [docs/architecture.md](docs/architecture.md) | Layered system map |
 | [docs/decisions.md](docs/decisions.md) | Why we made key choices (commit-backed) |
+| [docs/roadmap.md](docs/roadmap.md) | Lean implementation horizons (not PM parity) |
 | [docs/comparison.md](docs/comparison.md) | Vs PocketMine, Nukkit, BDS, … |
 | [docs/dx.md](docs/dx.md) | Developer experience |
 | [docs/why-zenith.md](docs/why-zenith.md) | Long-term bet |

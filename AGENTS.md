@@ -22,6 +22,7 @@
 - Always-on: [`.cursor/rules/zenith-architecture.mdc`](.cursor/rules/zenith-architecture.mdc), [`.cursor/rules/folder-layout.mdc`](.cursor/rules/folder-layout.mdc)
 - Intent/tick, raknet, testing: other files under `.cursor/rules/`
 - Decisions: [`docs/decisions.md`](docs/decisions.md) — ADR **before** a new layer/abstraction
+- Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — horizon order (alpha first; no PM parity chase)
 - DX: [`docs/dx.md`](docs/dx.md)
 
 Frozen: Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` commands — unless a concrete feature forces them (record in decisions first).
