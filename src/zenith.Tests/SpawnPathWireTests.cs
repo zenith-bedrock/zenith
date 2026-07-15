@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using Xunit;
-using Zenith.Network.Packets;
-using Zenith.Network.Protocol;
+using Zenith.Packets;
+using Zenith.Protocol;
 using Zenith.World;
 
 namespace Zenith.Tests;

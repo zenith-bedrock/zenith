@@ -1,4 +1,4 @@
-using Zenith.Network.Session;
+using Zenith.Session;
 using Zenith.Player;
 
 namespace Zenith.Gameplay;

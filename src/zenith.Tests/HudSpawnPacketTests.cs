@@ -1,5 +1,5 @@
 using System.Text;
-using Zenith.Network.Packets;
+using Zenith.Packets;
 using Xunit;
 
 namespace Zenith.Tests;

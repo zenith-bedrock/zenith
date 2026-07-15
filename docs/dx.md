@@ -53,12 +53,13 @@ Good DX is saying **no** until the yes is cheap to maintain.
 ## Workflow suggestions
 
 ```text
-1. Read docs/architecture.md + ARCHITECTURE.md (+ .cursor/rules for agents)
+1. Read docs/architecture.md + ARCHITECTURE.md (+ CONTRIBUTING.md / AGENTS.md for PRs and folders)
 2. Touch the smallest leaf (`libs/nbt`, `libs/leveldb`, `src/raknet`) when possible
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream
 5. If you need a new abstraction (Factory, ECS, Scheduler): justify against freeze list
 6. `PlayerManager.Online` allocates a snapshot — capture once per Tick (`var online = _players.Online`); do not read Online inside a nested loop
+7. Folders = roles under `src/zenith/` — look in `Packets/` / `Protocol/` / `Session/`, not a revived `Network/` junk drawer
 ```
 
 Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live in [`ARCHITECTURE.md`](../ARCHITECTURE.md).

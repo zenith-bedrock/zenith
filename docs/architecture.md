@@ -27,6 +27,8 @@ This page explains the shape of Zenith. The authoritative constraint list is [`A
 
 Dependency direction is always **down**: gameplay never references `DataPacket`; packets never reference `Player`/`World`; Nbt and LevelDB have **no** references to zenith or raknet.
 
+Folders under `src/zenith/` match roles: `Gameplay/`, `World/`, `Player/`, `Server/`, `Packets/`, `Protocol/`, `Session/` (plus `Event/`, `Log/`, `data/`). Do **not** recreate a `Network/` catch-all — see Layout in [`ARCHITECTURE.md`](../ARCHITECTURE.md) and ADR §48.
+
 ## Roles
 
 | Role | Responsibility |

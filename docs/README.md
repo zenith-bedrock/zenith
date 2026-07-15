@@ -13,6 +13,8 @@ Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHI
 | [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
 | [Developer experience](dx.md) | What you get day-to-day as a contributor or extension author |
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
+| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
+| [`AGENTS.md`](../AGENTS.md) | Folder layout for humans and agents |
 
 Library-specific notes:
 

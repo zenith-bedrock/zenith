@@ -1,5 +1,5 @@
 using Zenith.Gameplay.Runtime;
-using Zenith.Network;
+using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 

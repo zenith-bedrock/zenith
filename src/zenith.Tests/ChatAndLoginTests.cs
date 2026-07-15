@@ -1,6 +1,6 @@
 using Xunit;
-using Zenith.Network.Protocol;
-using Zenith.Network.Session;
+using Zenith.Protocol;
+using Zenith.Session;
 
 namespace Zenith.Tests;
 
@@ -59,7 +59,7 @@ public class ChatProtocolTests
     public void CreateChatPacket_sets_chat_type_and_fields()
     {
         var packet = ChatProtocol.CreateChatPacket("Alex", "hello");
-        Assert.Equal(Zenith.Network.Packets.TextPacket.TypeChat, packet.Type);
+        Assert.Equal(Zenith.Packets.TextPacket.TypeChat, packet.Type);
         Assert.Equal("Alex", packet.SourceName);
         Assert.Equal("hello", packet.Message);
         Assert.False(packet.NeedsTranslation);
@@ -74,9 +74,9 @@ public class ChatProtocolTests
 
         var stream = new Zenith.Raknet.Stream.BinaryStream(encoded);
         var header = stream.ReadUnsignedVarInt();
-        Assert.Equal((int)Zenith.Network.Packets.ProtocolInfo.TEXT_PACKET, header);
+        Assert.Equal((int)Zenith.Packets.ProtocolInfo.TEXT_PACKET, header);
 
-        var decoded = new Zenith.Network.Packets.TextPacket();
+        var decoded = new Zenith.Packets.TextPacket();
         decoded.Decode(ref stream);
 
         Assert.Equal(original.Type, decoded.Type);

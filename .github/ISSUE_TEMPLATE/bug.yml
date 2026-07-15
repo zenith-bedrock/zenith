@@ -1,0 +1,63 @@
+name: Bug
+description: Something broken or incorrect behaviour
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. For join/login failures, paste **server log lines** around the failure (not only “it didn’t connect”).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Actual vs expected behaviour.
+      placeholder: e.g. Mobile client stuck before spawn; desktop works on the same build.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Client / server version
+      description: Bedrock client version and Zenith commit/tag if known.
+      placeholder: "Client 1.26.33 · Zenith develop @ abc1234"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Client platform
+      options:
+        - Windows
+        - Android
+        - iOS
+        - Other / mixed
+        - N/A (not client-facing)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / evidence
+      description: Server stdout, stack traces, MOTD counts — trim noise but keep the first error and ~20 lines of context.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked existing issues / decisions for a known deferred item
+          required: false
+        - label: This is not a request for `/` commands, plugins, or a freeze-list framework (those need an ADR)
+          required: false

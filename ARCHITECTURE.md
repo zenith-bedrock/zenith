@@ -84,11 +84,18 @@ src/
     Gameplay/
       Runtime/     # GameLoop, GameClock, IGameSystem
       Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
-    World/         # IChunkStorage, World, BlockPalette (gzip→LE NBT)
-    Network/
+    World/         # IChunkStorage, World, Blocks, palettes, chests, floor drops
+    Player/        # Player, intents, inventory, manager
+    Server/        # ZenithServer, ServerContext, config, identity
+    Event/ Log/
+    Packets/       # DataPacket + ProtocolInfo — serialize only (sem Server/World)
+    Protocol/      # *Protocol, ProtocolGate, ColumnSend — transmit
+    Session/       # NetworkSession, handlers, ZenithSessionListener, PlayerVisibility
     data/          # block_palette.nbt, item_palette.json, creative_items.json (EmbeddedResource)
   raknet/
 ```
+
+Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Network/`.
 
 ## Notas deste estágio
 

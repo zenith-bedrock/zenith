@@ -1,4 +1,4 @@
-using Zenith.Network.Protocol;
+using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
