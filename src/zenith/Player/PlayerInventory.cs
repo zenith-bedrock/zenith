@@ -1,3 +1,4 @@
+using Zenith.Player;
 using Zenith.World;
 
 namespace Zenith.Player;
@@ -228,6 +229,19 @@ sealed class PlayerInventory
         Array.Copy(_slots, all, FullInventorySize);
         return all;
     }
+
+    /// <summary>Restore 36 main slots from packed blob; clears cursor (ADR §39).</summary>
+    public bool TryLoadMainFromBlob(ReadOnlySpan<byte> data)
+    {
+        Span<InventorySlot> slots = stackalloc InventorySlot[FullInventorySize];
+        if (!SlotBlob.TryUnpack(data, slots))
+            return false;
+        slots.CopyTo(_slots);
+        _cursor = InventorySlot.Empty;
+        return true;
+    }
+
+    public byte[] PackMainBlob() => SlotBlob.Pack(_slots);
 
     private void SetLocation(int slot, InventorySlot value)
     {

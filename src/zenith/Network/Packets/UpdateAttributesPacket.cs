@@ -13,8 +13,8 @@ readonly record struct AttributeEntry(
     float Default);
 
 /// <summary>
-/// UpdateAttributes (0x1d) — frozen default attribute seed at spawn (ADR §34).
-/// Constants only; no Player vitals domain / VitalsSystem.
+/// UpdateAttributes (0x1d) — spawn HUD attributes (ADR §34 / §40).
+/// Health/hunger values come from domain; remaining attrs still constant seed.
 /// </summary>
 sealed class UpdateAttributesPacket : DataPacket
 {
@@ -24,17 +24,21 @@ sealed class UpdateAttributesPacket : DataPacket
     public AttributeEntry[] Attributes { get; set; } = [];
     public ulong Tick { get; set; }
 
-    /// <summary>Vedrock-parity frozen defaults (not authoritative gameplay).</summary>
+    /// <summary>Back-compat: full defaults at 20/20.</summary>
     public static UpdateAttributesPacket CreateFrozenDefaults(ulong actorRuntimeId) =>
+        CreateDefaults(actorRuntimeId, health: 20f, hunger: 20f);
+
+    /// <summary>Spawn/update attributes using Player vitals (ADR §40).</summary>
+    public static UpdateAttributesPacket CreateDefaults(ulong actorRuntimeId, float health, float hunger) =>
         new()
         {
             ActorRuntimeId = actorRuntimeId,
             Tick = 0,
             Attributes =
             [
-                Entry("minecraft:health", 0f, 20f, 20f),
+                Entry("minecraft:health", 0f, 20f, health),
                 Entry("minecraft:movement", 0f, float.MaxValue, 0.1f),
-                Entry("minecraft:player.hunger", 0f, 20f, 20f),
+                Entry("minecraft:player.hunger", 0f, 20f, hunger),
                 Entry("minecraft:player.saturation", 0f, 20f, 20f),
                 Entry("minecraft:player.exhaustion", 0f, 5f, 0f),
                 Entry("minecraft:player.level", 0f, 24791f, 0f),

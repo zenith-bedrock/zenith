@@ -98,6 +98,7 @@ sealed class BlockSystem : IGameSystem
                     player.OpenChest = null;
 
                 var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
+                _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
                 if (!creative)
                 {
                     foreach (var (rid, count) in dumped)
@@ -128,10 +129,16 @@ sealed class BlockSystem : IGameSystem
         _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
 
         if (edit.BlockRuntimeId == Blocks.Chest)
+        {
             _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
+            _world.PersistChest(edit.X, edit.Y, edit.Z);
+        }
 
         if (inventoryChanged)
+        {
             player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+            _world.PersistInventory(player.Uuid, player.Inventory);
+        }
 
         foreach (var peer in _players.Online)
         {

@@ -22,12 +22,11 @@ public class HudSpawnPacketTests
     }
 
     [Fact]
-    public void UpdateAttributes_frozen_defaults_encode_health_and_hunger()
+    public void UpdateAttributes_defaults_use_health_and_hunger_args()
     {
-        var packet = UpdateAttributesPacket.CreateFrozenDefaults(2);
-        Assert.True(packet.Attributes.Length >= 2);
-        Assert.Contains(packet.Attributes, a => a.Name == "minecraft:health");
-        Assert.Contains(packet.Attributes, a => a.Name == "minecraft:player.hunger");
+        var packet = UpdateAttributesPacket.CreateDefaults(2, health: 15f, hunger: 10f);
+        Assert.Contains(packet.Attributes, a => a.Name == "minecraft:health" && a.Value == 15f);
+        Assert.Contains(packet.Attributes, a => a.Name == "minecraft:player.hunger" && a.Value == 10f);
 
         var bytes = packet.Encode().ToArray();
         Assert.True(bytes.Length > 32);

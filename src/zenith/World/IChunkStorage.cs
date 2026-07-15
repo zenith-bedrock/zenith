@@ -24,7 +24,7 @@ sealed class ChunkColumnData
 
 /// <summary>
 /// Seam de storage. <see cref="ValueTask"/> desde o dia 1.
-/// Overlay esparso (<c>ov:</c>) é o formato permanente de edição — coluna = só terreno base.
+/// Overlay esparso (<c>ov:</c>) + chests (<c>ct:</c>) + inventário (<c>inv:</c>) — ADR §39.
 /// </summary>
 interface IChunkStorage
 {
@@ -33,15 +33,24 @@ interface IChunkStorage
 
     ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default);
     ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default);
+
+    ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default);
+    ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default);
+    ValueTask ForEachChestAsync(Action<int, int, int, byte[]> visitor, CancellationToken cancellationToken = default);
+
+    ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
+    ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// Cache thread-safe; chunks tratados como imutáveis após Put.
-/// Overlay em memória só no <see cref="World"/> (InMemory não persiste <c>ov:</c>).
+/// Overlay/chest/inv em RAM para testes (ADR §39).
 /// </summary>
 sealed class InMemoryChunkStorage : IChunkStorage
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, ChunkColumnData> _chunks = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), byte[]> _chests = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
 
     public ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
     {
@@ -60,4 +69,35 @@ sealed class InMemoryChunkStorage : IChunkStorage
 
     public ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default) =>
         ValueTask.CompletedTask;
+
+    public ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _chests[(x, y, z)] = blob;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default)
+    {
+        _chests.TryRemove((x, y, z), out _);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ForEachChestAsync(Action<int, int, int, byte[]> visitor, CancellationToken cancellationToken = default)
+    {
+        foreach (var (key, blob) in _chests)
+            visitor(key.X, key.Y, key.Z, blob);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _inventories[uuid] = blob;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        _inventories.TryGetValue(uuid, out var blob);
+        return ValueTask.FromResult<byte[]?>(blob);
+    }
 }

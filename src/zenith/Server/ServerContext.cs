@@ -22,6 +22,7 @@ class ServerContext
     public BlockPalette BlockPalette { get; }
     public ItemPalette ItemPalette { get; }
     public RecipeRegistry Recipes { get; }
+    public CreativeCatalog Creative { get; }
 
     public ServerContext(
         ILogger logger,
@@ -32,7 +33,8 @@ class ServerContext
         ServerConfig config,
         BlockPalette blockPalette,
         ItemPalette itemPalette,
-        RecipeRegistry recipes)
+        RecipeRegistry recipes,
+        CreativeCatalog creative)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -43,5 +45,6 @@ class ServerContext
         BlockPalette = blockPalette;
         ItemPalette = itemPalette;
         Recipes = recipes;
+        Creative = creative;
     }
 }

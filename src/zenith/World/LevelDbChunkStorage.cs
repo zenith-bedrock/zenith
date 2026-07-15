@@ -12,6 +12,7 @@ namespace Zenith.World;
 sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 {
     private static readonly byte[] OverlayPrefix = Encoding.UTF8.GetBytes("ov:");
+    private static readonly byte[] ChestPrefix = Encoding.UTF8.GetBytes("ct:");
 
     private readonly DB _db;
     private readonly object _gate = new();
@@ -119,6 +120,94 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         }, cancellationToken));
     }
 
+    public ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                _db.Put(ChestKey(x, y, z), blob);
+            }
+        }, cancellationToken));
+    }
+
+    public ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                _db.Delete(ChestKey(x, y, z));
+            }
+        }, cancellationToken));
+    }
+
+    public ValueTask ForEachChestAsync(Action<int, int, int, byte[]> visitor, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                using var it = _db.CreateIterator();
+                it.Seek(ChestPrefix);
+                while (it.IsValid())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var keyBytes = it.Key();
+                    if (keyBytes is null || keyBytes.Length < ChestPrefix.Length)
+                        break;
+                    if (!StartsWith(keyBytes, ChestPrefix))
+                        break;
+
+                    var key = Encoding.UTF8.GetString(keyBytes);
+                    if (!TryParseChestKey(key, out var x, out var y, out var z))
+                    {
+                        it.Next();
+                        continue;
+                    }
+
+                    var value = it.Value();
+                    if (value is not null && value.Length > 0)
+                        visitor(x, y, z, value);
+
+                    it.Next();
+                }
+            }
+        }, cancellationToken));
+    }
+
+    public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                _db.Put(InventoryKey(uuid), blob);
+            }
+        }, cancellationToken));
+    }
+
+    public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<byte[]?>(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                return _db.Get(InventoryKey(uuid));
+            }
+        }, cancellationToken));
+    }
+
     private void OverlayWorkerLoop()
     {
         while (!_stopping)
@@ -149,10 +238,25 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     private static byte[] OverlayKey(int x, int y, int z) =>
         Encoding.UTF8.GetBytes($"ov:{x}:{y}:{z}");
 
+    private static byte[] ChestKey(int x, int y, int z) =>
+        Encoding.UTF8.GetBytes($"ct:{x}:{y}:{z}");
+
+    private static byte[] InventoryKey(Guid uuid) =>
+        Encoding.UTF8.GetBytes($"inv:{uuid.ToString("D").ToLowerInvariant()}");
+
     private static bool TryParseOverlayKey(string key, out int x, out int y, out int z)
     {
         x = y = z = 0;
         if (!key.StartsWith("ov:", StringComparison.Ordinal)) return false;
+        var parts = key.AsSpan(3).ToString().Split(':');
+        if (parts.Length != 3) return false;
+        return int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y) && int.TryParse(parts[2], out z);
+    }
+
+    private static bool TryParseChestKey(string key, out int x, out int y, out int z)
+    {
+        x = y = z = 0;
+        if (!key.StartsWith("ct:", StringComparison.Ordinal)) return false;
         var parts = key.AsSpan(3).ToString().Split(':');
         if (parts.Length != 3) return false;
         return int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y) && int.TryParse(parts[2], out z);

@@ -40,17 +40,35 @@ readonly struct InventoryStackIntent
     /// <summary>Quando set, InventorySystem aplica craft (Actions vazio/ignorado).</summary>
     public uint? CraftRecipeNetId { get; init; }
 
+    /// <summary>Quando set, InventorySystem aplica CraftCreative (Actions ignorado).</summary>
+    public uint? CraftCreativeNetId { get; init; }
+
+    public byte CraftCreativeTimes { get; init; }
+
     public static InventoryStackIntent Create(int requestId, InventoryStackAction[] actions) => new()
     {
         RequestId = requestId,
         Actions = actions,
-        CraftRecipeNetId = null
+        CraftRecipeNetId = null,
+        CraftCreativeNetId = null,
+        CraftCreativeTimes = 0
     };
 
     public static InventoryStackIntent CreateCraft(int requestId, uint recipeNetId) => new()
     {
         RequestId = requestId,
         Actions = [],
-        CraftRecipeNetId = recipeNetId
+        CraftRecipeNetId = recipeNetId,
+        CraftCreativeNetId = null,
+        CraftCreativeTimes = 0
+    };
+
+    public static InventoryStackIntent CreateCraftCreative(int requestId, uint creativeNetId, byte times) => new()
+    {
+        RequestId = requestId,
+        Actions = [],
+        CraftRecipeNetId = null,
+        CraftCreativeNetId = creativeNetId,
+        CraftCreativeTimes = times
     };
 }

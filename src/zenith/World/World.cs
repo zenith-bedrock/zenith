@@ -35,6 +35,29 @@ sealed class World
             .AsTask()
             .GetAwaiter()
             .GetResult();
+        storage.ForEachChestAsync((x, y, z, blob) => Chests.TryLoadFromBlob(x, y, z, blob))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    public void PersistChest(int x, int y, int z)
+    {
+        var blob = Chests.PackBlob(x, y, z);
+        if (blob is null) return;
+        _ = _storage.PutChestAsync(x, y, z, blob);
+    }
+
+    public void DeletePersistedChest(int x, int y, int z) =>
+        _ = _storage.DeleteChestAsync(x, y, z);
+
+    public void PersistInventory(Guid uuid, Player.PlayerInventory inventory) =>
+        _ = _storage.PutInventoryAsync(uuid, inventory.PackMainBlob());
+
+    public bool TryLoadInventory(Guid uuid, Player.PlayerInventory inventory)
+    {
+        var blob = _storage.GetInventoryAsync(uuid).AsTask().GetAwaiter().GetResult();
+        return blob is not null && inventory.TryLoadMainFromBlob(blob);
     }
 
     /// <summary>

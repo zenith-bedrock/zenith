@@ -98,6 +98,8 @@ class NetworkSession
             if (Player.IsInGame)
                 PlayerVisibility.AnnounceLeave(Player, Context.PlayerManager.Online);
 
+            Context.World.PersistInventory(Player.Uuid, Player.Inventory);
+
             Player.IsInGame = false;
             Context.PlayerManager.Remove(Player);
             Context.EventBus.Publish(new PlayerQuitEvent(Player));

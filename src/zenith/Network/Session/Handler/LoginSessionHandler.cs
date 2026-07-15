@@ -80,6 +80,7 @@ class LoginSessionHandler : ISessionHandler
         }
 
         session.Player = player;
+        _ = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 
         session.Protocol.Login.SendLoginSuccess();

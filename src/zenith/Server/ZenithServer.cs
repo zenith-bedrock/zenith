@@ -65,11 +65,12 @@ class ZenithServer
         IChunkStorage storage = CreateChunkStorage(config, logger);
         var world = new World.World(storage, logger);
         var recipes = RecipeRegistry.CreateDefault();
+        var creative = CreativeCatalog.CreateDefault();
         gameLoop.Register(new BlockSystem(players, world));
-        gameLoop.Register(new InventorySystem(players, world, recipes));
+        gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes);
+        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes, creative);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(config.Server.Port)

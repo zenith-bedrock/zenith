@@ -328,7 +328,31 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
 
-**Deferred / next honesty:** CraftCreative / place-from-creative-palette; Vitals; inv/chest persist; drop-entity §32; `/gamemode`.
+**Deferred / next honesty:** drop-entity §32; `/gamemode`; death/Respawn.
+
+### 38. CraftCreative from CreativeCatalog SSOT
+
+**Choice:** `CreativeCatalog` on `ServerContext` (net ids 1–7 matching former CreateStarter). Protocol `BuildCreativeContent` from catalog — no second item list in Packets. ISR `CraftCreative` supported → intent → `TryAdd` (Creative mode only; `times` capped at MaxStack). Recipe+Creative in one request rejected.
+
+**Why:** Creative fly (§37) without palette→inventory left place dead. Same spine as CraftRecipe.
+
+**Deferred:** full `creative_items.json` / `block_state_b64`.
+
+### 39. Inventory + chest LevelDB persist (`ct:` / `inv:`)
+
+**Choice:** Same world LevelDB as `c:`/`ov:`. Keys `ct:x:y:z` and `inv:{uuid:D}` with `SlotBlob` version=1 (i32 runtimeId+count pairs). Fire-and-forget Puts; World hydrates chests at boot; login `TryLoadInventory` before first content; quit enqueues Put. InMemory storage keeps ct/inv dicts for tests. No `players/` volume (§20).
+
+**Why:** Process restart was wiping bags/chests — ops honesty without Mojang playerdata.
+
+**Deferred:** Ender chest, armor, posição DB, double-chest; `players/` volume.
+
+### 40. Vitals fields + void soft-rescue
+
+**Choice:** `Player.Health`/`Hunger` (20/20) drive `UpdateAttributes` at spawn. Void: if `Y < FlatMinY - 8`, clamp Y to `FlatSpawnY` and send self `MoveActorAbsolute` — **no** Health=0 / Respawn handshake (softlock risk). Check lives in `MovementSystem` (Rule 7 — no decorative VitalsSystem).
+
+**Why:** Attributes literals lied about domain; falling forever was worse than thin vitals. Death wire deferred until respawn protocol is intentional.
+
+**Deferred:** hunger tick, food, fall damage, drowning, death/Respawn packets.
 
 ### OpenInventory / chest UI (note under §28)
 

@@ -87,4 +87,21 @@ sealed class ChestStore
         Ensure(x, y, z);
         Array.Copy(snapshot, _chests[(x, y, z)], Size);
     }
+
+    public byte[]? PackBlob(int x, int y, int z)
+    {
+        if (!_chests.TryGetValue((x, y, z), out var slots))
+            return null;
+        return SlotBlob.Pack(slots);
+    }
+
+    public bool TryLoadFromBlob(int x, int y, int z, ReadOnlySpan<byte> data)
+    {
+        Span<InventorySlot> slots = stackalloc InventorySlot[Size];
+        if (!SlotBlob.TryUnpack(data, slots))
+            return false;
+        Ensure(x, y, z);
+        slots.CopyTo(_chests[(x, y, z)]);
+        return true;
+    }
 }

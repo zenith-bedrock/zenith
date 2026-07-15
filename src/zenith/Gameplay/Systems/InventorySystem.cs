@@ -15,12 +15,14 @@ sealed class InventorySystem : IGameSystem
     private readonly PlayerManager _players;
     private readonly World.World _world;
     private readonly RecipeRegistry _recipes;
+    private readonly CreativeCatalog _creative;
 
-    public InventorySystem(PlayerManager players, World.World world, RecipeRegistry recipes)
+    public InventorySystem(PlayerManager players, World.World world, RecipeRegistry recipes, CreativeCatalog creative)
     {
         _players = players;
         _world = world;
         _recipes = recipes;
+        _creative = creative;
     }
 
     public void Tick(GameClock clock)
@@ -39,6 +41,30 @@ sealed class InventorySystem : IGameSystem
     {
         var protocol = player.Session.Protocol.Inventory;
 
+        if (intent.CraftCreativeNetId is { } creativeId)
+        {
+            if (!_creative.TryGet(creativeId, out var runtimeId, out var baseCount) ||
+                intent.CraftCreativeTimes == 0)
+            {
+                protocol.SendItemStackResponseError(intent.RequestId);
+                protocol.SendInventoryContent(player.Inventory);
+                return;
+            }
+
+            var count = Math.Min(PlayerInventory.MaxStack, baseCount * intent.CraftCreativeTimes);
+            if (!player.Inventory.TryAdd(runtimeId, count))
+            {
+                protocol.SendItemStackResponseError(intent.RequestId);
+                protocol.SendInventoryContent(player.Inventory);
+                return;
+            }
+
+            protocol.SendItemStackResponseOk(intent.RequestId, player, []);
+            protocol.SendInventoryContent(player.Inventory);
+            _world.PersistInventory(player.Uuid, player.Inventory);
+            return;
+        }
+
         if (intent.CraftRecipeNetId is { } recipeId)
         {
             if (!_recipes.TryCraft(player.Inventory, recipeId))
@@ -50,6 +76,7 @@ sealed class InventorySystem : IGameSystem
 
             protocol.SendItemStackResponseOk(intent.RequestId, player, []);
             protocol.SendInventoryContent(player.Inventory);
+            _world.PersistInventory(player.Uuid, player.Inventory);
             return;
         }
 
@@ -105,6 +132,9 @@ sealed class InventorySystem : IGameSystem
         }
 
         protocol.SendItemStackResponseOk(intent.RequestId, player, touched);
+        _world.PersistInventory(player.Uuid, inventory);
+        if (chestPos is { } openChest)
+            _world.PersistChest(openChest.X, openChest.Y, openChest.Z);
     }
 
     private InventorySlot GetSlot(global::Zenith.Player.Player player, int flat)

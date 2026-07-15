@@ -1,18 +1,23 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="MovementInputState"/> no tick e replica pose aos peers.
-/// Fan-out a todos online (exceto self) é aceitável neste estágio; VisibilitySystem futuro
-/// poderá restringir peers relevantes.
+/// Void soft-rescue (ADR §40): teleport to flat spawn without death/Respawn wire.
 /// </summary>
 sealed class MovementSystem : IGameSystem
 {
+    /// <summary>Y below FlatMinY - margin triggers soft-rescue to FlatSpawnY.</summary>
+    public const float VoidRescueMargin = 8f;
+
     private readonly PlayerManager _players;
 
     public MovementSystem(PlayerManager players) => _players = players;
+
+    public static float VoidRescueY => Blocks.FlatMinY - VoidRescueMargin;
 
     public void Tick(GameClock clock)
     {
@@ -30,8 +35,26 @@ sealed class MovementSystem : IGameSystem
             player.Yaw = input.Yaw;
             player.HeadYaw = input.Yaw;
 
+            if (player.PositionY < VoidRescueY)
+                SoftRescueFromVoid(player);
+
             ReplicateToPeers(player);
         }
+    }
+
+    private static void SoftRescueFromVoid(global::Zenith.Player.Player player)
+    {
+        player.PositionY = Blocks.FlatSpawnY;
+        player.Pitch = 0;
+        // Keep XZ — player falls back onto flat at same column when possible.
+        player.Session.Protocol.Entity.SendMoveAbsolute(
+            actorRuntimeId: (ulong)player.RuntimeId,
+            x: player.PositionX,
+            y: player.PositionY,
+            z: player.PositionZ,
+            pitch: player.Pitch,
+            yaw: player.Yaw,
+            headYaw: player.HeadYaw);
     }
 
     private void ReplicateToPeers(global::Zenith.Player.Player mover)

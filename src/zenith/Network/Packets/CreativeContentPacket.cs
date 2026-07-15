@@ -1,13 +1,11 @@
 using Zenith.Raknet.Stream;
-using Zenith.Server;
 using Zenith.World;
 
 namespace Zenith.Network.Packets;
 
 /// <summary>
 /// CreativeContent (0x91) — groups + items for creative inventory UI.
-/// Wire layout for <see cref="ServerIdentity.ProtocolVersion"/> (gophertunnel Groups + CreativeItems).
-/// V1: short starter list from ItemPalette — not creative_items.json (ADR §31).
+/// DTOs only; assembled from CreativeCatalog in Protocol (ADR §38).
 /// </summary>
 sealed class CreativeContentPacket : DataPacket
 {
@@ -18,44 +16,6 @@ sealed class CreativeContentPacket : DataPacket
 
     public CreativeGroupEntry[] Groups { get; set; } = [];
     public CreativeItemEntry[] Items { get; set; } = [];
-
-    /// <summary>Anonymous construction group + starter blocks already in Blocks/ItemPalette.</summary>
-    public static CreativeContentPacket CreateStarter(ItemPalette palette)
-    {
-        Blocks.EnsureLoaded();
-        ReadOnlySpan<(string Name, int RuntimeId)> entries =
-        [
-            ("minecraft:stone", Blocks.Stone),
-            ("minecraft:grass_block", Blocks.GrassBlock),
-            ("minecraft:dirt", Blocks.Dirt),
-            ("minecraft:oak_planks", Blocks.OakPlanks),
-            ("minecraft:oak_log", Blocks.OakLog),
-            ("minecraft:sand", Blocks.Sand),
-            ("minecraft:chest", Blocks.Chest)
-        ];
-
-        var items = new CreativeItemEntry[entries.Length];
-        for (var i = 0; i < entries.Length; i++)
-        {
-            var (name, runtimeId) = entries[i];
-            items[i] = new CreativeItemEntry(
-                CreativeItemNetworkId: (uint)(i + 1),
-                Item: new NetworkItemStack(palette.Require(name), 1, runtimeId),
-                GroupIndex: 0);
-        }
-
-        return new CreativeContentPacket
-        {
-            Groups =
-            [
-                new CreativeGroupEntry(
-                    Category: CategoryConstruction,
-                    Name: "",
-                    Icon: NetworkItemStack.Empty)
-            ],
-            Items = items
-        };
-    }
 
     public override Span<byte> Encode()
     {

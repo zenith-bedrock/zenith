@@ -62,6 +62,10 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
+    /// <summary>Domain vitals seed (ADR §40) — spawn attributes read these; damage Deferred.</summary>
+    public float Health { get; set; } = 20f;
+    public float Hunger { get; set; } = 20f;
+
     /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
     public int LastReplicatedHotbarSlot { get; set; } = -1;
     public int LastReplicatedHeldRuntimeId { get; set; } = int.MinValue;

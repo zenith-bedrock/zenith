@@ -50,6 +50,8 @@ readonly struct DecodedStackRequestAction
     public StackRequestSlotInfo Source { get; init; }
     public StackRequestSlotInfo Destination { get; init; }
     public uint RecipeNetId { get; init; }
+    public uint CreativeNetId { get; init; }
+    public byte CraftTimes { get; init; }
     public bool Supported { get; init; }
 }
 
@@ -224,9 +226,17 @@ sealed class ItemStackRequestPacket : DataPacket
                 return Unsupported(type);
             }
             case ActionCraftCreative:
-                stream.ReadUnsignedVarInt();
-                stream.ReadByte();
-                return Unsupported(type);
+            {
+                var creativeNetId = (uint)stream.ReadUnsignedVarInt();
+                var times = stream.ReadByte();
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    CreativeNetId = creativeNetId,
+                    CraftTimes = times,
+                    Supported = true
+                };
+            }
             case ActionCraftRecipeOptional:
                 stream.ReadUnsignedVarInt();
                 stream.ReadInt(BinaryStream.Endianess.Little);

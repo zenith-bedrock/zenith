@@ -121,6 +121,8 @@ class InGameSessionHandler : ISessionHandler
             }
 
             uint? craftNetId = null;
+            uint? craftCreativeNetId = null;
+            byte craftCreativeTimes = 0;
             var baked = new List<InventoryStackAction>(request.Actions.Length);
             var mapOk = true;
             foreach (var action in request.Actions)
@@ -128,6 +130,13 @@ class InGameSessionHandler : ISessionHandler
                 if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipe)
                 {
                     craftNetId = action.RecipeNetId;
+                    continue;
+                }
+
+                if (action.ActionType == ItemStackRequestPacket.ActionCraftCreative)
+                {
+                    craftCreativeNetId = action.CreativeNetId;
+                    craftCreativeTimes = action.CraftTimes;
                     continue;
                 }
 
@@ -153,9 +162,27 @@ class InGameSessionHandler : ISessionHandler
                 continue;
             }
 
-            // MVP craft (§29): CraftRecipe com netId Zenith → intent craft (ignora moves da mesma request).
             InventoryStackIntent intent;
-            if (craftNetId is { } rid)
+            if (craftNetId is not null && craftCreativeNetId is not null)
+            {
+                RejectIsr(session, player, request.RequestId);
+                continue;
+            }
+
+            if (craftCreativeNetId is { } creativeId)
+            {
+                if (player.GameMode != GameMode.Creative ||
+                    craftCreativeTimes == 0 ||
+                    !session.Context.Creative.TryGet(creativeId, out _, out _))
+                {
+                    RejectIsr(session, player, request.RequestId);
+                    continue;
+                }
+
+                intent = InventoryStackIntent.CreateCraftCreative(
+                    request.RequestId, creativeId, craftCreativeTimes);
+            }
+            else if (craftNetId is { } rid)
             {
                 if (!session.Context.Recipes.TryGet(rid, out _, out _, out _))
                 {

@@ -108,10 +108,10 @@ sealed class EntityProtocol
         });
     }
 
-    /// <summary>Frozen health/hunger/… defaults — not domain authority (§34).</summary>
-    public void SendDefaultAttributes(ulong actorRuntimeId)
+    /// <summary>Attributes from Player vitals (ADR §40) — remaining fields still seed constants.</summary>
+    public void SendDefaultAttributes(ulong actorRuntimeId, float health, float hunger)
     {
-        _session.SendDataPacket(UpdateAttributesPacket.CreateFrozenDefaults(actorRuntimeId));
+        _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(actorRuntimeId, health, hunger));
     }
 
     /// <summary>Local UpdateAbilities seed / RequestAbility echo — runtime id = unique id (§37).</summary>

@@ -68,11 +68,12 @@ file sealed class IntentTestFixture
             new ServerConfig(),
             blockPalette,
             itemPalette,
-            RecipeRegistry.CreateDefault());
+            RecipeRegistry.CreateDefault(),
+            CreativeCatalog.CreateDefault());
     }
 
     public InventorySystem CreateInventorySystem() =>
-        new(Players, World, Context.Recipes);
+        new(Players, World, Context.Recipes, Context.Creative);
 
     public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival)
     {
@@ -109,6 +110,27 @@ public class IntentContractTests
         player.BeginBreak(x, y, z, clock.CurrentTick);
         if (need > 0)
             clock.AdvanceBy(need);
+    }
+
+    [Fact]
+    public void MovementSystem_void_soft_rescue_clamps_to_flat_spawn()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("faller");
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 3.5f,
+            y: MovementSystem.VoidRescueY - 1f,
+            z: 4.5f,
+            pitch: 10f,
+            yaw: 20f));
+
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.FlatSpawnY, player.PositionY);
+        Assert.Equal(3.5f, player.PositionX);
+        Assert.Equal(4.5f, player.PositionZ);
+        Assert.Equal(0f, player.Pitch);
+        Assert.Equal(20f, player.Health);
     }
 
     [Fact]
@@ -602,10 +624,27 @@ public class IntentContractTests
     {
         Blocks.EnsureLoaded();
         var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var packet = CreativeContentPacket.CreateStarter(palette);
+        var packet = InventoryProtocol.BuildCreativeContent(CreativeCatalog.CreateDefault(), palette);
         Assert.Equal(7, packet.Items.Length);
+        Assert.Equal(CreativeCatalog.Stone, packet.Items[0].CreativeItemNetworkId);
         Assert.Single(packet.Groups);
         Assert.True(packet.Encode().Length > 16);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_adds_stone()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creator", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+
+        Assert.True(player.SubmitInventoryStack(
+            InventoryStackIntent.CreateCraftCreative(1, CreativeCatalog.Stone, times: 1)));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Stone, player.Inventory.Get(0).RuntimeId);
+        Assert.Equal(1, player.Inventory.Get(0).Count);
     }
 
     [Fact]
