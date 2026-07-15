@@ -1,16 +1,23 @@
+using System.Threading;
 using Zenith.Player;
+using Zenith.Raknet.Log;
 
 namespace Zenith.World;
 
 /// <summary>
-/// RAM chest inventories keyed by block position (ADR §28).
-/// Persistência LevelDB fica fora deste MVP.
+/// RAM chest inventories keyed by block position (ADR §28 / §36).
+/// Persistência LevelDB fica fora deste MVP. Warn once when crossing Ensure threshold — no silent drop.
 /// </summary>
 sealed class ChestStore
 {
     public const int Size = 27;
+    internal const int WarnThreshold = 10_000;
 
     private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
+    private readonly ILogger? _logger;
+    private int _thresholdWarned;
+
+    public ChestStore(ILogger? logger = null) => _logger = logger;
 
     public int Count => _chests.Count;
 
@@ -22,6 +29,13 @@ sealed class ChestStore
         for (var i = 0; i < Size; i++)
             slots[i] = InventorySlot.Empty;
         _chests[key] = slots;
+
+        if (_chests.Count >= WarnThreshold && Interlocked.Exchange(ref _thresholdWarned, 1) == 0)
+        {
+            _logger?.Warning(
+                $"ChestStore crossed WarnThreshold ({WarnThreshold} chests in RAM). " +
+                "No refuse/eviction — LevelDB persistence redesign needed for honesty at scale.");
+        }
     }
 
     public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots) =>

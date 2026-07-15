@@ -44,7 +44,7 @@ class AddPlayerPacket : DataPacket
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
         HeldItem.WriteLegacyItemInstance(ref writer);
         writer.WriteVarInt(GameMode);
-        WriteVisibleNameMetadata(ref writer, Username);
+        EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Username);
         writer.WriteUnsignedVarInt(0); // property sync ints
         writer.WriteUnsignedVarInt(0); // property sync floats
         WriteMinimalAbilities(ref writer, (long)ActorRuntimeId);
@@ -55,51 +55,6 @@ class AddPlayerPacket : DataPacket
     }
 
     public override void Decode(ref BinaryStream stream) { }
-
-    private static void WriteVisibleNameMetadata(ref BinaryStream writer, string name)
-    {
-        long flags =
-            EntityFlag.Bit(EntityFlag.Breathing) |
-            EntityFlag.Bit(EntityFlag.CanClimb) |
-            EntityFlag.Bit(EntityFlag.HasCollision) |
-            EntityFlag.Bit(EntityFlag.AffectedByGravity) |
-            EntityFlag.Bit(EntityFlag.ShowName) |
-            EntityFlag.Bit(EntityFlag.AlwaysShowName);
-
-        writer.WriteUnsignedVarInt(8);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
-        writer.WriteUnsignedVarInt(EntityMetaType.Long);
-        writer.WriteVarLong(flags);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.ColorIndex);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
-        writer.WriteByte(0);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.Name);
-        writer.WriteUnsignedVarInt(EntityMetaType.String);
-        writer.WriteVarString(name);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.EffectColor);
-        writer.WriteUnsignedVarInt(EntityMetaType.Int);
-        writer.WriteVarInt(0);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.EffectAmbience);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
-        writer.WriteByte(0);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.Width);
-        writer.WriteUnsignedVarInt(EntityMetaType.Float);
-        writer.WriteFloat(0.6f, BinaryStream.Endianess.Little);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.Height);
-        writer.WriteUnsignedVarInt(EntityMetaType.Float);
-        writer.WriteFloat(1.8f, BinaryStream.Endianess.Little);
-
-        writer.WriteUnsignedVarInt(EntityMetaKey.AlwaysShowNameTag);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
-        writer.WriteByte(1);
-    }
 
     private static void WriteMinimalAbilities(ref BinaryStream writer, long targetUniqueId)
     {

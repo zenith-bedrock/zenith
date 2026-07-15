@@ -63,7 +63,7 @@ class ZenithServer
         logger.Info($"Item palette loaded ({itemPalette.Count} entries)");
 
         IChunkStorage storage = CreateChunkStorage(config, logger);
-        var world = new World.World(storage);
+        var world = new World.World(storage, logger);
         var recipes = RecipeRegistry.CreateDefault();
         gameLoop.Register(new BlockSystem(players, world));
         gameLoop.Register(new InventorySystem(players, world, recipes));

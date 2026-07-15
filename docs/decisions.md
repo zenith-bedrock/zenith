@@ -227,7 +227,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Drop entity wire, merge across cells, despawn timers.
 
-**Known debt:** `FloorDropStore` dict/RAM is unbounded (same pattern as `_blockOverrides` in ARCHITECTURE) — no bound, no new abstraction in this leva.
+**Known debt (updated §36):** SoftCap refuse on new cells (`2048`); merge into existing cells still allowed. Warn once at refuse. Still no entity wire.
 
 ### 27. Server-authoritative break timing
 
@@ -250,15 +250,15 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** LevelDB hydrate/Put; sneak-to-place-on-chest; double-chest; BlockActor; hopper; full creative item list / `block_state_b64`; window-scoped net-id isolation beyond protocol arrays.
 
-**Known debt:** `ChestStore` dict/RAM is unbounded (same pattern as `_blockOverrides` in ARCHITECTURE) — no bound, no new abstraction in this leva.
+**Known debt (updated §36):** Warn once when Ensure count crosses `10_000` — still no refuse/eviction (needs LevelDB redesign).
 
-### 29. Crafting 2×2 — RecipeRegistry MVP (no CraftingData yet)
+### 29. Crafting 2×2 — RecipeRegistry MVP (wire completed in §35)
 
 **Choice:** `RecipeRegistry` on `ServerContext` (`CreateDefault`: 1 oak_log → 4 oak_planks; 8 oak_planks → 1 chest; shapeless exact `TryMatch`). Static Zenith recipe net ids `1`/`2`. ISR `CraftRecipe` supported (unsigned varint netId + times); `CraftResultsDeprecated` skip = supported no-op. Handler submits `InventoryStackIntent.CreateCraft` when netId known → tick `TryCraft` (consume + `TryAdd`, snapshot rollback).
 
-**Why:** Wire vanilla recipe ids require `CraftingDataPacket` to remint; shipping registry + tick path proves gameplay without stalling on Mojang recipe book ids. Client 2×2 with empty CraftingData will not hit our net ids until that packet lands.
+**Why:** Wire vanilla recipe ids require `CraftingDataPacket` to remint; shipping registry + tick path first proved gameplay without stalling on Mojang recipe book ids. Remint landed in §35.
 
-**Deferred:** `CraftingDataPacket` / recipe book sync; full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags.
+**Deferred (original):** full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags. (`CraftingDataPacket` → §35.)
 
 ### 30. CreativeContent after this spine (conscious yes) — superseded by §31
 
@@ -293,6 +293,34 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Choice:** Document Known debt on §26 / §28 (unbounded dicts). Add an **encode-shape** test for outbound `InventoryContentPacket` in the style of existing inventory packet tests — do **not** implement `Decode` (packet remains outbound-only).
 
 **Why:** ARCHITECTURE already documents unbounded `_blockOverrides`; chest/floor stores match that pattern and should say so. Round-trip wording would force useless Decode stubs.
+
+### 34. HUD spawn honesty (seed, not authority)
+
+**Choice:** After empty `BiomeDefinitionList`, send local `SetActorData` (FLAGS include `Breathing`) then `UpdateAttributes` with **frozen** defaults (health/hunger/saturation/exhaustion/movement/level/xp). Call site is spawn orchestration only — same pattern as CreativeContent. **No** `Player.Health`/`Hunger` fields, **no** `VitalsSystem`, **no** `UpdateAbilities`/`UpdateAdventureSettings` in this leva.
+
+**Why:** Survival clients expect local metadata/attributes; omission leaves air/hunger HUD broken. Smallest honest surface (Rule 7); food/effects remain Deferred (§14–16). Domain vitals without tick authority would mirror pre-§17 inventory lie.
+
+**Deferred:** Local UpdateAbilities/Adventure; VitalsSystem + Player vitals authority; water/`AirSupply`; hunger tick; food; damage.
+
+### 35. CraftingDataPacket remint (RecipeRegistry SSOT)
+
+**Choice:** `CRAFTING_DATA_PACKET = 0x34` after `CreativeContent`, before empty `BiomeDefinitionList`. Protocol builds shapeless DTOs from `RecipeRegistry.SnapshotRecipes()` + `ItemPalette` + `Blocks.TryGetName` — **no** second `CreateDefault` recipe list in Packets. `ClearRecipes = true` intentionally replaces the vanilla book with Zenith’s two recipes only. Unlock AlwaysUnlocked; UUID zeros; block `"crafting_table"`; `RecipeNetworkID` = registry net id (1 / 2).
+
+**Why:** Without remint, client 2×2 never sends our ISR net ids — registry craft stays dead on the wire. SSOT in Protocol avoids CreativeContent-style recipe table drift.
+
+**Deferred:** Shaped grid, AutoCraft, full Mojang dump, 3×3 table.
+
+### 36. Store honesty (warn + floor refuse-cap)
+
+**Choice:**
+
+1. **Overlays** (`World._blockOverrides`): `OverrideCount` exposed; one Warning when count crosses `10_000` — **no** refuse SetBlock, **no** eviction.
+2. **ChestStore:** one Warning when `Ensure` crosses `10_000` — no silent drop / refuse.
+3. **FloorDropStore:** SoftCap `2048` — `TryAddOrMerge` refuses **new** cell keys at cap + Warning once; merging into an existing same-item cell still succeeds.
+
+**Why:** Rule 7 — LAN floor grief is the only bound that is cheap and honest without persistence redesign. Overlays/chests stay document+observe until LevelDB/eviction design exists. No `BoundedStore` framework; no Blocks→Context migrate in this leva (§25 remains).
+
+**Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay eviction with I/O on tick.
 
 ### OpenInventory / chest UI (note under §28)
 

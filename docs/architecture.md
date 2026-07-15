@@ -69,7 +69,7 @@ The network thread **must not** mutate authoritative gameplay state (final posit
 | Concern | Approach |
 |---------|----------|
 | Base terrain | Flat overworld payloads (`ChunkPayloads`), FNV `network_id` hashes |
-| Edits | Sparse overlays in LevelDB (`ov:x:y:z`) + in-RAM map; `UpdateBlock` to clients |
+| Edits | Sparse overlays in LevelDB (`ov:x:y:z`) + in-RAM map; warn-once at overlay/chest thresholds; floor SoftCap refuse (ADR §36); `UpdateBlock` to clients |
 | Columns | Optional `c:x:z` blobs in LevelDB; `IChunkStorage` is `ValueTask`-first |
 | StartGame | `UseBlockNetworkIdHashes = true` so client decodes palette hashes correctly |
 

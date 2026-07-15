@@ -96,4 +96,21 @@ sealed class EntityProtocol
     {
         _session.SendDataPacket(new RemoveActorPacket { ActorUniqueId = actorUniqueId });
     }
+
+    /// <summary>Local-player metadata seed (Breathing) — HUD honesty at spawn (§34).</summary>
+    public void SendLocalActorData(ulong actorRuntimeId, string name)
+    {
+        _session.SendDataPacket(new SetActorDataPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            Name = name,
+            Tick = 0
+        });
+    }
+
+    /// <summary>Frozen health/hunger/… defaults — not domain authority (§34).</summary>
+    public void SendDefaultAttributes(ulong actorRuntimeId)
+    {
+        _session.SendDataPacket(UpdateAttributesPacket.CreateFrozenDefaults(actorRuntimeId));
+    }
 }

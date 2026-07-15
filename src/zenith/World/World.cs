@@ -1,22 +1,35 @@
+using System.Threading;
+using Zenith.Raknet.Log;
+
 namespace Zenith.World;
 
 /// <summary>
 /// Mundo: colunas base via <see cref="IChunkStorage"/> + overlay esparso permanente.
-/// <see cref="_blockOverrides"/> não tem bound — limitação conhecida nesta escala (sem eviction).
+/// Overlay warn-once at threshold (ADR §36) — sem refuse/eviction nesta leva.
 /// Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
 /// </summary>
 sealed class World
 {
+    internal const int OverrideWarnThreshold = 10_000;
+
     private readonly IChunkStorage _storage;
     private readonly byte[] _flatOverworldPayload;
     private readonly int _flatSubChunkCount;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
-    public FloorDropStore FloorDrops { get; } = new();
-    public ChestStore Chests { get; } = new();
+    private readonly ILogger? _logger;
+    private int _overrideWarned;
 
-    public World(IChunkStorage storage)
+    public FloorDropStore FloorDrops { get; }
+    public ChestStore Chests { get; }
+
+    public int OverrideCount => _blockOverrides.Count;
+
+    public World(IChunkStorage storage, ILogger? logger = null)
     {
         _storage = storage;
+        _logger = logger;
+        FloorDrops = new FloorDropStore(logger);
+        Chests = new ChestStore(logger);
         (_flatSubChunkCount, _flatOverworldPayload) = ChunkPayloads.BuildFlatOverworld();
         storage.ForEachOverlayAsync((x, y, z, id) => _blockOverrides[(x, y, z)] = id)
             .AsTask()
@@ -71,6 +84,14 @@ sealed class World
     {
         _blockOverrides[(x, y, z)] = blockRuntimeId;
         _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
+
+        if (_blockOverrides.Count >= OverrideWarnThreshold &&
+            Interlocked.Exchange(ref _overrideWarned, 1) == 0)
+        {
+            _logger?.Warning(
+                $"World overlays crossed OverrideWarnThreshold ({OverrideWarnThreshold}). " +
+                "No refuse/eviction — persistence redesign needed; continuing unbounded.");
+        }
     }
 
     /// <summary>Overlay se existir; senão amostra do terreno base flat.</summary>

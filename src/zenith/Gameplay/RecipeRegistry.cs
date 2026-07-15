@@ -5,8 +5,7 @@ using Zenith.World;
 namespace Zenith.Gameplay;
 
 /// <summary>
-/// Receitas shapeless mínimas (ADR §29). NetIds estáticos Zenith — craft wire completo
-/// exige <c>CraftingDataPacket</c> no follow-up.
+/// Receitas shapeless mínimas (ADR §29 / §35). NetIds estáticos reminted via CraftingDataPacket.
 /// </summary>
 sealed class RecipeRegistry
 {
@@ -16,6 +15,13 @@ sealed class RecipeRegistry
     private readonly Dictionary<uint, Recipe> _byNetId = new();
 
     readonly record struct Recipe(uint NetId, (int RuntimeId, int Count)[] Inputs, int OutRuntimeId, int OutCount);
+
+    /// <summary>Wire/DTO-facing recipe rows — no packets dependency.</summary>
+    public readonly record struct RecipeSnapshot(
+        uint NetId,
+        (int RuntimeId, int Count)[] Inputs,
+        int OutRuntimeId,
+        int OutCount);
 
     public static RecipeRegistry CreateDefault()
     {
@@ -35,6 +41,23 @@ sealed class RecipeRegistry
     }
 
     private void Register(in Recipe recipe) => _byNetId[recipe.NetId] = recipe;
+
+    /// <summary>Stable ordered snapshot for CraftingData wire (ADR §35) — SSOT for net ids.</summary>
+    public IReadOnlyList<RecipeSnapshot> SnapshotRecipes()
+    {
+        var list = new List<RecipeSnapshot>(_byNetId.Count);
+        foreach (var recipe in _byNetId.Values)
+        {
+            list.Add(new RecipeSnapshot(
+                recipe.NetId,
+                recipe.Inputs,
+                recipe.OutRuntimeId,
+                recipe.OutCount));
+        }
+
+        list.Sort((a, b) => a.NetId.CompareTo(b.NetId));
+        return list;
+    }
 
     public bool TryGet(uint recipeNetId, out int outRuntimeId, out int outCount, out (int RuntimeId, int Count)[] inputs)
     {

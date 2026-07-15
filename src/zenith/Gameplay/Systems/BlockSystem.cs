@@ -103,7 +103,7 @@ sealed class BlockSystem : IGameSystem
                     foreach (var (rid, count) in dumped)
                     {
                         if (!player.Inventory.TryAdd(rid, count))
-                            _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
+                            _ = _world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
                         else
                             inventoryChanged = true;
                     }
@@ -114,9 +114,11 @@ sealed class BlockSystem : IGameSystem
             {
                 if (!player.Inventory.TryAdd(previous))
                 {
-                    _world.FloorDrops.AddOrMerge(edit.X, edit.Y, edit.Z, previous, 1);
-                    player.Session.Context.Logger.Debug(
-                        $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    if (_world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, previous, 1))
+                    {
+                        player.Session.Context.Logger.Debug(
+                            $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    }
                 }
                 else
                     inventoryChanged = true;
