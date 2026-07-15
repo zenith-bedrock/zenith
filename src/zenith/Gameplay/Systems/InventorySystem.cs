@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
-using Zenith.Network.Protocol;
+using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 

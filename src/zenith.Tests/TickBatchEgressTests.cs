@@ -1,6 +1,6 @@
 using Zenith.Gameplay.Systems;
-using Zenith.Network.Packets;
-using Zenith.Network.Protocol;
+using Zenith.Packets;
+using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;

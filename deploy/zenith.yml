@@ -1,18 +1,19 @@
+# Docker/compose sample only — mounted at /app/zenith.yml.
+# Local `dotnet run` uses the config next to the DLL (AppContext.BaseDirectory).
 server:
   port: 19132
   motd: Zenith Bedrock
-  sub-motd: alpha
+  sub-motd: Test
   max-players: 20
   max-players-per-ip: 3
   gamemode: Survival
 world:
+  # LevelDB at /app/worlds/world (compose mounts ./deploy/worlds → /app/worlds)
   name: world
-  # Data root inside the container. LevelDB lives at {path}/worlds/{name}/ → /app/worlds/world
-  # Empty path = InMemory (volatile) — do not use for Docker persistence.
   path: /app
   spawn-chunk-radius: 4
 auth:
-  # LAN / local only. Set true before any public exposure.
+  # LAN default. Set true before any public exposure.
   require-chain-signatures: false
 chat:
   max-length: 512

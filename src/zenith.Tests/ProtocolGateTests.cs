@@ -1,5 +1,5 @@
-using Zenith.Network;
-using Zenith.Network.Packets;
+using Zenith.Protocol;
+using Zenith.Packets;
 using Zenith.Raknet.Stream;
 using Zenith.Server;
 using Xunit;

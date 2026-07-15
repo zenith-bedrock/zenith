@@ -1,5 +1,5 @@
-using Zenith.Network.Packets;
-using Zenith.Network.Session;
+using Zenith.Packets;
+using Zenith.Session;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Server;

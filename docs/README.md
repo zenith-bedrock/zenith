@@ -9,10 +9,13 @@ Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHI
 | [Decision history](decisions.md) | Why we chose X — traced from commits and milestones |
 | [Protocol churn](protocol-churn.md) | Human checklist vs Bedrock client bumps (ADR §22) |
 | [Alpha gate](alpha-gate.md) | `v0.0.1-alpha` tag checklist (compose / test / non-goals) |
+| [Roadmap](roadmap.md) | Lean horizons + suggested order (not PM parity) |
 | [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
 | [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
 | [Developer experience](dx.md) | What you get day-to-day as a contributor or extension author |
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
+| [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
+| [`AGENTS.md`](../AGENTS.md) | Folder layout for humans and agents |
 
 Library-specific notes:
 

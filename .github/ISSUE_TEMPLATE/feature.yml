@@ -1,0 +1,52 @@
+name: Feature / change
+description: Propose a product change or limited architecture step
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prefer a **small leaf**. Large “command framework / plugin API / ECS” ideas are frozen until an ADR says otherwise ([`docs/decisions.md`](https://github.com/zenith-bedrock/zenith/blob/develop/docs/decisions.md), [`docs/dx.md`](https://github.com/zenith-bedrock/zenith/blob/develop/docs/dx.md)).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What gap or pain does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Concrete approach — which folders/roles change?
+      placeholder: e.g. Handler records intent; System applies on tick; Protocol only sends …
+    validations:
+      required: true
+  - type: dropdown
+    id: adr
+    attributes:
+      label: ADR needed?
+      options:
+        - "No — fits existing architecture"
+        - "Yes — I will draft a note in docs/decisions.md"
+        - "Unsure — need discussion first"
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Out of scope for this idea (confirm none apply unless ADR)
+      options:
+        - label: Does not add `/` command framework or autocomplete surface
+          required: false
+        - label: Does not add plugins / DI / VisibilitySystem / ECS “for cleanliness”
+          required: false
+        - label: Does not recreate a `Network/` junk-drawer folder
+          required: false
+  - type: textarea
+    id: smoke
+    attributes:
+      label: How we would verify
+      description: Unit test and/or Bedrock smoke.
+    validations:
+      required: false

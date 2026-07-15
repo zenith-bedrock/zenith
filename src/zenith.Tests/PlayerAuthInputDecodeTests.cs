@@ -1,4 +1,4 @@
-using Zenith.Network.Packets;
+using Zenith.Packets;
 using Zenith.Raknet.Stream;
 using Xunit;
 

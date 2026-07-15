@@ -386,6 +386,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Smoke:** Idle LAN — peers idle without Absolute flood; look-turn still updates peer yaw; multi-place same tick → one envelope per peer.
 
+**Adendo (jul 2026 — join settle):** Dirty-check left late joiners with AddPlayer only until the subject moved — peer entities often floated until Absolute. `PlayerVisibility.SendAddPlayer` now follows with `MoveActorAbsolute` (`FLAG_ON_GROUND`) for that recipient so new viewers settle without forcing idle Absolute spam.
+
 ### 45. Sparse flat columns (miss without Put)
 
 **Choice:** `GetOrCreateColumnAsync` on storage miss returns shared in-memory flat payload **without** `PutAsync` under `c:x:z`. Existing terrain blobs reused. Legacy empty/corrupt (`!LooksLikeTerrainPayload`) still regenerates flat + Put (disk self-heal). Overlays remain `ov:` only.
@@ -420,6 +422,14 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Deferred:** Shorter global idle timeout; kicking live NAT roommates beyond unbound-prefer; logging mute for RakNet digests.
 
 **Smoke:** Peer leaves → MOTD shows 1 (host). Rejoin repeatedly from same IP without wedging at 3.
+
+### 48. Folder layout = architecture roles (no Network/ junk drawer)
+
+**Choice:** Promote `Packets/`, `Protocol/`, and `Session/` to siblings under `src/zenith/` (namespaces `Zenith.Packets` / `Zenith.Protocol` / `Zenith.Session`). Relocate glue: `ProtocolGate` + `ColumnSend` → Protocol; `ZenithSessionListener` + `PlayerVisibility` → Session. Delete `Network/`. Fix Packets→domain leaks (`StartGame` version strings from Protocol; `ItemRegistryWireEntry` DTO; drop unused World using on CreativeContent). Refresh ARCHITECTURE Layout + dx workflow.
+
+**Why:** ~⅔ of the server tree lived under `Network/`, mixing serialize / transmit / session SM — folders contradicted ARCHITECTURE roles and reference projects (Vedrock/PM/gophertunnel).
+
+**Deferred:** Split `World/` (ItemPalette / chests → `Item/` etc.); rename type `NetworkSession`.
 
 ### OpenInventory / chest UI (note under §28)
 

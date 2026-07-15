@@ -1,6 +1,6 @@
 using BenchmarkDotNet.Attributes;
-using Zenith.Network;
-using Zenith.Network.Packets;
+using Zenith.Protocol;
+using Zenith.Packets;
 
 namespace Zenith.Benchmarks;
 

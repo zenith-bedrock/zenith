@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Architecture & layout
+    url: https://github.com/zenith-bedrock/zenith/blob/develop/ARCHITECTURE.md
+    about: Living constraints — read before proposing layers or folder changes.
+  - name: Agent / folder guide
+    url: https://github.com/zenith-bedrock/zenith/blob/develop/AGENTS.md
+    about: Where files live under src/zenith (Packets / Protocol / Session).
