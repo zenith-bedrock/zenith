@@ -52,12 +52,12 @@ class GamePacket : IPacket
         {
             writer.WriteByte(PacketCompression.ZLIB);
             using var ms = new MemoryStream();
-            using (var deflate = new DeflateStream(ms, CompressionLevel.Fastest))
+            using (var deflate = new DeflateStream(ms, CompressionLevel.Fastest, leaveOpen: true))
             {
                 deflate.Write(uncompressed);
             }
 
-            writer.Write(ms.ToArray());
+            writer.Write(ms.GetBuffer().AsSpan(0, (int)ms.Length));
         }
         else
         {

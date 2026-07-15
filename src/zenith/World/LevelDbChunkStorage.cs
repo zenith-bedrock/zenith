@@ -276,18 +276,26 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     {
         x = y = z = 0;
         if (!key.StartsWith("ov:", StringComparison.Ordinal)) return false;
-        var parts = key.AsSpan(3).ToString().Split(':');
-        if (parts.Length != 3) return false;
-        return int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y) && int.TryParse(parts[2], out z);
+        var s = key.AsSpan(3);
+        var sep1 = s.IndexOf(':');
+        if (sep1 < 0 || !int.TryParse(s[..sep1], out x)) return false;
+        s = s[(sep1 + 1)..];
+        var sep2 = s.IndexOf(':');
+        if (sep2 < 0 || !int.TryParse(s[..sep2], out y)) return false;
+        return int.TryParse(s[(sep2 + 1)..], out z);
     }
 
     private static bool TryParseChestKey(string key, out int x, out int y, out int z)
     {
         x = y = z = 0;
         if (!key.StartsWith("ct:", StringComparison.Ordinal)) return false;
-        var parts = key.AsSpan(3).ToString().Split(':');
-        if (parts.Length != 3) return false;
-        return int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y) && int.TryParse(parts[2], out z);
+        var s = key.AsSpan(3);
+        var sep1 = s.IndexOf(':');
+        if (sep1 < 0 || !int.TryParse(s[..sep1], out x)) return false;
+        s = s[(sep1 + 1)..];
+        var sep2 = s.IndexOf(':');
+        if (sep2 < 0 || !int.TryParse(s[..sep2], out y)) return false;
+        return int.TryParse(s[(sep2 + 1)..], out z);
     }
 
     private static bool StartsWith(byte[] data, byte[] prefix)

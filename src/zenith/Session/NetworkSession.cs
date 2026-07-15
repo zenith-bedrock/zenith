@@ -128,6 +128,7 @@ class NetworkSession
                 break;
         }
 
+        byte[]? pooledDecompressed = null;
         if (compressionType == PacketCompression.ZLIB)
         {
             // MemoryStream direto sobre o array existente (com offset), sem copiar o
@@ -138,8 +139,8 @@ class NetworkSession
             var decompressed = InflateToPooledBuffer(inflater, out var decompressedLength);
             stream.Dispose();
 
-            stream = new BinaryStream(decompressed[..decompressedLength]);
-            ArrayPool<byte>.Shared.Return(decompressed);
+            pooledDecompressed = decompressed;
+            stream = new BinaryStream(decompressed, decompressedLength);
         }
 
         // TODO: snappy compression
@@ -151,14 +152,21 @@ class NetworkSession
         }
 
         stream.Dispose();
+
+        if (pooledDecompressed is not null)
+            ArrayPool<byte>.Shared.Return(pooledDecompressed);
+
         return false;
     }
+
+    /// <summary>Limite de segurança contra zip bomb.</summary>
+    private const int MaxDecompressedSize = 2 * 1024 * 1024;
 
     /// <summary>
     /// Descomprime <paramref name="inflater"/> inteiro pra um buffer alugado do ArrayPool,
     /// crescendo por dobragem quando necessário. Quem chama é responsável por devolver o
-    /// buffer retornado ao pool (<see cref="ArrayPool{T}.Return"/>) depois de copiar o que
-    /// precisar dele.
+    /// buffer retornado ao pool (<see cref="ArrayPool{T}.Return"/>) depois de terminar de
+    /// usar o <see cref="BinaryStream"/> que o envolve.
     /// </summary>
     private static byte[] InflateToPooledBuffer(DeflateStream inflater, out int length)
     {
@@ -169,6 +177,14 @@ class NetworkSession
         while ((read = inflater.Read(buffer, length, buffer.Length - length)) > 0)
         {
             length += read;
+
+            if (length > MaxDecompressedSize)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                throw new InvalidOperationException(
+                    $"Decompressed data exceeds maximum size ({MaxDecompressedSize} bytes).");
+            }
+
             if (length == buffer.Length)
             {
                 var bigger = ArrayPool<byte>.Shared.Rent(buffer.Length * 2);
