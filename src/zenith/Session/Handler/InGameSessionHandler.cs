@@ -347,17 +347,29 @@ class InGameSessionHandler : ISessionHandler
         var packet = DataPacket.From<InventoryTransactionPacket>(ref stream);
         var player = session.Player;
         if (player is null) return;
-        if (packet.TransactionType != InventoryTransactionPacket.TypeUseItem) return;
 
-        HandleUseItem(
-            session,
-            player,
-            packet.UseActionType,
-            packet.BlockX,
-            packet.BlockY,
-            packet.BlockZ,
-            packet.BlockFace,
-            packet.HotbarSlot);
+        session.Context.Logger.Debug("transaction type: " + packet.TransactionType);
+        switch (packet.TransactionType)
+        {
+            case InventoryTransactionPacket.TypeItemUse:
+                HandleUseItem(
+                    session,
+                    player,
+                    packet.UseActionType,
+                    packet.BlockX,
+                    packet.BlockY,
+                    packet.BlockZ,
+                    packet.BlockFace,
+                    packet.HotbarSlot);
+                break;
+            case InventoryTransactionPacket.TypeNormal:
+                HandleNormal(
+                    session,
+                    player,
+                    packet.UseActionType,
+                    packet.HotbarSlot);
+                break;
+        }
     }
 
     private static void HandleUseItemInteraction(
@@ -375,6 +387,36 @@ class InGameSessionHandler : ISessionHandler
             use.BlockZ,
             face,
             use.HotbarSlot);
+    }
+
+    private static void HandleNormal(
+        NetworkSession session,
+        Player.Player player,
+        int useActionType,
+        int hotbarSlot)
+    {
+        if (!PlayerInventory.IsValidHotbarSlot(hotbarSlot))
+        {
+            session.Context.Logger.Debug($"Rejected Normal: hotbar {hotbarSlot}");
+            return;
+        }
+
+        player.SelectedHotbarSlot = hotbarSlot;
+
+        switch (useActionType)
+        {
+            case 0:
+                break;
+
+            case 2:
+                var stack = player.Inventory.Get(hotbarSlot);
+                if (stack != null && stack.Count >= 1)
+                {
+                    session.Context.Logger.Debug("Drop item");
+                }
+
+                break;
+        }
     }
 
     private static void HandleUseItem(
