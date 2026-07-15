@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Zenith.Server;
 
 var configPath = Path.Combine(AppContext.BaseDirectory, ServerConfigLoader.DefaultFileName);
@@ -18,11 +19,17 @@ catch (Exception ex)
 var server = new ZenithServer(config);
 
 var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+void RequestShutdown() => shutdownTcs.TrySetResult();
+
 Console.CancelKeyPress += (_, e) =>
 {
     e.Cancel = true;
-    shutdownTcs.TrySetResult();
+    RequestShutdown();
 };
+
+// Docker/Dokploy send SIGTERM on stop/redeploy — CancelKeyPress alone misses that path (§41 flush).
+using var sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => RequestShutdown());
+using var sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => RequestShutdown());
 
 var runTask = server.StartAsync();
 await Task.WhenAny(runTask, shutdownTcs.Task);
@@ -33,5 +40,5 @@ try
 }
 catch (OperationCanceledException)
 {
-    // Expected after CancelKeyPress / ShutdownAsync.
+    // Expected after CancelKeyPress / POSIX signal / ShutdownAsync.
 }

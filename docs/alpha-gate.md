@@ -63,3 +63,5 @@ Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop
 | Relative `world.path` | Under `AppContext.BaseDirectory` (DLL dir), not shell cwd |
 | Auth sample | Chain signatures often off for LAN; boot WARNING; enable before public exposure |
 | ZLIB decompression (2 MB cap) | Oversized inflate throws; RakNet receive loop logs and drops the datagram (no explicit session disconnect yet). LAN risk low; public is still a DoS/CPU surface |
+| Docker / Dokploy volume | Persist host dir → `/app/worlds` (compose sample). Redeploy **without** that volume wipes LevelDB even when flush is correct |
+| Docker stop / redeploy | Process handles **SIGTERM** → `ShutdownAsync` / `FlushAsync`. Hard kill still drops in-flight Puts |

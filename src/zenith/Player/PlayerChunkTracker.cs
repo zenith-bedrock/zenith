@@ -10,6 +10,9 @@ sealed class PlayerChunkTracker
 {
     private readonly object _gate = new();
     private readonly HashSet<(int X, int Z)> _known = new();
+    private readonly Dictionary<(int X, int Z), int> _epoch = new();
+    private readonly List<(int X, int Z)> _scratch = new();
+    private int _nextEpoch = 1;
 
     /// <summary>Raio de view em chunks (confirmado ao cliente).</summary>
     public int Radius { get; set; }
@@ -18,16 +21,76 @@ sealed class PlayerChunkTracker
     public int LastPublisherChunkZ { get; private set; } = int.MinValue;
 
     /// <summary>Marca coluna como em voo/enviada. False se já conhecida.</summary>
-    public bool TryBegin(int chunkX, int chunkZ)
+    public bool TryBegin(int chunkX, int chunkZ) => TryBegin(chunkX, chunkZ, out _);
+
+    /// <summary>
+    /// Like <see cref="TryBegin(int, int)"/> but returns a stream <paramref name="epoch"/>.
+    /// Stale async completions must call <see cref="IsStreamCurrent"/> before emit.
+    /// </summary>
+    public bool TryBegin(int chunkX, int chunkZ, out int epoch)
     {
         lock (_gate)
-            return _known.Add((chunkX, chunkZ));
+        {
+            epoch = 0;
+            var key = (chunkX, chunkZ);
+            if (!_known.Add(key)) return false;
+            epoch = _nextEpoch++;
+            _epoch[key] = epoch;
+            return true;
+        }
+    }
+
+    /// <summary>True while this in-flight stream still owns the column slot.</summary>
+    public bool IsStreamCurrent(int chunkX, int chunkZ, int epoch)
+    {
+        lock (_gate)
+            return _epoch.TryGetValue((chunkX, chunkZ), out var e) && e == epoch;
     }
 
     public void Forget(int chunkX, int chunkZ)
     {
         lock (_gate)
-            _known.Remove((chunkX, chunkZ));
+        {
+            var key = (chunkX, chunkZ);
+            _known.Remove(key);
+            _epoch.Remove(key);
+        }
+    }
+
+    /// <summary>Drop known slot only if <paramref name="epoch"/> still matches (failed/stale stream).</summary>
+    public bool TryAbandon(int chunkX, int chunkZ, int epoch)
+    {
+        lock (_gate)
+        {
+            var key = (chunkX, chunkZ);
+            if (!_epoch.TryGetValue(key, out var e) || e != epoch) return false;
+            _known.Remove(key);
+            _epoch.Remove(key);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Forget columns outside the view square. Uses a reused scratch list (no LINQ).
+    /// Call when the publisher center chunk changes — not every tick.
+    /// </summary>
+    public void ForgetOutsideRadius(int centerX, int centerZ, int radius)
+    {
+        lock (_gate)
+        {
+            _scratch.Clear();
+            foreach (var c in _known)
+            {
+                if (Math.Abs(c.X - centerX) > radius || Math.Abs(c.Z - centerZ) > radius)
+                    _scratch.Add(c);
+            }
+
+            foreach (var c in _scratch)
+            {
+                _known.Remove(c);
+                _epoch.Remove(c);
+            }
+        }
     }
 
     public void RememberMany(IEnumerable<(int X, int Z)> coords)
@@ -35,7 +98,10 @@ sealed class PlayerChunkTracker
         lock (_gate)
         {
             foreach (var c in coords)
-                _known.Add(c);
+            {
+                if (!_known.Add(c)) continue;
+                _epoch[c] = _nextEpoch++;
+            }
         }
     }
 

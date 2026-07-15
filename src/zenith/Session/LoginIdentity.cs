@@ -9,7 +9,13 @@ namespace Zenith.Session;
 /// </summary>
 static class LoginIdentity
 {
-    public readonly record struct ParsedIdentity(string DisplayName, Guid Uuid, byte[]? SkinRgba, uint SkinWidth, uint SkinHeight);
+    public readonly record struct ParsedIdentity(
+        string DisplayName,
+        Guid Uuid,
+        bool IdentityFromJwt,
+        byte[]? SkinRgba,
+        uint SkinWidth,
+        uint SkinHeight);
 
     /// <summary>Quando true, login rejeita chain sem assinaturas verificáveis. Setado no boot.</summary>
     public static bool RequireChainSignatures { get; set; }
@@ -28,14 +34,18 @@ static class LoginIdentity
             throw new FormatException("The xname claim is empty.");
 
         var uuid = Guid.NewGuid();
+        var identityFromJwt = false;
         if (payload.RootElement.TryGetProperty("identity", out var identityClaim))
         {
             var raw = identityClaim.GetString();
             if (!string.IsNullOrWhiteSpace(raw) && Guid.TryParse(raw, out var parsed))
+            {
                 uuid = parsed;
+                identityFromJwt = true;
+            }
         }
 
-        return new ParsedIdentity(name, uuid, SkinRgba: null, SkinWidth: 0, SkinHeight: 0);
+        return new ParsedIdentity(name, uuid, identityFromJwt, SkinRgba: null, SkinWidth: 0, SkinHeight: 0);
     }
 
     /// <summary>Tenta ler SkinData (base64 RGBA) do ClientData JWT.</summary>

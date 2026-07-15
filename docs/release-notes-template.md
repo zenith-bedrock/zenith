@@ -31,8 +31,9 @@
 | `world.path` empty | **InMemory** — world wiped on restart, **no warning** |
 | Relative `world.path` | Resolved under the DLL directory (`AppContext.BaseDirectory`), **not** the shell cwd. Prefer `.` or an absolute root (`/app`). |
 | `world.path: ./worlds` | Wrong — `worlds/<name>/` is appended under the root; you get `…/worlds/worlds/<name>`. |
-| Docker volumes | Mount `./deploy/zenith.yml:/app/zenith.yml` **and** `./deploy/worlds:/app/worlds`. Do **not** mount a host folder over `/app` (overwrites the DLL). |
+| Docker volumes | Mount `./deploy/zenith.yml:/app/zenith.yml` **and** `./deploy/worlds:/app/worlds`. Do **not** mount a host folder over `/app` (overwrites the DLL). Redeploy without a durable `/app/worlds` volume = wipe. |
 | Layout | LevelDB at `{world.path}/worlds/{world.name}/` (compose sample: `/app/worlds/world`) |
+| Stop / redeploy | Prefer SIGTERM (compose/Dokploy stop) so `FlushAsync` runs; `kill -9` can lose recent bag/chest Puts |
 | `players/` | **Not shipped** — no Mojang-style playerdata volume (bag/chest live under world LevelDB keys) |
 | Auth | Default sample leaves chain signatures off for LAN; enable before public exposure |
 

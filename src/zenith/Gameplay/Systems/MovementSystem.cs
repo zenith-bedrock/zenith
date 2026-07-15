@@ -7,7 +7,7 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="MovementInputState"/> no tick e replica pose aos peers quando dirty (ADR §44).
-/// Void soft-rescue (ADR §40): teleport to flat spawn without death/Respawn wire.
+/// Void soft-rescue (ADR §40): teleport to world spawn (0, FlatSpawnY, 0) without death/Respawn wire.
 /// </summary>
 sealed class MovementSystem : IGameSystem
 {
@@ -99,7 +99,10 @@ sealed class MovementSystem : IGameSystem
 
     private static void SoftRescueFromVoid(global::Zenith.Player.Player player)
     {
+        // World spawn (same as PreSpawn), not same-XZ — dig shaft must not re-void (§40).
+        player.PositionX = 0f;
         player.PositionY = Blocks.FlatSpawnY;
+        player.PositionZ = 0f;
         player.Pitch = 0;
         player.Session.Protocol.Entity.SendMovePlayerTeleport(
             entityRuntimeId: (ulong)player.RuntimeId,

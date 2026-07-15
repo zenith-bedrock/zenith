@@ -138,7 +138,7 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S38** | Creative: palette stone → hotbar → place; Survival: CraftCreative rejeitado. |
 | **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. |
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. |
-| **S40** | Cair no void: **própria câmera** snap para spawn (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
+| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. |
 | Regressão | Held peer, rearrange, break/crack still OK. |
 
