@@ -22,6 +22,7 @@ public ref struct BinaryStream : IDisposable
     }
 
     private const int MinGrowth = 64;
+    private bool _disposed;
 
     public int Offset { get; set; }
 
@@ -67,10 +68,25 @@ public ref struct BinaryStream : IDisposable
         Offset = 0;
     }
 
+    /// <summary>
+    /// Modo de leitura: envelopa um array já existente com comprimento explícito.
+    /// Útil para buffers do <see cref="System.Buffers.ArrayPool{T}"/> cujo tamanho real
+    /// (<paramref name="length"/>) pode ser menor que <c>buffer.Length</c>.
+    /// </summary>
+    public BinaryStream(byte[] buffer, int length)
+    {
+        Buffer = buffer;
+        Length = length;
+        Offset = 0;
+    }
+
     public void Rewind() => Offset = 0;
 
     public Span<byte> ReadSpan(int len)
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(BinaryStream));
+
         switch (len)
         {
             case < 0:
@@ -433,6 +449,7 @@ public ref struct BinaryStream : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         Buffer = Array.Empty<byte>();
         Length = 0;
         Offset = 0;
