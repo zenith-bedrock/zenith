@@ -63,12 +63,15 @@ public class MovementDirtyTests
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        SubmitPose(mover, 0f, MovementSystem.VoidRescueY - 1f, 0f, 10f, 0f);
+        SubmitPose(mover, 32f, MovementSystem.VoidRescueY - 1f, -16f, 10f, 45f);
         system.Tick(fx.Clock);
         Flush(fx);
         Assert.True(fx.Transport.Captured.Count >= 1,
             "void rescue must teleport self and Absolute peers");
+        Assert.Equal(0f, mover.PositionX);
         Assert.Equal(Blocks.FlatSpawnY, mover.PositionY);
+        Assert.Equal(0f, mover.PositionZ);
+        Assert.Equal(0f, mover.Pitch);
     }
 
     private static void SubmitPose(Player.Player player, float x, float y, float z, float pitch, float yaw)

@@ -113,7 +113,7 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void MovementSystem_void_soft_rescue_clamps_to_flat_spawn()
+    public void MovementSystem_void_soft_rescue_teleports_to_world_spawn()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("faller");
@@ -126,9 +126,9 @@ public class IntentContractTests
 
         new MovementSystem(fx.Players).Tick(fx.Clock);
 
+        Assert.Equal(0f, player.PositionX);
         Assert.Equal(Blocks.FlatSpawnY, player.PositionY);
-        Assert.Equal(3.5f, player.PositionX);
-        Assert.Equal(4.5f, player.PositionZ);
+        Assert.Equal(0f, player.PositionZ);
         Assert.Equal(0f, player.Pitch);
         Assert.Equal(20f, player.Health);
     }

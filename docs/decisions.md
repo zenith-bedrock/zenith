@@ -348,7 +348,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 40. Vitals fields + void soft-rescue
 
-**Choice:** `Player.Health`/`Hunger` (20/20) drive `UpdateAttributes` at spawn. Void: if `Y < FlatMinY - 8`, clamp Y to `FlatSpawnY` — **no** Health=0 / Respawn handshake (softlock risk). Check lives in `MovementSystem` (Rule 7 — no decorative VitalsSystem). Self camera correction uses `MovePlayer` Teleport (§41); `MoveActorAbsolute` alone is insufficient for the local client under client-authoritative movement. Peers still get Absolute via `ReplicateToPeers`.
+**Choice:** `Player.Health`/`Hunger` (20/20) drive `UpdateAttributes` at spawn. Void: if `Y < FlatMinY - 8`, soft-rescue to **world spawn** `(0, FlatSpawnY, 0)` — **no** Health=0 / Respawn handshake (softlock risk). Same-XZ Y-only rescue left players inside dig shafts. Check lives in `MovementSystem` (Rule 7 — no decorative VitalsSystem). Self camera correction uses `MovePlayer` Teleport (§41); `MoveActorAbsolute` alone is insufficient for the local client under client-authoritative movement. Peers still get Absolute via dirty pose fan-out.
 
 **Why:** Attributes literals lied about domain; falling forever was worse than thin vitals. Death wire deferred until respawn protocol is intentional.
 
@@ -356,11 +356,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 41. Void MovePlayer Teleport + shutdown persistence flush
 
-**Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` CancelKeyPress awaits `ShutdownAsync` (5s flush timeout → Warning). Flush **never** on GameLoop tick (ADR §13).
+**Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` completes the same shutdown path from **CancelKeyPress**, **SIGINT**, and **SIGTERM** (Docker/Dokploy stop) — 5s flush timeout → Warning. Flush **never** on GameLoop tick (ADR §13).
 
-**Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts. Operational trust before death/drop-entity surface.
+**Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts; container SIGTERM previously skipped flush entirely. Operational trust before death/drop-entity surface.
 
-**Smoke:** S39 graceful restart; S40 own-camera snap (ARCHITECTURE.md).
+**Smoke:** S39 graceful restart / stop; S40 own-camera snap to world spawn (ARCHITECTURE.md).
 
 ### 42. Dig crack LevelEvent peer fan-out
 

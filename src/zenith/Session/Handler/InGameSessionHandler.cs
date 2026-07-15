@@ -329,8 +329,11 @@ class InGameSessionHandler : ISessionHandler
 
         if (packet.Action is not (PlayerActionPacket.ActionCreativeDestroy or PlayerActionPacket.ActionPredictDestroy))
         {
-            session.Context.Logger.Debug(
-                $"PlayerAction ignored from {player.Username}: action={packet.Action}");
+            if (packet.Action is not (PlayerActionPacket.ActionStartItemUseOn or PlayerActionPacket.ActionStopItemUseOn))
+            {
+                session.Context.Logger.Debug(
+                    $"PlayerAction ignored from {player.Username}: action={packet.Action}");
+            }
             return;
         }
 

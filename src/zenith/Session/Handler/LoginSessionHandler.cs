@@ -68,6 +68,13 @@ class LoginSessionHandler : ISessionHandler
             return;
         }
 
+        if (!identity.IdentityFromJwt)
+        {
+            session.Context.Logger.Warning(
+                $"Login '{identity.DisplayName}': JWT missing/unparseable identity claim — " +
+                $"using ephemeral uuid {identity.Uuid:D}; inventory will not persist across rejoins.");
+        }
+
         var gameMode = Zenith.Player.GameModeConfig.FromConfig(session.Context.Config.Server.Gamemode);
         var player = new Zenith.Player.Player(
             identity.DisplayName,
@@ -101,7 +108,11 @@ class LoginSessionHandler : ISessionHandler
 
         session.Player = player;
         session.RakSession.HasGameIdentity = true;
-        _ = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
+        var loaded = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
+        session.Context.Logger.Info(
+            loaded
+                ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
+                : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 
         session.Protocol.Login.SendLoginSuccess();

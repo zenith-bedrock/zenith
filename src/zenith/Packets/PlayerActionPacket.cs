@@ -7,6 +7,10 @@ class PlayerActionPacket : DataPacket
 {
     public const int ActionCreativeDestroy = 13;
     public const int ActionPredictDestroy = 26;
+    /// <summary>Bedrock START_ITEM_USE_ON — expected noise; not logged at Debug.</summary>
+    public const int ActionStartItemUseOn = 28;
+    /// <summary>Bedrock STOP_ITEM_USE_ON — expected noise; not logged at Debug.</summary>
+    public const int ActionStopItemUseOn = 29;
 
     public override int Id => (int)ProtocolInfo.PLAYER_ACTION_PACKET;
 

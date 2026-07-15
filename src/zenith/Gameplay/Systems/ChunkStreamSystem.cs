@@ -8,6 +8,8 @@ namespace Zenith.Gameplay.Systems;
 /// <summary>
 /// Emite colunas flat novas quando o jogador muda de chunk / tem buracos no disco de view.
 /// I/O de coluna é async (não bloqueia o tick); Protocol.Send sob o lock RakNet existente.
+/// Colunas fora do raio são esquecidas quando o centro muda para o cliente poder
+/// revalidar overlays após unload (smoke 6) — não é VisibilitySystem.
 /// </summary>
 sealed class ChunkStreamSystem : IGameSystem
 {
@@ -39,6 +41,7 @@ sealed class ChunkStreamSystem : IGameSystem
 
             if (player.Chunks.PublisherCenterChanged(cx, cz))
             {
+                player.Chunks.ForgetOutsideRadius(cx, cz, radius);
                 player.Session.Protocol.World.SendChunkPublisher(
                     blockX: (int)Math.Floor(player.PositionX),
                     blockY: (int)Math.Floor(player.PositionY),
@@ -50,31 +53,34 @@ sealed class ChunkStreamSystem : IGameSystem
             PlayerChunkTracker.ForEachInSquare(cx, cz, radius, (x, z) =>
             {
                 if (started >= MaxStartsPerTick) return;
-                if (!player.Chunks.TryBegin(x, z)) return;
+                if (!player.Chunks.TryBegin(x, z, out var epoch)) return;
                 started++;
-                StartStream(player, x, z);
+                StartStream(player, x, z, epoch);
             });
         }
     }
 
-    private void StartStream(global::Zenith.Player.Player player, int chunkX, int chunkZ)
+    private void StartStream(global::Zenith.Player.Player player, int chunkX, int chunkZ, int epoch)
     {
-        _ = StreamAsync(player, chunkX, chunkZ);
+        _ = StreamAsync(player, chunkX, chunkZ, epoch);
     }
 
-    private async Task StreamAsync(global::Zenith.Player.Player player, int chunkX, int chunkZ)
+    private async Task StreamAsync(global::Zenith.Player.Player player, int chunkX, int chunkZ, int epoch)
     {
         try
         {
             var column = await _world.GetOrCreateColumnAsync(chunkX, chunkZ).ConfigureAwait(false);
             if (!player.IsInGame) return;
+            if (!player.Chunks.IsStreamCurrent(chunkX, chunkZ, epoch)) return;
             ColumnSend.EmitToSession(player.Session, column);
         }
         catch (Exception ex)
         {
-            player.Chunks.Forget(chunkX, chunkZ);
-            player.Session.Context.Logger.Warning(
-                $"Chunk stream failed for {player.Username} @ {chunkX},{chunkZ}: {ex.Message}");
+            if (player.Chunks.TryAbandon(chunkX, chunkZ, epoch))
+            {
+                player.Session.Context.Logger.Warning(
+                    $"Chunk stream failed for {player.Username} @ {chunkX},{chunkZ}: {ex.Message}");
+            }
         }
     }
 }

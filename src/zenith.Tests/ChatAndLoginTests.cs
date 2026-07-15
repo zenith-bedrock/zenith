@@ -33,6 +33,25 @@ public class LoginIdentityTests
         Assert.Throws<FormatException>(() => LoginIdentity.ExtractDisplayName("not-a-jwt"));
     }
 
+    [Fact]
+    public void ParseIdentityToken_marks_ephemeral_uuid_without_identity_claim()
+    {
+        var jwt = MakeJwt("""{"xname":"Steve"}""");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt);
+        Assert.False(parsed.IdentityFromJwt);
+        Assert.NotEqual(Guid.Empty, parsed.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_marks_jwt_uuid_when_identity_claim_present()
+    {
+        var id = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var jwt = MakeJwt($$"""{"xname":"Steve","identity":"{{id}}"}""");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt);
+        Assert.True(parsed.IdentityFromJwt);
+        Assert.Equal(id, parsed.Uuid);
+    }
+
     private static string MakeJwt(string payloadJson)
     {
         static string B64Url(string s)
