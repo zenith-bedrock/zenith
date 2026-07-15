@@ -8,7 +8,7 @@ public class UnconnectedPing : IPacket
     public byte Id => (byte)Enumerator.MessageIdentifier.UnconnectedPing;
     
     public ulong Time { get; set; }
-    public byte[] Magic { get; set; } // 16 bytes
+    public byte[] Magic { get; set; } = []; // 16 bytes
     public ulong ClientGuid { get; set; }
 
     void IPacket.Decode(ref BinaryStream stream)

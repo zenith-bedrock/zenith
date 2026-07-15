@@ -71,15 +71,33 @@ static class Blocks
         return false;
     }
 
-    /// <summary>Rough break duration in GameLoop ticks (20 TPS) for empty hand. §27.</summary>
+    /// <summary>
+    /// Empty-hand dig duration in GameLoop ticks (20 TPS). Approximates Bedrock/Java hand break
+    /// times (hardness×5 seconds) for the starter palette — tools/enchants deferred (ADR §27).
+    /// Creative uses InstantBuild and skips this gate.
+    /// </summary>
     public static int BreakTicks(int runtimeId)
     {
         EnsureLoaded();
         if (runtimeId == _air) return 0;
-        if (runtimeId == _dirt || runtimeId == _sand || runtimeId == _grassBlock) return 6;
-        if (runtimeId == _oakPlanks || runtimeId == _oakLog || runtimeId == _chest) return 20;
-        if (runtimeId == _stone) return 40;
-        return 20;
+        // dirt/sand hardness 0.5 → 0.75s → 15 ticks
+        if (runtimeId == _dirt || runtimeId == _sand) return 15;
+        // grass_block hardness 0.6 → 0.9s → 18 ticks
+        if (runtimeId == _grassBlock) return 18;
+        // planks/log hardness 2 → 3s → 60 ticks
+        if (runtimeId == _oakPlanks || runtimeId == _oakLog) return 60;
+        // chest hardness 2.5 → 3.75s → 75 ticks
+        if (runtimeId == _chest) return 75;
+        // stone hardness 1.5, hand unsuitable → 7.5s → 150 ticks
+        if (runtimeId == _stone) return 150;
+        return 60;
+    }
+
+    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to 65535 (PM/Geyser).</summary>
+    public static int CrackEventData(int breakTicks)
+    {
+        if (breakTicks <= 0) return 65535;
+        return Math.Max(1, (int)Math.Round(65535.0 / breakTicks));
     }
 
     public static void EnsureLoaded()

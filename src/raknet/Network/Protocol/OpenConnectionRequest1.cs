@@ -6,7 +6,7 @@ public class OpenConnectionRequest1 : IPacket
 {
     public byte Id => (byte)Enumerator.MessageIdentifier.OpenConnectionRequest1;
 
-    public byte[] Magic { get; set; }
+    public byte[] Magic { get; set; } = [];
     public byte Protocol { get; set; }
     public ushort MTUSize { get; set; }
 

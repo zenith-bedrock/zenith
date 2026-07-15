@@ -22,8 +22,8 @@ class LoginPacket : DataPacket
     public override int Id => (int)ProtocolInfo.LOGIN_PACKET;
 
     public int Protocol { get; set; }
-    public AuthenticationInfo AuthInfo { get; set; }
-    public string ClientDataJwt { get; set; }
+    public AuthenticationInfo AuthInfo { get; set; } = new();
+    public string ClientDataJwt { get; set; } = "";
 
     public override void Decode(ref BinaryStream stream)
     {

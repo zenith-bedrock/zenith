@@ -289,12 +289,8 @@ class InGameSessionHandler : ISessionHandler
             {
                 case PlayerAuthInputPacket.ActionStartBreak:
                 case PlayerAuthInputPacket.ActionContinueDestroy:
-                    player.BeginBreak(action.BlockX, action.BlockY, action.BlockZ, session.Context.Clock.CurrentTick);
-                    var block = session.Context.World.GetBlock(action.BlockX, action.BlockY, action.BlockZ);
-                    session.Protocol.World.SendBlockStartCrack(
-                        action.BlockX, action.BlockY, action.BlockZ, Blocks.BreakTicks(block));
-                    session.Context.Logger.Debug(
-                        $"AuthInput start/continue break from {player.Username} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
+                    HandleBreakProgress(
+                        session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
                     break;
                 case PlayerAuthInputPacket.ActionAbortBreak:
                     if (player.HasBreakTarget)
@@ -418,6 +414,45 @@ class InGameSessionHandler : ISessionHandler
         inv.SendChestContent(session.Context.World.Chests, x, y, z);
         inv.SendInventoryContent(player.Inventory);
         session.Context.Logger.Debug($"Chest open for {player.Username} @ {x},{y},{z}");
+    }
+
+    /// <summary>
+    /// Survival: start_break (and continue only when the target cell changes) begins dig timer + crack.
+    /// Same-cell continue_destroy must not reset timer / RestartCrack — that finishes crack before SetBlock.
+    /// Creative InstantBuild: no crack / no dig timer (destroy arrives as creative_destroy).
+    /// </summary>
+    private static void HandleBreakProgress(
+        NetworkSession session,
+        Player.Player player,
+        int action,
+        int x,
+        int y,
+        int z)
+    {
+        if (player.GameMode == GameMode.Creative)
+            return;
+
+        if (player.IsBreakTarget(x, y, z))
+        {
+            session.Context.Logger.Debug(
+                $"AuthInput continue same-cell for {player.Username} @ {x},{y},{z} (timer kept)");
+            return;
+        }
+
+        if (player.HasBreakTarget)
+            session.Protocol.World.SendBlockStopCrack(
+                player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+
+        var block = session.Context.World.GetBlock(x, y, z);
+        var need = Blocks.BreakTicks(block);
+        player.BeginBreak(x, y, z, session.Context.Clock.CurrentTick, need);
+
+        if (need > 0)
+            session.Protocol.World.SendBlockStartCrack(x, y, z, need);
+
+        var label = action == PlayerAuthInputPacket.ActionStartBreak ? "start_break" : "continue_destroy";
+        session.Context.Logger.Debug(
+            $"AuthInput {label} from {player.Username} @ {x},{y},{z} need={need} ticks");
     }
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)

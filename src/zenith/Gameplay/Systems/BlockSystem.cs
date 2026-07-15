@@ -64,7 +64,9 @@ sealed class BlockSystem : IGameSystem
 
             if (!creative)
             {
-                var need = Blocks.BreakTicks(previous);
+                var need = player.HasBreakTarget && player.IsBreakTarget(edit.X, edit.Y, edit.Z)
+                    ? player.BreakRequiredTicks
+                    : Blocks.BreakTicks(previous);
                 if (need > 0)
                 {
                     if (!player.HasBreakTarget || !player.IsBreakTarget(edit.X, edit.Y, edit.Z))

@@ -1,3 +1,4 @@
+using System.Net;
 using Zenith.Raknet.Extension;
 using Zenith.Raknet.Stream;
 
@@ -7,7 +8,7 @@ public class ConnectionRequestAccepted : IPacket
 {
     public byte Id => (byte)Enumerator.MessageIdentifier.ConnectionRequestAccepted;
 
-    public System.Net.IPEndPoint Address { get; set; }
+    public IPEndPoint Address { get; set; } = new(IPAddress.Any, 0);
     public short SystemIndex { get; set; }
     public ulong SendPingTime { get; set; }
     public ulong SendPongTime { get; set; }

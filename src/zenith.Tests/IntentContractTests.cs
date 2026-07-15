@@ -107,7 +107,7 @@ public class IntentContractTests
     private static void BeginBreakReady(GameClock clock, World.World world, Player.Player player, int x, int y, int z)
     {
         var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
-        player.BeginBreak(x, y, z, clock.CurrentTick);
+        player.BeginBreak(x, y, z, clock.CurrentTick, need);
         if (need > 0)
             clock.AdvanceBy(need);
     }

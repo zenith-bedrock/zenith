@@ -14,7 +14,7 @@ class ResourcePacksInfoPacket : DataPacket
     public bool HasScripts { get; set; }
     public bool ForceDisableVibrantVisuals { get; set; }
     // public string WorldTemplateUuid { get; set; }
-    public string WorldTemplateVersion { get; set; }
+    public string WorldTemplateVersion { get; set; } = "";
 
     public override Span<byte> Encode()
     {

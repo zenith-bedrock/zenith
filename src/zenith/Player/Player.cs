@@ -76,23 +76,27 @@ class Player
     public int BreakTargetY { get; private set; }
     public int BreakTargetZ { get; private set; }
     public ulong BreakStartedTick { get; private set; }
+    /// <summary>Empty-hand dig duration snapshotted at <see cref="BeginBreak"/> (GameLoop ticks).</summary>
+    public int BreakRequiredTicks { get; private set; }
     public bool HasBreakTarget { get; private set; }
 
     /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
     public (int X, int Y, int Z)? OpenChest { get; set; }
 
-    public void BeginBreak(int x, int y, int z, ulong tick)
+    public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks)
     {
         BreakTargetX = x;
         BreakTargetY = y;
         BreakTargetZ = z;
         BreakStartedTick = tick;
+        BreakRequiredTicks = requiredTicks;
         HasBreakTarget = true;
     }
 
     public void AbortBreak()
     {
         HasBreakTarget = false;
+        BreakRequiredTicks = 0;
     }
 
     public bool IsBreakTarget(int x, int y, int z) =>

@@ -9,7 +9,7 @@ public class OpenConnectionReply2 : IPacket
     public byte Id => (byte)Enumerator.MessageIdentifier.OpenConnectionReply2;
 
     public ulong ServerGuid { get; set; }
-    public IPEndPoint ClientAddress { get; set; }
+    public IPEndPoint ClientAddress { get; set; } = new(IPAddress.Any, 0);
     public ushort MTUSize { get; set; }
     public bool ServerSecurity { get; set; }
 

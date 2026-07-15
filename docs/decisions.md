@@ -231,11 +231,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 27. Server-authoritative break timing
 
-**Choice:** Soft blocks use `Blocks.BreakTicks` against AuthInput `start_break`/`continue_destroy` → `Player.BeginBreak` + elapsed GameLoop ticks before `predict_destroy`/`TrySubmitBreak` succeeds. Zero-tick blocks (air) unchanged. Early/wrong-cell breaks rejected with Debug log.
+**Choice:** Soft blocks use `Blocks.BreakTicks` (empty-hand ≈ hardness×5s @ 20 TPS) snapshotted on AuthInput `start_break`. Same-cell `continue_destroy` does **not** reset the dig timer or re-send `StartCrack` (that finished the crack animation before `SetBlock`). Crack LevelEvent data = `round(65535 / ticks)` (PM/Geyser). Creative InstantBuild skips crack + timing gate. Early/wrong-cell breaks rejected with Debug log.
 
-**Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Timing is intentionally coarse (empty-hand table only).
+**Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Restarting crack on every continue made the animation complete while the server still rejected `predict_destroy`.
 
-**Deferred:** Tool speed, efficiency enchant, crack particles / LevelEvent fan-out.
+**Deferred:** Tool speed, efficiency enchant, crack particles / LevelEvent fan-out, `BLOCK_BREAK_SPEED` (3602) mid-dig updates.
 
 ### 28. Chests — RAM store + ISR container 7 (MVP)
 

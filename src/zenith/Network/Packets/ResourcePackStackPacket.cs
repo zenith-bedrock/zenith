@@ -9,7 +9,7 @@ class ResourcePackStackPacket : DataPacket
     public bool MustAccept { get; set; }
     // TODO: behavior packs
     // TODO: texture packs
-    public string GameVersion { get; set; }
+    public string GameVersion { get; set; } = "";
     // TODO: experiments
     public bool ExperimentsPreviouslyToggled { get; set; }
     public bool HasEditorPacks { get; set; }

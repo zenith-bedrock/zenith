@@ -8,7 +8,7 @@ class StartGamePacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.START_GAME_PACKET;
 
-    public string LevelName;
+    public string LevelName = "";
     public long EntityId = 0;
     public int GameMode = 0;
     public float PositionX;

@@ -1,5 +1,6 @@
 using Zenith.Network.Packets;
 using Zenith.Network.Session;
+using Zenith.World;
 
 namespace Zenith.Network.Protocol;
 
@@ -157,13 +158,12 @@ sealed class WorldProtocol
 
     public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks)
     {
-        var data = breakTicks <= 0 ? 65535 : Math.Max(1, 65535 / breakTicks);
         SendLevelEvent(
             LevelEventPacket.EventStartBlockCracking,
             blockX + 0.5f,
             blockY + 0.5f,
             blockZ + 0.5f,
-            data);
+            Blocks.CrackEventData(breakTicks));
     }
 
     public void SendBlockStopCrack(int blockX, int blockY, int blockZ) =>
