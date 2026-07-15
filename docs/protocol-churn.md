@@ -1,6 +1,6 @@
 # Protocol churn checklist
 
-**Last review:** Jul 2026 (CraftingDataPacket §35 — remint after CreativeContent; SetActorData/UpdateAttributes §34)
+**Last review:** Jul 2026 (UpdateAbilities + AdventureSettings §37 after §34 HUD; CraftingData §35; RequestAbility inbound)
 
 Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Manual** — no remote schema scraper.
 
@@ -14,6 +14,8 @@ Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Man
    - `CreativeContentPacket` (Groups + CreativeItems; after ItemRegistry in login)
    - `CraftingDataPacket` (shapeless remint from RecipeRegistry; ClearRecipes; after CreativeContent — §35)
    - `SetActorDataPacket` / `UpdateAttributesPacket` (local HUD seed after BiomeDefinitionList — §34)
+   - `UpdateAbilitiesPacket` / `UpdateAdventureSettingsPacket` (after §34 attributes; AbilityData SSOT with AddPlayer — §37)
+   - `RequestAbilityPacket` (inbound FLYING echo in Creative — §37)
    - `LevelChunkPacket`
    - Inventory / ItemStackRequest paths (SAI on)
 3. Smoke: login → InGame on that client.

@@ -3,7 +3,7 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Network.Packets;
 
 /// <summary>AddPlayer (0x0c) — spawn visual de outro jogador no mundo do receptor.</summary>
-class AddPlayerPacket : DataPacket
+sealed class AddPlayerPacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.ADD_PLAYER_PACKET;
 
@@ -47,7 +47,7 @@ class AddPlayerPacket : DataPacket
         EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Username);
         writer.WriteUnsignedVarInt(0); // property sync ints
         writer.WriteUnsignedVarInt(0); // property sync floats
-        WriteMinimalAbilities(ref writer, (long)ActorRuntimeId);
+        AbilityData.Write(ref writer, (long)ActorRuntimeId, AbilityData.ValuesForGameMode(GameMode));
         writer.WriteUnsignedVarInt(0); // links
         writer.WriteVarString(DeviceId);
         writer.WriteInt(BuildPlatform, BinaryStream.Endianess.Little);
@@ -55,28 +55,4 @@ class AddPlayerPacket : DataPacket
     }
 
     public override void Decode(ref BinaryStream stream) { }
-
-    private static void WriteMinimalAbilities(ref BinaryStream writer, long targetUniqueId)
-    {
-        uint allSet = (1u << AbilityBits.Count) - 1;
-        uint values =
-            AbilityBits.Bit(AbilityBits.Build) |
-            AbilityBits.Bit(AbilityBits.Mine) |
-            AbilityBits.Bit(AbilityBits.DoorsAndSwitches) |
-            AbilityBits.Bit(AbilityBits.OpenContainers) |
-            AbilityBits.Bit(AbilityBits.AttackPlayers) |
-            AbilityBits.Bit(AbilityBits.AttackMobs) |
-            AbilityBits.Bit(AbilityBits.WalkSpeed);
-
-        writer.WriteULong((ulong)targetUniqueId, BinaryStream.Endianess.Little);
-        writer.WriteByte(AbilityBits.PlayerPermissionMember);
-        writer.WriteByte(AbilityBits.CommandPermissionNormal);
-        writer.WriteByte(1); // layer count
-        writer.WriteUShort(AbilityBits.LayerBase, BinaryStream.Endianess.Little);
-        writer.WriteUInt(allSet, BinaryStream.Endianess.Little);
-        writer.WriteUInt(values, BinaryStream.Endianess.Little);
-        writer.WriteFloat(0.05f, BinaryStream.Endianess.Little);
-        writer.WriteFloat(1.0f, BinaryStream.Endianess.Little);
-        writer.WriteFloat(0.1f, BinaryStream.Endianess.Little);
-    }
 }

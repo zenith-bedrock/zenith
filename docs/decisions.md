@@ -300,7 +300,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Survival clients expect local metadata/attributes; omission leaves air/hunger HUD broken. Smallest honest surface (Rule 7); food/effects remain Deferred (§14–16). Domain vitals without tick authority would mirror pre-§17 inventory lie.
 
-**Deferred:** Local UpdateAbilities/Adventure; VitalsSystem + Player vitals authority; water/`AirSupply`; hunger tick; food; damage.
+**Deferred:** VitalsSystem + Player vitals authority; water/`AirSupply`; hunger tick; food; damage. (UpdateAbilities/Adventure → §37.)
 
 ### 35. CraftingDataPacket remint (RecipeRegistry SSOT)
 
@@ -321,6 +321,14 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Why:** Rule 7 — LAN floor grief is the only bound that is cheap and honest without persistence redesign. Overlays/chests stay document+observe until LevelDB/eviction design exists. No `BoundedStore` framework; no Blocks→Context migrate in this leva (§25 remains).
 
 **Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay eviction with I/O on tick.
+
+### 37. UpdateAbilities + AdventureSettings (spawn seed + fly echo)
+
+**Choice:** After §34 `SetActorData`/`UpdateAttributes`, send `UpdateAbilities` (`0xBB`) then `UpdateAdventureSettings` (`0xBC`) before PreSpawn. Shared `AbilityData` writer (SSOT) also used by `AddPlayer` via wire `GameMode` int. Survival mask = pre-refactor golden bits; Creative = Survival + `MayFly` + `InstantBuild` + `Flying` (join already flying — intentional vs Vedrock). `Invulnerable` off. Runtime id = unique id. Inbound `RequestAbility` (`0xB8`) for `FLYING` only: Creative echoes `SendLocalAbilities` with packet bool (stateless); Survival ignore (no kick). Adventure LAN defaults: ShowNameTags + AutoJump.
+
+**Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
+
+**Deferred / next honesty:** CraftCreative / place-from-creative-palette; Vitals; inv/chest persist; drop-entity §32; `/gamemode`.
 
 ### OpenInventory / chest UI (note under §28)
 

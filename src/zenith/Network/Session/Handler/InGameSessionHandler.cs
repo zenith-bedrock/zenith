@@ -69,6 +69,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleContainerClose(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.REQUEST_ABILITY_PACKET:
+                HandleRequestAbility(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
@@ -356,6 +360,26 @@ class InGameSessionHandler : ISessionHandler
         else
             session.Context.Logger.Debug(
                 $"Place queued from {player.Username} @ {tx},{ty},{tz} rid={runtimeId}");
+    }
+
+    private static void HandleRequestAbility(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = new RequestAbilityPacket();
+        packet.Decode(ref stream);
+
+        if (packet.Ability != AbilityBits.Flying)
+            return;
+
+        var player = session.Player;
+        if (player is null) return;
+
+        if (player.GameMode != GameMode.Creative)
+            return;
+
+        session.Protocol.Entity.SendLocalAbilities(
+            player.RuntimeId,
+            AbilityBits.WireGameModeCreative,
+            flying: packet.BoolValue);
     }
 
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)

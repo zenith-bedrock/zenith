@@ -113,4 +113,16 @@ sealed class EntityProtocol
     {
         _session.SendDataPacket(UpdateAttributesPacket.CreateFrozenDefaults(actorRuntimeId));
     }
+
+    /// <summary>Local UpdateAbilities seed / RequestAbility echo — runtime id = unique id (§37).</summary>
+    public void SendLocalAbilities(long uniqueId, int wireGameMode, bool flying = true)
+    {
+        _session.SendDataPacket(UpdateAbilitiesPacket.Create(uniqueId, wireGameMode, flying));
+    }
+
+    /// <summary>LAN UpdateAdventureSettings defaults (§37).</summary>
+    public void SendAdventureSettings()
+    {
+        _session.SendDataPacket(UpdateAdventureSettingsPacket.CreateLanDefaults());
+    }
 }
