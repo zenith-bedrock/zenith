@@ -112,7 +112,8 @@ sealed class BlockSystem : IGameSystem
                     player.BreakTargetZ);
             player.AbortBreak();
 
-            if (previous == Blocks.Chest)
+            var wasChest = Blocks.IsChest(previous);
+            if (wasChest)
             {
                 if (player.OpenChest is { } open &&
                     open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
@@ -134,9 +135,11 @@ sealed class BlockSystem : IGameSystem
 
             if (!creative)
             {
-                if (!player.Inventory.TryAdd(previous))
+                // Oriented chest → item form (south) so stacks merge.
+                var dropRid = wasChest ? Blocks.Chest : previous;
+                if (!player.Inventory.TryAdd(dropRid))
                 {
-                    if (_world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, previous, 1))
+                    if (_world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, dropRid, 1))
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -149,7 +152,7 @@ sealed class BlockSystem : IGameSystem
 
         _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
 
-        if (edit.BlockRuntimeId == Blocks.Chest)
+        if (Blocks.IsChest(edit.BlockRuntimeId))
         {
             _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
             _world.PersistChest(edit.X, edit.Y, edit.Z);

@@ -74,6 +74,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleRequestAbility(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.DISCONNECT_PACKET:
+                HandleDisconnect(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
@@ -402,7 +406,7 @@ class InGameSessionHandler : ISessionHandler
         var clicked = session.Context.World.GetBlock(blockX, blockY, blockZ);
 
         // Empty hand on chest → open UI (§28). Sneak+place não modelado ainda.
-        if (clicked == Blocks.Chest && (stack.IsEmpty || stack.Count <= 0))
+        if (Blocks.IsChest(clicked) && (stack.IsEmpty || stack.Count <= 0))
         {
             OpenChestUi(session, player, blockX, blockY, blockZ);
             return;
@@ -416,6 +420,9 @@ class InGameSessionHandler : ISessionHandler
 
         var runtimeId = stack.RuntimeId;
         if (runtimeId == World.World.AirRuntimeId) return;
+        // Facing policy on live place only — BlockSystem / SubmitBlockEdit with raw Blocks.Chest stay as-given.
+        if (Blocks.IsChest(runtimeId))
+            runtimeId = ChestFacing.RuntimeIdFromYaw(player.Yaw);
 
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot);
@@ -450,6 +457,15 @@ class InGameSessionHandler : ISessionHandler
             player.RuntimeId,
             AbilityBits.WireGameModeCreative,
             flying: packet.BoolValue);
+    }
+
+    private static void HandleDisconnect(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<DisconnectPacket>(ref stream);
+        session.Context.Logger.Info(
+            $"DisconnectPacket from {session.Player?.Username ?? session.RakSession.EndPoint.ToString()}: " +
+            $"reason={packet.Reason}, message={packet.Message}");
+        session.Disconnect();
     }
 
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)

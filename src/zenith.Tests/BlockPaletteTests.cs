@@ -33,6 +33,34 @@ public class BlockPaletteTests
     }
 
     [Fact]
+    public void Chest_Require_name_is_south_and_cardinals_resolve()
+    {
+        Blocks.ResetForTests();
+        var palette = BlockPaletteLoader.FromEmbeddedResource();
+        Blocks.Load(palette);
+
+        const int south = 741882976;
+        const int west = 1429214429;
+        const int north = -1132117234;
+        const int east = 2001328343;
+
+        Assert.Equal(south, palette.Require("minecraft:chest"));
+        Assert.Equal(south, Blocks.Chest);
+        Assert.Equal(south, palette.Require("minecraft:chest", Blocks.CardinalDirectionKey, Blocks.CardinalSouth));
+        Assert.Equal(west, palette.Require("minecraft:chest", Blocks.CardinalDirectionKey, Blocks.CardinalWest));
+        Assert.Equal(north, palette.Require("minecraft:chest", Blocks.CardinalDirectionKey, Blocks.CardinalNorth));
+        Assert.Equal(east, palette.Require("minecraft:chest", Blocks.CardinalDirectionKey, Blocks.CardinalEast));
+
+        Assert.True(Blocks.IsChest(south));
+        Assert.True(Blocks.IsChest(west));
+        Assert.True(Blocks.IsChest(north));
+        Assert.True(Blocks.IsChest(east));
+        Assert.False(Blocks.IsChest(Blocks.Stone));
+        Assert.Equal(75, Blocks.BreakTicks(north));
+        Assert.Equal(north, Blocks.ChestForFacing(Blocks.CardinalNorth));
+    }
+
+    [Fact]
     public void PropertyData_empty_compound_is_valid_network_nbt()
     {
         var bytes = NbtCodec.Encode(

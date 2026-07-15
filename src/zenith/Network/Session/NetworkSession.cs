@@ -105,6 +105,7 @@ class NetworkSession
             Context.EventBus.Publish(new PlayerQuitEvent(Player));
         }
 
+        RakSession.HasGameIdentity = false;
         _handler.OnDisable(this);
     }
 

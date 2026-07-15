@@ -81,12 +81,24 @@ class LoginSessionHandler : ISessionHandler
 
         if (!session.Context.PlayerManager.TryAdd(player))
         {
-            session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
-            session.Disconnect();
-            return;
+            var existing = session.Context.PlayerManager.Get(identity.DisplayName);
+            if (existing is not null)
+            {
+                session.Context.Logger.Warning(
+                    $"Displacing already-online player '{identity.DisplayName}' for reconnect.");
+                existing.Session.Disconnect();
+            }
+
+            if (!session.Context.PlayerManager.TryAdd(player))
+            {
+                session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
+                session.Disconnect();
+                return;
+            }
         }
 
         session.Player = player;
+        session.RakSession.HasGameIdentity = true;
         _ = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 

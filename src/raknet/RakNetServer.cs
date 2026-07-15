@@ -32,7 +32,12 @@ public class RakNetServer
 
     public ulong Guid { get; init; } = GenerateGuid();
     public IPEndPoint RemoteEndPoint { get; init; }
+
+    /// <summary>Snapshot list — allocates. Prefer <see cref="ConnectionCount"/> for occupancy checks.</summary>
     public List<RakNetSession> Connections => _sessions.Values.ToList();
+
+    public int ConnectionCount => _sessions.Count;
+
     public uint MaxConnections { get; init; } = 20;
 
     /// <summary>Máximo de sessões simultâneas por IP, independente do MaxConnections global.
@@ -44,6 +49,12 @@ public class RakNetServer
     public string ListGameMode { get; init; } = "Survival";
     public int ProtocolVersion { get; init; } = 1001;
     public string VersionName { get; init; } = "1.21.50";
+
+    /// <summary>
+    /// MOTD “online” count. When set (Zenith wires <c>PlayerManager.Count</c>), list UI
+    /// shows players — not raw RakNet sessions. Null → <see cref="ConnectionCount"/>.
+    /// </summary>
+    public Func<int>? OnlinePlayerCount { get; set; }
 
     public ILogger? Logger { get; init; }
     public IRakNetSessionListener? SessionListener { get; set; } = null;
@@ -110,6 +121,45 @@ public class RakNetServer
 
     public int CountSessionsByAddress(IPAddress address) =>
         _sessions.Values.Count(s => s.EndPoint.Address.Equals(address));
+
+    /// <summary>
+    /// Evict one session for <paramref name="address"/> to free a MaxConnectionsPerAddress
+    /// slot: prefer <see cref="RakNetSession.HasGameIdentity"/> == false, then oldest LastSeen.
+    /// </summary>
+    public bool TryEvictSessionForAddress(IPAddress address, out RakNetSession? victim)
+    {
+        RakNetSession? best = null;
+        foreach (var session in _sessions.Values)
+        {
+            if (!session.EndPoint.Address.Equals(address))
+                continue;
+            if (best is null)
+            {
+                best = session;
+                continue;
+            }
+
+            var preferNew = !session.HasGameIdentity && best.HasGameIdentity;
+            var bothSameIdentity = session.HasGameIdentity == best.HasGameIdentity;
+            if (preferNew || (bothSameIdentity && session.LastSeen < best.LastSeen))
+                best = session;
+        }
+
+        if (best is null)
+        {
+            victim = null;
+            return false;
+        }
+
+        Logger?.Warning(
+            $"Evicting session {best.EndPoint} (HasGameIdentity={best.HasGameIdentity}) " +
+            $"to free a slot for {address}.");
+        best.Disconnect(DisconnectReason.ServerDisconnect);
+        victim = best;
+        return true;
+    }
+
+    public int MotdOnlineCount => OnlinePlayerCount?.Invoke() ?? ConnectionCount;
 
     public async Task StartAsync()
     {

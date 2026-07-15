@@ -23,6 +23,12 @@ public class RakNetSession
     public required ushort MTU { get; init; }
     public long LastSeen { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+    /// <summary>
+    /// Set by the game layer after a Player is bound (login). Used when choosing which
+    /// same-IP session to evict at MaxConnectionsPerAddress — prefer unbound ghosts.
+    /// </summary>
+    public bool HasGameIdentity { get; set; }
+
     protected readonly HashSet<uint> ReceivedFrameSequences = new();
     protected readonly HashSet<uint> LostFrameSequences = new();
     protected readonly uint[] InputHighestSequenceIndex = new uint[32];

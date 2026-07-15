@@ -87,7 +87,8 @@ class ZenithServer
             SubMotd = config.Server.SubMotd,
             ListGameMode = config.Server.Gamemode,
             ProtocolVersion = ServerIdentity.ProtocolVersion,
-            VersionName = ServerIdentity.VersionName
+            VersionName = ServerIdentity.VersionName,
+            OnlinePlayerCount = () => Context.PlayerManager.Count
         };
     }
 

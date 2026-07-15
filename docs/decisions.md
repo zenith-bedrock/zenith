@@ -394,6 +394,33 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Smoke:** Explore far without LevelDB growth proportional to columns visited; overlays still persist across restart.
 
+### 46. Chest facing only (no double-chest)
+
+**Choice:** Palette secondary index `name + one string-state → network_id` (chest `minecraft:cardinal_direction`). Live place remaps chest item rid → facing from player yaw in `InGameSessionHandler` (front toward player = opposite look). `Blocks.Chest` remains south (item/recipe/creative). `IsChest` covers all four rids; break drops canonical `Blocks.Chest`. `BlockSystem` does not reorient intents submitted as raw south (tests / tools).
+
+**Why:** Adjacent south-south chests client-merge as a visual double while server keeps 2×27 (`ct:`). Correct facing is medium polish without BlockActor / pair model.
+
+**Deferred:** Double-chest (54 slots, sneak-pair, UI); trapped/ender/copper; stairs/beds/doors facing stack.
+
+**Known:** Two adjacent chests with the same cardinal still mesh as a double on the Bedrock client — not a 54-slot container.
+
+**Smoke:** Place chest while looking each cardinal → UpdateBlock rid matches; break always returns stackable south item; open/break works on any facing.
+
+### 47. MOTD online count + ghost session hygiene
+
+**Choice:**
+
+1. `RakNetServer.OnlinePlayerCount` (`Func<int>?`) wired to `PlayerManager.Count` — MOTD online is players, not `ConnectionCount` (avoids `Connections.ToList()` on ping).
+2. Bedrock `DisconnectPacket` → `session.Disconnect()` in PreSpawn + InGame (closes transport + `HandleClose`).
+3. At `MaxConnectionsPerAddress`, OCR2 **evicts** one same-IP session (`HasGameIdentity == false` preferred, else oldest `LastSeen`) then accepts — does not only reject.
+4. Login displace: if `TryAdd` fails, disconnect existing same username and retry.
+
+**Why:** Quit without RakNet teardown left UDP sessions until 15s timeout; MOTD inflated; rapid rejoins from new ephemeral ports burned `max-players-per-ip` (default 3) while the host still saw one in-world player.
+
+**Deferred:** Shorter global idle timeout; kicking live NAT roommates beyond unbound-prefer; logging mute for RakNet digests.
+
+**Smoke:** Peer leaves → MOTD shows 1 (host). Rejoin repeatedly from same IP without wedging at 3.
+
 ### OpenInventory / chest UI (note under §28)
 
 Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→Protocol (same-session UI), not GameLoop intents. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`. Opening a window is transmit of a decided view, not world mutation.

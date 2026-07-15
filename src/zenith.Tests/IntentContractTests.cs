@@ -540,6 +540,30 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_break_oriented_chest_drops_item_form()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chestbreak");
+        StandNear(player, 5, 64, 5);
+        var north = Blocks.ChestForFacing(Blocks.CardinalNorth);
+        Assert.NotEqual(Blocks.Chest, north);
+        fx.World.SetBlock(5, 64, 5, north);
+        fx.World.Chests.Ensure(5, 64, 5);
+
+        // Starter kit already has chests in hotbar slot 5 — merge target.
+        var before = player.Inventory.Get(5).Count;
+
+        BeginBreakReady(fx.Clock, fx.World, player, 5, 64, 5);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
+        Assert.False(fx.World.Chests.TryGetSlots(5, 64, 5, out _));
+        Assert.Equal(Blocks.Chest, player.Inventory.Get(5).RuntimeId);
+        Assert.Equal(before + 1, player.Inventory.Get(5).Count);
+    }
+
+    [Fact]
     public void InventorySystem_transfers_to_open_chest_flat()
     {
         var fx = new IntentTestFixture();

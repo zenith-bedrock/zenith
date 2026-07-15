@@ -11,6 +11,12 @@ namespace Zenith.World;
 /// </remarks>
 static class Blocks
 {
+    public const string CardinalNorth = "north";
+    public const string CardinalSouth = "south";
+    public const string CardinalEast = "east";
+    public const string CardinalWest = "west";
+    public const string CardinalDirectionKey = "minecraft:cardinal_direction";
+
     private static int _air;
     private static int _stone;
     private static int _grassBlock;
@@ -19,6 +25,11 @@ static class Blocks
     private static int _oakLog;
     private static int _sand;
     private static int _chest;
+    private static int _chestNorth;
+    private static int _chestSouth;
+    private static int _chestEast;
+    private static int _chestWest;
+    private static HashSet<int>? _chestIds;
     private static Dictionary<int, string>? _nameByRuntime;
     private static bool _loaded;
 
@@ -29,6 +40,8 @@ static class Blocks
     public static int OakPlanks { get { EnsureLoaded(); return _oakPlanks; } }
     public static int OakLog { get { EnsureLoaded(); return _oakLog; } }
     public static int Sand { get { EnsureLoaded(); return _sand; } }
+
+    /// <summary>Item / recipe / default place form — south palette entry.</summary>
     public static int Chest { get { EnsureLoaded(); return _chest; } }
 
     public const int FlatMinY = -64;
@@ -48,6 +61,13 @@ static class Blocks
         _oakLog = palette.Require("minecraft:oak_log");
         _sand = palette.Require("minecraft:sand");
         _chest = palette.Require("minecraft:chest");
+        _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
+        _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
+        _chestNorth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalNorth);
+        _chestEast = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalEast);
+        _chestIds = [_chestSouth, _chestWest, _chestNorth, _chestEast];
+        // Require(name) may equal south — keep one set entry.
+        _chestIds.Add(_chest);
         _nameByRuntime = new Dictionary<int, string>
         {
             [_air] = "minecraft:air",
@@ -57,9 +77,33 @@ static class Blocks
             [_oakPlanks] = "minecraft:oak_planks",
             [_oakLog] = "minecraft:oak_log",
             [_sand] = "minecraft:sand",
-            [_chest] = "minecraft:chest",
+            [_chestSouth] = "minecraft:chest",
+            [_chestWest] = "minecraft:chest",
+            [_chestNorth] = "minecraft:chest",
+            [_chestEast] = "minecraft:chest",
         };
+        if (!_nameByRuntime.ContainsKey(_chest))
+            _nameByRuntime[_chest] = "minecraft:chest";
         _loaded = true;
+    }
+
+    public static bool IsChest(int runtimeId)
+    {
+        EnsureLoaded();
+        return _chestIds is not null && _chestIds.Contains(runtimeId);
+    }
+
+    /// <summary>World block rid for a cardinal facing; unknown → south item form.</summary>
+    public static int ChestForFacing(string cardinalDirection)
+    {
+        EnsureLoaded();
+        return cardinalDirection switch
+        {
+            CardinalNorth => _chestNorth,
+            CardinalEast => _chestEast,
+            CardinalWest => _chestWest,
+            _ => _chestSouth
+        };
     }
 
     public static bool TryGetName(int runtimeId, out string name)
@@ -86,8 +130,8 @@ static class Blocks
         if (runtimeId == _grassBlock) return 18;
         // planks/log hardness 2 → 3s → 60 ticks
         if (runtimeId == _oakPlanks || runtimeId == _oakLog) return 60;
-        // chest hardness 2.5 → 3.75s → 75 ticks
-        if (runtimeId == _chest) return 75;
+        // chest hardness 2.5 → 3.75s → 75 ticks (any facing)
+        if (IsChest(runtimeId)) return 75;
         // stone hardness 1.5, hand unsuitable → 7.5s → 150 ticks
         if (runtimeId == _stone) return 150;
         return 60;
@@ -112,6 +156,8 @@ static class Blocks
     {
         _loaded = false;
         _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _chest = 0;
+        _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
+        _chestIds = null;
         _nameByRuntime = null;
     }
 }

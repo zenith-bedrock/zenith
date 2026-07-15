@@ -33,8 +33,10 @@ class PreSpawnSessionHandler : ISessionHandler
 
             case (int)ProtocolInfo.DISCONNECT_PACKET:
                 var disconnect = DataPacket.From<DisconnectPacket>(ref stream);
-                session.Context.Logger.Error($"[DisconnectPacket] Reason: {disconnect.Reason}, Message: {disconnect.Message}");
-                return false;
+                session.Context.Logger.Info(
+                    $"[DisconnectPacket] Reason: {disconnect.Reason}, Message: {disconnect.Message}");
+                session.Disconnect();
+                return true;
 
             default:
                 return false;

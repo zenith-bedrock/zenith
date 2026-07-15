@@ -32,7 +32,7 @@ public class UnconnectedRakNet
         {
             case (byte)MessageIdentifier.UnconnectedPing:
                 var ping = IPacket.From<UnconnectedPing>(ref reader);
-                var online = _server.Connections.Count;
+                var online = _server.MotdOnlineCount;
                 var max = _server.MaxConnections;
                 var port = _server.RemoteEndPoint.Port;
                 var pongBuffer = new UnconnectedPong
@@ -76,7 +76,7 @@ public class UnconnectedRakNet
                     return true;
                 }
 
-                if (_server.Connections.Count >= _server.MaxConnections)
+                if (_server.ConnectionCount >= _server.MaxConnections)
                 {
                     _server.Logger?.Warning($"Rejected connection from {remoteEndPoint}: server full.");
                     return true;
@@ -84,8 +84,12 @@ public class UnconnectedRakNet
 
                 if (_server.CountSessionsByAddress(remoteEndPoint.Address) >= _server.MaxConnectionsPerAddress)
                 {
-                    _server.Logger?.Warning($"Rejected connection from {remoteEndPoint}: too many connections from this address.");
-                    return true;
+                    if (!_server.TryEvictSessionForAddress(remoteEndPoint.Address, out _))
+                    {
+                        _server.Logger?.Warning(
+                            $"Rejected connection from {remoteEndPoint}: too many connections from this address.");
+                        return true;
+                    }
                 }
 
                 if (!_server.TryConsumeConnectionAttempt(remoteEndPoint.Address))
