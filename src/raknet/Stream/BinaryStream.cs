@@ -29,8 +29,10 @@ public ref struct BinaryStream : IDisposable
     /// <summary>
     /// Backing array. Em modo de escrita pode estar sobre-alocado (capacidade > dados
     /// válidos); use <see cref="Length"/> pra saber quantos bytes são válidos, nunca
-    /// <c>Buffer.Length</c>. Em modo de leitura (buffer passado no construtor) os dois
-    /// sempre coincidem.
+    /// <c>Buffer.Length</c>. Em leitura com <see cref="BinaryStream(byte[])"/>,
+    /// <see cref="Length"/> == <c>Buffer.Length</c>; com
+    /// <see cref="BinaryStream(byte[], int)"/>, <see cref="Length"/> é o prefixo válido
+    /// (ex. buffer do <c>ArrayPool</c>).
     /// </summary>
     public byte[] Buffer { get; private set; }
 
@@ -45,10 +47,12 @@ public ref struct BinaryStream : IDisposable
     /// </summary>
     public Span<byte> GetBufferDisposing()
     {
+        ThrowIfDisposed();
         var span = new Span<byte>(Buffer, 0, Length);
         Buffer = Array.Empty<byte>();
         Length = 0;
         Offset = 0;
+        _disposed = true;
         return span;
     }
 
@@ -75,17 +79,24 @@ public ref struct BinaryStream : IDisposable
     /// </summary>
     public BinaryStream(byte[] buffer, int length)
     {
+        ArgumentNullException.ThrowIfNull(buffer);
+        if ((uint)length > (uint)buffer.Length)
+            throw new ArgumentOutOfRangeException(nameof(length), length, "Length must be within the buffer.");
+
         Buffer = buffer;
         Length = length;
         Offset = 0;
     }
 
-    public void Rewind() => Offset = 0;
+    public void Rewind()
+    {
+        ThrowIfDisposed();
+        Offset = 0;
+    }
 
     public Span<byte> ReadSpan(int len)
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(BinaryStream));
+        ThrowIfDisposed();
 
         switch (len)
         {
@@ -107,6 +118,7 @@ public ref struct BinaryStream : IDisposable
 
     public Span<byte> ReadRemaining()
     {
+        ThrowIfDisposed();
         if (Offset >= Length)
         {
             throw new InvalidOperationException("No bytes left to read");
@@ -125,6 +137,7 @@ public ref struct BinaryStream : IDisposable
     /// </summary>
     private void EnsureCapacity(int additional)
     {
+        ThrowIfDisposed();
         var required = Length + additional;
         if (required <= Buffer.Length) return;
 
@@ -138,6 +151,7 @@ public ref struct BinaryStream : IDisposable
 
     public void Write(scoped ReadOnlySpan<byte> data)
     {
+        ThrowIfDisposed();
         if (data.Length == 0) return;
 
         EnsureCapacity(data.Length);
@@ -154,6 +168,7 @@ public ref struct BinaryStream : IDisposable
     /// <summary>Escreve um único byte sem alocar nenhum array temporário.</summary>
     public void WriteByte(byte v)
     {
+        ThrowIfDisposed();
         EnsureCapacity(1);
         Buffer[Length] = v;
         Length += 1;
@@ -453,5 +468,11 @@ public ref struct BinaryStream : IDisposable
         Buffer = Array.Empty<byte>();
         Length = 0;
         Offset = 0;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(BinaryStream));
     }
 }

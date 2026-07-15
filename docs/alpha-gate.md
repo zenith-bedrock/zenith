@@ -39,8 +39,8 @@ docker compose up --build
 ## Manual smoke (see ARCHITECTURE.md)
 
 - [ ] Baseline MP 1–12 + S35 / S37 / S38 / S39 / S39b / S40 / **S41** (peer sees crack)
-- [ ] Overlay: place 100 blocks → restart → blocks intact (< 10k warn threshold)
-- [ ] Crash recovery: place block + chest item + inventory item → `kill -9` server → restart → world, chest, inventory intact (LevelDB CURRENT trust)
+- [ ] Overlay: place 100 blocks → **graceful** restart → blocks intact (< 10k warn threshold)
+- [ ] Crash soft check (optional): place blocks → brief pause → `kill -9` → restart → LevelDB `CURRENT` world/overlays that already hit WAL may survive; **do not** require recent `inv:`/`ct:` intact — Puts are fire-and-forget until `FlushAsync` on graceful shutdown (§39 / §41)
 
 ## Tag & publish
 
@@ -62,4 +62,4 @@ Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop
 | `world.path` empty | **InMemory** — wiped on restart, **no warning** |
 | Relative `world.path` | Under `AppContext.BaseDirectory` (DLL dir), not shell cwd |
 | Auth sample | Chain signatures often off for LAN; boot WARNING; enable before public exposure |
-| ZLIB decompression (2 MB cap) | Malformed/zombie compressed payload rejected with disconnect; LAN risk low, public is DOS surface |
+| ZLIB decompression (2 MB cap) | Oversized inflate throws; RakNet receive loop logs and drops the datagram (no explicit session disconnect yet). LAN risk low; public is still a DoS/CPU surface |
