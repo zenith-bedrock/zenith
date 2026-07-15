@@ -39,6 +39,8 @@ docker compose up --build
 ## Manual smoke (see ARCHITECTURE.md)
 
 - [ ] Baseline MP 1–12 + S35 / S37 / S38 / S39 / S39b / S40 / **S41** (peer sees crack)
+- [ ] Overlay: place 100 blocks → restart → blocks intact (< 10k warn threshold)
+- [ ] Crash recovery: place block + chest item + inventory item → `kill -9` server → restart → world, chest, inventory intact (LevelDB CURRENT trust)
 
 ## Tag & publish
 
@@ -60,3 +62,4 @@ Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop
 | `world.path` empty | **InMemory** — wiped on restart, **no warning** |
 | Relative `world.path` | Under `AppContext.BaseDirectory` (DLL dir), not shell cwd |
 | Auth sample | Chain signatures often off for LAN; boot WARNING; enable before public exposure |
+| ZLIB decompression (2 MB cap) | Malformed/zombie compressed payload rejected with disconnect; LAN risk low, public is DOS surface |
