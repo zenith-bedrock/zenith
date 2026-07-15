@@ -7,10 +7,11 @@
 - Login → flat world + overlay place/break; chat + player visibility
 - Inventory 36 slots + ISR rearrange; held-item peer sync
 - LevelDB Zenith keys `c:` / `ov:` (and `ct:` / `inv:`) under `worlds/<name>/`
-- Chests (§28), 2×2 crafting (§35), Creative from config (§31 / §38)
+- Chests (§28) + chest facing (§46), 2×2 crafting (§35), Creative from config (§31 / §38)
 - Inventory / chest persist across graceful restart (§39 / §41)
 - Server-authoritative break timing + dig crack (self + peers, §27 / §42)
 - Void soft-rescue with local MovePlayer Teleport (§40 / §41)
+- MOTD online count + session hygiene (§47); ordered RakNet fragment reassembly
 - `dotnet test zenith.sln` green at tag time
 
 ### Non-goals (explicitly out of this tag)
@@ -18,7 +19,8 @@
 - Mojang vanilla worlds; `players/` volume
 - Plugins / DI / `/` commands / `/gamemode`
 - Drop-entity wire / WorldEntity; death–Respawn handshake
-- Tool speed / efficiency; biomes / noise; hunger tick
+- Tool speed / efficiency; block gravity (sand/gravel); biomes / noise; hunger tick
+- Double-chest 54 UI (facing-only is shipped)
 - Public production with `auth.require-chain-signatures: false`
 - Actor / domain EventHandler frameworks
 

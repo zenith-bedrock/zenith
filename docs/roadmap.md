@@ -10,15 +10,22 @@ Update this file when a horizon closes (e.g. alpha tagged) or an ADR changes “
 
 **Single source of gate checks:** [`alpha-gate.md`](alpha-gate.md).
 
-Focus: prove LAN multiplayer spine (login → flat world → inventory/chests/craft → persist → crack/void smokes) and ship the tag. Do **not** open plugins, `/` frameworks, biomes, or vanilla worlds in this horizon.
+### Code vs gate
 
-Useful parallel leaves that already belong near the spine (keep PRs small):
+Product spine from the gate is **implemented in-repo** (login → flat + overlay → inventory/chests/craft → LevelDB persist → dig crack + void rescue → `ProductVersion`). ADRs §17–§42 / §46–§48 + leaf tests cover the tree. Gate checkboxes stay **unchecked** until humans finish client smoke + compose + tag — do not tick them from CI alone.
 
-| Leaf | Why it fits now |
-|------|-----------------|
-| Deploy / smoke follow-ups | Fragment reassembly, MOTD/session hygiene, chest facing — validate on real clients |
-| Protocol mismatch UX / logging hygiene | Ops clarity without new gameplay domains |
-| Docs hygiene | CONTRIBUTING, AGENTS, this roadmap |
+**What is left for this horizon (not new features):**
+
+| Remaining | Why |
+|-----------|-----|
+| Manual MP smokes (1–12 + S35–S41) | Two Bedrock clients; mobile MTU still worth a pass |
+| `dotnet test` + compose proof | Sample `deploy/zenith.yml` must be present; LevelDB under `./deploy/worlds/...` |
+| Bugfixes / ops polish that block the tag | Protocol mismatch UX, reconnect edge cases, etc. |
+| Release notes + `git tag v0.0.1-alpha` | See gate “Tag & publish” |
+
+**Already shipped (no longer “parallel leaves to build”):** chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
+
+**Not on this tag** (do not slide into Horizon 0 PRs): sand/gravel gravity, drop-entity wire, death/respawn, tools, double-chest, `/` commands, plugins, biomes. Those are Horizon 1+ or explicit non-goals.
 
 ---
 
@@ -33,8 +40,9 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 3 | **`/gamemode` minimal** | One command path, config-backed modes you already have — **not** a command framework or autocomplete stack ([`dx.md`](dx.md) freeze). ADR first. |
 | 4 | **Tool dig speed / efficiency** | Extends §27; still no enchants catalogue dump. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | Facing-only (§46) does not unlock this; pair model + store (§28/§39). |
-| 6 | **`players/` or position persist** | After identity/reconnect story is clear; no silent path reinterpret (§20). |
-| 7 | **World beyond flat** | Noise/biomes or import strategy — only when flat+overlay no longer answers LAN product questions. |
+| 6 | **Block gravity** (sand/gravel) | Static placeable today; fall/landing is a new tick domain — ADR first. |
+| 7 | **`players/` or position persist** | After identity/reconnect story is clear; no silent path reinterpret (§20). |
+| 8 | **World beyond flat** | Noise/biomes or import strategy — only when flat+overlay no longer answers LAN product questions. |
 
 If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
 

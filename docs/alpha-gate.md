@@ -2,6 +2,8 @@
 
 Tag only when this checklist is green. Checkboxes stay **manual** at tag time — do not claim they are already green in-repo.
 
+**Implementation note:** the product spine rows below are **coded** (ADRs §17–§42 / §46–§48 + leaf tests). Empty boxes mean “human smoke / compose / release proof still outstanding,” not “feature missing.” Remaining Horizon 0 work is proving that spine on real clients and shipping the tag — see [`roadmap.md`](roadmap.md). Sand/gravel fall physics is **not** required here (Horizon 1).
+
 ## Product spine
 
 - [ ] Login → flat world + overlay place/break; chat + player visibility
@@ -49,7 +51,7 @@ git push origin v0.0.1-alpha
 
 ## Explicit non-goals on the tag
 
-Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop-entity / WorldEntity; death–Respawn; tool speed / efficiency; biomes / noise; hunger tick; public production with `auth.require-chain-signatures: false`.
+Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop-entity / WorldEntity; death–Respawn; tool speed / efficiency; block gravity (sand/gravel); biomes / noise; hunger tick; public production with `auth.require-chain-signatures: false`.
 
 ## Ops traps (must stay in release notes)
 
