@@ -129,34 +129,38 @@ class NetworkSession
         }
 
         byte[]? pooledDecompressed = null;
-        if (compressionType == PacketCompression.ZLIB)
+        try
         {
-            // MemoryStream direto sobre o array existente (com offset), sem copiar o
-            // conteúdo restante pra um array novo só pra alimentar o DeflateStream.
-            using var memoryStream = new MemoryStream(stream.Buffer, stream.Offset, stream.Length - stream.Offset, writable: false);
-            using var inflater = new DeflateStream(memoryStream, CompressionMode.Decompress);
+            if (compressionType == PacketCompression.ZLIB)
+            {
+                // MemoryStream direto sobre o array existente (com offset), sem copiar o
+                // conteúdo restante pra um array novo só pra alimentar o DeflateStream.
+                using var memoryStream = new MemoryStream(stream.Buffer, stream.Offset, stream.Length - stream.Offset, writable: false);
+                using var inflater = new DeflateStream(memoryStream, CompressionMode.Decompress);
 
-            var decompressed = InflateToPooledBuffer(inflater, out var decompressedLength);
+                var decompressed = InflateToPooledBuffer(inflater, out var decompressedLength);
+                stream.Dispose();
+
+                pooledDecompressed = decompressed;
+                stream = new BinaryStream(decompressed, decompressedLength);
+            }
+
+            // TODO: snappy compression
+
+            var gamePacket = IPacket.From<GamePacket>(ref stream);
+            foreach (var buffer in gamePacket.Buffers)
+            {
+                HandleDataPacket(buffer);
+            }
+
+            return false;
+        }
+        finally
+        {
             stream.Dispose();
-
-            pooledDecompressed = decompressed;
-            stream = new BinaryStream(decompressed, decompressedLength);
+            if (pooledDecompressed is not null)
+                ArrayPool<byte>.Shared.Return(pooledDecompressed);
         }
-
-        // TODO: snappy compression
-
-        var gamePacket = IPacket.From<GamePacket>(ref stream);
-        foreach (var buffer in gamePacket.Buffers)
-        {
-            HandleDataPacket(buffer);
-        }
-
-        stream.Dispose();
-
-        if (pooledDecompressed is not null)
-            ArrayPool<byte>.Shared.Return(pooledDecompressed);
-
-        return false;
     }
 
     /// <summary>Limite de segurança contra zip bomb.</summary>

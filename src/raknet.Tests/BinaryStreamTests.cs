@@ -227,6 +227,37 @@ public class BinaryStreamTests
     }
 
     [Fact]
+    public void Buffer_with_length_beyond_array_throws()
+    {
+        var data = new byte[] { 1, 2, 3 };
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BinaryStream(data, length: 4));
+    }
+
+    [Fact]
+    public void Buffer_with_negative_length_throws()
+    {
+        var data = new byte[] { 1, 2, 3 };
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BinaryStream(data, length: -1));
+    }
+
+    [Fact]
+    public void Write_after_Dispose_throws_ObjectDisposed()
+    {
+        var stream = new BinaryStream();
+        stream.Dispose();
+
+        try
+        {
+            stream.WriteByte(1);
+            Assert.Fail("Expected ObjectDisposedException");
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expected
+        }
+    }
+
+    [Fact]
     public void Rewind_resets_offset()
     {
         var stream = new BinaryStream([10, 20, 30]);
