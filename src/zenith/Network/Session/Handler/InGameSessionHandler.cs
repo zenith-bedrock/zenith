@@ -283,12 +283,16 @@ class InGameSessionHandler : ISessionHandler
 
         player.SubmitMovementInput(input);
 
+        if (packet.ItemInteraction is { } useItem)
+            HandleUseItemInteraction(session, player, useItem);
+
         foreach (var action in packet.BlockActions)
         {
             switch (action.Action)
             {
                 case PlayerAuthInputPacket.ActionStartBreak:
                 case PlayerAuthInputPacket.ActionContinueDestroy:
+                case PlayerAuthInputPacket.ActionCrackBreak:
                     HandleBreakProgress(
                         session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
                     break;
@@ -333,31 +337,69 @@ class InGameSessionHandler : ISessionHandler
         if (player is null) return;
         if (packet.TransactionType != InventoryTransactionPacket.TypeUseItem) return;
 
-        if (!PlayerInventory.IsValidHotbarSlot(packet.HotbarSlot))
+        HandleUseItem(
+            session,
+            player,
+            packet.UseActionType,
+            packet.BlockX,
+            packet.BlockY,
+            packet.BlockZ,
+            packet.BlockFace,
+            packet.HotbarSlot);
+    }
+
+    private static void HandleUseItemInteraction(
+        NetworkSession session,
+        Player.Player player,
+        in AuthItemInteraction use)
+    {
+        var face = use.Face is >= 0 and <= 255 ? (byte)use.Face : (byte)0;
+        HandleUseItem(
+            session,
+            player,
+            use.ActionType,
+            use.BlockX,
+            use.BlockY,
+            use.BlockZ,
+            face,
+            use.HotbarSlot);
+    }
+
+    private static void HandleUseItem(
+        NetworkSession session,
+        Player.Player player,
+        int useActionType,
+        int blockX,
+        int blockY,
+        int blockZ,
+        byte blockFace,
+        int hotbarSlot)
+    {
+        if (!PlayerInventory.IsValidHotbarSlot(hotbarSlot))
         {
-            session.Context.Logger.Debug($"Rejected InventoryTransaction: hotbar {packet.HotbarSlot}");
+            session.Context.Logger.Debug($"Rejected UseItem: hotbar {hotbarSlot}");
             return;
         }
 
-        player.SelectedHotbarSlot = packet.HotbarSlot;
+        player.SelectedHotbarSlot = hotbarSlot;
 
-        if (packet.UseActionType == InventoryTransactionPacket.UseDestroyBlock)
+        if (useActionType == InventoryTransactionPacket.UseDestroyBlock)
         {
             session.Context.Logger.Debug(
-                $"InventoryTransaction destroy from {player.Username} @ {packet.BlockX},{packet.BlockY},{packet.BlockZ}");
-            TrySubmitBreak(player, packet.BlockX, packet.BlockY, packet.BlockZ);
+                $"UseItem destroy from {player.Username} @ {blockX},{blockY},{blockZ}");
+            TrySubmitBreak(player, blockX, blockY, blockZ);
             return;
         }
 
-        if (packet.UseActionType != InventoryTransactionPacket.UseClickBlock) return;
+        if (useActionType != InventoryTransactionPacket.UseClickBlock) return;
 
-        var stack = player.Inventory.Get(packet.HotbarSlot);
-        var clicked = session.Context.World.GetBlock(packet.BlockX, packet.BlockY, packet.BlockZ);
+        var stack = player.Inventory.Get(hotbarSlot);
+        var clicked = session.Context.World.GetBlock(blockX, blockY, blockZ);
 
         // Empty hand on chest → open UI (§28). Sneak+place não modelado ainda.
         if (clicked == Blocks.Chest && (stack.IsEmpty || stack.Count <= 0))
         {
-            OpenChestUi(session, player, packet.BlockX, packet.BlockY, packet.BlockZ);
+            OpenChestUi(session, player, blockX, blockY, blockZ);
             return;
         }
 
@@ -370,8 +412,8 @@ class InGameSessionHandler : ISessionHandler
         var runtimeId = stack.RuntimeId;
         if (runtimeId == World.World.AirRuntimeId) return;
 
-        var (tx, ty, tz) = FaceOffset(packet.BlockX, packet.BlockY, packet.BlockZ, packet.BlockFace);
-        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, packet.HotbarSlot);
+        var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
+        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot);
         if (!intent.IsInWorldBounds())
         {
             session.Context.Logger.Debug($"Rejected place OOB from {player.Username}");
@@ -417,8 +459,8 @@ class InGameSessionHandler : ISessionHandler
     }
 
     /// <summary>
-    /// Survival: start_break (and continue only when the target cell changes) begins dig timer + crack.
-    /// Same-cell continue_destroy must not reset timer / RestartCrack — that finishes crack before SetBlock.
+    /// Survival: start_break / new-cell continue / crack_break without target begins dig + crack.
+    /// Same-cell continue_destroy / crack_break keep the timer (do not re-StartCrack — resets client stage).
     /// Creative InstantBuild: no crack / no dig timer (destroy arrives as creative_destroy).
     /// </summary>
     private static void HandleBreakProgress(
@@ -433,11 +475,7 @@ class InGameSessionHandler : ISessionHandler
             return;
 
         if (player.IsBreakTarget(x, y, z))
-        {
-            session.Context.Logger.Debug(
-                $"AuthInput continue same-cell for {player.Username} @ {x},{y},{z} (timer kept)");
             return;
-        }
 
         if (player.HasBreakTarget)
             session.Protocol.World.SendBlockStopCrack(
@@ -447,10 +485,15 @@ class InGameSessionHandler : ISessionHandler
         var need = Blocks.BreakTicks(block);
         player.BeginBreak(x, y, z, session.Context.Clock.CurrentTick, need);
 
-        if (need > 0)
-            session.Protocol.World.SendBlockStartCrack(x, y, z, need);
+        // Always cue crack for breakable cells — data 65535 = one-tick snap for soft blocks.
+        session.Protocol.World.SendBlockStartCrack(x, y, z, need);
 
-        var label = action == PlayerAuthInputPacket.ActionStartBreak ? "start_break" : "continue_destroy";
+        var label = action switch
+        {
+            PlayerAuthInputPacket.ActionStartBreak => "start_break",
+            PlayerAuthInputPacket.ActionCrackBreak => "crack_break",
+            _ => "continue_destroy"
+        };
         session.Context.Logger.Debug(
             $"AuthInput {label} from {player.Username} @ {x},{y},{z} need={need} ticks");
     }

@@ -131,5 +131,71 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(3, packet.BlockActions[0].BlockX);
         Assert.Equal(4, packet.BlockActions[0].BlockY);
         Assert.Equal(5, packet.BlockActions[0].BlockZ);
+
+        Assert.NotNull(packet.ItemInteraction);
+        Assert.Equal(InventoryTransactionPacket.UseDestroyBlock, packet.ItemInteraction!.Value.ActionType);
+        Assert.Equal(3, packet.ItemInteraction.Value.BlockX);
+        Assert.Equal(4, packet.ItemInteraction.Value.BlockY);
+        Assert.Equal(5, packet.ItemInteraction.Value.BlockZ);
+        Assert.Equal(0, packet.ItemInteraction.Value.HotbarSlot);
+    }
+
+    [Fact]
+    public void Decode_item_interaction_click_block_for_chest()
+    {
+        var w = new BinaryStream();
+        for (var i = 0; i < 5; i++)
+            w.WriteFloat(1f, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        // Flag 34 only
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80);
+        w.WriteByte(0x80 | (1 << 6));
+        w.WriteByte(0x00);
+
+        w.WriteUnsignedVarInt(1);
+        w.WriteUnsignedVarInt(0);
+        w.WriteUnsignedVarInt(1);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteUnsignedVarLong(1);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        w.WriteVarInt(0); // LegacyRequestID
+        w.WriteUnsignedVarInt(0); // Actions empty
+        w.WriteUnsignedVarInt(InventoryTransactionPacket.UseClickBlock);
+        w.WriteUnsignedVarInt(0); // TriggerType
+        w.WriteVarInt(8);
+        w.WriteVarInt(-60);
+        w.WriteVarInt(12);
+        w.WriteVarInt(1); // face
+        w.WriteVarInt(0); // hotbar
+        w.WriteVarInt(0); // air held
+        for (var i = 0; i < 6; i++)
+            w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteUnsignedVarInt(0);
+        w.WriteByte(0);
+        w.WriteByte(0);
+
+        for (var i = 0; i < 7; i++)
+            w.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(w.GetBufferDisposing().ToArray());
+        var packet = new PlayerAuthInputPacket();
+        packet.Decode(ref stream);
+
+        Assert.NotNull(packet.ItemInteraction);
+        Assert.Equal(InventoryTransactionPacket.UseClickBlock, packet.ItemInteraction!.Value.ActionType);
+        Assert.Equal(8, packet.ItemInteraction.Value.BlockX);
+        Assert.Equal(-60, packet.ItemInteraction.Value.BlockY);
+        Assert.Equal(12, packet.ItemInteraction.Value.BlockZ);
+        Assert.Empty(packet.BlockActions);
     }
 }

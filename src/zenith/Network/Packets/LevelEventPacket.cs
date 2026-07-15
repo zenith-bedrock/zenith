@@ -7,6 +7,7 @@ sealed class LevelEventPacket : DataPacket
 {
     public const int EventStartBlockCracking = 3600;
     public const int EventStopBlockCracking = 3601;
+    public const int EventBlockBreakSpeed = 3602;
 
     public override int Id => (int)ProtocolInfo.LEVEL_EVENT_PACKET;
 

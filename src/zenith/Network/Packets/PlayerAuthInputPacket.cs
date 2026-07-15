@@ -12,6 +12,20 @@ readonly struct PlayerBlockAction
 }
 
 /// <summary>
+/// UseItem embedded in AuthInput when <see cref="PlayerAuthInputPacket.InputFlagPerformItemInteraction"/> is set
+/// (gophertunnel <c>PlayerInventoryAction</c>).
+/// </summary>
+readonly struct AuthItemInteraction
+{
+    public int ActionType { get; init; }
+    public int BlockX { get; init; }
+    public int BlockY { get; init; }
+    public int BlockZ { get; init; }
+    public int Face { get; init; }
+    public int HotbarSlot { get; init; }
+}
+
+/// <summary>
 /// PlayerAuthInput — movement + optional BlockActions (server-authoritative block breaking).
 /// Decode continues past the position prefix so survival destroy via flag PerformBlockActions works.
 /// </summary>
@@ -36,6 +50,7 @@ class PlayerAuthInputPacket : DataPacket
     public float PositionY { get; set; }
     public float PositionZ { get; set; }
     public PlayerBlockAction[] BlockActions { get; set; } = [];
+    public AuthItemInteraction? ItemInteraction { get; set; }
 
     public override Span<byte> Encode() => Array.Empty<byte>();
 
@@ -64,7 +79,9 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
         if (InputBitsetTest(inputData, InputFlagPerformItemInteraction))
-            SkipUseItemTransactionData(ref stream);
+            ItemInteraction = ReadUseItemTransactionData(ref stream);
+        else
+            ItemInteraction = null;
 
         if (InputBitsetTest(inputData, InputFlagPerformItemStackRequest))
             ItemStackRequestPacket.SkipEmbeddedRequest(ref stream);
@@ -165,9 +182,9 @@ class PlayerAuthInputPacket : DataPacket
         return (bitset[idx] & (1 << pos)) != 0;
     }
 
-    private static void SkipUseItemTransactionData(ref BinaryStream stream)
+    /// <summary>gophertunnel Reader.PlayerInventoryAction — AuthInput item-interaction branch.</summary>
+    private static AuthItemInteraction ReadUseItemTransactionData(ref BinaryStream stream)
     {
-        // gophertunnel PlayerInventoryAction (UseItemTransactionData embedded in AuthInput).
         var legacyRequestId = stream.ReadVarInt();
         if (legacyRequestId < -1 && (legacyRequestId & 1) == 0)
         {
@@ -185,19 +202,29 @@ class PlayerAuthInputPacket : DataPacket
         for (var i = 0; i < actionCount; i++)
             SkipInventoryActionOld(ref stream);
 
-        _ = stream.ReadUnsignedVarInt(); // ActionType
+        var actionType = (int)stream.ReadUnsignedVarInt();
         _ = stream.ReadUnsignedVarInt(); // TriggerType
-        _ = stream.ReadVarInt(); // BlockPos x
-        _ = stream.ReadVarInt();
-        _ = stream.ReadVarInt();
-        _ = stream.ReadVarInt(); // BlockFace
-        _ = stream.ReadVarInt(); // HotBarSlot
-        SkipItemInstance(ref stream); // HeldItem (legacy ItemInstance, not ItemInstanceNew)
+        var blockX = stream.ReadVarInt();
+        var blockY = stream.ReadVarInt();
+        var blockZ = stream.ReadVarInt();
+        var face = stream.ReadVarInt();
+        var hotbar = stream.ReadVarInt();
+        SkipItemInstance(ref stream); // HeldItem
         for (var i = 0; i < 6; i++)
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadUnsignedVarInt(); // BlockRuntimeID
         _ = stream.ReadByte(); // ClientPrediction
         _ = stream.ReadByte(); // ClientCooldownState
+
+        return new AuthItemInteraction
+        {
+            ActionType = actionType,
+            BlockX = blockX,
+            BlockY = blockY,
+            BlockZ = blockZ,
+            Face = face,
+            HotbarSlot = hotbar
+        };
     }
 
     private const uint InventoryActionSourceContainer = 0;

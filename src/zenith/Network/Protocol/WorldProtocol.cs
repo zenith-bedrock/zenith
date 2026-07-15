@@ -158,18 +158,19 @@ sealed class WorldProtocol
 
     public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks)
     {
+        // PocketMine uses integer block coords for START/STOP break LevelEvents.
         SendLevelEvent(
             LevelEventPacket.EventStartBlockCracking,
-            blockX + 0.5f,
-            blockY + 0.5f,
-            blockZ + 0.5f,
+            blockX,
+            blockY,
+            blockZ,
             Blocks.CrackEventData(breakTicks));
     }
 
     public void SendBlockStopCrack(int blockX, int blockY, int blockZ) =>
         SendLevelEvent(
             LevelEventPacket.EventStopBlockCracking,
-            blockX + 0.5f,
-            blockY + 0.5f,
-            blockZ + 0.5f);
+            blockX,
+            blockY,
+            blockZ);
 }
