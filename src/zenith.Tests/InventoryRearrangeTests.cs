@@ -192,4 +192,44 @@ public class InventoryPacketEncodeTests
         Assert.True(packet.Requests[0].AllSupported);
         Assert.Equal(1u, packet.Requests[0].Actions[0].RecipeNetId);
     }
+
+    [Fact]
+    public void ItemStackRequest_CraftRecipe_with_Consume_and_Create_is_AllSupported()
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteVarInt(9);
+        writer.WriteUnsignedVarInt(3);
+
+        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteByte(1);
+
+        writer.WriteByte(ItemStackRequestPacket.ActionConsume);
+        writer.WriteByte(1); // count
+        writer.WriteByte(28); // container
+        writer.WriteBool(false);
+        writer.WriteByte(0); // slot
+        writer.WriteVarInt(1); // stack net id
+
+        writer.WriteByte(ItemStackRequestPacket.ActionCreate);
+        writer.WriteByte(0); // results slot
+
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteInt(0, BinaryStream.Endianess.Little);
+
+        var buf = writer.GetBufferDisposing().ToArray();
+        var stream = new BinaryStream(buf);
+        var packet = new ItemStackRequestPacket();
+        packet.Decode(ref stream);
+
+        Assert.True(packet.Requests[0].AllSupported);
+        Assert.Equal(3, packet.Requests[0].Actions.Length);
+        Assert.True(packet.Requests[0].Actions[0].Supported);
+        Assert.True(packet.Requests[0].Actions[1].Supported);
+        Assert.True(packet.Requests[0].Actions[2].Supported);
+        Assert.Equal(ItemStackRequestPacket.ActionCraftRecipe, packet.Requests[0].Actions[0].ActionType);
+        Assert.Equal(ItemStackRequestPacket.ActionConsume, packet.Requests[0].Actions[1].ActionType);
+        Assert.Equal(ItemStackRequestPacket.ActionCreate, packet.Requests[0].Actions[2].ActionType);
+    }
 }

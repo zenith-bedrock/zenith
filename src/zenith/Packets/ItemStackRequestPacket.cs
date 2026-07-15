@@ -63,7 +63,8 @@ readonly struct DecodedItemStackRequest
 }
 
 /// <summary>
-/// ItemStackRequest (0x93) — decode take/place/swap/container + CraftRecipe;
+/// ItemStackRequest (0x93) — decode take/place/swap/container + CraftRecipe/CraftCreative;
+/// Consume/Create are supported no-ops so craft UI requests are not rejected wholesale.
 /// CraftResultsDeprecated skipado como supported (no-op); restantes unsupported.
 /// </summary>
 sealed class ItemStackRequestPacket : DataPacket
@@ -186,13 +187,28 @@ sealed class ItemStackRequestPacket : DataPacket
                 stream.ReadBool();
                 return Unsupported(type);
             case ActionDestroy:
-            case ActionConsume:
                 stream.ReadByte();
                 _ = StackRequestSlotInfo.Read(ref stream);
                 return Unsupported(type);
-            case ActionCreate:
+            case ActionConsume:
+            {
+                // Dragonfly: acknowledged no-op (craft already consumed in domain tick).
                 stream.ReadByte();
-                return Unsupported(type);
+                _ = StackRequestSlotInfo.Read(ref stream);
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    Supported = true
+                };
+            }
+            case ActionCreate:
+                // Output materialize is domain TryCraft — Create is wire ack only (no pendingResults).
+                stream.ReadByte();
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    Supported = true
+                };
             case ActionLabTableCombine:
                 return Unsupported(type);
             case ActionBeaconPayment:

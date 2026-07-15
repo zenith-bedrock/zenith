@@ -145,7 +145,9 @@ class InGameSessionHandler : ISessionHandler
                     continue;
                 }
 
-                if (action.ActionType == ItemStackRequestPacket.ActionCraftResultsDeprecated)
+                if (action.ActionType == ItemStackRequestPacket.ActionCraftResultsDeprecated ||
+                    action.ActionType == ItemStackRequestPacket.ActionConsume ||
+                    action.ActionType == ItemStackRequestPacket.ActionCreate)
                     continue;
 
                 if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from) ||
@@ -348,7 +350,7 @@ class InGameSessionHandler : ISessionHandler
         var player = session.Player;
         if (player is null) return;
 
-        session.Context.Logger.Debug("transaction type: " + packet.TransactionType);
+        // TypeNormal does not populate UseActionType/HotbarSlot yet — do not mutate hotbar (ADR §17).
         switch (packet.TransactionType)
         {
             case InventoryTransactionPacket.TypeItemUse:
@@ -360,13 +362,6 @@ class InGameSessionHandler : ISessionHandler
                     packet.BlockY,
                     packet.BlockZ,
                     packet.BlockFace,
-                    packet.HotbarSlot);
-                break;
-            case InventoryTransactionPacket.TypeNormal:
-                HandleNormal(
-                    session,
-                    player,
-                    packet.UseActionType,
                     packet.HotbarSlot);
                 break;
         }
@@ -387,36 +382,6 @@ class InGameSessionHandler : ISessionHandler
             use.BlockZ,
             face,
             use.HotbarSlot);
-    }
-
-    private static void HandleNormal(
-        NetworkSession session,
-        Player.Player player,
-        int useActionType,
-        int hotbarSlot)
-    {
-        if (!PlayerInventory.IsValidHotbarSlot(hotbarSlot))
-        {
-            session.Context.Logger.Debug($"Rejected Normal: hotbar {hotbarSlot}");
-            return;
-        }
-
-        player.SelectedHotbarSlot = hotbarSlot;
-
-        switch (useActionType)
-        {
-            case 0:
-                break;
-
-            case 2:
-                var stack = player.Inventory.Get(hotbarSlot);
-                if (stack != null && stack.Count >= 1)
-                {
-                    session.Context.Logger.Debug("Drop item");
-                }
-
-                break;
-        }
     }
 
     private static void HandleUseItem(
