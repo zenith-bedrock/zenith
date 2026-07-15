@@ -40,6 +40,9 @@ interface IChunkStorage
 
     ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default);
+
+    /// <summary>Await in-flight persistence (chest/inv/overlay). Shutdown only — never GameLoop (ADR §41).</summary>
+    ValueTask FlushAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -100,4 +103,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
         _inventories.TryGetValue(uuid, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
     }
+
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
 }

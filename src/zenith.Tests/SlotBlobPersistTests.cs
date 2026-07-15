@@ -68,4 +68,55 @@ public class SlotBlobPersistTests
         Assert.Equal(7, loaded.Get(0).Count);
         Assert.True(loaded.Get(1).IsEmpty);
     }
+
+    [Fact]
+    public async Task InMemory_FlushAsync_is_noop_and_Get_sees_Put()
+    {
+        var storage = new InMemoryChunkStorage();
+        var uuid = Guid.NewGuid();
+        var slots = new InventorySlot[36];
+        slots[0] = new InventorySlot(Blocks.Dirt, 4);
+        await storage.PutInventoryAsync(uuid, SlotBlob.Pack(slots));
+        await storage.FlushAsync();
+        var got = await storage.GetInventoryAsync(uuid);
+        Assert.NotNull(got);
+        var dest = new InventorySlot[36];
+        Assert.True(SlotBlob.TryUnpack(got!, dest));
+        Assert.Equal(Blocks.Dirt, dest[0].RuntimeId);
+        Assert.Equal(4, dest[0].Count);
+    }
+
+    [Fact]
+    public async Task LevelDb_FlushAsync_awaits_inventory_Put()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "zenith-flush-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var uuid = Guid.NewGuid();
+            var slots = new InventorySlot[36];
+            slots[2] = new InventorySlot(Blocks.Chest, 1);
+            var blob = SlotBlob.Pack(slots);
+
+            {
+                var storage = new LevelDbChunkStorage(dir);
+                await storage.PutInventoryAsync(uuid, blob);
+                await storage.FlushAsync();
+                storage.Dispose();
+            }
+
+            {
+                using var storage = new LevelDbChunkStorage(dir);
+                var got = await storage.GetInventoryAsync(uuid);
+                Assert.NotNull(got);
+                var dest = new InventorySlot[36];
+                Assert.True(SlotBlob.TryUnpack(got!, dest));
+                Assert.Equal(Blocks.Chest, dest[2].RuntimeId);
+                Assert.Equal(1, dest[2].Count);
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
 }

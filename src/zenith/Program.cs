@@ -16,4 +16,22 @@ catch (Exception ex)
 }
 
 var server = new ZenithServer(config);
-await server.StartAsync();
+
+var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    shutdownTcs.TrySetResult();
+};
+
+var runTask = server.StartAsync();
+await Task.WhenAny(runTask, shutdownTcs.Task);
+await server.ShutdownAsync();
+try
+{
+    await runTask;
+}
+catch (OperationCanceledException)
+{
+    // Expected after CancelKeyPress / ShutdownAsync.
+}

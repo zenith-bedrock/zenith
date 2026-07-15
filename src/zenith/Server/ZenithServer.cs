@@ -7,6 +7,7 @@ using Zenith.Network;
 using Zenith.Network.Session;
 using Zenith.Player;
 using Zenith.Raknet;
+using Zenith.Raknet.Log;
 using Zenith.World;
 
 namespace Zenith.Server;
@@ -18,6 +19,8 @@ namespace Zenith.Server;
 class ZenithServer
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly IChunkStorage _chunkStorage;
+    private readonly ILogger _logger;
 
     public RakNetServer RakNetServer { get; }
     public ServerContext Context { get; }
@@ -28,6 +31,7 @@ class ZenithServer
     {
         Config = config;
         var logger = new Logger();
+        _logger = logger;
         logger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
 
         LoginIdentity.RequireChainSignatures = config.Auth.RequireChainSignatures;
@@ -62,8 +66,8 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:chest");
         logger.Info($"Item palette loaded ({itemPalette.Count} entries)");
 
-        IChunkStorage storage = CreateChunkStorage(config, logger);
-        var world = new World.World(storage, logger);
+        _chunkStorage = CreateChunkStorage(config, logger);
+        var world = new World.World(_chunkStorage, logger);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault();
         gameLoop.Register(new BlockSystem(players, world));
@@ -182,9 +186,27 @@ class ZenithServer
         await Task.WhenAll(gameLoopTask, raknetTask);
     }
 
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
         _lifetime.Cancel();
-        return RakNetServer.ShutdownAsync();
+
+        try
+        {
+            using var flushCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await Context.World.FlushPersistenceAsync(flushCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.Warning("Persistence flush timed out after 5s during shutdown; some writes may be incomplete.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Persistence flush failed during shutdown: {ex.Message}");
+        }
+
+        if (_chunkStorage is IDisposable disposable)
+            disposable.Dispose();
+
+        await RakNetServer.ShutdownAsync().ConfigureAwait(false);
     }
 }

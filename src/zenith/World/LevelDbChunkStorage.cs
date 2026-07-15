@@ -17,6 +17,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     private readonly DB _db;
     private readonly object _gate = new();
     private readonly ConcurrentQueue<OverlayWrite> _overlayWrites = new();
+    private readonly ConcurrentDictionary<Task, byte> _pendingDiskTasks = new();
     private readonly AutoResetEvent _overlaySignal = new(false);
     private readonly Thread _overlayWorker;
     private volatile bool _stopping;
@@ -123,7 +124,8 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        return Track(Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
@@ -136,7 +138,8 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        return Track(Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
@@ -185,7 +188,8 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        return Track(Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
@@ -206,6 +210,30 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                 return _db.Get(InventoryKey(uuid));
             }
         }, cancellationToken));
+    }
+
+    public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var pending = _pendingDiskTasks.Keys.ToArray();
+        if (pending.Length > 0)
+            await Task.WhenAll(pending).WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        _overlaySignal.Set();
+        // Brief yield so overlay worker can drain; then force-drain under gate.
+        await Task.Yield();
+        DrainOverlayWrites();
+    }
+
+    private ValueTask Track(Task task)
+    {
+        _pendingDiskTasks[task] = 0;
+        _ = task.ContinueWith(
+            t => _pendingDiskTasks.TryRemove(t, out _),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        return new ValueTask(task);
     }
 
     private void OverlayWorkerLoop()

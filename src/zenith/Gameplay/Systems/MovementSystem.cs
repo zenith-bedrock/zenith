@@ -46,9 +46,10 @@ sealed class MovementSystem : IGameSystem
     {
         player.PositionY = Blocks.FlatSpawnY;
         player.Pitch = 0;
-        // Keep XZ — player falls back onto flat at same column when possible.
-        player.Session.Protocol.Entity.SendMoveAbsolute(
-            actorRuntimeId: (ulong)player.RuntimeId,
+        // Keep XZ — land on flat at same column when possible.
+        // Local camera needs MovePlayer Teleport; Absolute alone does not snap own client (ADR §41).
+        player.Session.Protocol.Entity.SendMovePlayerTeleport(
+            entityRuntimeId: (ulong)player.RuntimeId,
             x: player.PositionX,
             y: player.PositionY,
             z: player.PositionZ,

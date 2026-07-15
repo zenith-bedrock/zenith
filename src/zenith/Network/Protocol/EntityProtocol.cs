@@ -33,6 +33,21 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>Local camera snap — MovePlayer Teleport (ADR §41). Not for peers.</summary>
+    public void SendMovePlayerTeleport(
+        ulong entityRuntimeId,
+        float x,
+        float y,
+        float z,
+        float pitch,
+        float yaw,
+        float headYaw,
+        ulong tick = 0)
+    {
+        _session.SendDataPacket(MovePlayerPacket.CreateTeleport(
+            entityRuntimeId, x, y, z, pitch, yaw, headYaw, tick));
+    }
+
     public void SendPlayerListAdd(Guid uuid, long actorUniqueId, string username, byte[]? skinRgba = null, uint skinWidth = 0, uint skinHeight = 0)
     {
         _session.SendDataPacket(new PlayerListPacket

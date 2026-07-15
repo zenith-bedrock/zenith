@@ -107,6 +107,8 @@ src/
 
 ## Smoke manual
 
+Baseline (multiplayer spine):
+
 1. Cliente A: login → InGame (chão flat sob os pés).
 2. AuthInput: servidor atualiza `Player` position.
 3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
@@ -120,7 +122,19 @@ src/
 11. **§17 rearrange:** abrir inventário → arrastar slot 0↔9 → fechar/reabrir (item permanece); place a partir da hotbar; break com hotbar cheia → item em storage ≥9; sem rubberband após place/break.
 12. **Held peer:** A troca hotbar / segura bloco → B vê o item na mão (`MobEquipment` / `AddPlayer` held).
 
-Gate: se o item 11 falhar, não começar containers/chests.
+Levas §35–§41 (confiança operacional — void MovePlayer + shutdown flush):
+
+| Id | Gate |
+|----|------|
+| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). |
+| **S37** | Creative: pode voar; Survival: sem MayFly. |
+| **S38** | Creative: palette stone → hotbar → place; Survival: CraftCreative rejeitado. |
+| **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. |
+| **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. |
+| **S40** | Cair no void: **própria câmera** snap para spawn (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
+| Regressão | Held peer, rearrange, break/crack ainda OK. |
+
+Gates: se item **11** falhar, não começar containers. Se **S39** ou **S40** falharem, não abrir death/drop-entity.
 
 ## Roadmap
 

@@ -60,6 +60,10 @@ sealed class World
         return blob is not null && inventory.TryLoadMainFromBlob(blob);
     }
 
+    /// <summary>Await in-flight chest/inv/overlay writes — shutdown only (ADR §41).</summary>
+    public ValueTask FlushPersistenceAsync(CancellationToken cancellationToken = default) =>
+        _storage.FlushAsync(cancellationToken);
+
     /// <summary>
     /// Lê payload base (gera flat on miss / migra empty legado) e aplica overlays da coluna na leitura.
     /// Seguro para chamar da thread de rede.
