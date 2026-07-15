@@ -398,8 +398,23 @@ public class RakNetSession
             fragment[splitInfo.Index] = frame;
 
             if (fragment.Count != splitInfo.Count) return false;
+
+            // Dictionary enumeration order is NOT split-index order. Concatenating via foreach
+            // corrupts remounted payloads (GamePacket length-prefix decode → "need N, have M").
+            // Mobile/cellular MTU often splits login/NetworkSettings; LAN desktop often does not.
             var stream = new BinaryStream();
-            foreach (var frag in fragment) stream.Write(frag.Value.Buffer);
+            for (var i = 0; i < splitInfo.Count; i++)
+            {
+                if (!fragment.TryGetValue(i, out var part))
+                {
+                    Server.Logger?.Warning(
+                        $"[{EndPoint}] Incomplete fragment set id={splitInfo.Id}: missing index {i}/{splitInfo.Count}.");
+                    FragmentsQueue.Remove(splitInfo.Id);
+                    return false;
+                }
+
+                stream.Write(part.Buffer);
+            }
 
             var newFrame = new Frame
             {
@@ -493,6 +508,8 @@ public class RakNetSession
     /// remontado; por isso ela chama <see cref="DispatchFrame"/> diretamente em vez de
     /// voltar aqui, senão essa mesma mensagem seria rejeitada como duplicata dela mesma.
     /// </summary>
+    internal bool HandleFrameForTests(Frame frame) => HandleFrame(frame);
+
     private bool HandleFrame(Frame frame)
     {
         // OrderChannel vem do fio como um byte cru (0-255), mas os arrays de tracking
