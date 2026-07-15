@@ -26,6 +26,22 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
+    public void LoadOrCreate_rejects_directory_path()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-dir-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => ServerConfigLoader.LoadOrCreate(path));
+            Assert.Contains("is a directory", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(path);
+        }
+    }
+
+    [Fact]
     public void LoadOrCreate_applies_overrides()
     {
         var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-{Guid.NewGuid():N}.yml");

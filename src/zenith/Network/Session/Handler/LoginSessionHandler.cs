@@ -1,6 +1,7 @@
 using Zenith.Raknet.Stream;
 using Zenith.Event;
 using Zenith.Network.Packets;
+using Zenith.Server;
 
 namespace Zenith.Network.Session.Handler;
 
@@ -36,12 +37,18 @@ class LoginSessionHandler : ISessionHandler
             enableClientThrottling: false,
             clientThrottleThreshold: 0,
             clientThrottleScalar: 0);
+
+        if (!TryAcceptProtocol(session, packet.ProtocolVersion, stage: "RequestNetworkSettings"))
+            return;
     }
 
     private static void HandleLogin(NetworkSession session, ref BinaryStream stream)
     {
         var packet = DataPacket.From<LoginPacket>(ref stream);
         session.Context.Logger.Debug($"LoginPacket: {packet.Protocol}");
+
+        if (!TryAcceptProtocol(session, packet.Protocol, stage: "Login"))
+            return;
 
         LoginIdentity.ParsedIdentity identity;
         try
@@ -90,5 +97,32 @@ class LoginSessionHandler : ISessionHandler
             hasScripts: false,
             worldTemplateVersion: "");
         session.SetHandler(new ResourcePacksSessionHandler());
+    }
+
+    /// <summary>
+    /// Evaluate → Publish <see cref="ProtocolNegotiateEvent"/> → reject PlayStatus + disconnect if !Accepted.
+    /// </summary>
+    private static bool TryAcceptProtocol(NetworkSession session, int clientProtocol, string stage)
+    {
+        var serverProtocol = ServerIdentity.ProtocolVersion;
+        var outcome = ProtocolGate.Evaluate(clientProtocol, serverProtocol);
+        var rejectStatus = ProtocolGate.RejectPlayStatus(outcome);
+        var negotiate = new ProtocolNegotiateEvent(
+            clientProtocol,
+            serverProtocol,
+            accepted: outcome == ProtocolGate.Outcome.Accepted,
+            rejectPlayStatus: rejectStatus);
+
+        session.Context.EventBus.Publish(negotiate);
+
+        if (negotiate.Accepted)
+            return true;
+
+        session.Context.Logger.Warning(
+            $"Rejected {stage}: client protocol {clientProtocol} vs server {serverProtocol} " +
+            $"(PlayStatus={negotiate.RejectPlayStatus}).");
+        session.Protocol.Login.SendIncompatibleProtocol(negotiate.RejectPlayStatus);
+        session.Disconnect();
+        return false;
     }
 }

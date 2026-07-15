@@ -34,6 +34,12 @@ sealed class LoginProtocol
 
     public void SendLoginSuccess()
     {
-        _session.SendDataPacket(new PlayStatusPacket { Status = 0 });
+        _session.SendDataPacket(new PlayStatusPacket { Status = PlayStatusPacket.LoginSuccess });
+    }
+
+    /// <summary>PlayStatus LOGIN_FAILED_CLIENT/SERVER — no policy; Handler decided.</summary>
+    public void SendIncompatibleProtocol(int playStatus)
+    {
+        _session.SendDataPacket(new PlayStatusPacket { Status = playStatus });
     }
 }

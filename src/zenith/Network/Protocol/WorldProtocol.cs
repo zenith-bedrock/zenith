@@ -123,7 +123,7 @@ sealed class WorldProtocol
 
     public void SendSpawnComplete()
     {
-        _session.SendDataPacket(new PlayStatusPacket { Status = 3 }); // PLAYER_SPAWN
+        _session.SendDataPacket(new PlayStatusPacket { Status = PlayStatusPacket.PlayerSpawn }); // PLAYER_SPAWN
     }
 
     public void SendTime(int worldTime)

@@ -4,6 +4,11 @@ namespace Zenith.Network.Packets;
 
 class PlayStatusPacket : DataPacket
 {
+    public const int LoginSuccess = 0;
+    public const int LoginFailedClient = 1; // client protocol < server
+    public const int LoginFailedServer = 2; // client protocol > server
+    public const int PlayerSpawn = 3;
+
     public override int Id => (int)ProtocolInfo.PLAY_STATUS_PACKET;
 
     public int Status { get; set; }

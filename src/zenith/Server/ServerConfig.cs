@@ -109,6 +109,15 @@ static class ServerConfigLoader
     /// </summary>
     public static ServerConfig LoadOrCreate(string path)
     {
+        // Docker bind-mount of a missing host *file* creates a directory; File.Exists is false then.
+        if (Directory.Exists(path))
+        {
+            throw new InvalidOperationException(
+                $"Config path '{path}' is a directory. " +
+                "If you mounted deploy/zenith.yml, ensure that file exists on the host (it is tracked under deploy/). " +
+                "Remove any bogus directory at that mount path and redeploy.");
+        }
+
         if (!File.Exists(path))
         {
             var defaults = new ServerConfig();

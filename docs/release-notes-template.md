@@ -4,22 +4,23 @@
 
 ### Includes (LAN spine)
 
-- Login → flat world + overlay place/break
-- Inventory 36 slots + ISR rearrange
-- Held-item peer sync
-- LevelDB Zenith keys `c:` / `ov:` under `worlds/<name>/`
-- Chat + player visibility
+- Login → flat world + overlay place/break; chat + player visibility
+- Inventory 36 slots + ISR rearrange; held-item peer sync
+- LevelDB Zenith keys `c:` / `ov:` (and `ct:` / `inv:`) under `worlds/<name>/`
+- Chests (§28), 2×2 crafting (§35), Creative from config (§31 / §38)
+- Inventory / chest persist across graceful restart (§39 / §41)
+- Server-authoritative break timing + dig crack (self + peers, §27 / §42)
+- Void soft-rescue with local MovePlayer Teleport (§40 / §41)
 - `dotnet test zenith.sln` green at tag time
 
 ### Non-goals (explicitly out of this tag)
 
-- Chests / container inventory (§19 sketch)
-- CreativeContent, Mojang vanilla worlds
-- Plugins / DI / `/` commands
-- Inventory or position persistence across reconnect (`players/` not on disk yet)
-- AuthInput block path
-- Actor / domain EventHandlers
+- Mojang vanilla worlds; `players/` volume
+- Plugins / DI / `/` commands / `/gamemode`
+- Drop-entity wire / WorldEntity; death–Respawn handshake
+- Tool speed / efficiency; biomes / noise; hunger tick
 - Public production with `auth.require-chain-signatures: false`
+- Actor / domain EventHandler frameworks
 
 ### Ops traps
 
@@ -30,7 +31,7 @@
 | `world.path: ./worlds` | Wrong — `worlds/<name>/` is appended under the root; you get `…/worlds/worlds/<name>`. |
 | Docker volumes | Mount `./deploy/zenith.yml:/app/zenith.yml` **and** `./deploy/worlds:/app/worlds`. Do **not** mount a host folder over `/app` (overwrites the DLL). |
 | Layout | LevelDB at `{world.path}/worlds/{world.name}/` (compose sample: `/app/worlds/world`) |
-| `players/` | **Not shipped** — session RAM only |
+| `players/` | **Not shipped** — no Mojang-style playerdata volume (bag/chest live under world LevelDB keys) |
 | Auth | Default sample leaves chain signatures off for LAN; enable before public exposure |
 
 ### Run (Docker)

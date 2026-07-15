@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Zenith.Gameplay;
 using Zenith.Raknet.Stream;
 using Zenith.Network.Packets;
 using Zenith.Network.Protocol;
@@ -298,8 +299,12 @@ class InGameSessionHandler : ISessionHandler
                     break;
                 case PlayerAuthInputPacket.ActionAbortBreak:
                     if (player.HasBreakTarget)
-                        session.Protocol.World.SendBlockStopCrack(
-                            player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+                        BlockCrackFanout.Stop(
+                            session.Context.PlayerManager,
+                            session,
+                            player.BreakTargetX,
+                            player.BreakTargetY,
+                            player.BreakTargetZ);
                     player.AbortBreak();
                     break;
                 case PlayerAuthInputPacket.ActionPredictDestroy:
@@ -478,15 +483,19 @@ class InGameSessionHandler : ISessionHandler
             return;
 
         if (player.HasBreakTarget)
-            session.Protocol.World.SendBlockStopCrack(
-                player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+            BlockCrackFanout.Stop(
+                session.Context.PlayerManager,
+                session,
+                player.BreakTargetX,
+                player.BreakTargetY,
+                player.BreakTargetZ);
 
         var block = session.Context.World.GetBlock(x, y, z);
         var need = Blocks.BreakTicks(block);
         player.BeginBreak(x, y, z, session.Context.Clock.CurrentTick, need);
 
         // Always cue crack for breakable cells — data 65535 = one-tick snap for soft blocks.
-        session.Protocol.World.SendBlockStartCrack(x, y, z, need);
+        BlockCrackFanout.Start(session.Context.PlayerManager, session, x, y, z, need);
 
         var label = action switch
         {

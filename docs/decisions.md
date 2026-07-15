@@ -235,7 +235,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Restarting crack on every continue made the animation complete while the server still rejected `predict_destroy`.
 
-**Deferred:** Tool speed, efficiency enchant, crack particles / LevelEvent fan-out, `BLOCK_BREAK_SPEED` (3602) mid-dig updates.
+**Deferred:** Tool speed, efficiency enchant, `BLOCK_BREAK_SPEED` (3602) mid-dig updates. (LevelEvent peer fan-out → §42.)
 
 ### 28. Chests — RAM store + ISR container 7 (MVP)
 
@@ -361,6 +361,22 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts. Operational trust before death/drop-entity surface.
 
 **Smoke:** S39 graceful restart; S40 own-camera snap (ARCHITECTURE.md).
+
+### 42. Dig crack LevelEvent peer fan-out
+
+**Choice:** Keep `WorldProtocol.SendBlockStartCrack` / `SendBlockStopCrack` session-scoped (Protocol transmits only). Callers use `BlockCrackFanout.Start/Stop(PlayerManager, minerSession, …)` — miner + every other `IsInGame` peer (same Online loop as EquipmentSystem / UpdateBlock). No VisibilitySystem. Dig rarity ≠ §24 hot path.
+
+**Why:** Self-only crack made MP dig look single-player; peers never saw progress. Fan-out is the smallest honest fix without radius culling abstractions.
+
+**Smoke:** S41 (ARCHITECTURE.md). Gate: fail S41 → do not open death/drop-entity.
+
+### 43. Protocol mismatch UX (+ EventBus negotiate seam)
+
+**Choice:** After `NetworkSettings`, `ProtocolGate.Evaluate(client, ServerIdentity.ProtocolVersion)` decides Accepted / FailClient / FailServer. Reject → `LoginProtocol.SendIncompatibleProtocol` (`PlayStatus` 1 or 2) + disconnect; no `Player`. Re-check on `LoginPacket.Protocol`. Before accept/reject, publish mutable `ProtocolNegotiateEvent` (Accepted / RejectPlayStatus) so a future listener can override the gate — **Accepted ≠ second codec** (document: forcing accept without encode support breaks on wire). Multi-codec / YAML supported-protocols / plugins: **Deferred**.
+
+**Why:** Wrong-version clients previously hung or logged in without Bedrock’s classic incompatible UI. Gate stays pure; Protocol only transmits; Handler orchestrates. Cheap multiprotocol seam without inventing PluginAPI now (Rule 7).
+
+**Smoke:** Connect with client protocol ≠ server → Bedrock outdated client/server UI + disconnect.
 
 ### OpenInventory / chest UI (note under §28)
 

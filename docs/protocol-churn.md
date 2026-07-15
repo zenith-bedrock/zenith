@@ -19,7 +19,8 @@ Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Man
    - `LevelChunkPacket`
    - Inventory / ItemStackRequest paths (SAI on)
 3. Smoke: login → InGame on that client.
-4. If wire broke: fix encode, bump SSOT (ADR §12), add a short decision entry if the bump is non-trivial.
-5. Update **Last review** date at the top of this file.
+4. Mismatch clients (protocol ≠ `ServerIdentity.ProtocolVersion`) must see `PlayStatus` 1 (`LOGIN_FAILED_CLIENT`) or 2 (`LOGIN_FAILED_SERVER`) then disconnect — ADR §43. Do not soft-ignore wrong versions.
+5. If wire broke: fix encode, bump SSOT (ADR §12), add a short decision entry if the bump is non-trivial.
+6. Update **Last review** date at the top of this file.
 
 Automation against public schemas remains deferred (ARCHITECTURE freeze: no decorative infra).

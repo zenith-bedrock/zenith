@@ -1,0 +1,22 @@
+server:
+  port: 19132
+  motd: Zenith Bedrock
+  sub-motd: alpha
+  max-players: 20
+  max-players-per-ip: 3
+  gamemode: Survival
+world:
+  name: world
+  # Data root inside the container. LevelDB lives at {path}/worlds/{name}/ → /app/worlds/world
+  # Empty path = InMemory (volatile) — do not use for Docker persistence.
+  path: /app
+  spawn-chunk-radius: 4
+auth:
+  # LAN / local only. Set true before any public exposure.
+  require-chain-signatures: false
+chat:
+  max-length: 512
+  rate-capacity: 8
+  rate-refill-per-second: 4
+network:
+  compression-threshold: 256

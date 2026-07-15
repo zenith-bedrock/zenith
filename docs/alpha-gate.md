@@ -1,14 +1,15 @@
 # v0.0.1-alpha release gate
 
-Tag only when this checklist is green. Chests (§19) do **not** block alpha.
+Tag only when this checklist is green. Checkboxes stay **manual** at tag time — do not claim they are already green in-repo.
 
 ## Product spine
 
-- [ ] Login → flat world + overlay place/break
-- [ ] Inventory 36 + ISR rearrange
-- [ ] Held-item peer sync
+- [ ] Login → flat world + overlay place/break; chat + player visibility
+- [ ] Inventory 36 + ISR rearrange; held-item peer sync
 - [ ] LevelDB at `{world.path}/worlds/{world.name}/` (`c:` / `ov:`)
-- [ ] Chat + visibility
+- [ ] Chests (§28) + 2×2 craft (§35) + Creative join from config (§31 / §38)
+- [ ] Inventory + chest persist (`inv:` / `ct:`, §39) + graceful flush on Ctrl+C (§41)
+- [ ] SA break timing + dig crack (§27); crack visible to peers (§42); void soft-rescue MovePlayer (§40 / §41)
 - [ ] `ServerIdentity.ProductVersion` logged; wire `ProtocolVersion` / `VersionName` unchanged
 
 ## CI / local proofs
@@ -33,6 +34,10 @@ docker compose up --build
 - [ ] LevelDB appears under `./deploy/worlds/world` (or configured name)
 - [ ] Empty `world.path` trap documented in release notes (InMemory, no warning)
 
+## Manual smoke (see ARCHITECTURE.md)
+
+- [ ] Baseline MP 1–12 + S35 / S37 / S38 / S39 / S39b / S40 / **S41** (peer sees crack)
+
 ## Tag & publish
 
 ```bash
@@ -44,4 +49,12 @@ git push origin v0.0.1-alpha
 
 ## Explicit non-goals on the tag
 
-Chests, CreativeContent, Mojang worlds, plugins/DI/`/`, inventory reconnect persist, AuthInput blocks, Actor, production without `auth.require-chain-signatures: true`, `players/` volume.
+Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop-entity / WorldEntity; death–Respawn; tool speed / efficiency; biomes / noise; hunger tick; public production with `auth.require-chain-signatures: false`.
+
+## Ops traps (must stay in release notes)
+
+| Trap | Reality |
+|------|---------|
+| `world.path` empty | **InMemory** — wiped on restart, **no warning** |
+| Relative `world.path` | Under `AppContext.BaseDirectory` (DLL dir), not shell cwd |
+| Auth sample | Chain signatures often off for LAN; boot WARNING; enable before public exposure |

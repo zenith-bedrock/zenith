@@ -44,6 +44,8 @@ node_modules/
 appsettings.json
 appsettings.*.json
 zenith.yml
+# Docker sample must be in git (Dokploy/clone); missing bind-mount → Docker makes a directory.
+!deploy/zenith.yml
 
 ## Publish Output
 publish/

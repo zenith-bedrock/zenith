@@ -19,3 +19,24 @@ class PlayerQuitEvent
 
     public PlayerQuitEvent(Player.Player player) => Player = player;
 }
+
+/// <summary>
+/// Protocol negotiate (ADR §43). Pré-preenchido pelo gate; listeners podem mutar
+/// <see cref="Accepted"/> (EventBus sem cancel framework — objeto mutável).
+/// Accepting a protocol without a matching encode path is unsupported footgun.
+/// </summary>
+sealed class ProtocolNegotiateEvent
+{
+    public int ClientProtocol { get; }
+    public int ServerProtocol { get; }
+    public bool Accepted { get; set; }
+    public int RejectPlayStatus { get; set; }
+
+    public ProtocolNegotiateEvent(int clientProtocol, int serverProtocol, bool accepted, int rejectPlayStatus)
+    {
+        ClientProtocol = clientProtocol;
+        ServerProtocol = serverProtocol;
+        Accepted = accepted;
+        RejectPlayStatus = rejectPlayStatus;
+    }
+}

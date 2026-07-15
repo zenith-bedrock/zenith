@@ -8,5 +8,7 @@ RUN dotnet publish src/zenith/zenith.csproj -c Release -o /app --no-self-contain
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app .
+# Default for image-only / Application deploys. Compose may bind-mount over this path.
+COPY deploy/zenith.yml /app/zenith.yml
 EXPOSE 19132/udp
 ENTRYPOINT ["dotnet", "/app/zenith.dll"]

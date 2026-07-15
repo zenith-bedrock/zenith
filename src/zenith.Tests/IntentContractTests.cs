@@ -26,7 +26,7 @@ file sealed class SilentLogger : ILogger
     public void Error(string message) { }
 }
 
-file sealed class RecordingRakNetServer : RakNetServer
+internal sealed class RecordingRakNetServer : RakNetServer
 {
     public ConcurrentQueue<byte[]> Captured { get; } = new();
 
@@ -42,7 +42,7 @@ file sealed class StubSessionHandler : ISessionHandler
 }
 
 /// <summary>Monta Player + NetworkSession + world sem boot completo do ZenithServer.</summary>
-file sealed class IntentTestFixture
+internal sealed class IntentTestFixture
 {
     public PlayerManager Players { get; }
     public World.World World { get; }

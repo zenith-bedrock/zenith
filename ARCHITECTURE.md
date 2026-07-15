@@ -122,7 +122,7 @@ Baseline (multiplayer spine):
 11. **§17 rearrange:** abrir inventário → arrastar slot 0↔9 → fechar/reabrir (item permanece); place a partir da hotbar; break com hotbar cheia → item em storage ≥9; sem rubberband após place/break.
 12. **Held peer:** A troca hotbar / segura bloco → B vê o item na mão (`MobEquipment` / `AddPlayer` held).
 
-Levas §35–§41 (confiança operacional — void MovePlayer + shutdown flush):
+Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush + crack peers):
 
 | Id | Gate |
 |----|------|
@@ -132,9 +132,10 @@ Levas §35–§41 (confiança operacional — void MovePlayer + shutdown flush):
 | **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. |
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. |
 | **S40** | Cair no void: **própria câmera** snap para spawn (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
-| Regressão | Held peer, rearrange, break/crack ainda OK. |
+| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. |
+| Regressão | Held peer, rearrange, break/crack still OK. |
 
-Gates: se item **11** falhar, não começar containers. Se **S39** ou **S40** falharem, não abrir death/drop-entity.
+Gates: se item **11** falhar, não começar containers. Se **S39**, **S40** ou **S41** falharem, não abrir death/drop-entity.
 
 ## Roadmap
 

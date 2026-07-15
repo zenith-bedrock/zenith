@@ -89,8 +89,12 @@ sealed class BlockSystem : IGameSystem
             }
 
             if (player.HasBreakTarget)
-                player.Session.Protocol.World.SendBlockStopCrack(
-                    player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+                BlockCrackFanout.Stop(
+                    _players,
+                    player.Session,
+                    player.BreakTargetX,
+                    player.BreakTargetY,
+                    player.BreakTargetZ);
             player.AbortBreak();
 
             if (previous == Blocks.Chest)
