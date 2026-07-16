@@ -1,5 +1,7 @@
 using Zenith.Event;
 using Zenith.Gameplay;
+using Zenith.Gameplay.Commands;
+using Zenith.Gameplay.Commands.BuiltIn;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Log;
@@ -45,6 +47,12 @@ class ZenithServer
         var players = new PlayerManager();
         var clock = new GameClock();
         var gameLoop = new GameLoop(clock, logger);
+
+        var commandPalette = new CommandPalette();
+        commandPalette.Register(HelpCommand.Create(commandPalette));
+        commandPalette.Register(AboutCommand.Create());
+        gameLoop.Register(new CommandSystem(players, commandPalette));
+
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
         gameLoop.Register(new EquipmentSystem(players));
@@ -74,7 +82,7 @@ class ZenithServer
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes, creative);
+        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes, creative, commandPalette);
         GameLoop = gameLoop;
 
         RakNetServer = new RakNetServer(config.Server.Port)

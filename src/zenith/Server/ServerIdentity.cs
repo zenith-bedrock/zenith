@@ -18,4 +18,7 @@ static class ServerIdentity
 
     /// <summary>String de versão de jogo no wire (StartGame / ResourcePackStack). SSOT.</summary>
     public const string VersionName = "1.26.33";
+
+    /// <summary>Git commit SHA curto do build (atualizar no release).</summary>
+    public const string GitCommit = "55f536b";
 }

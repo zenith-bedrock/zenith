@@ -59,6 +59,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // Abilities / adventure seed (§37) — after §34, before PreSpawn.
                 session.Protocol.Entity.SendLocalAbilities(player.RuntimeId, (int)player.GameMode);
                 session.Protocol.Entity.SendAdventureSettings();
+                session.Protocol.Command.SendAvailableCommands(session.Context.CommandPalette);
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }

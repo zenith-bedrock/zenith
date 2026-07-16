@@ -1,3 +1,4 @@
+using Zenith.Packets;
 using Zenith.Session;
 using Zenith.World;
 
@@ -23,6 +24,9 @@ class Player
     private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
     private readonly object _chatLock = new();
     private string? _pendingChat;
+    private readonly object _commandLock = new();
+    private string? _pendingCommand;
+    private CommandOriginData _pendingCommandOrigin;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -230,6 +234,33 @@ class Player
 
             message = _pendingChat;
             _pendingChat = null;
+            return true;
+        }
+    }
+
+    public void SubmitCommand(string text, CommandOriginData origin)
+    {
+        lock (_commandLock)
+        {
+            _pendingCommand = text;
+            _pendingCommandOrigin = origin;
+        }
+    }
+
+    public bool TryConsumeCommand(out string text, out CommandOriginData origin)
+    {
+        lock (_commandLock)
+        {
+            if (_pendingCommand is null)
+            {
+                text = "";
+                origin = default;
+                return false;
+            }
+
+            text = _pendingCommand;
+            origin = _pendingCommandOrigin;
+            _pendingCommand = null;
             return true;
         }
     }

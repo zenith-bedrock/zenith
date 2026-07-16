@@ -78,6 +78,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleDisconnect(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.COMMAND_REQUEST_PACKET:
+                HandleCommandRequest(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
@@ -476,6 +480,15 @@ class InGameSessionHandler : ISessionHandler
             $"DisconnectPacket from {session.Player?.Username ?? session.RakSession.EndPoint.ToString()}: " +
             $"reason={packet.Reason}, message={packet.Message}");
         session.Disconnect();
+    }
+
+    private static void HandleCommandRequest(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<CommandRequestPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        player.SubmitCommand(packet.Command, packet.OriginData);
     }
 
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)

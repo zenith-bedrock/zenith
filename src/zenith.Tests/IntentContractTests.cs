@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using Zenith.Event;
 using Zenith.Gameplay;
+using Zenith.Gameplay.Commands;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Packets;
@@ -59,6 +60,7 @@ internal sealed class IntentTestFixture
         var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
         Players = new PlayerManager();
         World = new World.World(new InMemoryChunkStorage());
+        var cmdPalette = new CommandPalette();
         Context = new ServerContext(
             new SilentLogger(),
             Players,
@@ -69,7 +71,8 @@ internal sealed class IntentTestFixture
             blockPalette,
             itemPalette,
             RecipeRegistry.CreateDefault(),
-            CreativeCatalog.CreateDefault());
+            CreativeCatalog.CreateDefault(),
+            cmdPalette);
     }
 
     public InventorySystem CreateInventorySystem() =>
