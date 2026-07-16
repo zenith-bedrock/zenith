@@ -8,19 +8,28 @@ namespace Zenith.World;
 /// <summary>
 /// Mapa name → network_id a partir de block_palette.nbt.
 /// Índice secundário: name + uma string-state (ex. baú <c>cardinal_direction</c>) — não é um resolutor genérico de block-state.
+/// Reverse <c>network_id → name</c> covers every dump entry (incl. multi-state skipped by the secondary index).
 /// </summary>
 sealed class BlockPalette
 {
     private readonly Dictionary<string, int> _byName;
     private readonly Dictionary<string, int> _byNameAndState;
+    private readonly Dictionary<int, string> _nameByRuntime;
 
-    public BlockPalette(Dictionary<string, int> byName, Dictionary<string, int> byNameAndState)
+    public BlockPalette(
+        Dictionary<string, int> byName,
+        Dictionary<string, int> byNameAndState,
+        Dictionary<int, string> nameByRuntime)
     {
         _byName = byName;
         _byNameAndState = byNameAndState;
+        _nameByRuntime = nameByRuntime;
     }
 
     public int Count => _byName.Count;
+
+    /// <summary>Dump entries with a recorded network_id (includes multi-state variants).</summary>
+    public int ReverseCount => _nameByRuntime.Count;
 
     public bool TryGet(string name, out int networkId) => _byName.TryGetValue(name, out networkId);
 
@@ -37,6 +46,10 @@ sealed class BlockPalette
             ? id
             : throw new InvalidOperationException(
                 $"Block palette missing '{name}' with {stateKey}={stateValue}.");
+
+    /// <summary>First-wins reverse map from NBT parse (ADR §12 adendo).</summary>
+    public bool TryGetName(int networkId, out string name) =>
+        _nameByRuntime.TryGetValue(networkId, out name!);
 
     internal static string StateKey(string name, string stateKey, string stateValue)
     {
@@ -104,6 +117,7 @@ static class BlockPaletteLoader
         var preferred = new Dictionary<string, int>(StringComparer.Ordinal);
         var fallback = new Dictionary<string, int>(StringComparer.Ordinal);
         var byState = new Dictionary<string, int>(StringComparer.Ordinal);
+        var nameByRuntime = new Dictionary<int, string>(blocks.Count);
 
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -113,6 +127,9 @@ static class BlockPaletteLoader
                 continue;
             if (!entry.TryGet("network_id", out var idTag) || !idTag.TryGetInt(out var networkId))
                 continue;
+
+            // Every dump entry — first-wins if ids collide (should not).
+            nameByRuntime.TryAdd(networkId, name);
 
             fallback.TryAdd(name, networkId);
 
@@ -137,6 +154,6 @@ static class BlockPaletteLoader
         foreach (var (name, id) in preferred)
             fallback[name] = id;
 
-        return new BlockPalette(fallback, byState);
+        return new BlockPalette(fallback, byState, nameByRuntime);
     }
 }

@@ -30,7 +30,9 @@ static class Blocks
     private static int _chestEast;
     private static int _chestWest;
     private static HashSet<int>? _chestIds;
+    private static HashSet<int>? _placeableIds;
     private static Dictionary<int, string>? _nameByRuntime;
+    private static BlockPalette? _palette;
     private static bool _loaded;
 
     public static int Air { get { EnsureLoaded(); return _air; } }
@@ -53,6 +55,7 @@ static class Blocks
     public static void Load(BlockPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
+        _palette = palette;
         _air = palette.Require("minecraft:air");
         _stone = palette.Require("minecraft:stone");
         _grassBlock = palette.Require("minecraft:grass_block");
@@ -68,6 +71,20 @@ static class Blocks
         _chestIds = [_chestSouth, _chestWest, _chestNorth, _chestEast];
         // Require(name) may equal south — keep one set entry.
         _chestIds.Add(_chest);
+        _placeableIds =
+        [
+            _stone,
+            _grassBlock,
+            _dirt,
+            _oakPlanks,
+            _oakLog,
+            _sand,
+            _chest,
+            _chestSouth,
+            _chestWest,
+            _chestNorth,
+            _chestEast
+        ];
         _nameByRuntime = new Dictionary<int, string>
         {
             [_air] = "minecraft:air",
@@ -93,6 +110,16 @@ static class Blocks
         return _chestIds is not null && _chestIds.Contains(runtimeId);
     }
 
+    /// <summary>
+    /// Curated placeables only (starter set + chest facings) — not “any palette rid” (§12).
+    /// Air is never placeable.
+    /// </summary>
+    public static bool IsPlaceable(int runtimeId)
+    {
+        EnsureLoaded();
+        return _placeableIds is not null && _placeableIds.Contains(runtimeId);
+    }
+
     /// <summary>World block rid for a cardinal facing; unknown → south item form.</summary>
     public static int ChestForFacing(string cardinalDirection)
     {
@@ -110,6 +137,8 @@ static class Blocks
     {
         EnsureLoaded();
         if (_nameByRuntime is not null && _nameByRuntime.TryGetValue(runtimeId, out name!))
+            return true;
+        if (_palette is not null && _palette.TryGetName(runtimeId, out name!))
             return true;
         name = "";
         return false;
@@ -158,6 +187,8 @@ static class Blocks
         _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _chest = 0;
         _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
         _chestIds = null;
+        _placeableIds = null;
         _nameByRuntime = null;
+        _palette = null;
     }
 }
