@@ -4,7 +4,7 @@ Host-side mounts for `docker compose` — **not** used by `dotnet run`.
 
 | Path | Role |
 |------|------|
-| `deploy/zenith.yml` | Sample config (`world.path: /app`) — **tracked in git** (needed for Dokploy/clone mounts) |
+| `deploy/zenith.yml` | Sample config (`world.path: /app`) — **tracked in git** (needed for Dokploy/clone mounts). Schema: [`schemas/zenith.schema.json`](../schemas/zenith.schema.json) (IDE only). |
 | `deploy/worlds/` | Bind mount → container `/app/worlds` (gitignored contents; Docker creates the dir) |
 
 If `deploy/zenith.yml` is missing on the host, Docker turns the file mount into a **directory** and boot fails with access denied / “is a directory”.
