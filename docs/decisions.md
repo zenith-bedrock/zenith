@@ -227,9 +227,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Full hotbar must not soft-lock survival break; entity actors stay frozen.
 
-**Deferred:** Drop entity wire, merge across cells, despawn timers.
+**Deferred:** Merge across cells, despawn timers, gravity/physics, LevelDB persist of drops. (Wire shipped — adendo below.)
 
-**Known debt (updated §36):** SoftCap refuse on new cells (`2048`); merge into existing cells still allowed. Warn once at refuse. Still no entity wire.
+**Known debt (updated §36):** SoftCap refuse on new cells (`2048`); merge into existing cells still allowed. Warn once at refuse.
+
+**Adendo (jul 2026 — drop-entity wire MVP):** Each floor cell also holds `EntityRuntimeId` (from `PlayerManager.AllocateRuntimeId`). Spawn → `AddItemActor` (0x0f) to peers with `Chunks.Knows`; pickup → `TakeItemActor` (0x11). Merge count change → `RemoveActor` + `AddItemActor`. Late join / column stream catch-up emits Add for drops in known columns. Position = cell center, velocity zero (floating OK). Still **no** WorldEntity/ECS, gravity tick, despawn TTL, Q-throw, or LevelDB persist of drops (§32).
 
 ### 27. Server-authoritative break timing
 
@@ -290,6 +292,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Three RAM workarounds converging is Rule 7 signal, but Creative (§31) and current chests do **not** require entity wire. A generic entity layer “for mobs someday” violates decisions Item 4 / ARCHITECTURE Rule 7.
 
+**Status (jul 2026):** Drop-entity **wire** shipped as §26 adendo — entity id lives on the floor-drop **cell**, not a `WorldEntity` type. Mob AI / persistence / collision remain Deferred.
+
 **Deferred (after minimal dropped-item entity):** mob AI, Mojang BlockActor, entity persistence, collision — each its own ADR.
 
 ### 33. Store unbounded honesty + InventoryContent encode-shape
@@ -334,7 +338,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
 
-**Deferred / next honesty:** drop-entity §32; `/gamemode`; death/Respawn.
+**Deferred / next honesty:** `/gamemode`; death/Respawn. (Drop-entity wire → §26 adendo / §32.)
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
@@ -462,7 +466,7 @@ Recorded so we don't “accidentally” implement them:
 - Mojang LevelDB world format
 - Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
 - Full creative catalog / `block_state_b64` decode (short CreativeContent list shipped in §31)
-- WorldEntity / ECS until drop-entity wire is explicitly pulled (§32)
+- WorldEntity / ECS / mob AI (drop-entity **wire** shipped without a generic entity layer — §32)
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 

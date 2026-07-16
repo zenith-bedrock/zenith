@@ -22,7 +22,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 
 | Order | Leaf | Notes |
 |------:|------|--------|
-| 1 | **Drop-entity wire** (minimal) | Floor drops already exist as cells (§26); peers need to *see* items. Minimal dropped-item entity only — not ECS/mobs (§32). |
+| 1 | **Drop-entity wire** (minimal) | **Shipped** (Jul 2026): `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
 | 2 | **Death / Respawn** | Soft void rescue is not death. Needs packets + clear softlock rules (§40 Deferred). |
 | 3 | **`/gamemode` minimal** | One command path, config-backed modes you already have — **not** a command framework or autocomplete stack ([`dx.md`](dx.md) freeze). ADR first. |
 | 4 | **Tool dig speed / efficiency** | Extends §27; still no enchants catalogue dump. |

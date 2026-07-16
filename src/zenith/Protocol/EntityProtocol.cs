@@ -156,6 +156,35 @@ sealed class EntityProtocol
         _session.SendDataPacket(new RemoveActorPacket { ActorUniqueId = actorUniqueId });
     }
 
+    /// <summary>Dropped item entity at cell center (ADR §26 wire). Velocity always zero in MVP.</summary>
+    public void SendAddItemActor(
+        long entityRuntimeId,
+        NetworkItemStack item,
+        float x,
+        float y,
+        float z)
+    {
+        _session.SendDataPacket(new AddItemActorPacket
+        {
+            EntityUniqueId = entityRuntimeId,
+            EntityRuntimeId = (ulong)entityRuntimeId,
+            Item = item,
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            FromFishing = false
+        });
+    }
+
+    public void SendTakeItemActor(ulong itemEntityRuntimeId, ulong takerEntityRuntimeId)
+    {
+        _session.SendDataPacket(new TakeItemActorPacket
+        {
+            ItemEntityRuntimeId = itemEntityRuntimeId,
+            TakerEntityRuntimeId = takerEntityRuntimeId
+        });
+    }
+
     /// <summary>Local-player metadata seed (Breathing) — HUD honesty at spawn (§34).</summary>
     public void SendLocalActorData(ulong actorRuntimeId, string name)
     {
