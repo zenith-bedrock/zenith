@@ -32,6 +32,19 @@ public class InventoryContainerMapTests
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Inventory, 27, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out _));
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));
+        // Craft UI containers stay unmapped — handler skips them before TryMap.
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 0, out _));
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CreatedOutput, 50, out _));
+    }
+
+    [Fact]
+    public void Ui_craft_containers_are_flagged()
+    {
+        Assert.True(InventoryContainerMap.IsUiCraftContainer(InventoryContainerMap.CraftingInput));
+        Assert.True(InventoryContainerMap.IsUiCraftContainer(InventoryContainerMap.CraftingOutputPreview));
+        Assert.True(InventoryContainerMap.IsUiCraftContainer(InventoryContainerMap.CreatedOutput));
+        Assert.False(InventoryContainerMap.IsUiCraftContainer(InventoryContainerMap.Hotbar));
+        Assert.False(InventoryContainerMap.IsUiCraftContainer(InventoryContainerMap.Cursor));
     }
 
     [Fact]

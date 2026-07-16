@@ -14,9 +14,15 @@ namespace Zenith.Protocol;
 static class InventoryContainerMap
 {
     public const byte CombinedHotbarAndInventory = 12;
+    /// <summary>Bedrock crafting input (2×2 / 3×3 UI). No domain slots yet — ISR skips.</summary>
+    public const byte CraftingInput = 13;
+    /// <summary>Bedrock crafting output preview. ISR skips.</summary>
+    public const byte CraftingOutputPreview = 14;
     public const byte Hotbar = 28;
     public const byte Inventory = 29;
     public const byte Cursor = 59;
+    /// <summary>Bedrock created-output (CraftCreative / craft result pickup). ISR skips.</summary>
+    public const byte CreatedOutput = 60;
     public const byte Chest = 7;
 
     /// <summary>Flat domínio para slots do baú aberto (não vive em <see cref="PlayerInventory"/>).</summary>
@@ -24,6 +30,13 @@ static class InventoryContainerMap
 
     public static bool IsChestFlat(int flat) =>
         flat is >= ChestBase and < ChestBase + ChestStore.Size;
+
+    /// <summary>
+    /// Craft/UI containers without a Zenith domain window. Place/Take involving these must not
+    /// <c>RejectIsr</c> — bag-only craft/creative still apply via CraftRecipe/CraftCreative.
+    /// </summary>
+    public static bool IsUiCraftContainer(byte containerId) =>
+        containerId is CraftingInput or CraftingOutputPreview or CreatedOutput;
 
     public static bool TryMap(byte containerId, byte slot, out int flat)
     {

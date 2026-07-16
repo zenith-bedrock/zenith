@@ -22,7 +22,7 @@ dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 ```
 
 - [ ] All tests green
-- [ ] Benchmarks project builds (numbers optional refresh in `docs/dx.md`)
+- [ ] Benchmarks project builds (numbers optional refresh in `docs/dx.md` — hot-path suite: ZLIB / UpdateBlock / LevelChunk / inventory wire / overlay / palette)
 
 ## Docker / compose
 

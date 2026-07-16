@@ -89,22 +89,35 @@ That antipattern is how Bedrock stacks become un-upgradable across protocol bump
 
 ## Measured (optional)
 
-Baseline dated **2026-07-14**, host Windows 11 / .NET 10.0.9 / Ryzen 5 3600 — ShortRun (`-j short -m`). Refresh with:
+Baseline dated **2026-07-15**, host Windows 11 / .NET 10.0.10 / Ryzen 5 3600 — ShortRun (`-j short -m --join`). Refresh with:
 
 ```bash
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 ```
 
-| Method | Params | Mean | Allocated |
-|--------|--------|------|-----------|
-| `BinaryStream` WriteVarIntsAndInts (64 pairs) | — | ~489 ns | 1056 B |
-| `BinaryStream` ReadVarIntsAndInts (64 pairs) | — | ~175 ns | 0 B |
-| `GamePacket` EncodeSmallBatch (3× PlayStatus) | — | ~160 ns | 440 B |
-| `EventBus.Publish` | 0 listeners | ~3.5 ns | 0 B |
-| `EventBus.Publish` | 1 listener | ~15 ns | 0 B |
-| `EventBus.Publish` | 8 listeners | ~38 ns | 0 B |
+Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as order-of-magnitude / alloc signal, **not** a CI gate (ADR §24).
 
-ShortRun margins are wide; treat as order-of-magnitude / alloc signal, not a CI gate (ADR §24).
+| Area | Method | Params | Mean | Allocated |
+|------|--------|--------|------|-----------|
+| BinaryStream | WriteVarIntsAndInts (64 pairs) | — | ~498 ns | 1056 B |
+| BinaryStream | ReadVarIntsAndInts (64 pairs) | — | ~152 ns | 0 B |
+| GamePacket | Encode 3× PlayStatus `NONE` | — | ~134 ns | 440 B |
+| GamePacket | Encode 2× UpdateBlock ZLIB under threshold | — | ~131 ns | 352 B |
+| GamePacket | Encode 32× UpdateBlock ZLIB **over** threshold | — | ~6.0 µs | 4120 B |
+| UpdateBlock batch | EncodeNone | 1 / 8 / 32 | ~80 / ~367 / ~1.3 µs | 264 / 1032 / 3712 B |
+| UpdateBlock batch | EncodeZlibPref | 1 / 8 / 32 | ~82 / ~361 / ~5.9 µs | 264 / 1032 / 4136 B |
+| LevelChunk | EncodeFlatColumn | — | ~144 ns | 1216 B |
+| Inventory wire | EncodeInventoryContent36 | — | ~1.1 µs | 1056 B |
+| Inventory wire | EncodeItemStackResponseOk | — | ~161 ns | 88 B |
+| Inventory wire | EncodeItemStackResponseError | — | ~34 ns | 88 B |
+| World overlay | SetBlock | overlays 0 / 1k / 10k | ~140 ns / ~7.4 µs / ~15 µs | 0 B |
+| World overlay | GetBlock | overlays 0 / 1k / 10k | ~6–7 ns | 0 B |
+| World overlay | GetOverlaysInColumn | overlays 0 / 1k / 10k | ~44 ns / ~6.2 µs / ~255 µs | 0 / ~33 KB / ~525 KB |
+| Palette | Blocks.Stone/Chest/Air (cached fields) | — | ~0 ns (noise floor) | 0 B |
+| Palette | ItemPalette.Require (stone/chest/oak_log) | — | ~12–13 ns | 0 B |
+| EventBus | Publish | 0 / 1 / 8 listeners | ~4 / ~18 / ~37 ns | 0 B |
+
+**Improvement signals from this run:** ZLIB Deflate on 32-block batches (~6 µs) dwarfs uncompressed encode; `GetOverlaysInColumn` allocates and scales poorly at 10k overlays (~525 KB / ~255 µs) — primary post-alpha RAM scan candidate. Palette `Blocks.*` is already a field hit; item name lookup stays cheap.
 
 ## Related
 
