@@ -203,4 +203,23 @@ sealed class WorldProtocol
             blockX,
             blockY,
             blockZ);
+
+    public void SendPlaySound(string soundName, float x, float y, float z, float volume = 1f, float pitch = 1f) =>
+        _session.SendDataPacket(new PlaySoundPacket
+        {
+            SoundName = soundName,
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            Volume = volume,
+            Pitch = pitch
+        });
+
+    public void SendStopSound(string soundName = "", bool stopAll = false, bool stopMusic = false) =>
+        _session.SendDataPacket(new StopSoundPacket
+        {
+            SoundName = soundName,
+            StopAllSounds = stopAll,
+            StopMusic = stopMusic
+        });
 }

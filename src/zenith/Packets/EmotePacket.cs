@@ -2,44 +2,41 @@
 
 namespace Zenith.Packets;
 
-enum EmoteFlags : int
-{
-    SERVER,
-    MUTE_CHAT
-}
-
+/// <summary>Emote (0x8a) — client ↔ server. Flags are bitfield bytes (gophertunnel).</summary>
 sealed class EmotePacket : DataPacket
 {
+    public const byte FlagServerSide = 1 << 0;
+    public const byte FlagMuteChat = 1 << 1;
+
     public override int Id => (int)ProtocolInfo.EMOTE_PACKET;
 
-    public long ActorRuntimeId { get; set; }
-    public string EmoteId { get; set; }
-    public int TickLength { get; set; }
-    public string XUID { get; set; }
-    public string PlatformChatId { get; set; }
-    public EmoteFlags Flags { get; set; }
+    public ulong ActorRuntimeId { get; set; }
+    public string EmoteId { get; set; } = "";
+    public uint TickLength { get; set; }
+    public string Xuid { get; set; } = "";
+    public string PlatformChatId { get; set; } = "";
+    public byte Flags { get; set; }
 
     public override void Decode(ref BinaryStream stream)
     {
-        ActorRuntimeId = stream.ReadVarLong();
+        ActorRuntimeId = (ulong)stream.ReadUnsignedVarLong();
         EmoteId = stream.ReadVarString();
-        TickLength = stream.ReadVarInt();
-        XUID = stream.ReadString();
-        PlatformChatId = stream.ReadString();
-        Flags = (EmoteFlags)stream.ReadVarInt();
+        TickLength = (uint)stream.ReadUnsignedVarInt();
+        Xuid = stream.ReadVarString();
+        PlatformChatId = stream.ReadVarString();
+        Flags = stream.ReadByte();
     }
 
     public override Span<byte> Encode()
     {
         var writer = new BinaryStream();
-
-        writer.WriteVarLong(ActorRuntimeId);
+        writer.WriteUnsignedVarInt(Id);
+        writer.WriteUnsignedVarLong((long)ActorRuntimeId);
         writer.WriteVarString(EmoteId);
-        writer.WriteVarInt(TickLength);
-        writer.WriteVarString(XUID);
+        writer.WriteUnsignedVarInt((int)TickLength);
+        writer.WriteVarString(Xuid);
         writer.WriteVarString(PlatformChatId);
-        writer.WriteVarInt((int)Flags);
-
+        writer.WriteByte(Flags);
         return writer.GetBufferDisposing();
     }
 }
