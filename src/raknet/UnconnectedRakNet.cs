@@ -41,7 +41,7 @@ public class UnconnectedRakNet
                     ServerGuid = _server.Guid,
                     Message =
                         $"MCPE;{_server.Motd};{_server.ProtocolVersion};{_server.VersionName};" +
-                        $"{online};{max};{_server.Guid};{_server.SubMotd};{_server.ListGameMode};1;{port};{port};"
+                        $"{online};{max};{_server.Guid};{_server.SubMotd};{_server.ListGameMode};1;{port};{port};0;"
                 }.Encode();
                 _server.Send(remoteEndPoint, pongBuffer);
                 return true;

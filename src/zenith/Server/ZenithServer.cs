@@ -21,6 +21,7 @@ class ZenithServer
     private readonly CancellationTokenSource _lifetime = new();
     private readonly IChunkStorage _chunkStorage;
     private readonly ILogger _logger;
+    private readonly ZenithSessionListener _sessionListener;
 
     public RakNetServer RakNetServer { get; }
     public ServerContext Context { get; }
@@ -76,10 +77,12 @@ class ZenithServer
         Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes, creative);
         GameLoop = gameLoop;
 
-        RakNetServer = new RakNetServer(config.Server.Port)
+        _sessionListener = new ZenithSessionListener(Context);
+        var serverGuid = LoadOrCreateServerGuid(AppContext.BaseDirectory, logger);
+        RakNetServer = new RakNetServer(config.Server.Port, serverGuid)
         {
             Logger = logger,
-            SessionListener = new ZenithSessionListener(Context),
+            SessionListener = _sessionListener,
             MaxConnections = (uint)config.Server.MaxPlayers,
             MaxConnectionsPerAddress = (uint)config.Server.MaxPlayersPerIp,
             Motd = config.Server.Motd,
@@ -89,6 +92,40 @@ class ZenithServer
             VersionName = ServerIdentity.VersionName,
             OnlinePlayerCount = () => Context.PlayerManager.Count
         };
+    }
+
+    /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>
+    private static ulong LoadOrCreateServerGuid(string dataDir, ILogger logger)
+    {
+        var path = Path.Combine(dataDir, "server.guid");
+        try
+        {
+            if (File.Exists(path) &&
+                ulong.TryParse(File.ReadAllText(path).Trim(), out var existing) &&
+                existing != 0)
+            {
+                return existing;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"Could not read server.guid: {ex.Message}");
+        }
+
+        Span<byte> bytes = stackalloc byte[8];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        var guid = BitConverter.ToUInt64(bytes);
+        try
+        {
+            File.WriteAllText(path, guid.ToString());
+            logger.Info($"Wrote stable RakNet GUID to {path}");
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"Could not persist server.guid: {ex.Message}");
+        }
+
+        return guid;
     }
 
     private static IChunkStorage CreateChunkStorage(ServerConfig config, Zenith.Raknet.Log.ILogger logger)
@@ -189,6 +226,10 @@ class ZenithServer
     public async Task ShutdownAsync()
     {
         _lifetime.Cancel();
+
+        // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose enqueues inv Puts.
+        _logger.Info("Disconnecting sessions...");
+        _sessionListener.DisconnectAll("Server closed");
 
         try
         {

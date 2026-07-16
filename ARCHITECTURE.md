@@ -114,20 +114,22 @@ Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Net
 
 ## Smoke manual
 
-Baseline (multiplayer spine):
+Baseline (multiplayer spine) — status humano Jul 2026 (Dokploy compose + 1–2 clients). Checklist canónico: [`docs/alpha-gate.md`](docs/alpha-gate.md).
 
-1. Cliente A: login → InGame (chão flat sob os pés).
-2. AuthInput: servidor atualiza `Player` position.
-3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
-4. Movimento de A visível em B (`MoveActorAbsolute`).
-5. Chat A↔B (`TextPacket`).
-6. A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`); hotbar sincroniza (`InventoryContent`).
-7. Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame.
-8. A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity.
-9. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
-10. A anda para fora do raio de spawn → novas colunas flat chegam (`ChunkStreamSystem`); chão continua sob os pés.
-11. **§17 rearrange:** abrir inventário → arrastar slot 0↔9 → fechar/reabrir (item permanece); place a partir da hotbar; break com hotbar cheia → item em storage ≥9; sem rubberband após place/break.
-12. **Held peer:** A troca hotbar / segura bloco → B vê o item na mão (`MobEquipment` / `AddPlayer` held).
+| # | Gate | Status |
+|---|------|--------|
+| 1 | Cliente A: login → InGame (chão flat sob os pés). | **OK** |
+| 2 | AuthInput: servidor atualiza `Player` position. | **OK** |
+| 3 | Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`). | **OK** |
+| 4 | Movimento de A visível em B (`MoveActorAbsolute`). | **OK** |
+| 5 | Chat A↔B (`TextPacket`). | **OK** |
+| 6 | A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`); hotbar sync. | **OK** (era PARCIAL AFK join-miss → join-overlay catch-up §14) |
+| 7 | Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame. | **OK** |
+| 8 | A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity. | **OK** |
+| 9 | B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`). | **OK** |
+| 10 | A anda para fora do raio de spawn → novas colunas flat (`ChunkStreamSystem`). | **OK** |
+| 11 | **§17 rearrange:** drag / SHIFT hotbar↔inv; place/break; sem rubberband. | **OK** (press-drag extremo = polish pós-alpha) |
+| 12 | **Held peer:** A troca hotbar → B vê item na mão (`MobEquipment` / `AddPlayer` held). | **OK** |
 
 Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush + crack peers):
 
@@ -140,7 +142,7 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
 | **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
-| Regressão | Held peer, rearrange, break/crack still OK. | — |
+| Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
 
 **Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
 

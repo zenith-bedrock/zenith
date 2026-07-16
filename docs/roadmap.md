@@ -12,16 +12,9 @@ Update this file when a horizon closes (e.g. alpha tagged) or an ADR changes “
 
 ### Code vs gate
 
-Product spine from the gate is **implemented in-repo** (login → flat + overlay → inventory/chests/craft → LevelDB persist → dig crack + void rescue → `ProductVersion`). ADRs §17–§42 / §46–§48 + leaf tests cover the tree. Gate checkboxes stay **unchecked** until humans finish client smoke + compose + tag — do not tick them from CI alone.
+Product spine is **implemented and smoke-proven** (Jul 2026): baseline MP 1–12, S35–S41, Dokploy compose, leaf tests + benchmarks, hard-kill soft check. See [`alpha-gate.md`](alpha-gate.md).
 
-**What is left for this horizon (not new features):**
-
-| Remaining | Why |
-|-----------|-----|
-| Manual MP smokes (1–12 + S35–S41) | Two Bedrock clients; mobile MTU still worth a pass |
-| `dotnet test` + compose proof | Sample `deploy/zenith.yml` must be present; LevelDB under `./deploy/worlds/...` |
-| Bugfixes / ops polish that block the tag | Protocol mismatch UX, reconnect edge cases, etc. |
-| Release notes + `git tag v0.0.1-alpha` | See gate “Tag & publish” |
+**What is left for this horizon:** ship the tag — release notes are in [`release-notes-template.md`](release-notes-template.md); CI publishes on `v*` push.
 
 **Already shipped (no longer “parallel leaves to build”):** chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
 
