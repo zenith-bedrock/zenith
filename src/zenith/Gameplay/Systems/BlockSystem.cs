@@ -30,6 +30,7 @@ sealed class BlockSystem : IGameSystem
         {
             while (player.TryConsumeBlockEdit(out var edit))
             {
+                if (player.IsDead) continue;
                 if (ApplyEdit(player, edit, clock, online))
                     updates.Add((edit.X, edit.Y, edit.Z, edit.BlockRuntimeId));
             }
@@ -259,7 +260,7 @@ sealed class BlockSystem : IGameSystem
         {
             foreach (var player in online)
             {
-                if (!player.IsInGame) continue;
+                if (!player.IsInGame || player.IsDead) continue;
                 var dx = player.PositionX - (pos.X + 0.5f);
                 var dy = player.PositionY - (pos.Y + 0.5f);
                 var dz = player.PositionZ - (pos.Z + 0.5f);

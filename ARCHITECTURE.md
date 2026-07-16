@@ -140,7 +140,8 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S38** | Creative: palette click → **cursor**; SHIFT → bag; place; Survival rejeita CraftCreative. | **OK** |
 | **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. | **OK** |
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
-| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
+| **S40** | Cair no void: death screen (`DeathInfo` + Respawn); Respawn → spawn `(0, FlatSpawnY, 0)`; inventário intacto; Health 20. | **Wire shipped** (§40) — smoke humano |
+| **H1-2** | Survival void → death UI → Respawn limpa; bag/chest inalterados; peer vê pose. | Wire shipped — smoke humano |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
 | **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag. | Wire shipped (§26) — smoke humano |
 | Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
@@ -148,7 +149,7 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 
 **Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
 
-Gates: se item **11** falhar, não começar containers. Se **S39**, **S40** ou **S41** falharem, não abrir death/drop-entity.
+Gates: se item **11** falhar, não começar containers. Se **S39** ou **S41** falharem, não abrir leaves dependentes. **S40** / **H1-2** = smoke humano pós death wire.
 
 ## Roadmap
 

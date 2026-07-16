@@ -23,6 +23,8 @@ class Player
     private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
     private readonly object _chatLock = new();
     private string? _pendingChat;
+    private readonly object _respawnLock = new();
+    private bool _pendingRespawn;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -62,9 +64,15 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
-    /// <summary>Domain vitals seed (ADR §40) — spawn attributes read these; damage Deferred.</summary>
+    /// <summary>Domain vitals (ADR §40) — spawn attributes read these; damage pipeline Deferred.</summary>
     public float Health { get; set; } = 20f;
     public float Hunger { get; set; } = 20f;
+
+    /// <summary>True while death screen is up — AuthInput/edits ignored until respawn tick (§40).</summary>
+    public bool IsDead { get; private set; }
+
+    /// <summary>Cause string last sent via DeathInfo (tests / Debug).</summary>
+    public string DeathCause { get; private set; } = "";
 
     /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
     public int LastReplicatedHotbarSlot { get; set; } = -1;
@@ -244,5 +252,51 @@ class Player
             _pendingChat = null;
             return true;
         }
+    }
+
+    /// <summary>
+    /// Marks dead on the GameLoop. No-op if already dead. Inventory untouched (§40).
+    /// </summary>
+    public bool BeginDeath(string cause = "generic")
+    {
+        if (IsDead) return false;
+        IsDead = true;
+        Health = 0f;
+        DeathCause = cause;
+        AbortBreak();
+        OpenChest = null;
+        InventoryWindowOpen = false;
+        CraftUi.Clear();
+        lock (_respawnLock)
+            _pendingRespawn = false;
+        return true;
+    }
+
+    /// <summary>Client Respawn CLIENT_READY / PlayerAction RESPAWN — overwrite-latest one-shot.</summary>
+    public void SubmitRespawn()
+    {
+        if (!IsDead) return;
+        lock (_respawnLock)
+            _pendingRespawn = true;
+    }
+
+    public bool TryConsumeRespawn()
+    {
+        lock (_respawnLock)
+        {
+            if (!_pendingRespawn) return false;
+            _pendingRespawn = false;
+            return true;
+        }
+    }
+
+    /// <summary>Clears death after GameLoop applied spawn pose + vitals.</summary>
+    public void CompleteRespawn()
+    {
+        IsDead = false;
+        Health = 20f;
+        DeathCause = "";
+        lock (_respawnLock)
+            _pendingRespawn = false;
     }
 }

@@ -338,7 +338,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
 
-**Deferred / next honesty:** `/gamemode`; death/Respawn. (Drop-entity wire → §26 adendo / §32.)
+**Deferred / next honesty:** `/gamemode`; hunger/food/fall damage. (Death/Respawn → §40 adendo; drop-entity → §26.)
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
@@ -363,6 +363,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Why:** Attributes literals lied about domain; falling forever was worse than thin vitals. Death wire deferred until respawn protocol is intentional.
 
 **Deferred:** hunger tick, food, fall damage, drowning, death/Respawn packets.
+
+**Adendo (jul 2026 — death / Respawn MVP):** Soft-rescue **superseded** once Respawn wire shipped. Void `Y < FlatMinY - 8` now sets `Health = 0`, `IsDead`, sends `DeathInfo` (`0xbd`) + `Respawn` SEARCHING (`0x2d`); client `Respawn` CLIENT_READY or `PlayerAction` RESPAWN → `SubmitRespawn` → GameLoop restores Health=20, pose to world spawn `(0, FlatSpawnY, 0)`, Teleport + attributes + Respawn READY. **Inventory unchanged** (death drops Deferred — separate leaf). AuthInput / block edits ignored while dead. No VitalsSystem / DamageSystem; logic stays in `MovementSystem` + handler intents. Hunger/food/fall/drowning still Deferred.
 
 ### 41. Void MovePlayer Teleport + shutdown persistence flush
 

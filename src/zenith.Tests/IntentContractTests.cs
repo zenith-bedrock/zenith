@@ -132,10 +132,11 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void MovementSystem_void_soft_rescue_teleports_to_world_spawn()
+    public void MovementSystem_void_triggers_death_not_soft_rescue()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("faller");
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
         player.SubmitMovementInput(MovementInputState.From(
             x: 3.5f,
             y: MovementSystem.VoidRescueY - 1f,
@@ -145,11 +146,43 @@ public class IntentContractTests
 
         new MovementSystem(fx.Players).Tick(fx.Clock);
 
+        Assert.True(player.IsDead);
+        Assert.Equal(0f, player.Health);
+        Assert.Equal("generic", player.DeathCause);
+        // Still at void pose until client Respawn — no soft-rescue teleport.
+        Assert.Equal(3.5f, player.PositionX);
+        Assert.Equal(MovementSystem.VoidRescueY - 1f, player.PositionY);
+        Assert.Equal(4.5f, player.PositionZ);
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void MovementSystem_respawn_restores_spawn_and_keeps_inventory()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("faller");
+        Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 7));
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 3.5f,
+            y: MovementSystem.VoidRescueY - 1f,
+            z: 4.5f,
+            pitch: 10f,
+            yaw: 20f));
+        var movement = new MovementSystem(fx.Players);
+        movement.Tick(fx.Clock);
+        Assert.True(player.IsDead);
+
+        player.SubmitRespawn();
+        movement.Tick(fx.Clock);
+
+        Assert.False(player.IsDead);
+        Assert.Equal(20f, player.Health);
         Assert.Equal(0f, player.PositionX);
         Assert.Equal(Blocks.FlatSpawnY, player.PositionY);
         Assert.Equal(0f, player.PositionZ);
         Assert.Equal(0f, player.Pitch);
-        Assert.Equal(20f, player.Health);
+        Assert.Equal(Blocks.Dirt, player.Inventory.GetRuntimeId(0));
+        Assert.Equal(7, player.Inventory.Get(0).Count);
     }
 
     [Fact]

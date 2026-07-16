@@ -50,14 +50,14 @@ public class MovementDirtyTests
     }
 
     [Fact]
-    public void Void_rescue_marks_dirty_and_fans_Absolute()
+    public void Void_death_marks_dirty_and_fans_Absolute()
     {
         var fx = new IntentTestFixture();
         var mover = fx.AddInGamePlayer("mover");
         _ = fx.AddInGamePlayer("watcher");
         var system = new MovementSystem(fx.Players);
 
-        // Seed last-replicated at spawn so rescue Y change is dirty.
+        // Seed last-replicated at spawn so void Y change is dirty.
         SubmitPose(mover, 0f, Blocks.FlatSpawnY, 0f, 0f, 0f);
         system.Tick(fx.Clock);
         Flush(fx);
@@ -67,11 +67,34 @@ public class MovementDirtyTests
         system.Tick(fx.Clock);
         Flush(fx);
         Assert.True(fx.Transport.Captured.Count >= 1,
-            "void rescue must teleport self and Absolute peers");
+            "void death must fan Absolute to peers at death pose");
+        Assert.True(mover.IsDead);
+        Assert.Equal(32f, mover.PositionX);
+        Assert.Equal(MovementSystem.VoidRescueY - 1f, mover.PositionY);
+        Assert.Equal(-16f, mover.PositionZ);
+    }
+
+    [Fact]
+    public void Respawn_after_void_death_fans_Absolute_to_spawn()
+    {
+        var fx = new IntentTestFixture();
+        var mover = fx.AddInGamePlayer("mover");
+        _ = fx.AddInGamePlayer("watcher");
+        var system = new MovementSystem(fx.Players);
+
+        SubmitPose(mover, 32f, MovementSystem.VoidRescueY - 1f, -16f, 10f, 45f);
+        system.Tick(fx.Clock);
+        Flush(fx);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        mover.SubmitRespawn();
+        system.Tick(fx.Clock);
+        Flush(fx);
+        Assert.False(mover.IsDead);
         Assert.Equal(0f, mover.PositionX);
         Assert.Equal(Blocks.FlatSpawnY, mover.PositionY);
-        Assert.Equal(0f, mover.PositionZ);
-        Assert.Equal(0f, mover.Pitch);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "respawn must Absolute peers to world spawn");
     }
 
     private static void SubmitPose(Player.Player player, float x, float y, float z, float pitch, float yaw)
