@@ -29,7 +29,7 @@ Inbound code validates and **queues**; systems apply on tick. That means:
 
 ### 4. Config that matches how you run binaries
 
-`zenith.yml` next to the executable — same story in Visual Studio, `dotnet run`, or a Windows service. No hidden `ZENITH_*` matrix.
+`zenith.yml` next to the executable — same story in Visual Studio, `dotnet run`, or a Windows service. No hidden `ZENITH_*` matrix. Log levels are split: `log.server` (default `info`) vs `log.raknet` (default `warn`) so enabling Bedrock Debug does not flood ACK/`Connected PID`.
 
 IDE autocomplete/validation (optional): [`schemas/zenith.schema.json`](../schemas/zenith.schema.json) + workspace [`.vscode/settings.json`](../.vscode/settings.json) (Red Hat YAML / Cursor). **Not** used at boot — `ServerConfig.Validate()` remains the runtime SSOT.
 

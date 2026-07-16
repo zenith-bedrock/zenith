@@ -1,5 +1,6 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using Zenith.Raknet.Enumerator;
 
 namespace Zenith.Server;
 
@@ -11,6 +12,7 @@ sealed class ServerConfig
     public AuthSection Auth { get; set; } = new();
     public ChatSection Chat { get; set; } = new();
     public NetworkSection Network { get; set; } = new();
+    public LogSection Log { get; set; } = new();
 
     public sealed class ServerSection
     {
@@ -116,6 +118,42 @@ sealed class ServerConfig
         public int CompressionThreshold { get; set; } = 256;
     }
 
+    /// <summary>
+    /// Independent severity for Bedrock/server vs RakNet transport.
+    /// Aliases are severity ladders mapped onto <see cref="LogLevel"/> flags
+    /// (<c>info</c> = Info|Warning|Error, not Info alone).
+    /// </summary>
+    public sealed class LogSection
+    {
+        public string Server { get; set; } = "info";
+        public string Raknet { get; set; } = "warn";
+    }
+
+    /// <summary>
+    /// Maps yaml aliases to flag masks. <c>info</c> keeps Warning/Error;
+    /// <c>debug</c>/<c>all</c> → <see cref="LogLevel.All"/>.
+    /// </summary>
+    internal static LogLevel ParseLogLevel(string raw, string key)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            throw new InvalidOperationException(
+                $"log.{key} must not be empty. Allowed: none, info, warn, warning, error, debug, all.");
+        }
+
+        var level = raw.Trim().ToLowerInvariant();
+        return level switch
+        {
+            "none" => LogLevel.None,
+            "info" => LogLevel.Info | LogLevel.Warning | LogLevel.Error,
+            "warn" or "warning" => LogLevel.Warning | LogLevel.Error,
+            "error" => LogLevel.Error,
+            "debug" or "all" => LogLevel.All,
+            _ => throw new InvalidOperationException(
+                $"log.{key} contains unknown level '{raw}'. Allowed: none, info, warn, warning, error, debug, all.")
+        };
+    }
+
     public void Validate()
     {
         if (Server.Port is < 1 or > 65535)
@@ -148,6 +186,10 @@ sealed class ServerConfig
 
         if (Network.CompressionThreshold < 0)
             throw new InvalidOperationException($"network.compression-threshold must be >= 0 (got {Network.CompressionThreshold}).");
+
+        Log ??= new LogSection();
+        _ = ParseLogLevel(Log.Server, "server");
+        _ = ParseLogLevel(Log.Raknet, "raknet");
     }
 }
 

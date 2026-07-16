@@ -31,20 +31,28 @@ class ZenithServer
     public ZenithServer(ServerConfig config)
     {
         Config = config;
-        var logger = new Logger();
-        _logger = logger;
-        logger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
-        logger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
+        var serverLogger = new Logger
+        {
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
+        };
+        var raknetLogger = new Logger
+        {
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet")
+        };
+        _logger = serverLogger;
+        serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
+        serverLogger.Info($"log.server={config.Log.Server} log.raknet={config.Log.Raknet}");
+        serverLogger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
         if (!config.Auth.RequireStrictXbox)
         {
-            logger.Warning(
+            serverLogger.Warning(
                 "*** AUTH WARNING: auth.accept includes self-signed and/or offline. " +
                 "Clients may join without Xbox Live. Use accept: [xbox] before public exposure. ***");
         }
 
         var players = new PlayerManager();
         var clock = new GameClock();
-        var gameLoop = new GameLoop(clock, logger);
+        var gameLoop = new GameLoop(clock, serverLogger);
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
         gameLoop.Register(new EquipmentSystem(players));
@@ -52,7 +60,7 @@ class ZenithServer
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
-        logger.Info($"Block palette loaded (air={Blocks.Air}, stone={Blocks.Stone}, grass={Blocks.GrassBlock})");
+        serverLogger.Info($"Block palette loaded (air={Blocks.Air}, stone={Blocks.Stone}, grass={Blocks.GrassBlock})");
 
         var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
         // Boot contract: placeable starter blocks + air must exist in item palette.
@@ -64,24 +72,24 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:oak_log");
         _ = itemPalette.Require("minecraft:sand");
         _ = itemPalette.Require("minecraft:chest");
-        logger.Info($"Item palette loaded ({itemPalette.Count} entries)");
+        serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries)");
 
-        _chunkStorage = CreateChunkStorage(config, logger);
-        var world = new World.World(_chunkStorage, logger);
+        _chunkStorage = CreateChunkStorage(config, serverLogger);
+        var world = new World.World(_chunkStorage, serverLogger);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault();
         gameLoop.Register(new BlockSystem(players, world));
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
-        Context = new ServerContext(logger, players, new EventBus(logger), clock, world, config, blockPalette, itemPalette, recipes, creative);
+        Context = new ServerContext(serverLogger, players, new EventBus(serverLogger), clock, world, config, blockPalette, itemPalette, recipes, creative);
         GameLoop = gameLoop;
 
         _sessionListener = new ZenithSessionListener(Context);
-        var serverGuid = LoadOrCreateServerGuid(AppContext.BaseDirectory, logger);
+        var serverGuid = LoadOrCreateServerGuid(AppContext.BaseDirectory, serverLogger);
         RakNetServer = new RakNetServer(config.Server.Port, serverGuid)
         {
-            Logger = logger,
+            Logger = raknetLogger,
             SessionListener = _sessionListener,
             MaxConnections = (uint)config.Server.MaxPlayers,
             MaxConnectionsPerAddress = (uint)config.Server.MaxPlayersPerIp,
