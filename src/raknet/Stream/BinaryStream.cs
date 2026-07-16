@@ -221,7 +221,10 @@ public ref struct BinaryStream : IDisposable
         return ReadSpan(length).ToArray();
     }
 
-    public string ReadUuid()
+    /// <summary>
+    /// UUID Bedrock: bytes RFC 4122 com cada metade de 8 bytes invertida no wire (espelha <see cref="WriteUuid"/>).
+    /// </summary>
+    public Guid ReadUuid()
     {
         Span<byte> wire = stackalloc byte[16];
         ReadSpan(16).CopyTo(wire);
@@ -239,7 +242,7 @@ public ref struct BinaryStream : IDisposable
         le[7] = wire[6];
         wire[8..].CopyTo(le[8..]);
 
-        return new Guid(le).ToString("D");
+        return new Guid(le);
     }
 
     /// <summary>

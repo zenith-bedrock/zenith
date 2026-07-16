@@ -536,20 +536,41 @@ class InGameSessionHandler : ISessionHandler
 
     private static void HandlePlayerSkin(NetworkSession session, ref BinaryStream stream)
     {
-        var packet = DataPacket.From<PlayerSkinPacket>(ref stream);
+        PlayerSkinPacket packet;
+        try
+        {
+            packet = DataPacket.From<PlayerSkinPacket>(ref stream);
+        }
+        catch (InvalidOperationException ex)
+        {
+            session.Context.Logger.Debug($"PlayerSkin decode rejected: {ex.Message}");
+            return;
+        }
+
         var player = session.Player;
         if (player is null) return;
 
-        player.Skin = packet.Skin;
-        player.SkinRgba = null;
-        player.SkinWidth = 0;
-        player.SkinHeight = 0;
+        if (!Guid.TryParse(packet.Uuid, out var packetUuid) || packetUuid != player.Uuid)
+        {
+            session.Context.Logger.Debug(
+                $"PlayerSkin ignored for {player.Username}: uuid mismatch (packet={packet.Uuid}).");
+            return;
+        }
 
-        session.Protocol.Skin.SendSkin(
-            player.Uuid.ToString(),
+        if (packet.Skin.TryGetClassicRgba(out var rgba, out var width, out var height))
+        {
+            player.SkinRgba = rgba;
+            player.SkinWidth = width;
+            player.SkinHeight = height;
+        }
+
+        PlayerVisibility.RelaySkin(
+            player,
             packet.Skin,
             packet.SkinName,
-            packet.OldSkinName);
+            packet.OldSkinName,
+            packet.IsVerified,
+            session.Context.PlayerManager.Online);
     }
 
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)

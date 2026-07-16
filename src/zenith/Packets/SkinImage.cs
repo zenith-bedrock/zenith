@@ -16,7 +16,7 @@ readonly struct SkinImage
         return new SkinImage { Width = width, Height = height, Data = data };
     }
 
-    public void Write(BinaryStream writer)
+    public void Write(ref BinaryStream writer)
     {
         writer.WriteUInt(Width, BinaryStream.Endianess.Little);
         writer.WriteUInt(Height, BinaryStream.Endianess.Little);

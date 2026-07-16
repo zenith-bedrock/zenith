@@ -42,6 +42,26 @@ static class PlayerVisibility
         }
     }
 
+    /// <summary>
+    /// Mid-game skin change: relay <see cref="PlayerSkinPacket"/> to other InGame peers only.
+    /// Join/late-join still uses SkinRgba + SkinWire on PlayerList (persona Deferred).
+    /// </summary>
+    public static void RelaySkin(
+        Player.Player subject,
+        SerializedSkin skin,
+        string skinName,
+        string oldSkinName,
+        bool isVerified,
+        IReadOnlyCollection<Player.Player> online)
+    {
+        var uuid = subject.Uuid.ToString("D");
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Skin.SendSkin(uuid, skin, skinName, oldSkinName, isVerified);
+        }
+    }
+
     private static void SendPlayerListAdd(Player.Player recipient, Player.Player subject)
     {
         recipient.Session.Protocol.Entity.SendPlayerListAdd(

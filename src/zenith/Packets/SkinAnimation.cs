@@ -18,9 +18,9 @@ readonly struct SkinAnimation
         return new SkinAnimation { Image = image, Type = type, Frames = frames, Expression = expression };
     }
 
-    public void Write(BinaryStream writer)
+    public void Write(ref BinaryStream writer)
     {
-        Image.Write(writer);
+        Image.Write(ref writer);
         writer.WriteUInt(Type, BinaryStream.Endianess.Little);
         writer.WriteFloat(Frames, BinaryStream.Endianess.Little);
         writer.WriteUInt(Expression, BinaryStream.Endianess.Little);
