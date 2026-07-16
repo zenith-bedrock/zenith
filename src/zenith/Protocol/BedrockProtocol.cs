@@ -2,9 +2,6 @@ using Zenith.Session;
 
 namespace Zenith.Protocol;
 
-/// <summary>
-/// Façade de composição: só agrega os módulos <c>*Protocol</c>. Sem lógica de negócio.
-/// </summary>
 sealed class BedrockProtocol
 {
     public LoginProtocol Login { get; }
@@ -13,6 +10,7 @@ sealed class BedrockProtocol
     public EntityProtocol Entity { get; }
     public ChatProtocol Chat { get; }
     public InventoryProtocol Inventory { get; }
+    public SkinProtocol Skin { get; }
 
     public BedrockProtocol(NetworkSession session)
     {
@@ -22,5 +20,6 @@ sealed class BedrockProtocol
         Entity = new EntityProtocol(session);
         Chat = new ChatProtocol(session);
         Inventory = new InventoryProtocol(session);
+        Skin = new SkinProtocol(session);
     }
 }

@@ -78,6 +78,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleDisconnect(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.PLAYER_SKIN_PACKET:
+                HandlePlayerSkin(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
@@ -476,6 +480,24 @@ class InGameSessionHandler : ISessionHandler
             $"DisconnectPacket from {session.Player?.Username ?? session.RakSession.EndPoint.ToString()}: " +
             $"reason={packet.Reason}, message={packet.Message}");
         session.Disconnect();
+    }
+
+    private static void HandlePlayerSkin(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<PlayerSkinPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        player.Skin = packet.Skin;
+        player.SkinRgba = null;
+        player.SkinWidth = 0;
+        player.SkinHeight = 0;
+
+        session.Protocol.Skin.SendSkin(
+            player.Uuid.ToString(),
+            packet.Skin,
+            packet.SkinName,
+            packet.OldSkinName);
     }
 
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)
