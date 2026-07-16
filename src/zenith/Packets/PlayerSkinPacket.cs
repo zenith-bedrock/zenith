@@ -14,7 +14,7 @@ sealed class PlayerSkinPacket : DataPacket
 
     public override void Decode(ref BinaryStream stream)
     {
-        Uuid = stream.ReadUuid();
+        Uuid = stream.ReadUuid().ToString("D");
         Skin = SerializedSkin.Read(ref stream);
         SkinName = stream.ReadVarString();
         OldSkinName = stream.ReadVarString();
@@ -25,7 +25,7 @@ sealed class PlayerSkinPacket : DataPacket
     {
         var writer = new BinaryStream();
         writer.WriteUuid(Guid.Parse(Uuid));
-        Skin.Write(writer);
+        Skin.Write(ref writer);
         writer.WriteVarString(SkinName);
         writer.WriteVarString(OldSkinName);
         writer.WriteBool(IsVerified);

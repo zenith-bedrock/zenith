@@ -46,7 +46,7 @@ public class PlayerSkinPacketTests
                     new SkinPersonaPiece
                     {
                         PieceId = "piece1",
-                        PieceType = 0,
+                        PieceType = "persona_hair",
                         PackId = "00000000-0000-0000-0000-000000000000",
                         IsDefault = true,
                         ProductId = "product1"
@@ -126,12 +126,12 @@ public class PlayerSkinPacketTests
         var original = new SkinImage
         {
             Width = 128,
-            Height = 256,
-            Data = [0x00, 0x01, 0x02, 0x03]
+            Height = 64,
+            Data = new byte[128 * 64 * 4]
         };
 
         var writer = new BinaryStream();
-        original.Write(writer);
+        original.Write(ref writer);
         var bytes = writer.GetBufferDisposing().ToArray();
 
         var reader = new BinaryStream(bytes);
@@ -154,7 +154,7 @@ public class PlayerSkinPacketTests
         };
 
         var writer = new BinaryStream();
-        original.Write(writer);
+        original.Write(ref writer);
         var bytes = writer.GetBufferDisposing().ToArray();
 
         var reader = new BinaryStream(bytes);
@@ -163,6 +163,7 @@ public class PlayerSkinPacketTests
         Assert.Equal(original.Type, decoded.Type);
         Assert.Equal(original.Frames, decoded.Frames);
         Assert.Equal(original.Expression, decoded.Expression);
+        Assert.Equal(original.Image.Data, decoded.Image.Data);
     }
 
     [Fact]
@@ -174,9 +175,13 @@ public class PlayerSkinPacketTests
         Assert.Equal("wide", skin.ArmSize);
         Assert.Equal(64u, skin.Image.Width);
         Assert.Equal(64u, skin.Image.Height);
+        Assert.Equal(64 * 64 * 4, skin.Image.Data.Length);
         Assert.False(skin.IsPersona);
         Assert.True(skin.IsPrimaryUser);
         Assert.True(skin.OverridesPlayerAppearance);
+        Assert.True(skin.TryGetClassicRgba(out _, out var w, out var h));
+        Assert.Equal(64u, w);
+        Assert.Equal(64u, h);
     }
 
     [Fact]
@@ -196,18 +201,18 @@ public class PlayerSkinPacketTests
             CapeId = "",
             FullId = "",
             ArmSize = "wide",
-            SkinColor = "",
+            SkinColor = "#0",
             PersonaPieces = [],
             TintPieces = [],
             IsPremium = false,
             IsPersona = false,
             IsPersonaCapeOnClassic = false,
-            IsPrimaryUser = false,
-            OverridesPlayerAppearance = false
+            IsPrimaryUser = true,
+            OverridesPlayerAppearance = true
         };
 
         var writer = new BinaryStream();
-        original.Write(writer);
+        original.Write(ref writer);
         var bytes = writer.GetBufferDisposing().ToArray();
 
         var reader = new BinaryStream(bytes);
@@ -218,5 +223,30 @@ public class PlayerSkinPacketTests
         Assert.Empty(decoded.Animations);
         Assert.Empty(decoded.PersonaPieces);
         Assert.Empty(decoded.TintPieces);
+    }
+
+    [Fact]
+    public void SerializedSkin_rejects_oversized_animation_list()
+    {
+        var writer = new BinaryStream();
+        writer.WriteVarString("id");
+        writer.WriteVarString("");
+        writer.WriteVarString("");
+        new SkinImage { Width = 0, Height = 0, Data = [] }.Write(ref writer);
+        writer.WriteUInt(SerializedSkin.MaxAnimations + 1, BinaryStream.Endianess.Little);
+
+        var bytes = writer.GetBufferDisposing().ToArray();
+        var reader = new BinaryStream(bytes);
+        var threw = false;
+        try
+        {
+            _ = SerializedSkin.Read(ref reader);
+        }
+        catch (InvalidOperationException)
+        {
+            threw = true;
+        }
+
+        Assert.True(threw);
     }
 }

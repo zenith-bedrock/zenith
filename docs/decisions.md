@@ -441,6 +441,14 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Split `World/` (ItemPalette / chests → `Item/` etc.); rename type `NetworkSession`.
 
+### 49. PlayerSkinPacket wire + Session relay (no Player→Packets)
+
+**Choice:** Fix/complete mid-game skin sync: `SerializedSkin` DTOs stay in Packets (`ref BinaryStream` Write/Read, `PieceType` string, list/image caps). `Player` keeps only `SkinRgba`/`SkinWidth`/`SkinHeight` for PlayerList/`SkinWire`. Inbound `PlayerSkinPacket` validates UUID == player, updates RGBA when classic image is well-formed (never null-out on bad image), relays via `PlayerVisibility.RelaySkin` to other InGame peers (Session helper — same join-like orchestration as `AnnounceJoin`; not a SkinSystem/ECS). `IsVerified` relayed as decoded. Login/join persona-complete PlayerList remains Deferred (dual path SkinWire vs full PlayerSkin).
+
+**Why:** Collaborator merge landed broken encode (`BinaryStream` by value), `Player`→Packets leak, self-only echo, and `PieceType` as uint. Chat already forbids handler fan-out loops; skin is rare one-shot so Session helper is enough.
+
+**Smoke:** A changes skin in-game → B sees update; join still SkinWire+RGBA. Spoofed UUID ignored.
+
 ### OpenInventory / chest UI (note under §28)
 
 Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→Protocol (same-session UI), not GameLoop intents. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`. Opening a window is transmit of a decided view, not world mutation.

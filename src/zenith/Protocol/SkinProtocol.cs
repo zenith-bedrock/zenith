@@ -9,7 +9,12 @@ sealed class SkinProtocol
 
     public SkinProtocol(NetworkSession session) => _session = session;
 
-    public void SendSkin(string uuid, SerializedSkin skin, string skinName, string oldSkinName)
+    public void SendSkin(
+        string uuid,
+        SerializedSkin skin,
+        string skinName,
+        string oldSkinName,
+        bool isVerified)
     {
         _session.SendDataPacket(new PlayerSkinPacket
         {
@@ -17,7 +22,7 @@ sealed class SkinProtocol
             Skin = skin,
             SkinName = skinName,
             OldSkinName = oldSkinName,
-            IsVerified = true
+            IsVerified = isVerified
         });
     }
 }

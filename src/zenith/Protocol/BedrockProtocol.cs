@@ -1,7 +1,9 @@
+using Zenith.Packets;
 using Zenith.Session;
 
 namespace Zenith.Protocol;
 
+/// <summary>Façade de composição: só agrega os módulos <c>*Protocol</c>. Sem lógica de negócio.</summary>
 sealed class BedrockProtocol
 {
     public LoginProtocol Login { get; }
