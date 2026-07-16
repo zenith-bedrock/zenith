@@ -91,6 +91,12 @@ class Player
     /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
     public (int X, int Y, int Z)? OpenChest { get; set; }
 
+    /// <summary>Player inventory UI open (ContainerOpen window 0).</summary>
+    public bool InventoryWindowOpen { get; set; }
+
+    /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
+    public PlayerCraftUi CraftUi { get; } = new();
+
     public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks)
     {
         BreakTargetX = x;

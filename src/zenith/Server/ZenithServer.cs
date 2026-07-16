@@ -33,13 +33,12 @@ class ZenithServer
         var logger = new Logger();
         _logger = logger;
         logger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
-
-        LoginIdentity.RequireChainSignatures = config.Auth.RequireChainSignatures;
-        if (!config.Auth.RequireChainSignatures)
+        logger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
+        if (!config.Auth.RequireStrictXbox)
         {
             logger.Warning(
-                "*** AUTH WARNING: auth.require-chain-signatures is false. " +
-                "Any client can claim any username/UUID. Enable before public exposure. ***");
+                "*** AUTH WARNING: auth.accept includes self-signed and/or offline. " +
+                "Clients may join without Xbox Live. Use accept: [xbox] before public exposure. ***");
         }
 
         var players = new PlayerManager();

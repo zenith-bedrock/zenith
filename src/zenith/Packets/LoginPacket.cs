@@ -9,6 +9,10 @@ class LoginPacket : DataPacket
 {
     public class AuthenticationInfo
     {
+        public const int TypeFull = 0;
+        public const int TypeGuest = 1;
+        public const int TypeSelfSigned = 2;
+
         [JsonPropertyName("AuthenticationType")]
         public int AuthenticationType { get; set; }
 

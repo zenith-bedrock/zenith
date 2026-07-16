@@ -13,8 +13,15 @@ world:
   path: /app
   spawn-chunk-radius: 4
 auth:
-  # LAN default. Set true before any public exposure.
-  require-chain-signatures: false
+  # Who may join (one or more). Case-insensitive.
+  #   xbox         — Microsoft / FULL token
+  #   self-signed  — Bedrock SELF_SIGNED (xname + leguuid), PocketMine-style offline
+  #   offline      — ClientData/chain name fallbacks (empty xname LAN clients)
+  # Public exposure: accept: [xbox] only.
+  accept:
+    - xbox
+    - self-signed
+    - offline
 chat:
   max-length: 512
   rate-capacity: 8
