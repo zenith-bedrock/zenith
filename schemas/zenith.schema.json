@@ -122,6 +122,25 @@
           "description": "Bytes above which game packets are zlib-compressed."
         }
       }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Independent log severity for Bedrock/server vs RakNet. Missing section uses C# defaults (server=info, raknet=warn). Aliases are ladders mapped to LogLevel flags.",
+      "properties": {
+        "server": {
+          "type": "string",
+          "enum": ["none", "info", "warn", "warning", "error", "debug", "all"],
+          "default": "info",
+          "description": "Bedrock/gameplay logger. info = Info|Warning|Error. debug/all enable Debug (join/place rejects, etc.)."
+        },
+        "raknet": {
+          "type": "string",
+          "enum": ["none", "info", "warn", "warning", "error", "debug", "all"],
+          "default": "warn",
+          "description": "RakNet transport logger. warn keeps drops/full/rate-limit; debug floods ACK/Incoming/Connected PID."
+        }
+      }
     }
   }
 }

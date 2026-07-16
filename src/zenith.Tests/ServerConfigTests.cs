@@ -1,4 +1,5 @@
 using Xunit;
+using Zenith.Raknet.Enumerator;
 using Zenith.Server;
 
 namespace Zenith.Tests;
@@ -21,6 +22,69 @@ public class ServerConfigLoaderTests
             Assert.True(config.Auth.AllowsOfflineFallback);
             Assert.False(config.Auth.RequireStrictXbox);
             Assert.Equal("", config.World.Path);
+            Assert.Equal("info", config.Log.Server);
+            Assert.Equal("warn", config.Log.Raknet);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrCreate_yaml_without_log_section_keeps_defaults()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-{Guid.NewGuid():N}.yml");
+        try
+        {
+            File.WriteAllText(path, """
+                server:
+                  port: 19132
+                  motd: Custom
+                auth:
+                  accept:
+                    - xbox
+                    - self-signed
+                    - offline
+                """);
+            var config = ServerConfigLoader.LoadOrCreate(path);
+            Assert.Equal("info", config.Log.Server);
+            Assert.Equal("warn", config.Log.Raknet);
+            Assert.Equal(
+                LogLevel.Info | LogLevel.Warning | LogLevel.Error,
+                ServerConfig.ParseLogLevel(config.Log.Server, "server"));
+            Assert.Equal(
+                LogLevel.Warning | LogLevel.Error,
+                ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet"));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadOrCreate_applies_log_overrides()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-{Guid.NewGuid():N}.yml");
+        try
+        {
+            File.WriteAllText(path, """
+                server:
+                  port: 19132
+                  motd: Custom
+                auth:
+                  accept:
+                    - xbox
+                log:
+                  server: debug
+                  raknet: error
+                """);
+            var config = ServerConfigLoader.LoadOrCreate(path);
+            Assert.Equal("debug", config.Log.Server);
+            Assert.Equal("error", config.Log.Raknet);
+            Assert.Equal(LogLevel.All, ServerConfig.ParseLogLevel(config.Log.Server, "server"));
+            Assert.Equal(LogLevel.Error, ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet"));
         }
         finally
         {
@@ -187,6 +251,34 @@ public class ServerConfigLoaderTests
         Assert.Equal(nested, ZenithServer.ResolveDataRoot("./worlds"));
         Assert.StartsWith(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             ZenithServer.ResolveDataRoot("./worlds"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ParseLogLevel_maps_severity_ladders()
+    {
+        Assert.Equal(LogLevel.None, ServerConfig.ParseLogLevel("none", "server"));
+        Assert.Equal(
+            LogLevel.Info | LogLevel.Warning | LogLevel.Error,
+            ServerConfig.ParseLogLevel("info", "server"));
+        Assert.Equal(
+            LogLevel.Warning | LogLevel.Error,
+            ServerConfig.ParseLogLevel("warn", "raknet"));
+        Assert.Equal(
+            LogLevel.Warning | LogLevel.Error,
+            ServerConfig.ParseLogLevel("WARNING", "raknet"));
+        Assert.Equal(LogLevel.Error, ServerConfig.ParseLogLevel("error", "server"));
+        Assert.Equal(LogLevel.All, ServerConfig.ParseLogLevel("debug", "server"));
+        Assert.Equal(LogLevel.All, ServerConfig.ParseLogLevel("all", "raknet"));
+    }
+
+    [Fact]
+    public void Validate_rejects_unknown_log_level()
+    {
+        var config = new ServerConfig();
+        config.Log.Server = "verbose";
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("log.server", ex.Message);
+        Assert.Contains("unknown level", ex.Message);
     }
 
     [Fact]

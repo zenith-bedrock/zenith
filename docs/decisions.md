@@ -439,7 +439,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Quit without RakNet teardown left UDP sessions until 15s timeout; MOTD inflated; rapid rejoins from new ephemeral ports burned `max-players-per-ip` (default 3) while the host still saw one in-world player.
 
-**Deferred:** Shorter global idle timeout; kicking live NAT roommates beyond unbound-prefer; logging mute for RakNet digests.
+**Deferred:** Shorter global idle timeout; kicking live NAT roommates beyond unbound-prefer (RakNet digest mute → §50).
 
 **Smoke:** Peer leaves → MOTD shows 1 (host). Rejoin repeatedly from same IP without wedging at 3.
 
@@ -458,6 +458,14 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Why:** Collaborator merge landed broken encode (`BinaryStream` by value), `Player`→Packets leak, self-only echo, and `PieceType` as uint. Chat already forbids handler fan-out loops; skin is rare one-shot so Session helper is enough.
 
 **Smoke:** A changes skin in-game → B sees update; join still SkinWire+RGBA. Spoofed UUID ignored.
+
+### 50. Split log levels (server vs RakNet)
+
+**Choice:** Two `Logger` instances at composition root (`ZenithServer`), levels from `zenith.yml` `log.server` / `log.raknet`. Aliases (`none`|`info`|`warn`|`error`|`debug`|`all`) map to **severity ladders** on the existing flag enum (`info` = Info|Warning|Error). Defaults ops-first: server `info`, raknet `warn`. YAML without a `log:` block keeps C# defaults (no rewrite of operator files). No Serilog, no categories, no call-site changes in `raknet`.
+
+**Why:** Shared `LogLevel.All` made Bedrock Debug unusable — datagram spam drowned join/place. Transport is mature; gameplay is the active debug surface. Rule 7: two loggers beat a logging framework.
+
+**Smoke:** Default boot — join Info, no `Connected PID` flood. `log.raknet: debug` + `log.server: info` → only transport Debug.
 
 ### OpenInventory / chest UI (note under §28)
 

@@ -29,3 +29,8 @@ chat:
   rate-refill-per-second: 4
 network:
   compression-threshold: 256
+# Independent severity ladders (ops-first defaults). Aliases: none|info|warn|error|debug|all
+# info = Info|Warning|Error (not Info alone). Previous boot default was All for a shared logger.
+log:
+  server: info
+  raknet: warn
