@@ -7,7 +7,7 @@ namespace Zenith.Gameplay.Systems;
 /// <summary>
 /// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
 /// Break timing (§27): dig auth snapshotted on the intent when BreakTicks &gt; 0.
-/// Floor drops (§26): se TryAdd falha, bloco quebra e cai em <see cref="FloorDropStore"/>.
+/// Floor drops (§26): se TryAdd falha, bloco quebra e cai em <see cref="FloorDropStore"/> + AddItemActor wire.
 /// </summary>
 sealed class BlockSystem : IGameSystem
 {
@@ -30,7 +30,7 @@ sealed class BlockSystem : IGameSystem
         {
             while (player.TryConsumeBlockEdit(out var edit))
             {
-                if (ApplyEdit(player, edit, clock))
+                if (ApplyEdit(player, edit, clock, online))
                     updates.Add((edit.X, edit.Y, edit.Z, edit.BlockRuntimeId));
             }
         }
@@ -68,7 +68,11 @@ sealed class BlockSystem : IGameSystem
     }
 
     /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
-    private bool ApplyEdit(global::Zenith.Player.Player player, in BlockEditIntent edit, GameClock clock)
+    private bool ApplyEdit(
+        global::Zenith.Player.Player player,
+        in BlockEditIntent edit,
+        GameClock clock,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (!edit.IsInWorldBounds())
             return false;
@@ -156,7 +160,7 @@ sealed class BlockSystem : IGameSystem
                     foreach (var (rid, count) in dumped)
                     {
                         if (!player.Inventory.TryAdd(rid, count))
-                            _ = _world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, rid, count);
+                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, rid, count);
                         else
                             inventoryChanged = true;
                     }
@@ -169,7 +173,7 @@ sealed class BlockSystem : IGameSystem
                 var dropRid = wasChest ? Blocks.Chest : previous;
                 if (!player.Inventory.TryAdd(dropRid))
                 {
-                    if (_world.FloorDrops.TryAddOrMerge(edit.X, edit.Y, edit.Z, dropRid, 1))
+                    if (DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropRid, 1))
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -204,11 +208,54 @@ sealed class BlockSystem : IGameSystem
         player.Session.Protocol.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
     }
 
+    private bool DepositFloorDrop(
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        int x,
+        int y,
+        int z,
+        int itemRuntimeId,
+        int count)
+    {
+        var entityId = _players.AllocateRuntimeId();
+        if (!_world.FloorDrops.TryAddOrMerge(x, y, z, itemRuntimeId, count, entityId, out var deposit) ||
+            deposit is null)
+            return false;
+
+        var d = deposit.Value;
+        PublishFloorDrop(online, d);
+        return true;
+    }
+
+    private static void PublishFloorDrop(
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        FloorDropStore.DepositResult deposit)
+    {
+        if (!deposit.Created && !deposit.CountChanged) return;
+
+        var cx = PlayerChunkTracker.BlockToChunk(deposit.X);
+        var cz = PlayerChunkTracker.BlockToChunk(deposit.Z);
+        var px = deposit.X + 0.5f;
+        var py = deposit.Y + 0.125f;
+        var pz = deposit.Z + 0.5f;
+
+        foreach (var peer in online)
+        {
+            // InGame always; PreSpawn joiners only if they Know the column (§14).
+            if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
+
+            var entity = peer.Session.Protocol.Entity;
+            var item = peer.Session.Protocol.Inventory.DescribeStack(deposit.ItemRuntimeId, deposit.Count);
+            if (!deposit.Created && deposit.CountChanged)
+                entity.SendRemoveActor(deposit.EntityRuntimeId);
+            entity.SendAddItemActor(deposit.EntityRuntimeId, item, px, py, pz);
+        }
+    }
+
     private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
         const float reachSq = 1.5f * 1.5f;
-        foreach (var (pos, runtimeId, count) in _world.FloorDrops.Snapshot())
+        foreach (var (pos, runtimeId, count, entityRuntimeId) in _world.FloorDrops.Snapshot())
         {
             foreach (var player in online)
             {
@@ -218,8 +265,22 @@ sealed class BlockSystem : IGameSystem
                 var dz = player.PositionZ - (pos.Z + 0.5f);
                 if (dx * dx + dy * dy + dz * dz > reachSq) continue;
                 if (!player.Inventory.TryAdd(runtimeId, count)) continue;
-                if (!_world.FloorDrops.TryTake(pos.X, pos.Y, pos.Z, out _, out _)) continue;
+                if (!_world.FloorDrops.TryTake(pos.X, pos.Y, pos.Z, out _, out _, out var takenEntity))
+                    continue;
+
+                var eid = takenEntity != 0 ? takenEntity : entityRuntimeId;
+                var cx = PlayerChunkTracker.BlockToChunk(pos.X);
+                var cz = PlayerChunkTracker.BlockToChunk(pos.Z);
+                foreach (var peer in online)
+                {
+                    if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
+                    peer.Session.Protocol.Entity.SendTakeItemActor(
+                        (ulong)eid,
+                        (ulong)player.RuntimeId);
+                }
+
                 player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                _world.PersistInventory(player.Uuid, player.Inventory);
                 break;
             }
         }

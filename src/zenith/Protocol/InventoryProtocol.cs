@@ -367,6 +367,14 @@ sealed class InventoryProtocol
         return ToNetworkStack(stack, stackNetworkId: 0);
     }
 
+    /// <summary>Floor-drop / AddItemActor — domain runtime id + count → wire stack.</summary>
+    public NetworkItemStack DescribeStack(int blockRuntimeId, int count)
+    {
+        if (count <= 0 || blockRuntimeId == Blocks.Air)
+            return NetworkItemStack.Empty;
+        return ToNetworkStack(new InventorySlot(blockRuntimeId, count), stackNetworkId: 0);
+    }
+
     public void SendContainerOpen(int blockX, int blockY, int blockZ)
     {
         _session.SendDataPacket(new ContainerOpenPacket
