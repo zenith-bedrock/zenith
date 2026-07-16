@@ -133,16 +133,16 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 
 | Id | Gate | Status (Jul 2026) |
 |----|------|-------------------|
-| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). | **Parcial** — craft ok; cadeia planks→chest (take do 2º resultado) a corrigir |
+| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). | **OK** (cadeia planks→chest após emit CreatedOutput) |
 | **S37** | Creative: pode voar; Survival: sem MayFly. | **OK** |
 | **S38** | Creative: palette click → **cursor**; SHIFT → bag; place; Survival rejeita CraftCreative. | **OK** |
 | **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. | **OK** |
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
 | **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
-| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **Pendente** |
+| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
 | Regressão | Held peer, rearrange, break/crack still OK. | — |
 
-**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente); S35 take em cadeia após craft com itens do resultado.
+**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
 
 Gates: se item **11** falhar, não começar containers. Se **S39**, **S40** ou **S41** falharem, não abrir death/drop-entity.
 

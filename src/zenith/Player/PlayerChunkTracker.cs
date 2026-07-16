@@ -20,6 +20,29 @@ sealed class PlayerChunkTracker
     public int LastPublisherChunkX { get; private set; } = int.MinValue;
     public int LastPublisherChunkZ { get; private set; } = int.MinValue;
 
+    /// <summary>
+    /// Set on InGame enable — ChunkStreamSystem re-sends overlays for known columns once (§14).
+    /// </summary>
+    public bool NeedsOverlayResync { get; set; }
+
+    /// <summary>True if this player already received (or began streaming) the column.</summary>
+    public bool Knows(int chunkX, int chunkZ)
+    {
+        lock (_gate)
+            return _known.Contains((chunkX, chunkZ));
+    }
+
+    /// <summary>Copy known column coords into <paramref name="dst"/> (cleared first).</summary>
+    public void CopyKnown(List<(int X, int Z)> dst)
+    {
+        lock (_gate)
+        {
+            dst.Clear();
+            foreach (var c in _known)
+                dst.Add(c);
+        }
+    }
+
     /// <summary>Marca coluna como em voo/enviada. False se já conhecida.</summary>
     public bool TryBegin(int chunkX, int chunkZ) => TryBegin(chunkX, chunkZ, out _);
 

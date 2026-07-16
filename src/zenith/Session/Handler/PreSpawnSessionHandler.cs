@@ -110,6 +110,11 @@ class PreSpawnSessionHandler : ISessionHandler
 
             FlushBatch();
 
+            // Remember as soon as LevelChunks are out so live UpdateBlock fan-out
+            // can reach this joiner during overlay send / SpawnResponse (§14).
+            session.Player.Chunks.RememberMany(remembered);
+            session.Player.Chunks.PublisherCenterChanged(0, 0);
+
             // Overlays after base terrain (same order as ColumnTerrainEmitter).
             foreach (var column in worldColumns)
             {
@@ -120,9 +125,6 @@ class PreSpawnSessionHandler : ISessionHandler
                     session.Protocol.World.SendUpdateBlock(o.X, o.Y, o.Z, o.BlockRuntimeId);
                 }
             }
-
-            session.Player.Chunks.RememberMany(remembered);
-            session.Player.Chunks.PublisherCenterChanged(0, 0);
 
             session.Protocol.World.SendWorldSpawnPosition(x: 0, y: Blocks.FlatSpawnY, z: 0);
             session.Context.Logger.Debug("Chunks published (publisher → batched LevelChunks → overlays), waiting for spawn response");

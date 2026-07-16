@@ -113,6 +113,12 @@ class Player
         BreakRequiredTicks = 0;
     }
 
+    /// <summary>
+    /// Clears dig lock without crack fan-out — used after queueing a Survival break so
+    /// Continue can retarget without poisoning the pending intent (§27).
+    /// </summary>
+    public void ClearBreakTarget() => AbortBreak();
+
     public bool IsBreakTarget(int x, int y, int z) =>
         HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;
 
