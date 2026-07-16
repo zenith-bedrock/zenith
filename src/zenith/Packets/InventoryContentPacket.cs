@@ -21,11 +21,11 @@ sealed class InventoryContentPacket : DataPacket
         writer.WriteUnsignedVarInt(WindowId);
         writer.WriteUnsignedVarInt(Slots.Length);
         foreach (var slot in Slots)
-            slot.Write(ref writer);
+            slot.WriteNetworkItemStackDescriptor(ref writer);
 
         writer.WriteByte(0); // FullContainerName.container_id
         writer.WriteBool(false); // no dynamic id
-        NetworkItemStack.Empty.Write(ref writer); // storage
+        NetworkItemStack.Empty.WriteNetworkItemStackDescriptor(ref writer); // storage
         return writer.GetBufferDisposing();
     }
 

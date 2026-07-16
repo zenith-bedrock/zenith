@@ -2,13 +2,19 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
-/// <summary>Network item stack descriptor (InventoryContent / ItemInstanceNew / AddPlayer ItemInstance).</summary>
+/// <summary>
+/// Wire item stack DTO (domain maps via Protocol). One type, three encode shapes —
+/// packet <c>Encode</c> picks the writer; Gameplay never calls these.
+/// </summary>
 readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0)
 {
     public static NetworkItemStack Empty => new(0, 0, 0);
 
-    /// <summary>ItemInstanceNew — InventoryContent, MobEquipment (protocol ~1.16+).</summary>
-    public void Write(ref BinaryStream writer)
+    /// <summary>
+    /// NetworkItemStackDescriptor / gophertunnel ItemInstanceNew (i16 LE network id).
+    /// Use from: InventoryContent, MobEquipment.
+    /// </summary>
+    public void WriteNetworkItemStackDescriptor(ref BinaryStream writer)
     {
         writer.WriteShort(NetworkId, BinaryStream.Endianess.Little);
         writer.WriteUShort(Count, BinaryStream.Endianess.Little);
@@ -27,10 +33,30 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     }
 
     /// <summary>
-    /// ItemStack (gophertunnel <c>Item</c>) — CreativeContent groups/items.
-    /// Not the same as <see cref="Write"/> / ItemInstanceNew.
+    /// ItemStackWrapper / legacy ItemInstance (VarInt network id). Stack net id always omitted.
+    /// Use from: AddPlayer held, AddItemActor.
     /// </summary>
-    public void WriteItem(ref BinaryStream writer)
+    public void WriteItemStackWrapper(ref BinaryStream writer)
+    {
+        if (NetworkId == 0)
+        {
+            writer.WriteVarInt(0);
+            return;
+        }
+
+        writer.WriteVarInt(NetworkId);
+        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(Meta);
+        writer.WriteBool(false); // no stack net id for entity/held display
+        writer.WriteVarInt(BlockRuntimeId);
+        writer.WriteUnsignedVarInt(0); // extra bytes
+    }
+
+    /// <summary>
+    /// ItemStack without stack net id (gophertunnel Item / PM WithoutStackId).
+    /// Use from: CreativeContent, CraftingData outputs.
+    /// </summary>
+    public void WriteItemStack(ref BinaryStream writer)
     {
         if (NetworkId == 0)
         {
@@ -59,22 +85,5 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         extra[9] = 0;
         writer.WriteUnsignedVarInt(extra.Length);
         writer.Write(extra);
-    }
-
-    /// <summary>ItemInstance legacy — AddPlayer held field (VarInt network id first).</summary>
-    public void WriteLegacyItemInstance(ref BinaryStream writer)
-    {
-        if (NetworkId == 0)
-        {
-            writer.WriteVarInt(0);
-            return;
-        }
-
-        writer.WriteVarInt(NetworkId);
-        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
-        writer.WriteUnsignedVarInt(Meta);
-        writer.WriteBool(false); // no stack net id for peer display
-        writer.WriteVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(0); // extra bytes
     }
 }

@@ -61,6 +61,46 @@ public class BlockPaletteTests
     }
 
     [Fact]
+    public void Reverse_map_covers_dump_entries_outside_curated_facade()
+    {
+        Blocks.ResetForTests();
+        var palette = BlockPaletteLoader.FromEmbeddedResource();
+        Blocks.Load(palette);
+
+        Assert.True(palette.ReverseCount > palette.Count,
+            "reverse map must include state variants beyond preferred-per-name");
+
+        // Cobblestone is in the dump but not a Blocks.* const — must still resolve for wire bridge.
+        Assert.True(palette.TryGet("minecraft:cobblestone", out var cobbleRid));
+        Assert.NotEqual(Blocks.Stone, cobbleRid);
+        Assert.True(palette.TryGetName(cobbleRid, out var fromPalette));
+        Assert.Equal("minecraft:cobblestone", fromPalette);
+        Assert.True(Blocks.TryGetName(cobbleRid, out var fromBlocks));
+        Assert.Equal("minecraft:cobblestone", fromBlocks);
+
+        var items = ItemPaletteLoader.FromEmbeddedResource();
+        Assert.True(items.TryGet("minecraft:cobblestone", out var cobbleItem));
+        Assert.NotEqual(items.Require("minecraft:air"), cobbleItem);
+        Assert.NotEqual(0, cobbleItem);
+    }
+
+    [Fact]
+    public void IsPlaceable_allowlists_starter_set_not_arbitrary_palette_rids()
+    {
+        Blocks.ResetForTests();
+        var palette = BlockPaletteLoader.FromEmbeddedResource();
+        Blocks.Load(palette);
+
+        Assert.True(Blocks.IsPlaceable(Blocks.Stone));
+        Assert.True(Blocks.IsPlaceable(Blocks.Chest));
+        Assert.True(Blocks.IsPlaceable(Blocks.ChestForFacing(Blocks.CardinalNorth)));
+        Assert.False(Blocks.IsPlaceable(Blocks.Air));
+        Assert.True(palette.TryGet("minecraft:cobblestone", out var cobbleRid));
+        Assert.False(Blocks.IsPlaceable(cobbleRid));
+        Assert.False(Blocks.IsPlaceable(int.MaxValue));
+    }
+
+    [Fact]
     public void PropertyData_empty_compound_is_valid_network_nbt()
     {
         var bytes = NbtCodec.Encode(
