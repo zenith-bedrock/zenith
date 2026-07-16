@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenith-bedrock.local/schemas/zenith.schema.json",
+  "title": "Zenith server config (zenith.yml)",
+  "description": "Operational config loaded next to the executable (AppContext.BaseDirectory). Boot validation in ServerConfig.Validate() remains the runtime SSOT — this schema is IDE DX only.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 19132,
+          "description": "UDP listen port (Bedrock default 19132)."
+        },
+        "motd": {
+          "type": "string",
+          "minLength": 1,
+          "default": "Zenith Bedrock",
+          "description": "Primary MOTD shown in the server list."
+        },
+        "sub-motd": {
+          "type": "string",
+          "default": "Test",
+          "description": "Secondary MOTD line."
+        },
+        "max-players": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20
+        },
+        "max-players-per-ip": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "Concurrent sessions allowed from the same IP."
+        },
+        "gamemode": {
+          "type": "string",
+          "enum": ["Survival", "Creative"],
+          "default": "Survival",
+          "description": "Uniform join mode for all players (no /gamemode yet)."
+        }
+      }
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "default": "world",
+          "description": "World folder name under {path}/worlds/{name}/."
+        },
+        "path": {
+          "type": "string",
+          "default": "",
+          "description": "Data root. Empty = InMemory (volatile, no warning). Non-empty ⇒ LevelDB at {path}/worlds/{name}/. Relative paths resolve against the DLL directory, not shell cwd."
+        },
+        "spawn-chunk-radius": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 4,
+          "description": "Chunk radius streamed around spawn on join."
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["xbox", "self-signed", "offline"]
+          },
+          "default": ["xbox", "self-signed", "offline"],
+          "description": "Who may join. xbox = Microsoft FULL; self-signed = type 2 (xname+leguuid); offline = ClientData/chain name fallbacks. Public exposure: [xbox] only. Do not use require-chain-signatures (removed)."
+        }
+      },
+      "required": ["accept"]
+    },
+    "chat": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max-length": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 512
+        },
+        "rate-capacity": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 8,
+          "description": "Token-bucket capacity for chat messages."
+        },
+        "rate-refill-per-second": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 4
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compression-threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 256,
+          "description": "Bytes above which game packets are zlib-compressed."
+        }
+      }
+    }
+  }
+}
