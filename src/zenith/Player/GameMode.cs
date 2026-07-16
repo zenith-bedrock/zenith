@@ -7,6 +7,10 @@ enum GameMode
     Creative = 1
 }
 
+/// <summary>
+/// Config string → <see cref="GameMode"/>. Lives beside the enum because C# enums cannot host methods
+/// (so <c>GameMode.FromConfig</c> is not possible without abandoning the enum).
+/// </summary>
 static class GameModeConfig
 {
     public static GameMode FromConfig(string gamemode) =>
