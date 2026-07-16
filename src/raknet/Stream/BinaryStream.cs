@@ -213,6 +213,36 @@ public ref struct BinaryStream : IDisposable
     }
 
     /// <summary>
+    /// Lê byte array prefixado com unsigned varint (contraparte de <see cref="WriteByteArray"/>).
+    /// </summary>
+    public byte[] ReadByteArray()
+    {
+        var length = ReadUnsignedVarInt();
+        return ReadSpan(length).ToArray();
+    }
+
+    public string ReadUuid()
+    {
+        Span<byte> wire = stackalloc byte[16];
+        ReadSpan(16).CopyTo(wire);
+        wire[..8].Reverse();
+        wire[8..].Reverse();
+
+        Span<byte> le = stackalloc byte[16];
+        le[0] = wire[3];
+        le[1] = wire[2];
+        le[2] = wire[1];
+        le[3] = wire[0];
+        le[4] = wire[5];
+        le[5] = wire[4];
+        le[6] = wire[7];
+        le[7] = wire[6];
+        wire[8..].CopyTo(le[8..]);
+
+        return new Guid(le).ToString("D");
+    }
+
+    /// <summary>
     /// UUID Bedrock: bytes RFC 4122 com cada metade de 8 bytes invertida no wire.
     /// </summary>
     public void WriteUuid(Guid uuid)

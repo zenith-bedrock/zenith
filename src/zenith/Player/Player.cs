@@ -1,3 +1,4 @@
+using Zenith.Packets;
 using Zenith.Session;
 using Zenith.World;
 
@@ -54,6 +55,9 @@ class Player
     public byte[]? SkinRgba { get; set; }
     public uint SkinWidth { get; set; }
     public uint SkinHeight { get; set; }
+
+    /// <summary>Skin completa (serialized model) — enviada/recebida via PlayerSkinPacket.</summary>
+    public SerializedSkin Skin { get; set; } = SerializedSkin.Default;
 
     public float PositionX { get; set; }
     public float PositionY { get; set; } = Blocks.FlatSpawnY;
