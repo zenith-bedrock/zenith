@@ -2,19 +2,18 @@
 
 namespace Zenith.Packets;
 
+/// <summary>StopSound (0x57) — server → client stop named / all / music sounds.</summary>
 sealed class StopSoundPacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.STOP_SOUND_PACKET;
 
-    public string SoundName { get; set; }
-
+    public string SoundName { get; set; } = "";
     public bool StopAllSounds { get; set; }
     public bool StopMusic { get; set; }
 
     public override void Decode(ref BinaryStream stream)
     {
         SoundName = stream.ReadVarString();
-
         StopAllSounds = stream.ReadBool();
         StopMusic = stream.ReadBool();
     }
@@ -22,11 +21,10 @@ sealed class StopSoundPacket : DataPacket
     public override Span<byte> Encode()
     {
         var writer = new BinaryStream();
-
+        writer.WriteUnsignedVarInt(Id);
         writer.WriteVarString(SoundName);
         writer.WriteBool(StopAllSounds);
         writer.WriteBool(StopMusic);
-
         return writer.GetBufferDisposing();
     }
 }

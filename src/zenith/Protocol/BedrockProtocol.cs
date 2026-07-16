@@ -13,6 +13,7 @@ sealed class BedrockProtocol
     public ChatProtocol Chat { get; }
     public InventoryProtocol Inventory { get; }
     public SkinProtocol Skin { get; }
+    public UiProtocol Ui { get; }
 
     public BedrockProtocol(NetworkSession session)
     {
@@ -23,5 +24,6 @@ sealed class BedrockProtocol
         Chat = new ChatProtocol(session);
         Inventory = new InventoryProtocol(session);
         Skin = new SkinProtocol(session);
+        Ui = new UiProtocol(session);
     }
 }

@@ -2,56 +2,54 @@
 
 namespace Zenith.Packets;
 
+/// <summary>
+/// PlaySound (0x56) — server → client. Position is SoundPos (BlockPos of world*8).
+/// Optional handle is fixed LE uint64 (gophertunnel).
+/// </summary>
 sealed class PlaySoundPacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.PLAY_SOUND_PACKET;
 
-    public string SoundName { get; set; }
+    public string SoundName { get; set; } = "";
 
+    /// <summary>World X; Encode writes (int)(X * 8) as BlockPos.</summary>
     public float PositionX { get; set; }
     public float PositionY { get; set; }
     public float PositionZ { get; set; }
 
-    public float Volume { get; set; }
-    public float Pitch { get; set; }
+    public float Volume { get; set; } = 1f;
+    public float Pitch { get; set; } = 1f;
 
-    public float Loop { get; set; }
-
-    public long? ServerSoundHandle { get; set; } = null;
+    public ulong? ServerSoundHandle { get; set; }
 
     public override void Decode(ref BinaryStream stream)
     {
         SoundName = stream.ReadVarString();
-
-        PositionX = stream.ReadFloat(BinaryStream.Endianess.Little);
-        PositionY = stream.ReadFloat(BinaryStream.Endianess.Little);
-        PositionZ = stream.ReadFloat(BinaryStream.Endianess.Little);
-
+        PositionX = stream.ReadVarInt() / 8f;
+        PositionY = stream.ReadVarInt() / 8f;
+        PositionZ = stream.ReadVarInt() / 8f;
         Volume = stream.ReadFloat(BinaryStream.Endianess.Little);
         Pitch = stream.ReadFloat(BinaryStream.Endianess.Little);
-
-        Loop = stream.ReadFloat(BinaryStream.Endianess.Little);
-
         if (stream.ReadBool())
-            ServerSoundHandle = stream.ReadUnsignedVarLong();
+            ServerSoundHandle = stream.ReadULong(BinaryStream.Endianess.Little);
+        else
+            ServerSoundHandle = null;
     }
 
     public override Span<byte> Encode()
     {
         var writer = new BinaryStream();
-
+        writer.WriteUnsignedVarInt(Id);
         writer.WriteVarString(SoundName);
-        writer.WriteFloat(PositionX);
-        writer.WriteFloat(PositionY);
-        writer.WriteFloat(PositionZ);
-        writer.WriteFloat(Volume);
-        writer.WriteFloat(Pitch);
-        writer.WriteFloat(Loop);
-
-        if (ServerSoundHandle != null)
+        writer.WriteVarInt((int)(PositionX * 8f));
+        writer.WriteVarInt((int)(PositionY * 8f));
+        writer.WriteVarInt((int)(PositionZ * 8f));
+        writer.WriteFloat(Volume, BinaryStream.Endianess.Little);
+        writer.WriteFloat(Pitch, BinaryStream.Endianess.Little);
+        if (ServerSoundHandle is { } handle)
         {
             writer.WriteBool(true);
-            writer.WriteUnsignedVarLong((long) ServerSoundHandle);
+            writer.WriteULong(handle, BinaryStream.Endianess.Little);
         }
         else
         {
