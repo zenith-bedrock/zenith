@@ -112,6 +112,25 @@ public class IntentContractTests
             clock.AdvanceBy(need);
     }
 
+    /// <summary>Queue a Survival break with dig auth frozen into the intent (§27).</summary>
+    private static void QueueReadyBreak(
+        GameClock clock,
+        World.World world,
+        Player.Player player,
+        int x,
+        int y,
+        int z)
+    {
+        BeginBreakReady(clock, world, player, x, y, z);
+        var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
+        var intent = need > 0
+            ? BlockEditIntent.BreakWithDig(x, y, z, player.BreakStartedTick, player.BreakRequiredTicks)
+            : BlockEditIntent.Set(x, y, z, Blocks.Air);
+        if (need > 0)
+            player.ClearBreakTarget();
+        Assert.True(player.SubmitBlockEdit(intent));
+    }
+
     [Fact]
     public void MovementSystem_void_soft_rescue_teleports_to_world_spawn()
     {
@@ -230,8 +249,7 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
-        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
@@ -249,8 +267,7 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
-        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
@@ -267,6 +284,148 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_break_survives_dig_retarget_before_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chainbreak");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        fx.World.SetBlock(1, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+
+        // Simulate Continue on next cell before GameLoop drains the queue (§27).
+        player.BeginBreak(1, 90, 0, fx.Clock.CurrentTick, need);
+        Assert.True(player.IsBreakTarget(1, 90, 0));
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(1, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_abort_then_stale_predict_rejects_then_redig_breaks()
+    {
+        // Mirrors cancel+redig: Abort clears dig; Predict without DigAuthorized rejects;
+        // Start + DigAuthorized on the next attempt succeeds (§27 AuthInput order).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("cancelredig");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need / 2);
+        player.AbortBreak();
+        Assert.False(player.HasBreakTarget);
+
+        // Stale Predict after Abort (no dig auth) — first "retry" that used to feel broken.
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+
+        // Proper redig: Start then DigAuthorized Predict.
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_same_cell_two_digs_first_writer_wins_loot()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("alice");
+        var b = fx.AddInGamePlayer("bob");
+        StandNear(a, 0, 90, 0);
+        StandNear(b, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        var start = fx.Clock.CurrentTick;
+        fx.Clock.AdvanceBy(need);
+
+        Assert.True(a.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
+        Assert.True(b.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
+
+        var beforeA = CountRuntime(a.Inventory, Blocks.Dirt);
+        var beforeB = CountRuntime(b.Inventory, Blocks.Dirt);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        var gainedA = CountRuntime(a.Inventory, Blocks.Dirt) - beforeA;
+        var gainedB = CountRuntime(b.Inventory, Blocks.Dirt) - beforeB;
+        Assert.Equal(1, gainedA + gainedB);
+        Assert.True(gainedA == 1 ^ gainedB == 1);
+    }
+
+    [Fact]
+    public void BlockSystem_fans_UpdateBlock_to_joiner_who_Knows_column()
+    {
+        var fx = new IntentTestFixture();
+        var placer = fx.AddInGamePlayer("placer");
+        var joiner = fx.AddInGamePlayer("joiner");
+        joiner.IsInGame = false;
+        joiner.Chunks.RememberMany([(0, 0)]);
+        StandNear(placer, 2, 64, 2);
+        Assert.True(placer.Inventory.TrySet(0, Blocks.Stone, 5));
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        Assert.True(placer.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(2, 64, 2));
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "joiner with Knows(0,0) must receive UpdateBlock while !IsInGame");
+    }
+
+    [Fact]
+    public void ChunkStreamSystem_overlay_resync_on_NeedsOverlayResync()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("resync");
+        player.Chunks.Radius = 1;
+        player.Chunks.RememberMany([(0, 0)]);
+        fx.World.SetBlock(3, 64, 3, Blocks.OakPlanks);
+        player.Chunks.NeedsOverlayResync = true;
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        new ChunkStreamSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.False(player.Chunks.NeedsOverlayResync);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "NeedsOverlayResync must emit UpdateBlock for known-column overlays");
+    }
+
+    private static int CountRuntime(PlayerInventory inv, int runtimeId)
+    {
+        var n = 0;
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+        {
+            var s = inv.Get(i);
+            if (s.RuntimeId == runtimeId)
+                n += s.Count;
+        }
+        return n;
     }
 
     [Fact]
@@ -553,8 +712,7 @@ public class IntentContractTests
         // Starter kit already has chests in hotbar slot 5 — merge target.
         var before = player.Inventory.Get(5).Count;
 
-        BeginBreakReady(fx.Clock, fx.World, player, 5, 64, 5);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 5, 64, 5);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
@@ -573,7 +731,10 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 10));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
-            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+            InventoryStackAction.Transfer(
+                0, InventoryContainerMap.ChestBase, 4,
+                new WireSlot(InventoryContainerMap.Hotbar, 0),
+                new WireSlot(InventoryContainerMap.Chest, 0))
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock);
 
@@ -583,22 +744,252 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void InventorySystem_craft_oak_log_to_planks()
+    public void InventorySystem_places_into_craft_grid()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("grid");
+        player.InventoryWindowOpen = true;
+        Assert.True(player.Inventory.TrySet(0, Blocks.OakLog, 8));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+            InventoryStackAction.Transfer(
+                0, InventoryContainerMap.CraftUiBase, 1,
+                new WireSlot(InventoryContainerMap.CombinedHotbarAndInventory, 0),
+                new WireSlot(InventoryContainerMap.CraftingInput, 28))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(7, player.Inventory.Get(0).Count);
+        Assert.Equal(Blocks.OakLog, player.CraftUi.GetGrid(0).RuntimeId);
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_drop_clears_slot()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("dropper");
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 10));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(3, [
+            InventoryStackAction.Drop(0, 4, new WireSlot(InventoryContainerMap.Hotbar, 0))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(6, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_oak_log_to_planks_from_grid()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("crafter");
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
-        Assert.True(player.Inventory.TrySet(0, Blocks.OakLog, 2));
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 2)));
 
-        Assert.True(player.SubmitInventoryStack(
-            InventoryStackIntent.CreateCraft(9, RecipeRegistry.OakLogToPlanks)));
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(9, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.CreateOutput()
+        ])));
         fx.CreateInventorySystem().Tick(fx.Clock);
 
-        Assert.Equal(1, player.Inventory.Get(0).Count);
-        Assert.Equal(Blocks.OakLog, player.Inventory.Get(0).RuntimeId);
-        Assert.Equal(4, player.Inventory.Get(1).Count);
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.Equal(Blocks.OakLog, player.CraftUi.GetGrid(0).RuntimeId);
+        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(Blocks.OakPlanks, player.CraftUi.Result.RuntimeId);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_then_take_result_to_cursor()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("takeout");
+        player.InventoryWindowOpen = true;
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 1)));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(10, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 4,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
+                new WireSlot(InventoryContainerMap.Cursor, 0))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(Blocks.OakPlanks, player.Inventory.Cursor.RuntimeId);
+        Assert.Equal(4, player.Inventory.Cursor.Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_chain_planks_then_chest_take()
+    {
+        // S35: log→planks take, place planks, chest craft, take chest (sequential intents).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chaincraft");
+        player.InventoryWindowOpen = true;
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(0, Blocks.OakLog, 2));
+
+        var sys = fx.CreateInventorySystem();
+
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 1)));
+        Assert.True(player.Inventory.TrySet(0, Blocks.OakLog, 1));
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(20, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 1, 4)
+        ])));
+        sys.Tick(fx.Clock);
         Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(1).RuntimeId);
+        Assert.Equal(4, player.Inventory.Get(1).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 1)));
+        Assert.True(player.Inventory.TrySet(0, Blocks.Air, 0));
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(21, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 2, 4)
+        ])));
+        sys.Tick(fx.Clock);
+        Assert.Equal(4, player.Inventory.Get(2).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakPlanks, 2)));
+        Assert.True(player.CraftUi.TrySetGrid(1, new InventorySlot(Blocks.OakPlanks, 2)));
+        Assert.True(player.CraftUi.TrySetGrid(2, new InventorySlot(Blocks.OakPlanks, 2)));
+        Assert.True(player.CraftUi.TrySetGrid(3, new InventorySlot(Blocks.OakPlanks, 2)));
+        Assert.True(player.Inventory.TrySet(1, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(2, Blocks.Air, 0));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(22, [
+            InventoryStackAction.Craft(RecipeRegistry.OakPlanksToChest),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 3, 1,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
+                new WireSlot(InventoryContainerMap.Inventory, 3))
+        ])));
+        sys.Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(Blocks.Chest, player.Inventory.Get(3).RuntimeId);
+        Assert.Equal(1, player.Inventory.Get(3).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_refuses_while_result_occupied()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stuckout");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 2)));
+
+        var sys = fx.CreateInventorySystem();
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(30, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks)
+        ])));
+        sys.Tick(fx.Clock);
+        Assert.Equal(Blocks.OakPlanks, player.CraftUi.Result.RuntimeId);
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(31, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks)
+        ])));
+        sys.Tick(fx.Clock);
+
+        Assert.Equal(Blocks.OakPlanks, player.CraftUi.Result.RuntimeId);
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_times_two_then_place_result_to_bag()
+    {
+        // Shift-click craft output: CraftRecipe(times=2) + Place 8 planks to bag.
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("shiftcraft");
+        player.InventoryWindowOpen = true;
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 2)));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(12, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 2),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 9, 8,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
+                new WireSlot(InventoryContainerMap.Inventory, 9))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(9).RuntimeId);
+        Assert.Equal(8, player.Inventory.Get(9).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_times_zero_treated_as_one()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("times0");
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 1)));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(13, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 0),
+            InventoryStackAction.CreateOutput()
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_times_clamped_by_grid()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("clamp");
+        Assert.True(player.CraftUi.TrySetGrid(0, new InventorySlot(Blocks.OakLog, 1)));
+
+        // Request 5 crafts but only 1 log → clamp to 1, not fail.
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(14, [
+            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 5),
+            InventoryStackAction.CreateOutput()
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
+    }
+
+    [Fact]
+    public void InventorySystem_storage_slot_to_cursor_via_container_29()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("storage");
+        player.InventoryWindowOpen = true;
+        Assert.True(player.Inventory.TrySet(9, Blocks.Dirt, 8));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(11, [
+            InventoryStackAction.Transfer(
+                9, PlayerInventory.CursorSlot, 8,
+                new WireSlot(InventoryContainerMap.Inventory, 9),
+                new WireSlot(InventoryContainerMap.Cursor, 0))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.Inventory.Get(9).IsEmpty);
+        Assert.Equal(Blocks.Dirt, player.Inventory.Cursor.RuntimeId);
+        Assert.Equal(8, player.Inventory.Cursor.Count);
     }
 
     [Fact]
@@ -656,19 +1047,151 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void InventorySystem_craft_creative_adds_stone()
+    public void InventorySystem_craft_creative_places_on_cursor()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("creator", GameMode.Creative);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
 
-        Assert.True(player.SubmitInventoryStack(
-            InventoryStackIntent.CreateCraftCreative(1, CreativeCatalog.Stone, times: 1)));
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
+                new WireSlot(InventoryContainerMap.Cursor, 0))
+        ])));
         fx.CreateInventorySystem().Tick(fx.Clock);
 
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(Blocks.Stone, player.Inventory.Cursor.RuntimeId);
+        Assert.Equal(PlayerInventory.MaxStack, player.Inventory.Cursor.Count);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_shift_to_bag()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("shiftcreate", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(2, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 0, PlayerInventory.MaxStack)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Inventory.Cursor.IsEmpty);
         Assert.Equal(Blocks.Stone, player.Inventory.Get(0).RuntimeId);
-        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(PlayerInventory.MaxStack, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_merges_same_item_on_cursor()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("merges", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(PlayerInventory.CursorSlot, Blocks.Stone, 32));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(3, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 32)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Stone, player.Inventory.Cursor.RuntimeId);
+        Assert.Equal(PlayerInventory.MaxStack, player.Inventory.Cursor.Count);
+        Assert.Equal(32, player.CraftUi.Result.Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_rejects_different_item_on_cursor()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("clash", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(PlayerInventory.CursorSlot, Blocks.Dirt, 1));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(4, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(Blocks.Dirt, player.Inventory.Cursor.RuntimeId);
+        Assert.Equal(1, player.Inventory.Cursor.Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_rejects_cursor_overflow()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fullcursor", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySet(PlayerInventory.CursorSlot, Blocks.Stone, PlayerInventory.MaxStack));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(7, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 1)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(PlayerInventory.MaxStack, player.Inventory.Cursor.Count);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_drop_from_result()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("dropcreate", GameMode.Creative);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(5, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Drop(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.MaxStack,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Inventory.Cursor.IsEmpty);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+    }
+
+    [Fact]
+    public void InventorySystem_craft_creative_survival_rejects()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("survivor");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Air, 0));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(6, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Inventory.Cursor.IsEmpty);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
     }
 
     [Fact]

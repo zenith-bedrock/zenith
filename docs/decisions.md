@@ -75,11 +75,11 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Relative `zenith.yml` followed the process cwd — broken for service hosts / debuggers / double-click launches. BaseDirectory matches “config next to the binary” mental model.
 
-### 9. Auth verification as config, not hard-fail for LAN
+### 9. Auth accept modes (config visual)
 
-**Choice:** `auth.require-chain-signatures` in YAML; warn on boot if soft.
+**Choice:** `auth.accept` YAML list of named modes: `xbox` | `self-signed` | `offline`. Default LAN = all three + boot WARNING. Public = `[xbox]` only (strict chain checks). `offline` is parse fallbacks only — does not open AuthenticationType SELF_SIGNED. Obsolete `require-chain-signatures` aborts boot with actionable message (no auto-migrate / rewrite).
 
-**Why:** LAN iteration vs public exposure are different threat models. Hard-coding verify-on would slow solo testing; silent never-verify would be dangerous for production. Config makes the trade-off explicit.
+**Why:** Bool soft/hard mixed “who may join” with crypto. Ops need a readable multi-select. Loud fail on bad YAML matches gamemode / unmatched-key DX.
 
 ### 10. LGPL-3.0
 
@@ -120,6 +120,8 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 ### 14. Flat chunk streaming + async PreSpawn
 
 **Choice:** `PlayerChunkTracker` + `ChunkStreamSystem` stream missing columns around the player (async `GetOrCreateColumnAsync`, cap starts/tick). PreSpawn loads the spawn disk via `async` continuation (no receive-thread `GetResult`). Still flat base + overlays — not Mojang worlds / noise gen / VisibilitySystem.
+
+**Adendo (jul 2026 — join overlay catch-up):** PreSpawn `RememberMany` right after LevelChunks (before T0 overlay loop). Live `UpdateBlock` fan-out reaches peers with `Chunks.Knows(cx,cz)` even when `!IsInGame`. On InGame enable set `NeedsOverlayResync`; first `ChunkStreamSystem` tick re-emits current overlays for known columns (`ColumnSend.EmitOverlaysToSession`) so places during the LevelChunk batch window are not lost.
 
 **Why:** Closes the “world dies outside spawn radius” gap without Actor/EventHandlers or vanilla LevelDB. Matches early Zenith spine: continuous flat multiplayer before effects/gen.
 
@@ -233,7 +235,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Soft blocks use `Blocks.BreakTicks` (empty-hand ≈ hardness×5s @ 20 TPS) snapshotted on AuthInput `start_break`. Same-cell `continue_destroy` does **not** reset the dig timer or re-send `StartCrack` (that finished the crack animation before `SetBlock`). Crack LevelEvent data = `round(65535 / ticks)` (PM/Geyser). Creative InstantBuild skips crack + timing gate. Early/wrong-cell breaks rejected with Debug log.
 
-**Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Restarting crack on every continue made the animation complete while the server still rejected `predict_destroy`.
+**Adendo (jul 2026 — dig desync):** Survival `predict_destroy` freezes dig auth (`DigStartedTick` / `DigRequiredTicks`) into `BlockEditIntent`, then `ClearBreakTarget` without StopCrack so same-AuthInput Continue can retarget. `BlockSystem` validates from the intent snapshot, not live `HasBreakTarget`. Reject (break/place) → self `UpdateBlock` of server truth to the breaker only. AuthInput break order: **Abort → Start/Crack → Predict → Continue** (cancel+redig needs Start before Predict; chain-break needs Predict before Continue). Abort always `StopCrack` at Abort packet coords (even when dig already cleared) and does **not** dequeue DigAuthorized intents (`predict` = commit). Same-cell MP: first DigAuthorized in tick order wins loot; loser sees air + Resync — no per-cell dig lock.
+
+**Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Restarting crack on every continue made the animation complete while the server still rejected `predict_destroy`. Live dig + Continue retarget before tick rejected the queued destroy → client ghost + peer desync.
 
 **Deferred:** Tool speed, efficiency enchant, `BLOCK_BREAK_SPEED` (3602) mid-dig updates. (LevelEvent peer fan-out → §42.)
 
@@ -254,11 +258,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 29. Crafting 2×2 — RecipeRegistry MVP (wire completed in §35)
 
-**Choice:** `RecipeRegistry` on `ServerContext` (`CreateDefault`: 1 oak_log → 4 oak_planks; 8 oak_planks → 1 chest; shapeless exact `TryMatch`). Static Zenith recipe net ids `1`/`2`. ISR `CraftRecipe` supported (unsigned varint netId + times); `CraftResultsDeprecated` skip = supported no-op. Handler submits `InventoryStackIntent.CreateCraft` when netId known → tick `TryCraft` (consume + `TryAdd`, snapshot rollback).
+**Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid flats `CraftUiBase`+0–3, result `CraftResultFlat`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
 
-**Why:** Wire vanilla recipe ids require `CraftingDataPacket` to remint; shipping registry + tick path first proved gameplay without stalling on Mojang recipe book ids. Remint landed in §35.
+**Why:** Empty ISR OK / bag consume never drove SAI craft UI (S35). Grid + Create matches Dragonfly without full 54-slot UI inventory. Discarding times made shift-click Place N×out fail after craft ×1. Skipping CreatedOutput (60) in ItemStackResponse (PM virtual-output habit) desynced sequential take after planks→chest — **fixed:** emit 60 like Dragonfly; refuse Survival craft while Result still occupied.
 
-**Deferred (original):** full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags. (`CraftingDataPacket` → §35.)
+**Deferred:** 3×3 crafting table; recipe-book **CraftRecipeAuto**; container 14 preview sync; negative stack-net-id prediction; multi-stack CreatedOutput when out×N > MaxStack; double-click gather (no dedicated ISR opcode — client multi Place/Take, intermittent).
 
 ### 30. CreativeContent after this spine (conscious yes) — superseded by §31
 
@@ -322,6 +326,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay eviction with I/O on tick.
 
+**Adendo (jul 2026 — column index):** Secondary `_overlaysByChunk` map updated only via `StoreOverlay` (same path as LevelDB hydrate). `GetOverlaysInColumn` is O(bucket) instead of scanning all overlays. Flat `_blockOverrides` remains SSOT for `GetBlock` / `OverrideCount` / warn@10k. Break→air still overwrites (no TryRemove). Not zero-alloc — result list is still O(column size). No eviction.
+
 ### 37. UpdateAbilities + AdventureSettings (spawn seed + fly echo)
 
 **Choice:** After §34 `SetActorData`/`UpdateAttributes`, send `UpdateAbilities` (`0xBB`) then `UpdateAdventureSettings` (`0xBC`) before PreSpawn. Shared `AbilityData` writer (SSOT) also used by `AddPlayer` via wire `GameMode` int. Survival mask = pre-refactor golden bits; Creative = Survival + `MayFly` + `InstantBuild` + `Flying` (join already flying — intentional vs Vedrock). `Invulnerable` off. Runtime id = unique id. Inbound `RequestAbility` (`0xB8`) for `FLYING` only: Creative echoes `SendLocalAbilities` with packet bool (stateless); Survival ignore (no kick). Adventure LAN defaults: ShowNameTags + AutoJump.
@@ -332,11 +338,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
-**Choice:** `CreativeCatalog` on `ServerContext` (net ids 1–7 matching former CreateStarter). Protocol `BuildCreativeContent` from catalog — no second item list in Packets. ISR `CraftCreative` supported → intent → `TryAdd` (Creative mode only; `times` capped at MaxStack). Recipe+Creative in one request rejected.
+**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `CraftResultFlat` (CreatedOutput), then honor same-request Place/Take/Drop/Create — Dragonfly `createResults` + `Grow(MaxCount-1)`. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response omits container 60.
 
-**Why:** Creative fly (§37) without palette→inventory left place dead. Same spine as CraftRecipe.
+**Why:** Palette vanilla is CreatedOutput→cursor/bag, not bag `TryAdd`. The prior `CraftCreativeNetId` parallel intent with empty Actions discarded client Places (click never reached cursor).
 
-**Deferred:** full `creative_items.json` / `block_state_b64`.
+**Deferred:** full `creative_items.json` / `block_state_b64`; ActionDestroy creative trash (Unsupported → whole-request reject today).
 
 ### 39. Inventory + chest LevelDB persist (`ct:` / `inv:`)
 
@@ -358,9 +364,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` completes the same shutdown path from **CancelKeyPress**, **SIGINT**, and **SIGTERM** (Docker/Dokploy stop) — 5s flush timeout → Warning. Flush **never** on GameLoop tick (ADR §13).
 
+**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `ZenithSessionListener.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (DF/PM — no fixed sleep; DF waits session teardown via WaitGroup, we flush frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong matches gophertunnel trailing `0`; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
+
 **Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts; container SIGTERM previously skipped flush entirely. Operational trust before death/drop-entity surface.
 
-**Smoke:** S39 graceful restart / stop; S40 own-camera snap to world spawn (ARCHITECTURE.md).
+**Smoke:** S39 graceful restart / stop; S40 own-camera snap to world spawn (ARCHITECTURE.md). Ctrl+C with players online → clean disconnect screen.
 
 ### 42. Dig crack LevelEvent peer fan-out
 
@@ -373,6 +381,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 ### 43. Protocol mismatch UX (+ EventBus negotiate seam)
 
 **Choice:** After `NetworkSettings`, `ProtocolGate.Evaluate(client, ServerIdentity.ProtocolVersion)` decides Accepted / FailClient / FailServer. Reject → `LoginProtocol.SendIncompatibleProtocol` (`PlayStatus` 1 or 2) + disconnect; no `Player`. Re-check on `LoginPacket.Protocol`. Before accept/reject, publish mutable `ProtocolNegotiateEvent` (Accepted / RejectPlayStatus) so a future listener can override the gate — **Accepted ≠ second codec** (document: forcing accept without encode support breaks on wire). Multi-codec / YAML supported-protocols / plugins: **Deferred**.
+
+**Adendo (jul 2026 — PlayStatus flush):** Incompatible `PlayStatus` is sent **Immediate** + `NOT_PRESENT` compression, then `FlushOutgoing` before RakNet close. Prior Normal-priority PlayStatus was often lost when `Disconnect` Immediate flushed one random frame and closed — vanilla outdated UI never appeared (DF/PM: PlayStatus only, no custom Disconnect string).
 
 **Why:** Wrong-version clients previously hung or logged in without Bedrock’s classic incompatible UI. Gate stays pure; Protocol only transmits; Handler orchestrates. Cheap multiprotocol seam without inventing PluginAPI now (Rule 7).
 

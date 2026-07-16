@@ -39,9 +39,69 @@ sealed class ServerConfig
         public int SpawnChunkRadius { get; set; } = 4;
     }
 
+    /// <summary>
+    /// Login accept modes (<c>auth.accept</c>). Names: xbox | self-signed | offline.
+    /// </summary>
     public sealed class AuthSection
     {
-        public bool RequireChainSignatures { get; set; }
+        public const string ModeXbox = "xbox";
+        public const string ModeSelfSigned = "self-signed";
+        public const string ModeOffline = "offline";
+
+        public static readonly string[] AllowedModes = [ModeXbox, ModeSelfSigned, ModeOffline];
+
+        /// <summary>Default LAN: all three modes.</summary>
+        public List<string> Accept { get; set; } = [ModeXbox, ModeSelfSigned, ModeOffline];
+
+        private HashSet<string> _modes = new(StringComparer.Ordinal);
+
+        [YamlIgnore]
+        public bool AllowsXbox => _modes.Contains(ModeXbox);
+
+        [YamlIgnore]
+        public bool AllowsSelfSigned => _modes.Contains(ModeSelfSigned);
+
+        [YamlIgnore]
+        public bool AllowsOfflineFallback => _modes.Contains(ModeOffline);
+
+        /// <summary>True when accept is exactly xbox — strict chain signature checks.</summary>
+        [YamlIgnore]
+        public bool RequireStrictXbox =>
+            _modes.Count == 1 && _modes.Contains(ModeXbox);
+
+        [YamlIgnore]
+        public string EffectiveAcceptSummary =>
+            _modes.Count == 0 ? "(none)" : string.Join(", ", AllowedModes.Where(_modes.Contains));
+
+        internal void NormalizeAndValidate()
+        {
+            if (Accept is null || Accept.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "auth.accept must list one or more of: xbox, self-signed, offline.");
+            }
+
+            _modes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var raw in Accept)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    throw new InvalidOperationException(
+                        "auth.accept entries must not be empty. Allowed: xbox, self-signed, offline.");
+                }
+
+                var mode = raw.Trim().ToLowerInvariant();
+                if (mode is not (ModeXbox or ModeSelfSigned or ModeOffline))
+                {
+                    throw new InvalidOperationException(
+                        $"auth.accept contains unknown mode '{raw}'. Allowed: xbox, self-signed, offline.");
+                }
+
+                _modes.Add(mode);
+            }
+
+            Accept = AllowedModes.Where(_modes.Contains).ToList();
+        }
     }
 
     public sealed class ChatSection
@@ -77,6 +137,8 @@ sealed class ServerConfig
         if (string.IsNullOrWhiteSpace(World.Name))
             throw new InvalidOperationException("world.name must not be empty.");
 
+        Auth.NormalizeAndValidate();
+
         if (Chat.MaxLength < 1)
             throw new InvalidOperationException($"chat.max-length must be >= 1 (got {Chat.MaxLength}).");
         if (Chat.RateCapacity <= 0)
@@ -93,6 +155,11 @@ sealed class ServerConfig
 static class ServerConfigLoader
 {
     public const string DefaultFileName = "zenith.yml";
+
+    private const string ObsoleteAuthKeyMessage =
+        "auth.require-chain-signatures was removed. " +
+        "Use auth.accept: [xbox], [xbox, self-signed], or [xbox, self-signed, offline]. " +
+        "See deploy/zenith.yml.";
 
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
         .WithNamingConvention(HyphenatedNamingConvention.Instance)
@@ -121,6 +188,7 @@ static class ServerConfigLoader
         if (!File.Exists(path))
         {
             var defaults = new ServerConfig();
+            defaults.Validate();
             try
             {
                 var yaml = Serializer.Serialize(defaults);
@@ -144,6 +212,8 @@ static class ServerConfigLoader
             throw new InvalidOperationException($"Failed to read config '{path}'.", ex);
         }
 
+        RejectObsoleteAuthKeys(text, path);
+
         ServerConfig config;
         try
         {
@@ -153,6 +223,14 @@ static class ServerConfigLoader
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
+            var msg = ex.Message;
+            if (msg.Contains("require-chain-signatures", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Invalid zenith.yml ({path}): {ObsoleteAuthKeyMessage}",
+                    ex);
+            }
+
             throw new InvalidOperationException(
                 $"Invalid zenith.yml ({path}): {ex.Message}",
                 ex);
@@ -160,5 +238,20 @@ static class ServerConfigLoader
 
         config.Validate();
         return config;
+    }
+
+    private static void RejectObsoleteAuthKeys(string yamlText, string path)
+    {
+        // Loud abort — do not migrate or rewrite the operator's file.
+        foreach (var line in yamlText.Split('\n'))
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith('#')) continue;
+            if (trimmed.StartsWith("require-chain-signatures:", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Invalid zenith.yml ({path}): {ObsoleteAuthKeyMessage}");
+            }
+        }
     }
 }

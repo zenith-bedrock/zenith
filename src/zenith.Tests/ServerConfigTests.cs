@@ -16,7 +16,10 @@ public class ServerConfigLoaderTests
             Assert.True(File.Exists(path));
             Assert.Equal(19132, config.Server.Port);
             Assert.Equal(20, config.Server.MaxPlayers);
-            Assert.False(config.Auth.RequireChainSignatures);
+            Assert.True(config.Auth.AllowsXbox);
+            Assert.True(config.Auth.AllowsSelfSigned);
+            Assert.True(config.Auth.AllowsOfflineFallback);
+            Assert.False(config.Auth.RequireStrictXbox);
             Assert.Equal("", config.World.Path);
         }
         finally
@@ -53,18 +56,62 @@ public class ServerConfigLoaderTests
                   motd: Custom
                   max-players: 5
                 auth:
-                  require-chain-signatures: true
+                  accept:
+                    - xbox
                 """);
             var config = ServerConfigLoader.LoadOrCreate(path);
             Assert.Equal(25565, config.Server.Port);
             Assert.Equal("Custom", config.Server.Motd);
             Assert.Equal(5, config.Server.MaxPlayers);
-            Assert.True(config.Auth.RequireChainSignatures);
+            Assert.True(config.Auth.RequireStrictXbox);
+            Assert.True(config.Auth.AllowsXbox);
+            Assert.False(config.Auth.AllowsSelfSigned);
         }
         finally
         {
             if (File.Exists(path)) File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void LoadOrCreate_rejects_obsolete_require_chain_signatures()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-{Guid.NewGuid():N}.yml");
+        try
+        {
+            File.WriteAllText(path, """
+                server:
+                  port: 19132
+                  motd: Test
+                auth:
+                  require-chain-signatures: false
+                """);
+            var ex = Assert.Throws<InvalidOperationException>(() => ServerConfigLoader.LoadOrCreate(path));
+            Assert.Contains("require-chain-signatures was removed", ex.Message);
+            Assert.Contains("auth.accept", ex.Message);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Validate_rejects_unknown_auth_accept_mode()
+    {
+        var config = new ServerConfig();
+        config.Auth.Accept = ["xbox", "guest"];
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("unknown mode", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_rejects_empty_auth_accept()
+    {
+        var config = new ServerConfig();
+        config.Auth.Accept = [];
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("auth.accept", ex.Message);
     }
 
     [Fact]

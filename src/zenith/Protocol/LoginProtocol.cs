@@ -37,9 +37,28 @@ sealed class LoginProtocol
         _session.SendDataPacket(new PlayStatusPacket { Status = PlayStatusPacket.LoginSuccess });
     }
 
-    /// <summary>PlayStatus LOGIN_FAILED_CLIENT/SERVER — no policy; Handler decided.</summary>
+    /// <summary>PlayStatus LOGIN_FAILED_CLIENT/SERVER — Immediate + uncompressed (§43).</summary>
     public void SendIncompatibleProtocol(int playStatus)
     {
-        _session.SendDataPacket(new PlayStatusPacket { Status = playStatus });
+        // Reject runs during handshake before the client enables compression.
+        _session.SendDataPacket(
+            RakNetSession.Priority.Immediate,
+            PacketCompression.NOT_PRESENT,
+            new PlayStatusPacket { Status = playStatus });
+    }
+
+    /// <summary>Bedrock DisconnectPacket with a visible message (Protocol transmits only).</summary>
+    public void SendDisconnect(string message, int reason = DisconnectPacket.ReasonUnknown)
+    {
+        _session.SendDataPacket(
+            RakNetSession.Priority.Immediate,
+            _session.CompressionAlgorithm,
+            new DisconnectPacket
+            {
+                Reason = reason,
+                HideDisconnectionScreen = false,
+                Message = message,
+                FilteredMessage = ""
+            });
     }
 }

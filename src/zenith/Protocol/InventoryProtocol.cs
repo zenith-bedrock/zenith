@@ -14,16 +14,44 @@ namespace Zenith.Protocol;
 static class InventoryContainerMap
 {
     public const byte CombinedHotbarAndInventory = 12;
+    /// <summary>Bedrock crafting input (2×2 / 3×3 UI) — domain flats CraftUiBase+.</summary>
+    public const byte CraftingInput = 13;
+    /// <summary>Bedrock crafting output preview.</summary>
+    public const byte CraftingOutputPreview = 14;
     public const byte Hotbar = 28;
     public const byte Inventory = 29;
     public const byte Cursor = 59;
+    /// <summary>Bedrock created-output (craft result pickup).</summary>
+    public const byte CreatedOutput = 60;
     public const byte Chest = 7;
 
     /// <summary>Flat domínio para slots do baú aberto (não vive em <see cref="PlayerInventory"/>).</summary>
     public const int ChestBase = 100;
 
+    /// <summary>Flat domínio craft UI 2×2 (ephemeral, ADR §35).</summary>
+    public const int CraftUiBase = 150;
+
+    /// <summary>Created output slot (container 60 wire slot 50).</summary>
+    public const int CraftResultFlat = CraftUiBase + PlayerCraftUi.GridSize;
+
+    public const int CraftingGridWireOffset = 28;
+    public const byte CraftingResultWireSlot = 50;
+    public const int UiInventorySlotCount = 54;
+
+    /// <summary>Mojang PlayerUISlot::CURSOR — window 124 slot 0 (ISR container 59).</summary>
+    public const int UiCursorSlot = 0;
+
     public static bool IsChestFlat(int flat) =>
         flat is >= ChestBase and < ChestBase + ChestStore.Size;
+
+    public static bool IsCraftUiFlat(int flat) =>
+        flat is >= CraftUiBase and <= CraftResultFlat;
+
+    public static bool IsCraftGridFlat(int flat) =>
+        flat is >= CraftUiBase and < CraftResultFlat;
+
+    public static byte CraftGridWireSlot(int gridIndex) =>
+        (byte)(CraftingGridWireOffset + gridIndex);
 
     public static bool TryMap(byte containerId, byte slot, out int flat)
     {
@@ -40,7 +68,8 @@ static class InventoryContainerMap
                 return true;
 
             case CombinedHotbarAndInventory:
-                // Combined window: wire slots 0–35 are already flat domain indices.
+            case Inventory:
+                // PM/Dragonfly: containers 12 and 29 use absolute bag slots 0–35 (not relative 0–26).
                 if (slot >= PlayerInventory.FullInventorySize)
                 {
                     flat = 0;
@@ -48,16 +77,6 @@ static class InventoryContainerMap
                 }
 
                 flat = slot;
-                return true;
-
-            case Inventory:
-                flat = slot + PlayerInventory.HotbarSize;
-                if (!PlayerInventory.IsValidInventorySlot(flat))
-                {
-                    flat = 0;
-                    return false;
-                }
-
                 return true;
 
             case Cursor:
@@ -73,6 +92,27 @@ static class InventoryContainerMap
 
                 flat = ChestBase + slot;
                 return true;
+
+            case CraftingInput:
+                if (slot is >= CraftingGridWireOffset and < CraftingGridWireOffset + PlayerCraftUi.GridSize)
+                {
+                    flat = CraftUiBase + (slot - CraftingGridWireOffset);
+                    return true;
+                }
+
+                flat = 0;
+                return false;
+
+            case CraftingOutputPreview:
+            case CreatedOutput:
+                if (slot == CraftingResultWireSlot)
+                {
+                    flat = CraftResultFlat;
+                    return true;
+                }
+
+                flat = 0;
+                return false;
 
             default:
                 flat = 0;
@@ -96,6 +136,20 @@ static class InventoryContainerMap
             return true;
         }
 
+        if (IsCraftGridFlat(flat))
+        {
+            containerId = CraftingInput;
+            wireSlot = CraftGridWireSlot(flat - CraftUiBase);
+            return true;
+        }
+
+        if (flat == CraftResultFlat)
+        {
+            containerId = CreatedOutput;
+            wireSlot = CraftingResultWireSlot;
+            return true;
+        }
+
         if (flat is >= 0 and < PlayerInventory.HotbarSize)
         {
             containerId = Hotbar;
@@ -105,8 +159,9 @@ static class InventoryContainerMap
 
         if (PlayerInventory.IsValidInventorySlot(flat))
         {
+            // Absolute slot on container 29 (PM parity) — not flat-9 relative.
             containerId = Inventory;
-            wireSlot = (byte)(flat - PlayerInventory.HotbarSize);
+            wireSlot = (byte)flat;
             return true;
         }
 
@@ -125,6 +180,8 @@ sealed class InventoryProtocol
     private readonly HashSet<int> _warnedUnknownBlocks = new();
     private readonly int[] _slotNetIds = new int[PlayerInventory.FullInventorySize];
     private readonly int[] _chestNetIds = new int[ChestStore.Size];
+    private readonly int[] _craftNetIds = new int[PlayerCraftUi.GridSize + 1];
+    private readonly Dictionary<int, (int RuntimeId, int Count)> _stackIdentity = new();
     private int _cursorNetId;
     private int _nextNetId = 1;
 
@@ -238,6 +295,50 @@ sealed class InventoryProtocol
         });
     }
 
+    /// <summary>Window 124 — 54-slot UI inventory (cursor at 0, craft grid 28–31, result 50).</summary>
+    public void SendUiInventoryContent(global::Zenith.Player.Player player)
+    {
+        _session.SendDataPacket(new InventoryContentPacket
+        {
+            WindowId = InventoryContentPacket.WindowUI,
+            Slots = BuildUiInventorySlots(player)
+        });
+    }
+
+    /// <summary>
+    /// Window 124 layout (Endstone CONTAINER_ID_PLAYER_ONLY_UI / Mojang PlayerUISlot).
+    /// Omitting slot 0 wiped ISR cursor after OK (smoke 11).
+    /// </summary>
+    internal NetworkItemStack[] BuildUiInventorySlots(global::Zenith.Player.Player player)
+    {
+        var wire = new NetworkItemStack[InventoryContainerMap.UiInventorySlotCount];
+        for (var i = 0; i < wire.Length; i++)
+            wire[i] = NetworkItemStack.Empty;
+
+        RefreshNetId(PlayerInventory.CursorSlot, player.Inventory.Cursor);
+        wire[InventoryContainerMap.UiCursorSlot] =
+            ToNetworkStack(player.Inventory.Cursor, GetNetId(PlayerInventory.CursorSlot));
+
+        for (var g = 0; g < PlayerCraftUi.GridSize; g++)
+        {
+            var flat = InventoryContainerMap.CraftUiBase + g;
+            var stack = player.CraftUi.GetGrid(g);
+            RefreshNetId(flat, stack);
+            wire[InventoryContainerMap.CraftingGridWireOffset + g] =
+                ToNetworkStack(stack, GetNetId(flat));
+        }
+
+        {
+            var flat = InventoryContainerMap.CraftResultFlat;
+            var stack = player.CraftUi.Result;
+            RefreshNetId(flat, stack);
+            wire[InventoryContainerMap.CraftingResultWireSlot] =
+                ToNetworkStack(stack, GetNetId(flat));
+        }
+
+        return wire;
+    }
+
     public void SendChestContent(ChestStore chests, int x, int y, int z)
     {
         chests.Ensure(x, y, z);
@@ -305,29 +406,27 @@ sealed class InventoryProtocol
     public void SendItemStackResponseError(int requestId) =>
         _session.SendDataPacket(ItemStackResponsePacket.Error(requestId));
 
-    public void SendItemStackResponseOk(int requestId, global::Zenith.Player.Player player, IReadOnlyList<int> touchedFlats)
+    public void SendItemStackResponseOk(int requestId, global::Zenith.Player.Player player, IReadOnlyList<WireTouch> wireTouches)
     {
         var byContainer = new Dictionary<byte, List<StackResponseSlotInfo>>();
-        foreach (var flat in touchedFlats)
+        foreach (var touch in wireTouches)
         {
-            if (!InventoryContainerMap.TryToWire(flat, out var containerId, out var wireSlot))
-                continue;
-
-            var stack = ResolveStack(player, flat);
-            RefreshNetId(flat, stack);
-            var netId = GetNetId(flat);
+            // DF emits CreatedOutput; skipping it desyncs sequential craft take (S35 planks→chest).
+            var stack = ResolveStack(player, touch.Flat);
+            RefreshNetId(touch.Flat, stack);
+            var netId = GetNetId(touch.Flat);
             var info = new StackResponseSlotInfo
             {
-                Slot = wireSlot,
-                HotbarSlot = wireSlot,
+                Slot = touch.Slot,
+                HotbarSlot = touch.Slot,
                 Count = (byte)Math.Clamp(stack.IsEmpty ? 0 : stack.Count, 0, 255),
                 StackNetworkId = netId
             };
 
-            if (!byContainer.TryGetValue(containerId, out var list))
+            if (!byContainer.TryGetValue(touch.ContainerId, out var list))
             {
                 list = new List<StackResponseSlotInfo>();
-                byContainer[containerId] = list;
+                byContainer[touch.ContainerId] = list;
             }
 
             list.Add(info);
@@ -347,6 +446,20 @@ sealed class InventoryProtocol
         _session.SendDataPacket(ItemStackResponsePacket.Ok(requestId, containers));
     }
 
+    /// <summary>Legacy flat-only path — maps via TryToWire (closed inventory / hotbar).</summary>
+    public void SendItemStackResponseOk(int requestId, global::Zenith.Player.Player player, IReadOnlyList<int> touchedFlats)
+    {
+        var touches = new List<WireTouch>(touchedFlats.Count);
+        foreach (var flat in touchedFlats)
+        {
+            if (!InventoryContainerMap.TryToWire(flat, out var containerId, out var wireSlot))
+                continue;
+            touches.Add(new WireTouch(flat, containerId, wireSlot));
+        }
+
+        SendItemStackResponseOk(requestId, player, touches);
+    }
+
     private InventorySlot ResolveStack(global::Zenith.Player.Player player, int flat)
     {
         if (InventoryContainerMap.IsChestFlat(flat))
@@ -356,6 +469,12 @@ sealed class InventoryProtocol
                 pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase);
         }
 
+        if (InventoryContainerMap.IsCraftGridFlat(flat))
+            return player.CraftUi.GetGrid(flat - InventoryContainerMap.CraftUiBase);
+
+        if (flat == InventoryContainerMap.CraftResultFlat)
+            return player.CraftUi.Result;
+
         return player.Inventory.Get(flat);
     }
 
@@ -364,10 +483,16 @@ sealed class InventoryProtocol
         if (slot.IsEmpty)
         {
             SetNetId(flat, 0);
+            _stackIdentity.Remove(flat);
             return;
         }
 
+        if (_stackIdentity.TryGetValue(flat, out var prev) &&
+            prev.RuntimeId == slot.RuntimeId && prev.Count == slot.Count)
+            return;
+
         SetNetId(flat, AllocateNetId());
+        _stackIdentity[flat] = (slot.RuntimeId, slot.Count);
     }
 
     private int AllocateNetId() => _nextNetId++;
@@ -377,6 +502,8 @@ sealed class InventoryProtocol
         if (flat == PlayerInventory.CursorSlot) return _cursorNetId;
         if (InventoryContainerMap.IsChestFlat(flat))
             return _chestNetIds[flat - InventoryContainerMap.ChestBase];
+        if (InventoryContainerMap.IsCraftUiFlat(flat))
+            return _craftNetIds[flat - InventoryContainerMap.CraftUiBase];
         return _slotNetIds[flat];
     }
 
@@ -386,6 +513,8 @@ sealed class InventoryProtocol
             _cursorNetId = netId;
         else if (InventoryContainerMap.IsChestFlat(flat))
             _chestNetIds[flat - InventoryContainerMap.ChestBase] = netId;
+        else if (InventoryContainerMap.IsCraftUiFlat(flat))
+            _craftNetIds[flat - InventoryContainerMap.CraftUiBase] = netId;
         else
             _slotNetIds[flat] = netId;
     }

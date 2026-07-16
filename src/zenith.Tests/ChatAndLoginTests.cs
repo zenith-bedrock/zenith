@@ -1,11 +1,19 @@
 using Xunit;
 using Zenith.Protocol;
+using Zenith.Server;
 using Zenith.Session;
 
 namespace Zenith.Tests;
 
 public class LoginIdentityTests
 {
+    private static ServerConfig.AuthSection Auth(params string[] modes)
+    {
+        var a = new ServerConfig.AuthSection { Accept = [.. modes] };
+        a.NormalizeAndValidate();
+        return a;
+    }
+
     [Fact]
     public void ExtractDisplayName_reads_xname_claim()
     {
@@ -21,10 +29,77 @@ public class LoginIdentityTests
     }
 
     [Fact]
-    public void ExtractDisplayName_rejects_empty_xname()
+    public void ParseIdentityToken_xbox_only_rejects_empty_xname()
     {
-        var jwt = MakeJwt("""{"xname":"  "}""");
-        Assert.Throws<FormatException>(() => LoginIdentity.ExtractDisplayName(jwt));
+        var jwt = MakeJwt("""{"xname":""}""");
+        Assert.Throws<FormatException>(() =>
+            LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox")));
+    }
+
+    [Fact]
+    public void ParseIdentityToken_falls_back_to_chain_displayName_when_offline()
+    {
+        var id = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var chainJwt = MakeJwt(
+            "{\"extraData\":{\"displayName\":\"OfflineSteve\",\"identity\":\"" + id + "\"}}");
+        var chain = "{\"chain\":[\"" + chainJwt + "\"]}";
+        var token = MakeJwt("""{"xname":""}""");
+
+        var parsed = LoginIdentity.ParseIdentityToken(token, chain, auth: Auth("xbox", "self-signed", "offline"));
+        Assert.Equal("OfflineSteve", parsed.DisplayName);
+        Assert.Equal(id, parsed.Uuid);
+        Assert.True(parsed.IdentityStable);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_falls_back_to_ThirdPartyName_and_SelfSignedId()
+    {
+        var selfId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var token = MakeJwt("""{"xname":""}""");
+        var clientData = MakeJwt(
+            "{\"ThirdPartyName\":\"GuestAlex\",\"SelfSignedId\":\"" + selfId + "\"}");
+
+        var parsed = LoginIdentity.ParseIdentityToken(
+            token, identityChainJson: null, clientData, Auth("xbox", "offline"));
+        Assert.Equal("GuestAlex", parsed.DisplayName);
+        Assert.Equal(selfId, parsed.Uuid);
+        Assert.True(parsed.IdentityStable);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_offline_stable_uuid_from_name()
+    {
+        var token = MakeJwt("""{"xname":"LANPlayer"}""");
+        var auth = Auth("xbox", "offline");
+        var a = LoginIdentity.ParseIdentityToken(token, auth: auth);
+        var b = LoginIdentity.ParseIdentityToken(token, auth: auth);
+        Assert.Equal(a.Uuid, b.Uuid);
+        Assert.True(a.IdentityStable);
+        Assert.Equal(LoginIdentity.IdentityFromOfflineName("LANPlayer"), a.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_reads_leguuid_self_signed()
+    {
+        var id = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var jwt = MakeJwt("{\"xname\":\"Steve\",\"leguuid\":\"" + id + "\"}");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("self-signed"));
+        Assert.Equal(id, parsed.Uuid);
+        Assert.True(parsed.IdentityFromJwt);
+        Assert.True(parsed.IdentityStable);
+    }
+
+    [Fact]
+    public void ValidateIdentityChain_soft_skips_empty_dummy_jwt()
+    {
+        LoginIdentity.ValidateIdentityChain("""{"chain":[""]}""", requireStrictXbox: false);
+    }
+
+    [Fact]
+    public void ValidateIdentityChain_strict_rejects_empty_dummy_jwt()
+    {
+        Assert.Throws<FormatException>(() =>
+            LoginIdentity.ValidateIdentityChain("""{"chain":[""]}""", requireStrictXbox: true));
     }
 
     [Fact]
@@ -34,11 +109,12 @@ public class LoginIdentityTests
     }
 
     [Fact]
-    public void ParseIdentityToken_marks_ephemeral_uuid_without_identity_claim()
+    public void ParseIdentityToken_xbox_only_marks_ephemeral_without_identity_or_xid()
     {
         var jwt = MakeJwt("""{"xname":"Steve"}""");
-        var parsed = LoginIdentity.ParseIdentityToken(jwt);
+        var parsed = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
         Assert.False(parsed.IdentityFromJwt);
+        Assert.False(parsed.IdentityStable);
         Assert.NotEqual(Guid.Empty, parsed.Uuid);
     }
 
@@ -46,9 +122,32 @@ public class LoginIdentityTests
     public void ParseIdentityToken_marks_jwt_uuid_when_identity_claim_present()
     {
         var id = Guid.Parse("11111111-2222-3333-4444-555555555555");
-        var jwt = MakeJwt($$"""{"xname":"Steve","identity":"{{id}}"}""");
-        var parsed = LoginIdentity.ParseIdentityToken(jwt);
+        var jwt = MakeJwt("{\"xname\":\"Steve\",\"identity\":\"" + id + "\"}");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
         Assert.True(parsed.IdentityFromJwt);
+        Assert.True(parsed.IdentityStable);
+        Assert.Equal(id, parsed.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_derives_stable_uuid_from_xid()
+    {
+        var jwt = MakeJwt("""{"xname":"Steve","xid":"25332747913222912"}""");
+        var a = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
+        var b = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
+        Assert.False(a.IdentityFromJwt);
+        Assert.True(a.IdentityStable);
+        Assert.Equal(a.Uuid, b.Uuid);
+        Assert.Equal(LoginIdentity.IdentityFromXuid("25332747913222912"), a.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_identity_claim_takes_priority_over_xid()
+    {
+        var id = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var jwt = MakeJwt(
+            "{\"xname\":\"Steve\",\"identity\":\"" + id + "\",\"xid\":\"25332747913222912\"}");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
         Assert.Equal(id, parsed.Uuid);
     }
 

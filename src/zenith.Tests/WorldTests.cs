@@ -88,6 +88,57 @@ public class WorldOverlayTests
     }
 
     [Fact]
+    public void GetOverlaysInColumn_isolates_distinct_chunks()
+    {
+        var world = new World.World(new InMemoryChunkStorage());
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);   // chunk (0,0)
+        world.SetBlock(20, Blocks.FlatSpawnY, 5, Blocks.Dirt);   // chunk (1,0)
+
+        var c00 = world.GetOverlaysInColumn(0, 0);
+        var c10 = world.GetOverlaysInColumn(1, 0);
+        var empty = world.GetOverlaysInColumn(2, 2);
+
+        Assert.Single(c00);
+        Assert.Equal(3, c00[0].X);
+        Assert.Equal(Blocks.Stone, c00[0].BlockRuntimeId);
+
+        Assert.Single(c10);
+        Assert.Equal(20, c10[0].X);
+        Assert.Equal(Blocks.Dirt, c10[0].BlockRuntimeId);
+
+        Assert.Empty(empty);
+        Assert.Equal(2, world.OverrideCount);
+    }
+
+    [Fact]
+    public void SetBlock_overwrite_keeps_single_index_entry()
+    {
+        var world = new World.World(new InMemoryChunkStorage());
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Dirt);
+
+        var column = world.GetOverlaysInColumn(0, 0);
+        Assert.Single(column);
+        Assert.Equal(Blocks.Dirt, column[0].BlockRuntimeId);
+        Assert.Equal(Blocks.Dirt, world.GetBlock(3, Blocks.FlatSpawnY, 5));
+        Assert.Equal(1, world.OverrideCount);
+    }
+
+    [Fact]
+    public void SetBlock_air_overwrite_stays_in_index()
+    {
+        // Break path: SetBlock(air) does not TryRemove — index must mirror flat map.
+        var world = new World.World(new InMemoryChunkStorage());
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Air);
+
+        var column = world.GetOverlaysInColumn(0, 0);
+        Assert.Single(column);
+        Assert.Equal(Blocks.Air, column[0].BlockRuntimeId);
+        Assert.Equal(Blocks.Air, world.GetBlock(3, Blocks.FlatSpawnY, 5));
+    }
+
+    [Fact]
     public async Task LevelDb_persists_overlays_across_World_instances()
     {
         var dir = Path.Combine(Path.GetTempPath(), "zenith-ov-" + Guid.NewGuid().ToString("N"));
@@ -97,6 +148,7 @@ public class WorldOverlayTests
                 var storage = new LevelDbChunkStorage(dir);
                 var world = new World.World(storage);
                 world.SetBlock(1, -60, 2, Blocks.Stone);
+                world.SetBlock(20, -60, 2, Blocks.Dirt); // chunk (1,0) — hydrate must rebuild index
                 await world.GetOrCreateColumnAsync(0, 0);
                 storage.Dispose();
             }
@@ -105,8 +157,11 @@ public class WorldOverlayTests
                 using var storage = new LevelDbChunkStorage(dir);
                 var world = new World.World(storage);
                 Assert.Equal(Blocks.Stone, world.GetBlock(1, -60, 2));
+                Assert.Equal(Blocks.Dirt, world.GetBlock(20, -60, 2));
                 var column = await world.GetOrCreateColumnAsync(0, 0);
                 Assert.Contains(column.Overlays, o => o.X == 1 && o.Z == 2 && o.BlockRuntimeId == Blocks.Stone);
+                Assert.DoesNotContain(column.Overlays, o => o.X == 20);
+                Assert.Single(world.GetOverlaysInColumn(1, 0));
             }
         }
         finally
