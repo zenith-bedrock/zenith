@@ -6,19 +6,13 @@ Update this file when a horizon closes (e.g. alpha tagged) or an ADR changes “
 
 ---
 
-## Horizon 0 — Now: close `v0.0.1-alpha`
+## Horizon 0 — Closed: `v0.0.1-alpha`
 
-**Single source of gate checks:** [`alpha-gate.md`](alpha-gate.md).
+Tagged **v0.0.1-alpha** (Jul 2026). `main` and `develop` both at the release tip. Notes: [`release-notes-template.md`](release-notes-template.md) / [GitHub Release](https://github.com/zenith-bedrock/zenith/releases/tag/v0.0.1-alpha). Gate: [`alpha-gate.md`](alpha-gate.md).
 
-### Code vs gate
+**Already shipped on that tag:** LAN spine (login → flat InMemory **or** LevelDB world → place/break → inventory/chests/craft → Creative/Survival → persist → dig crack + void rescue → graceful disconnect). Chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
 
-Product spine is **implemented and smoke-proven** (Jul 2026): baseline MP 1–12, S35–S41, Dokploy compose, leaf tests + benchmarks, hard-kill soft check. See [`alpha-gate.md`](alpha-gate.md).
-
-**What is left for this horizon:** ship the tag — release notes are in [`release-notes-template.md`](release-notes-template.md); CI publishes on `v*` push.
-
-**Already shipped (no longer “parallel leaves to build”):** chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
-
-**Not on this tag** (do not slide into Horizon 0 PRs): sand/gravel gravity, drop-entity wire, death/respawn, tools, double-chest, `/` commands, plugins, biomes. Those are Horizon 1+ or explicit non-goals.
+**Do not slide into post-tag polish as Horizon 0:** sand/gravel gravity, drop-entity wire, death/respawn, tools, double-chest, `/` commands, plugins, biomes — those are Horizon 1+ or explicit non-goals.
 
 ---
 
