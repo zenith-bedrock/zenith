@@ -535,6 +535,13 @@ class InGameSessionHandler : ISessionHandler
         if (Blocks.IsChest(runtimeId))
             runtimeId = ChestFacing.RuntimeIdFromYaw(player.Yaw);
 
+        if (!Blocks.IsPlaceable(runtimeId))
+        {
+            session.Context.Logger.Debug(
+                $"Rejected place: non-placeable runtime {runtimeId} from {player.Username}");
+            return;
+        }
+
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot);
         if (!intent.IsInWorldBounds())

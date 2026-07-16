@@ -88,6 +88,12 @@ sealed class BlockSystem : IGameSystem
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
+            if (!Blocks.IsPlaceable(edit.BlockRuntimeId))
+            {
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                return false;
+            }
+
             if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
             {
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
@@ -248,6 +254,7 @@ sealed class BlockSystem : IGameSystem
             var item = peer.Session.Protocol.Inventory.DescribeStack(deposit.ItemRuntimeId, deposit.Count);
             if (!deposit.Created && deposit.CountChanged)
                 entity.SendRemoveActor(deposit.EntityRuntimeId);
+            if (item.NetworkId == 0) continue; // invalid/air item crashes Bedrock near player
             entity.SendAddItemActor(deposit.EntityRuntimeId, item, px, py, pz);
         }
     }
