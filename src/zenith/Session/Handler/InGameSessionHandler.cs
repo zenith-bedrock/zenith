@@ -90,15 +90,28 @@ class InGameSessionHandler : ISessionHandler
                 HandlePlayerSkin(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.EMOTE_LIST_PACKET:
+                HandleEmote(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
-            case (int)ProtocolInfo.EMOTE_LIST_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
                 return true;
 
             default:
                 return false;
         }
+    }
+
+    private static void HandleEmote(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<EmotePacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        // TODO: set player actor flag
+        // This packet uses Gameplay.Systems-based event to handle the stopping emote signal
     }
 
     private static void HandleInteract(NetworkSession session, ref BinaryStream stream)
