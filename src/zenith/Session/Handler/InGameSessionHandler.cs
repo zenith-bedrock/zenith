@@ -17,7 +17,11 @@ class InGameSessionHandler : ISessionHandler
     public void OnEnable(NetworkSession session)
     {
         if (session.Player is not null)
+        {
             session.Player.IsInGame = true;
+            // Catch-up overlays placed while we were PreSpawn/SpawnResponse (§14).
+            session.Player.Chunks.NeedsOverlayResync = true;
+        }
         session.Context.Logger.Info($"{session.Player?.Username} is now in-game.");
     }
 
@@ -320,32 +324,53 @@ class InGameSessionHandler : ISessionHandler
         if (packet.ItemInteraction is { } useItem)
             HandleUseItemInteraction(session, player, useItem);
 
-        foreach (var action in packet.BlockActions)
+        // AuthInput break order (§27): Abort → Start/Crack → Predict → Continue.
+        // Abort-before-Predict clears cancelled dig; Start-before-Predict fixes cancel+redig
+        // same-packet; Predict-before-Continue keeps chain-break DigAuthorized intact.
+        var actions = packet.BlockActions;
+
+        foreach (var action in actions)
         {
-            switch (action.Action)
+            if (action.Action != PlayerAuthInputPacket.ActionAbortBreak)
+                continue;
+            // Always StopCrack at Abort coords — dig may already be cleared after
+            // DigAuthorized queue. Do not dequeue pending BlockEditIntent.
+            BlockCrackFanout.Stop(
+                session.Context.PlayerManager,
+                session,
+                action.BlockX,
+                action.BlockY,
+                action.BlockZ);
+            player.AbortBreak();
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action is PlayerAuthInputPacket.ActionStartBreak
+                or PlayerAuthInputPacket.ActionCrackBreak)
             {
-                case PlayerAuthInputPacket.ActionStartBreak:
-                case PlayerAuthInputPacket.ActionContinueDestroy:
-                case PlayerAuthInputPacket.ActionCrackBreak:
-                    HandleBreakProgress(
-                        session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
-                    break;
-                case PlayerAuthInputPacket.ActionAbortBreak:
-                    if (player.HasBreakTarget)
-                        BlockCrackFanout.Stop(
-                            session.Context.PlayerManager,
-                            session,
-                            player.BreakTargetX,
-                            player.BreakTargetY,
-                            player.BreakTargetZ);
-                    player.AbortBreak();
-                    break;
-                case PlayerAuthInputPacket.ActionPredictDestroy:
-                case PlayerActionPacket.ActionCreativeDestroy:
-                    session.Context.Logger.Debug(
-                        $"AuthInput break from {player.Username}: action={action.Action} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
-                    TrySubmitBreak(player, action.BlockX, action.BlockY, action.BlockZ);
-                    break;
+                HandleBreakProgress(
+                    session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
+            }
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action is PlayerAuthInputPacket.ActionPredictDestroy
+                or PlayerActionPacket.ActionCreativeDestroy)
+            {
+                session.Context.Logger.Debug(
+                    $"AuthInput break from {player.Username}: action={action.Action} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
+                TrySubmitBreak(player, action.BlockX, action.BlockY, action.BlockZ);
+            }
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action == PlayerAuthInputPacket.ActionContinueDestroy)
+            {
+                HandleBreakProgress(
+                    session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
             }
         }
     }
@@ -562,13 +587,27 @@ class InGameSessionHandler : ISessionHandler
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)
     {
-        var intent = BlockEditIntent.Set(x, y, z, World.World.AirRuntimeId);
+        BlockEditIntent intent;
+        if (player.GameMode != GameMode.Creative &&
+            player.IsBreakTarget(x, y, z) &&
+            player.BreakRequiredTicks > 0)
+        {
+            intent = BlockEditIntent.BreakWithDig(
+                x, y, z, player.BreakStartedTick, player.BreakRequiredTicks);
+            // Clear dig lock only — StopCrack stays for ApplyEdit success (§27).
+            player.ClearBreakTarget();
+        }
+        else
+        {
+            intent = BlockEditIntent.Set(x, y, z, World.World.AirRuntimeId);
+        }
+
         if (!intent.IsInWorldBounds()) return;
         if (!player.SubmitBlockEdit(intent))
             player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
         else
             player.Session.Context.Logger.Debug(
-                $"Break queued from {player.Username} @ {x},{y},{z}");
+                $"Break queued from {player.Username} @ {x},{y},{z} dig={intent.DigAuthorized}");
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch

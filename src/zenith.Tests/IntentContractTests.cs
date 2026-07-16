@@ -112,6 +112,25 @@ public class IntentContractTests
             clock.AdvanceBy(need);
     }
 
+    /// <summary>Queue a Survival break with dig auth frozen into the intent (§27).</summary>
+    private static void QueueReadyBreak(
+        GameClock clock,
+        World.World world,
+        Player.Player player,
+        int x,
+        int y,
+        int z)
+    {
+        BeginBreakReady(clock, world, player, x, y, z);
+        var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
+        var intent = need > 0
+            ? BlockEditIntent.BreakWithDig(x, y, z, player.BreakStartedTick, player.BreakRequiredTicks)
+            : BlockEditIntent.Set(x, y, z, Blocks.Air);
+        if (need > 0)
+            player.ClearBreakTarget();
+        Assert.True(player.SubmitBlockEdit(intent));
+    }
+
     [Fact]
     public void MovementSystem_void_soft_rescue_teleports_to_world_spawn()
     {
@@ -230,8 +249,7 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
-        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
@@ -249,8 +267,7 @@ public class IntentContractTests
             Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
-        BeginBreakReady(fx.Clock, fx.World, player, 0, 90, 0);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
@@ -267,6 +284,148 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_break_survives_dig_retarget_before_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chainbreak");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        fx.World.SetBlock(1, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+
+        // Simulate Continue on next cell before GameLoop drains the queue (§27).
+        player.BeginBreak(1, 90, 0, fx.Clock.CurrentTick, need);
+        Assert.True(player.IsBreakTarget(1, 90, 0));
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(1, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_abort_then_stale_predict_rejects_then_redig_breaks()
+    {
+        // Mirrors cancel+redig: Abort clears dig; Predict without DigAuthorized rejects;
+        // Start + DigAuthorized on the next attempt succeeds (§27 AuthInput order).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("cancelredig");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need / 2);
+        player.AbortBreak();
+        Assert.False(player.HasBreakTarget);
+
+        // Stale Predict after Abort (no dig auth) — first "retry" that used to feel broken.
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+
+        // Proper redig: Start then DigAuthorized Predict.
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_same_cell_two_digs_first_writer_wins_loot()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("alice");
+        var b = fx.AddInGamePlayer("bob");
+        StandNear(a, 0, 90, 0);
+        StandNear(b, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        var start = fx.Clock.CurrentTick;
+        fx.Clock.AdvanceBy(need);
+
+        Assert.True(a.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
+        Assert.True(b.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
+
+        var beforeA = CountRuntime(a.Inventory, Blocks.Dirt);
+        var beforeB = CountRuntime(b.Inventory, Blocks.Dirt);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        var gainedA = CountRuntime(a.Inventory, Blocks.Dirt) - beforeA;
+        var gainedB = CountRuntime(b.Inventory, Blocks.Dirt) - beforeB;
+        Assert.Equal(1, gainedA + gainedB);
+        Assert.True(gainedA == 1 ^ gainedB == 1);
+    }
+
+    [Fact]
+    public void BlockSystem_fans_UpdateBlock_to_joiner_who_Knows_column()
+    {
+        var fx = new IntentTestFixture();
+        var placer = fx.AddInGamePlayer("placer");
+        var joiner = fx.AddInGamePlayer("joiner");
+        joiner.IsInGame = false;
+        joiner.Chunks.RememberMany([(0, 0)]);
+        StandNear(placer, 2, 64, 2);
+        Assert.True(placer.Inventory.TrySet(0, Blocks.Stone, 5));
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        Assert.True(placer.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(2, 64, 2));
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "joiner with Knows(0,0) must receive UpdateBlock while !IsInGame");
+    }
+
+    [Fact]
+    public void ChunkStreamSystem_overlay_resync_on_NeedsOverlayResync()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("resync");
+        player.Chunks.Radius = 1;
+        player.Chunks.RememberMany([(0, 0)]);
+        fx.World.SetBlock(3, 64, 3, Blocks.OakPlanks);
+        player.Chunks.NeedsOverlayResync = true;
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        new ChunkStreamSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.False(player.Chunks.NeedsOverlayResync);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "NeedsOverlayResync must emit UpdateBlock for known-column overlays");
+    }
+
+    private static int CountRuntime(PlayerInventory inv, int runtimeId)
+    {
+        var n = 0;
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+        {
+            var s = inv.Get(i);
+            if (s.RuntimeId == runtimeId)
+                n += s.Count;
+        }
+        return n;
     }
 
     [Fact]
@@ -553,8 +712,7 @@ public class IntentContractTests
         // Starter kit already has chests in hotbar slot 5 — merge target.
         var before = player.Inventory.Get(5).Count;
 
-        BeginBreakReady(fx.Clock, fx.World, player, 5, 64, 5);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 5, 64, 5);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));

@@ -6,7 +6,7 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
-/// Break timing (§27): exige progresso AuthInput when BreakTicks &gt; 0.
+/// Break timing (§27): dig auth snapshotted on the intent when BreakTicks &gt; 0.
 /// Floor drops (§26): se TryAdd falha, bloco quebra e cai em <see cref="FloorDropStore"/>.
 /// </summary>
 sealed class BlockSystem : IGameSystem
@@ -37,10 +37,30 @@ sealed class BlockSystem : IGameSystem
 
         if (updates.Count > 0)
         {
+            List<(int X, int Y, int Z, int BlockRuntimeId)>? joinerSubset = null;
             foreach (var peer in online)
             {
-                if (!peer.IsInGame) continue;
-                peer.Session.Protocol.World.PublishUpdateBlocks(updates);
+                // InGame peers always; joiners who already Know the column get live
+                // UpdateBlock during PreSpawn/SpawnResponse (§14).
+                if (peer.IsInGame)
+                {
+                    peer.Session.Protocol.World.PublishUpdateBlocks(updates);
+                    continue;
+                }
+
+                joinerSubset ??= new List<(int X, int Y, int Z, int BlockRuntimeId)>(updates.Count);
+                joinerSubset.Clear();
+                for (var i = 0; i < updates.Count; i++)
+                {
+                    var u = updates[i];
+                    var cx = PlayerChunkTracker.BlockToChunk(u.X);
+                    var cz = PlayerChunkTracker.BlockToChunk(u.Z);
+                    if (peer.Chunks.Knows(cx, cz))
+                        joinerSubset.Add(u);
+                }
+
+                if (joinerSubset.Count > 0)
+                    peer.Session.Protocol.World.PublishUpdateBlocks(joinerSubset);
             }
         }
 
@@ -54,20 +74,29 @@ sealed class BlockSystem : IGameSystem
             return false;
 
         if (!IsWithinReach(player, edit.X, edit.Y, edit.Z))
+        {
+            ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
             return false;
+        }
 
         var creative = player.GameMode == GameMode.Creative;
         var inventoryChanged = false;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
             if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
+            {
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
+            }
 
             if (!creative)
             {
                 var slot = edit.HotbarSlot;
                 if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
+                {
+                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                     return false;
+                }
                 inventoryChanged = true;
             }
         }
@@ -75,42 +104,43 @@ sealed class BlockSystem : IGameSystem
         {
             var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
             if (previous == World.World.AirRuntimeId)
+            {
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
+            }
 
             if (!creative)
             {
-                var need = player.HasBreakTarget && player.IsBreakTarget(edit.X, edit.Y, edit.Z)
-                    ? player.BreakRequiredTicks
+                var need = edit.DigAuthorized
+                    ? edit.DigRequiredTicks
                     : Blocks.BreakTicks(previous);
                 if (need > 0)
                 {
-                    if (!player.HasBreakTarget || !player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                    if (!edit.DigAuthorized)
                     {
                         player.Session.Context.Logger.Debug(
-                            $"Break rejected (no/wrong start_break) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                            $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                        ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                         return false;
                     }
 
-                    var elapsed = clock.CurrentTick >= player.BreakStartedTick
-                        ? clock.CurrentTick - player.BreakStartedTick
+                    var elapsed = clock.CurrentTick >= edit.DigStartedTick
+                        ? clock.CurrentTick - edit.DigStartedTick
                         : 0;
                     if (elapsed < (ulong)need)
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
+                        ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                         return false;
                     }
                 }
             }
 
-            if (player.HasBreakTarget)
-                BlockCrackFanout.Stop(
-                    _players,
-                    player.Session,
-                    player.BreakTargetX,
-                    player.BreakTargetY,
-                    player.BreakTargetZ);
-            player.AbortBreak();
+            // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
+            BlockCrackFanout.Stop(_players, player.Session, edit.X, edit.Y, edit.Z);
+            if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                player.AbortBreak();
 
             var wasChest = Blocks.IsChest(previous);
             if (wasChest)
@@ -165,6 +195,13 @@ sealed class BlockSystem : IGameSystem
         }
 
         return true;
+    }
+
+    /// <summary>Self UpdateBlock with server truth — kills client ghost after reject (§27).</summary>
+    private void ResyncCellToBreaker(global::Zenith.Player.Player player, int x, int y, int z)
+    {
+        if (!player.IsInGame) return;
+        player.Session.Protocol.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
     }
 
     private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)

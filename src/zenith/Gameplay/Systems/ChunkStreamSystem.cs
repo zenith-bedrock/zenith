@@ -18,6 +18,7 @@ sealed class ChunkStreamSystem : IGameSystem
 
     private readonly PlayerManager _players;
     private readonly World.World _world;
+    private readonly List<(int X, int Z)> _knownScratch = new();
 
     public ChunkStreamSystem(PlayerManager players, World.World world)
     {
@@ -35,6 +36,13 @@ sealed class ChunkStreamSystem : IGameSystem
             if (!player.IsInGame) continue;
             var radius = player.Chunks.Radius;
             if (radius < 0) continue;
+
+            if (player.Chunks.NeedsOverlayResync)
+            {
+                player.Chunks.CopyKnown(_knownScratch);
+                ColumnSend.EmitOverlaysToSession(player.Session, _world, _knownScratch);
+                player.Chunks.NeedsOverlayResync = false;
+            }
 
             var cx = PlayerChunkTracker.BlockToChunk(player.PositionX);
             var cz = PlayerChunkTracker.BlockToChunk(player.PositionZ);

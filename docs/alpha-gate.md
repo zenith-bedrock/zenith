@@ -38,12 +38,13 @@ docker compose up --build
 
 ## Manual smoke (see ARCHITECTURE.md)
 
-- [ ] Baseline MP 1–12 + **S41** (peer sees crack) — ainda pendente
+- [ ] Baseline MP 1–12
 - [x] **S37** Creative fly / Survival no MayFly
 - [x] **S38** Creative palette → cursor / SHIFT → bag (fix CreatedOutput+Place)
 - [x] **S39** / **S39b** LevelDB bag+chest persist (graceful + quit)
 - [x] **S40** void → spawn snap, health 20
-- [ ] **S35** Survival 2×2 craft — **parcial** (cadeia planks→chest take do 2º resultado)
+- [x] **S35** Survival 2×2 craft (cadeia planks→chest OK)
+- [x] **S41** peer sees crack / limpa
 - [ ] Overlay: place 100 blocks → **graceful** restart → blocks intact (< 10k warn threshold)
 - [ ] Crash soft check (optional): place blocks → brief pause → `kill -9` → restart → LevelDB `CURRENT` world/overlays that already hit WAL may survive; **do not** require recent `inv:`/`ct:` intact — Puts are fire-and-forget until `FlushAsync` on graceful shutdown (§39 / §41)
 
