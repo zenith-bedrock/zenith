@@ -32,7 +32,7 @@ sealed class ShapelessCraftingRecipe
 
         writer.WriteUnsignedVarInt(Outputs.Length);
         foreach (var output in Outputs)
-            output.WriteItem(ref writer);
+            output.WriteItemStack(ref writer);
 
         writer.WriteUuid(Guid.Empty);
         writer.WriteVarString(Block);

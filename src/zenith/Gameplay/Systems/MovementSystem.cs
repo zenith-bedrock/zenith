@@ -151,5 +151,9 @@ sealed class MovementSystem : IGameSystem
             yaw: player.Yaw,
             headYaw: player.HeadYaw);
         entity.SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateReadyToSpawn, rid);
+
+        // Client clears bag UI on death — resync like join (SpawnResponse).
+        player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+        player.Session.Protocol.Inventory.SendUiInventoryContent(player);
     }
 }

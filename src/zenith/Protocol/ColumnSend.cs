@@ -62,6 +62,7 @@ static class ColumnSend
             if (entityId == 0) continue;
 
             var item = session.Protocol.Inventory.DescribeStack(itemRid, count);
+            if (item.NetworkId == 0) continue; // invalid/air — do not spawn AddItemActor
             session.Protocol.Entity.SendAddItemActor(
                 entityId,
                 item,

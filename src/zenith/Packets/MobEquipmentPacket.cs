@@ -20,7 +20,7 @@ sealed class MobEquipmentPacket : DataPacket
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
         writer.WriteUnsignedVarLong(ActorRuntimeId);
-        Item.Write(ref writer);
+        Item.WriteNetworkItemStackDescriptor(ref writer);
         writer.WriteByte((byte)InventorySlot);
         writer.WriteByte((byte)HotbarSlot);
         writer.WriteByte((byte)WindowId);
