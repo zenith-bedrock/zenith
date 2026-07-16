@@ -47,6 +47,10 @@ class InGameSessionHandler : ISessionHandler
                 HandlePlayerAction(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.RESPAWN_PACKET:
+                HandleRespawn(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET:
                 HandleInventoryTransaction(session, ref stream);
                 return true;
@@ -131,6 +135,12 @@ class InGameSessionHandler : ISessionHandler
         var packet = DataPacket.From<ItemStackRequestPacket>(ref stream);
         var player = session.Player;
         if (player is null) return;
+        if (player.IsDead)
+        {
+            foreach (var request in packet.Requests)
+                RejectIsr(session, player, request.RequestId);
+            return;
+        }
 
         foreach (var request in packet.Requests)
         {
@@ -310,6 +320,20 @@ class InGameSessionHandler : ISessionHandler
         var player = session.Player;
         if (player is null) return;
 
+        // Death screen: still submit pose so MovementSystem can drain; ignore dig/use.
+        if (player.IsDead)
+        {
+            var deadInput = MovementInputState.From(
+                packet.PositionX,
+                packet.PositionY,
+                packet.PositionZ,
+                packet.Pitch,
+                packet.Yaw);
+            if (deadInput.IsSecure())
+                player.SubmitMovementInput(deadInput);
+            return;
+        }
+
         var input = MovementInputState.From(
             packet.PositionX,
             packet.PositionY,
@@ -385,6 +409,15 @@ class InGameSessionHandler : ISessionHandler
         var player = session.Player;
         if (player is null) return;
 
+        if (packet.Action == PlayerActionPacket.ActionRespawn)
+        {
+            if (player.IsDead)
+                player.SubmitRespawn();
+            return;
+        }
+
+        if (player.IsDead) return;
+
         if (packet.Action is not (PlayerActionPacket.ActionCreativeDestroy or PlayerActionPacket.ActionPredictDestroy))
         {
             if (packet.Action is not (PlayerActionPacket.ActionStartItemUseOn or PlayerActionPacket.ActionStopItemUseOn))
@@ -400,11 +433,23 @@ class InGameSessionHandler : ISessionHandler
         TrySubmitBreak(player, packet.BlockX, packet.BlockY, packet.BlockZ);
     }
 
+    private static void HandleRespawn(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<RespawnPacket>(ref stream);
+        var player = session.Player;
+        if (player is null || !player.IsDead) return;
+
+        if (packet.State != RespawnPacket.StateClientReadyToSpawn)
+            return;
+
+        player.SubmitRespawn();
+    }
+
     private static void HandleInventoryTransaction(NetworkSession session, ref BinaryStream stream)
     {
         var packet = DataPacket.From<InventoryTransactionPacket>(ref stream);
         var player = session.Player;
-        if (player is null) return;
+        if (player is null || player.IsDead) return;
 
         // TypeNormal does not populate UseActionType/HotbarSlot yet — do not mutate hotbar (ADR §17).
         switch (packet.TransactionType)
@@ -630,6 +675,8 @@ class InGameSessionHandler : ISessionHandler
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)
     {
+        if (player.IsDead) return;
+
         BlockEditIntent intent;
         if (player.GameMode != GameMode.Creative &&
             player.IsBreakTarget(x, y, z) &&

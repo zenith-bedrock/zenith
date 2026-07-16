@@ -23,7 +23,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | Order | Leaf | Notes |
 |------:|------|--------|
 | 1 | **Drop-entity wire** (minimal) | **Shipped** (Jul 2026): `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
-| 2 | **Death / Respawn** | Soft void rescue is not death. Needs packets + clear softlock rules (§40 Deferred). |
+| 2 | **Death / Respawn** | **Shipped** (Jul 2026): void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
 | 3 | **`/gamemode` minimal** | One command path, config-backed modes you already have — **not** a command framework or autocomplete stack ([`dx.md`](dx.md) freeze). ADR first. |
 | 4 | **Tool dig speed / efficiency** | Extends §27; still no enchants catalogue dump. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | Facing-only (§46) does not unlock this; pair model + store (§28/§39). |

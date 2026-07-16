@@ -34,7 +34,10 @@ sealed class InventorySystem : IGameSystem
         foreach (var player in _players.Online)
         {
             while (player.TryConsumeInventoryStack(out var intent))
+            {
+                if (player.IsDead) continue;
                 Apply(player, intent);
+            }
         }
     }
 

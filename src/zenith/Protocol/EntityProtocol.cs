@@ -202,6 +202,29 @@ sealed class EntityProtocol
         _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(actorRuntimeId, health, hunger));
     }
 
+    /// <summary>Death screen cause (DeathInfo 0xbd).</summary>
+    public void SendDeathInfo(string cause, params string[] messages)
+    {
+        _session.SendDataPacket(new DeathInfoPacket
+        {
+            Cause = cause,
+            Messages = messages
+        });
+    }
+
+    /// <summary>Respawn handshake state (0x2d). Position is eye-space like StartGame.</summary>
+    public void SendRespawn(float eyeX, float eyeY, float eyeZ, byte state, ulong entityRuntimeId)
+    {
+        _session.SendDataPacket(new RespawnPacket
+        {
+            PositionX = eyeX,
+            PositionY = eyeY,
+            PositionZ = eyeZ,
+            State = state,
+            EntityRuntimeId = entityRuntimeId
+        });
+    }
+
     /// <summary>Local UpdateAbilities seed / RequestAbility echo — runtime id = unique id (§37).</summary>
     public void SendLocalAbilities(long uniqueId, int wireGameMode, bool flying = true)
     {

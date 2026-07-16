@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Runtime;
+using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
@@ -7,11 +8,11 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="MovementInputState"/> no tick e replica pose aos peers quando dirty (ADR §44).
-/// Void soft-rescue (ADR §40): teleport to world spawn (0, FlatSpawnY, 0) without death/Respawn wire.
+/// Void below threshold → death/Respawn handshake (ADR §40); soft-rescue retired.
 /// </summary>
 sealed class MovementSystem : IGameSystem
 {
-    /// <summary>Y below FlatMinY - margin triggers soft-rescue to FlatSpawnY.</summary>
+    /// <summary>Y below FlatMinY - margin triggers death (was soft-rescue before §40 adendo).</summary>
     public const float VoidRescueMargin = 8f;
 
     private readonly PlayerManager _players;
@@ -32,6 +33,19 @@ sealed class MovementSystem : IGameSystem
 
         foreach (var player in online)
         {
+            if (player.IsDead)
+            {
+                // Drain stale AuthInput while on death screen; do not apply pose.
+                _ = player.TryConsumeMovementInput(out _);
+                if (player.TryConsumeRespawn())
+                {
+                    ApplyRespawn(player);
+                    if (IsPoseDirty(player))
+                        _dirty.Add(player);
+                }
+                continue;
+            }
+
             if (!player.TryConsumeMovementInput(out var input)) continue;
 
             player.PositionX = input.X;
@@ -42,7 +56,7 @@ sealed class MovementSystem : IGameSystem
             player.HeadYaw = input.Yaw;
 
             if (player.PositionY < VoidRescueY)
-                SoftRescueFromVoid(player);
+                BeginVoidDeath(player);
 
             if (!IsPoseDirty(player))
                 continue;
@@ -97,20 +111,45 @@ sealed class MovementSystem : IGameSystem
         player.LastReplicatedHeadYaw = player.HeadYaw;
     }
 
-    private static void SoftRescueFromVoid(global::Zenith.Player.Player player)
+    /// <summary>Void fall → death screen (inventory kept). Respawn restores world spawn.</summary>
+    private static void BeginVoidDeath(global::Zenith.Player.Player player)
     {
-        // World spawn (same as PreSpawn), not same-XZ — dig shaft must not re-void (§40).
+        if (!player.BeginDeath("generic")) return;
+
+        var entity = player.Session.Protocol.Entity;
+        var rid = (ulong)player.RuntimeId;
+        var eyeX = player.PositionX;
+        var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
+        var eyeZ = player.PositionZ;
+
+        entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+        entity.SendDeathInfo(player.DeathCause);
+        entity.SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateSearchingForSpawn, rid);
+    }
+
+    private static void ApplyRespawn(global::Zenith.Player.Player player)
+    {
         player.PositionX = 0f;
         player.PositionY = Blocks.FlatSpawnY;
         player.PositionZ = 0f;
-        player.Pitch = 0;
-        player.Session.Protocol.Entity.SendMovePlayerTeleport(
-            entityRuntimeId: (ulong)player.RuntimeId,
+        player.Pitch = 0f;
+        player.CompleteRespawn();
+
+        var entity = player.Session.Protocol.Entity;
+        var rid = (ulong)player.RuntimeId;
+        var eyeX = player.PositionX;
+        var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
+        var eyeZ = player.PositionZ;
+
+        entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+        entity.SendMovePlayerTeleport(
+            entityRuntimeId: rid,
             x: player.PositionX,
             y: player.PositionY,
             z: player.PositionZ,
             pitch: player.Pitch,
             yaw: player.Yaw,
             headYaw: player.HeadYaw);
+        entity.SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateReadyToSpawn, rid);
     }
 }
