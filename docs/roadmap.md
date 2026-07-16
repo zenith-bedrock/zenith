@@ -6,26 +6,13 @@ Update this file when a horizon closes (e.g. alpha tagged) or an ADR changes “
 
 ---
 
-## Horizon 0 — Now: close `v0.0.1-alpha`
+## Horizon 0 — Closed: `v0.0.1-alpha`
 
-**Single source of gate checks:** [`alpha-gate.md`](alpha-gate.md).
+Tagged **v0.0.1-alpha** (Jul 2026). `main` and `develop` both at the release tip. Notes: [`release-notes-template.md`](release-notes-template.md) / [GitHub Release](https://github.com/zenith-bedrock/zenith/releases/tag/v0.0.1-alpha). Gate: [`alpha-gate.md`](alpha-gate.md).
 
-### Code vs gate
+**Already shipped on that tag:** LAN spine (login → flat InMemory **or** LevelDB world → place/break → inventory/chests/craft → Creative/Survival → persist → dig crack + void rescue → graceful disconnect). Chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
 
-Product spine from the gate is **implemented in-repo** (login → flat + overlay → inventory/chests/craft → LevelDB persist → dig crack + void rescue → `ProductVersion`). ADRs §17–§42 / §46–§48 + leaf tests cover the tree. Gate checkboxes stay **unchecked** until humans finish client smoke + compose + tag — do not tick them from CI alone.
-
-**What is left for this horizon (not new features):**
-
-| Remaining | Why |
-|-----------|-----|
-| Manual MP smokes (1–12 + S35–S41) | Two Bedrock clients; mobile MTU still worth a pass |
-| `dotnet test` + compose proof | Sample `deploy/zenith.yml` must be present; LevelDB under `./deploy/worlds/...` |
-| Bugfixes / ops polish that block the tag | Protocol mismatch UX, reconnect edge cases, etc. |
-| Release notes + `git tag v0.0.1-alpha` | See gate “Tag & publish” |
-
-**Already shipped (no longer “parallel leaves to build”):** chest facing (§46), MOTD/session hygiene (§47), ordered fragment reassembly (raknet), folder layout (§48).
-
-**Not on this tag** (do not slide into Horizon 0 PRs): sand/gravel gravity, drop-entity wire, death/respawn, tools, double-chest, `/` commands, plugins, biomes. Those are Horizon 1+ or explicit non-goals.
+**Do not slide into post-tag polish as Horizon 0:** sand/gravel gravity, drop-entity wire, death/respawn, tools, double-chest, `/` commands, plugins, biomes — those are Horizon 1+ or explicit non-goals.
 
 ---
 

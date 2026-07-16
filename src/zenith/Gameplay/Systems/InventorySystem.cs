@@ -8,7 +8,8 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="InventoryStackIntent"/> no tick e responde ItemStackResponse (same-session).
-/// Slots flat ≥ <see cref="InventoryContainerMap.ChestBase"/> → <see cref="ChestStore"/> do OpenChest.
+/// Slots flat ≥ <see cref="InventoryContainerMap.ChestBase"/> → chest;
+/// craft UI flats → <see cref="PlayerCraftUi"/>.
 /// </summary>
 sealed class InventorySystem : IGameSystem
 {
@@ -40,98 +41,138 @@ sealed class InventorySystem : IGameSystem
     private void Apply(global::Zenith.Player.Player player, in InventoryStackIntent intent)
     {
         var protocol = player.Session.Protocol.Inventory;
-
-        if (intent.CraftCreativeNetId is { } creativeId)
-        {
-            if (!_creative.TryGet(creativeId, out var runtimeId, out var baseCount) ||
-                intent.CraftCreativeTimes == 0)
-            {
-                protocol.SendItemStackResponseError(intent.RequestId);
-                protocol.SendInventoryContent(player.Inventory);
-                return;
-            }
-
-            var count = Math.Min(PlayerInventory.MaxStack, baseCount * intent.CraftCreativeTimes);
-            if (!player.Inventory.TryAdd(runtimeId, count))
-            {
-                protocol.SendItemStackResponseError(intent.RequestId);
-                protocol.SendInventoryContent(player.Inventory);
-                return;
-            }
-
-            protocol.SendItemStackResponseOk(intent.RequestId, player, []);
-            protocol.SendInventoryContent(player.Inventory);
-            _world.PersistInventory(player.Uuid, player.Inventory);
-            return;
-        }
-
-        if (intent.CraftRecipeNetId is { } recipeId)
-        {
-            if (!_recipes.TryCraft(player.Inventory, recipeId))
-            {
-                protocol.SendItemStackResponseError(intent.RequestId);
-                protocol.SendInventoryContent(player.Inventory);
-                return;
-            }
-
-            protocol.SendItemStackResponseOk(intent.RequestId, player, []);
-            protocol.SendInventoryContent(player.Inventory);
-            _world.PersistInventory(player.Uuid, player.Inventory);
-            return;
-        }
-
         var inventory = player.Inventory;
         var invSnap = inventory.CaptureSnapshot();
+        var craftSnap = player.CraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
         (int X, int Y, int Z)? chestPos = player.OpenChest;
         if (chestPos is { } pos)
             chestSnap = _world.Chests.CaptureSnapshot(pos.X, pos.Y, pos.Z);
 
-        var touched = new List<int>();
+        var wireTouches = new List<WireTouch>();
         var ok = true;
 
         foreach (var action in intent.Actions)
         {
-            if (action.Kind == InventoryStackActionKind.Swap)
+            switch (action.Kind)
             {
-                if (!TrySwap(player, action.From, action.To))
+                case InventoryStackActionKind.CraftRecipe:
+                    // DF: materialize CreatedOutput so same-request Take works; refuse if prior result untaken.
+                    if (!GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty ||
+                        !_recipes.TryCraftFromGrid(player.CraftUi, action.RecipeNetId, out var crafted, action.CraftTimes) ||
+                        !TrySetSlot(player, InventoryContainerMap.CraftResultFlat, crafted))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    for (var g = 0; g < PlayerCraftUi.GridSize; g++)
+                    {
+                        var flat = InventoryContainerMap.CraftUiBase + g;
+                        AddWireTouch(wireTouches, flat,
+                            InventoryContainerMap.CraftingInput,
+                            InventoryContainerMap.CraftGridWireSlot(g));
+                    }
+
+                    AddWireTouch(wireTouches, InventoryContainerMap.CraftResultFlat,
+                        InventoryContainerMap.CreatedOutput,
+                        InventoryContainerMap.CraftingResultWireSlot);
+                    break;
+
+                case InventoryStackActionKind.CraftCreative:
+                    // DF: MaxStack → CreatedOutput; same-request Place/Take/Drop moves it.
+                    if (player.GameMode != GameMode.Creative ||
+                        !_creative.TryGet(action.CreativeNetId, out var creativeRid, out _) ||
+                        !TrySetSlot(player, InventoryContainerMap.CraftResultFlat,
+                            new InventorySlot(creativeRid, PlayerInventory.MaxStack)))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, InventoryContainerMap.CraftResultFlat,
+                        InventoryContainerMap.CreatedOutput,
+                        InventoryContainerMap.CraftingResultWireSlot);
+                    break;
+
+                case InventoryStackActionKind.Create:
+                    // Idempotent ack after CraftRecipe/CraftCreative wrote CraftResultFlat (PM skips 60 in OK).
+                    if (GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty)
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    break;
+
+                case InventoryStackActionKind.NoOp:
+                    break;
+
+                case InventoryStackActionKind.Swap:
+                    if (!TrySwap(player, action.From, action.To))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, action.From, action.FromWire);
+                    AddWireTouch(wireTouches, action.To, action.ToWire);
+                    break;
+
+                case InventoryStackActionKind.Drop:
                 {
-                    ok = false;
+                    var count = action.Count;
+                    if (count == 0)
+                        count = GetSlot(player, action.From).Count;
+                    if (!TryDrop(player, action.From, count))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, action.From, action.FromWire);
                     break;
                 }
 
-                AddTouched(touched, action.From);
-                AddTouched(touched, action.To);
-            }
-            else
-            {
-                var count = action.Count;
-                if (count == 0)
-                    count = GetSlot(player, action.From).Count;
-                if (!TryTransfer(player, action.From, action.To, count))
+                default:
                 {
-                    ok = false;
+                    var count = action.Count;
+                    if (count == 0)
+                        count = GetSlot(player, action.From).Count;
+                    if (!TryTransfer(player, action.From, action.To, count))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, action.From, action.FromWire);
+                    AddWireTouch(wireTouches, action.To, action.ToWire);
                     break;
                 }
-
-                AddTouched(touched, action.From);
-                AddTouched(touched, action.To);
             }
+
+            if (!ok) break;
         }
 
         if (!ok)
         {
             inventory.RestoreSnapshot(invSnap);
+            player.CraftUi.RestoreSnapshot(craftSnap);
             if (chestPos is { } cp && chestSnap is not null && chestSnap.Length == ChestStore.Size)
                 _world.Chests.RestoreSnapshot(cp.X, cp.Y, cp.Z, chestSnap);
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
+            protocol.SendUiInventoryContent(player);
             if (chestPos is { } open)
                 protocol.SendChestContent(_world.Chests, open.X, open.Y, open.Z);
             return;
         }
 
-        protocol.SendItemStackResponseOk(intent.RequestId, player, touched);
+        protocol.SendItemStackResponseOk(intent.RequestId, player, wireTouches);
+        if (player.InventoryWindowOpen)
+            protocol.SendUiInventoryContent(player);
+        if (chestPos is { } openAfter)
+            protocol.SendChestContent(_world.Chests, openAfter.X, openAfter.Y, openAfter.Z);
         _world.PersistInventory(player.Uuid, inventory);
         if (chestPos is { } openChest)
             _world.PersistChest(openChest.X, openChest.Y, openChest.Z);
@@ -145,6 +186,12 @@ sealed class InventorySystem : IGameSystem
             return _world.Chests.Get(pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase);
         }
 
+        if (InventoryContainerMap.IsCraftGridFlat(flat))
+            return player.CraftUi.GetGrid(flat - InventoryContainerMap.CraftUiBase);
+
+        if (flat == InventoryContainerMap.CraftResultFlat)
+            return player.CraftUi.Result;
+
         return player.Inventory.Get(flat);
     }
 
@@ -155,6 +202,12 @@ sealed class InventorySystem : IGameSystem
             if (player.OpenChest is not { } pos) return false;
             return _world.Chests.TrySet(pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase, value);
         }
+
+        if (InventoryContainerMap.IsCraftGridFlat(flat))
+            return player.CraftUi.TrySetGrid(flat - InventoryContainerMap.CraftUiBase, value);
+
+        if (flat == InventoryContainerMap.CraftResultFlat)
+            return player.CraftUi.TrySetResult(value);
 
         return player.Inventory.TrySet(flat, value.RuntimeId, value.IsEmpty ? 0 : value.Count);
     }
@@ -183,6 +236,18 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
+    private bool TryDrop(global::Zenith.Player.Player player, int from, int count)
+    {
+        if (!IsValidFlat(player, from)) return false;
+        if (count <= 0 || !PlayerInventory.IsValidStackCount(count)) return false;
+
+        var src = GetSlot(player, from);
+        if (src.IsEmpty || count > src.Count) return false;
+
+        var left = src.Count - count;
+        return TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left });
+    }
+
     private bool TrySwap(global::Zenith.Player.Player player, int a, int b)
     {
         if (a == b) return false;
@@ -199,12 +264,27 @@ sealed class InventorySystem : IGameSystem
     {
         if (InventoryContainerMap.IsChestFlat(flat))
             return player.OpenChest.HasValue;
+        if (InventoryContainerMap.IsCraftUiFlat(flat))
+            return true;
         return PlayerInventory.IsValidLocation(flat);
     }
 
-    private static void AddTouched(List<int> touched, int flat)
+    private static void AddWireTouch(List<WireTouch> touches, int flat, WireSlot wire)
     {
-        if (!touched.Contains(flat))
-            touched.Add(flat);
+        if (wire.ContainerId == 0 && InventoryContainerMap.TryToWire(flat, out var c, out var s))
+            AddWireTouch(touches, flat, c, s);
+        else
+            AddWireTouch(touches, flat, wire.ContainerId, wire.Slot);
+    }
+
+    private static void AddWireTouch(List<WireTouch> touches, int flat, byte containerId, byte slot)
+    {
+        foreach (var t in touches)
+        {
+            if (t.Flat == flat && t.ContainerId == containerId && t.Slot == slot)
+                return;
+        }
+
+        touches.Add(new WireTouch(flat, containerId, slot));
     }
 }

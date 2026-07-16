@@ -1,0 +1,9 @@
+{
+  "yaml.schemas": {
+    "./schemas/zenith.schema.json": [
+      "zenith.yml",
+      "**/zenith.yml",
+      "deploy/zenith.yml"
+    ]
+  }
+}

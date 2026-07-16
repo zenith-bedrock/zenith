@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading;
 using Zenith.Raknet.Log;
 
@@ -7,6 +8,7 @@ namespace Zenith.World;
 /// Mundo: colunas base via <see cref="IChunkStorage"/> + overlay esparso permanente.
 /// Overlay warn-once at threshold (ADR §36) — sem refuse/eviction nesta leva.
 /// Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
+/// Column index (§36 adendo): <see cref="GetOverlaysInColumn"/> O(bucket), not O(all overlays).
 /// </summary>
 sealed class World
 {
@@ -18,7 +20,12 @@ sealed class World
     private readonly IChunkStorage _storage;
     private readonly byte[] _flatOverworldPayload;
     private readonly int _flatSubChunkCount;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
+    private readonly ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
+    /// <summary>
+    /// Secondary index by chunk for column stream. SSOT for GetBlock remains <see cref="_blockOverrides"/>;
+    /// both updated only via <see cref="StoreOverlay"/> (no drift).
+    /// </summary>
+    private readonly ConcurrentDictionary<(int Cx, int Cz), ConcurrentDictionary<(int X, int Y, int Z), int>> _overlaysByChunk = new();
     private readonly ILogger? _logger;
     private int _overrideWarned;
 
@@ -34,7 +41,7 @@ sealed class World
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
         (_flatSubChunkCount, _flatOverworldPayload) = ChunkPayloads.BuildFlatOverworld();
-        storage.ForEachOverlayAsync((x, y, z, id) => _blockOverrides[(x, y, z)] = id)
+        storage.ForEachOverlayAsync(StoreOverlay)
             .AsTask()
             .GetAwaiter()
             .GetResult();
@@ -118,7 +125,7 @@ sealed class World
     /// </summary>
     public void SetBlock(int x, int y, int z, int blockRuntimeId)
     {
-        _blockOverrides[(x, y, z)] = blockRuntimeId;
+        StoreOverlay(x, y, z, blockRuntimeId);
         _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
 
         if (_blockOverrides.Count >= OverrideWarnThreshold &&
@@ -128,6 +135,19 @@ sealed class World
                 $"World overlays crossed OverrideWarnThreshold ({OverrideWarnThreshold}). " +
                 "No refuse/eviction — persistence redesign needed; continuing unbounded.");
         }
+    }
+
+    /// <summary>
+    /// Single write path for flat map + chunk index (SetBlock + LevelDB hydrate).
+    /// Break → air overwrites in place (no TryRemove) — same as pre-index behavior.
+    /// </summary>
+    private void StoreOverlay(int x, int y, int z, int blockRuntimeId)
+    {
+        var cell = (x, y, z);
+        _blockOverrides[cell] = blockRuntimeId;
+        var chunk = (ToChunk(x), ToChunk(z));
+        var bucket = _overlaysByChunk.GetOrAdd(chunk, static _ => new ConcurrentDictionary<(int X, int Y, int Z), int>());
+        bucket[cell] = blockRuntimeId;
     }
 
     /// <summary>Overlay se existir; senão amostra do terreno base flat.</summary>
@@ -140,16 +160,17 @@ sealed class World
 
     public IReadOnlyList<BlockOverride> GetOverlaysInColumn(int chunkX, int chunkZ)
     {
-        List<BlockOverride>? list = null;
-        foreach (var kv in _blockOverrides)
+        if (!_overlaysByChunk.TryGetValue((chunkX, chunkZ), out var bucket) || bucket.IsEmpty)
+            return Array.Empty<BlockOverride>();
+
+        var list = new List<BlockOverride>(bucket.Count);
+        foreach (var kv in bucket)
         {
             var (bx, by, bz) = kv.Key;
-            if (ToChunk(bx) != chunkX || ToChunk(bz) != chunkZ) continue;
-            list ??= new List<BlockOverride>();
             list.Add(new BlockOverride(bx, by, bz, kv.Value));
         }
 
-        return list is null ? Array.Empty<BlockOverride>() : list;
+        return list;
     }
 
     private static int SampleBaseBlock(int x, int y, int z)

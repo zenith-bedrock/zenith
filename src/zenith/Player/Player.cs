@@ -95,6 +95,12 @@ class Player
     /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
     public (int X, int Y, int Z)? OpenChest { get; set; }
 
+    /// <summary>Player inventory UI open (ContainerOpen window 0).</summary>
+    public bool InventoryWindowOpen { get; set; }
+
+    /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
+    public PlayerCraftUi CraftUi { get; } = new();
+
     public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks)
     {
         BreakTargetX = x;
@@ -110,6 +116,12 @@ class Player
         HasBreakTarget = false;
         BreakRequiredTicks = 0;
     }
+
+    /// <summary>
+    /// Clears dig lock without crack fan-out — used after queueing a Survival break so
+    /// Continue can retarget without poisoning the pending intent (§27).
+    /// </summary>
+    public void ClearBreakTarget() => AbortBreak();
 
     public bool IsBreakTarget(int x, int y, int z) =>
         HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;

@@ -17,7 +17,11 @@ class InGameSessionHandler : ISessionHandler
     public void OnEnable(NetworkSession session)
     {
         if (session.Player is not null)
+        {
             session.Player.IsInGame = true;
+            // Catch-up overlays placed while we were PreSpawn/SpawnResponse (§14).
+            session.Player.Chunks.NeedsOverlayResync = true;
+        }
         session.Context.Logger.Info($"{session.Player?.Username} is now in-game.");
     }
 
@@ -100,10 +104,12 @@ class InGameSessionHandler : ISessionHandler
         if (player is null) return;
         if (packet.Action != InteractPacket.ActionOpenInventory) return;
 
+        player.InventoryWindowOpen = true;
         session.Protocol.Inventory.SendContainerOpen(
             (int)MathF.Floor(player.PositionX),
             (int)MathF.Floor(player.PositionY),
             (int)MathF.Floor(player.PositionZ));
+        session.Protocol.Inventory.SendUiInventoryContent(player);
     }
 
     private static void HandleContainerClose(NetworkSession session, ref BinaryStream stream)
@@ -111,7 +117,12 @@ class InGameSessionHandler : ISessionHandler
         var packet = DataPacket.From<ContainerClosePacket>(ref stream);
         var player = session.Player;
         if (player is not null)
+        {
+            if (packet.WindowId == InventoryContentPacket.WindowInventory)
+                player.InventoryWindowOpen = false;
             player.OpenChest = null;
+        }
+
         session.Protocol.Inventory.SendContainerClose(packet.WindowId, packet.WindowType);
     }
 
@@ -129,88 +140,107 @@ class InGameSessionHandler : ISessionHandler
                 continue;
             }
 
-            uint? craftNetId = null;
-            uint? craftCreativeNetId = null;
-            byte craftCreativeTimes = 0;
             var baked = new List<InventoryStackAction>(request.Actions.Length);
             var mapOk = true;
+
             foreach (var action in request.Actions)
             {
-                if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipe)
-                {
-                    craftNetId = action.RecipeNetId;
-                    continue;
-                }
-
                 if (action.ActionType == ItemStackRequestPacket.ActionCraftCreative)
                 {
-                    craftCreativeNetId = action.CreativeNetId;
-                    craftCreativeTimes = action.CraftTimes;
+                    // NumberOfCrafts / CraftTimes is protocol boilerplate — ignored (PM/DF).
+                    baked.Add(InventoryStackAction.CraftCreative(action.CreativeNetId));
                     continue;
                 }
 
-                if (action.ActionType == ItemStackRequestPacket.ActionCraftResultsDeprecated ||
-                    action.ActionType == ItemStackRequestPacket.ActionConsume ||
-                    action.ActionType == ItemStackRequestPacket.ActionCreate)
+                if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipe)
+                {
+                    baked.Add(InventoryStackAction.Craft(action.RecipeNetId, action.CraftTimes));
                     continue;
+                }
 
-                if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from) ||
-                    !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var to))
+                if (action.ActionType == ItemStackRequestPacket.ActionCreate)
+                {
+                    baked.Add(InventoryStackAction.CreateOutput());
+                    continue;
+                }
+
+                if (action.ActionType == ItemStackRequestPacket.ActionConsume ||
+                    action.ActionType == ItemStackRequestPacket.ActionCraftResultsDeprecated)
+                {
+                    baked.Add(InventoryStackAction.ConsumeNoOp());
+                    continue;
+                }
+
+                if (action.ActionType == ItemStackRequestPacket.ActionDrop)
+                {
+                    if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from))
+                    {
+                        mapOk = false;
+                        break;
+                    }
+
+                    var fromWire = new WireSlot(action.Source.Container.ContainerId, action.Source.Slot);
+                    baked.Add(InventoryStackAction.Drop(from, action.Count, fromWire));
+                    continue;
+                }
+
+                if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var srcFlat) ||
+                    !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var dstFlat))
                 {
                     mapOk = false;
                     break;
                 }
 
+                var srcWire = new WireSlot(action.Source.Container.ContainerId, action.Source.Slot);
+                var dstWire = new WireSlot(action.Destination.Container.ContainerId, action.Destination.Slot);
+
                 if (action.ActionType == ItemStackRequestPacket.ActionSwap)
-                    baked.Add(InventoryStackAction.Swap(from, to));
+                    baked.Add(InventoryStackAction.Swap(srcFlat, dstFlat, srcWire, dstWire));
                 else
-                    baked.Add(InventoryStackAction.Transfer(from, to, action.Count));
+                    baked.Add(InventoryStackAction.Transfer(srcFlat, dstFlat, action.Count, srcWire, dstWire));
             }
 
-            if (!mapOk)
+            if (!mapOk || baked.Count == 0)
             {
                 RejectIsr(session, player, request.RequestId);
                 continue;
             }
 
-            InventoryStackIntent intent;
-            if (craftNetId is not null && craftCreativeNetId is not null)
+            var hasCreative = false;
+            var hasRecipe = false;
+            foreach (var a in baked)
             {
-                RejectIsr(session, player, request.RequestId);
-                continue;
+                if (a.Kind == InventoryStackActionKind.CraftCreative) hasCreative = true;
+                else if (a.Kind == InventoryStackActionKind.CraftRecipe) hasRecipe = true;
             }
 
-            if (craftCreativeNetId is { } creativeId)
+            if (hasCreative)
             {
-                if (player.GameMode != GameMode.Creative ||
-                    craftCreativeTimes == 0 ||
-                    !session.Context.Creative.TryGet(creativeId, out _, out _))
+                if (hasRecipe || player.GameMode != GameMode.Creative)
                 {
                     RejectIsr(session, player, request.RequestId);
                     continue;
                 }
 
-                intent = InventoryStackIntent.CreateCraftCreative(
-                    request.RequestId, creativeId, craftCreativeTimes);
-            }
-            else if (craftNetId is { } rid)
-            {
-                if (!session.Context.Recipes.TryGet(rid, out _, out _, out _))
+                var catalogOk = true;
+                foreach (var a in baked)
+                {
+                    if (a.Kind != InventoryStackActionKind.CraftCreative) continue;
+                    if (!session.Context.Creative.TryGet(a.CreativeNetId, out _, out _))
+                    {
+                        catalogOk = false;
+                        break;
+                    }
+                }
+
+                if (!catalogOk)
                 {
                     RejectIsr(session, player, request.RequestId);
                     continue;
                 }
-
-                intent = InventoryStackIntent.CreateCraft(request.RequestId, rid);
             }
-            else if (baked.Count == 0)
-            {
-                RejectIsr(session, player, request.RequestId);
-                continue;
-            }
-            else
-                intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
 
+            var intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
             if (!player.SubmitInventoryStack(intent))
             {
                 session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
@@ -223,6 +253,7 @@ class InGameSessionHandler : ISessionHandler
     {
         session.Protocol.Inventory.SendItemStackResponseError(requestId);
         session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+        session.Protocol.Inventory.SendUiInventoryContent(player);
         if (player.OpenChest is { } chest)
             session.Protocol.Inventory.SendChestContent(session.Context.World.Chests, chest.X, chest.Y, chest.Z);
     }
@@ -297,32 +328,53 @@ class InGameSessionHandler : ISessionHandler
         if (packet.ItemInteraction is { } useItem)
             HandleUseItemInteraction(session, player, useItem);
 
-        foreach (var action in packet.BlockActions)
+        // AuthInput break order (§27): Abort → Start/Crack → Predict → Continue.
+        // Abort-before-Predict clears cancelled dig; Start-before-Predict fixes cancel+redig
+        // same-packet; Predict-before-Continue keeps chain-break DigAuthorized intact.
+        var actions = packet.BlockActions;
+
+        foreach (var action in actions)
         {
-            switch (action.Action)
+            if (action.Action != PlayerAuthInputPacket.ActionAbortBreak)
+                continue;
+            // Always StopCrack at Abort coords — dig may already be cleared after
+            // DigAuthorized queue. Do not dequeue pending BlockEditIntent.
+            BlockCrackFanout.Stop(
+                session.Context.PlayerManager,
+                session,
+                action.BlockX,
+                action.BlockY,
+                action.BlockZ);
+            player.AbortBreak();
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action is PlayerAuthInputPacket.ActionStartBreak
+                or PlayerAuthInputPacket.ActionCrackBreak)
             {
-                case PlayerAuthInputPacket.ActionStartBreak:
-                case PlayerAuthInputPacket.ActionContinueDestroy:
-                case PlayerAuthInputPacket.ActionCrackBreak:
-                    HandleBreakProgress(
-                        session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
-                    break;
-                case PlayerAuthInputPacket.ActionAbortBreak:
-                    if (player.HasBreakTarget)
-                        BlockCrackFanout.Stop(
-                            session.Context.PlayerManager,
-                            session,
-                            player.BreakTargetX,
-                            player.BreakTargetY,
-                            player.BreakTargetZ);
-                    player.AbortBreak();
-                    break;
-                case PlayerAuthInputPacket.ActionPredictDestroy:
-                case PlayerActionPacket.ActionCreativeDestroy:
-                    session.Context.Logger.Debug(
-                        $"AuthInput break from {player.Username}: action={action.Action} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
-                    TrySubmitBreak(player, action.BlockX, action.BlockY, action.BlockZ);
-                    break;
+                HandleBreakProgress(
+                    session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
+            }
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action is PlayerAuthInputPacket.ActionPredictDestroy
+                or PlayerActionPacket.ActionCreativeDestroy)
+            {
+                session.Context.Logger.Debug(
+                    $"AuthInput break from {player.Username}: action={action.Action} @ {action.BlockX},{action.BlockY},{action.BlockZ}");
+                TrySubmitBreak(player, action.BlockX, action.BlockY, action.BlockZ);
+            }
+        }
+
+        foreach (var action in actions)
+        {
+            if (action.Action == PlayerAuthInputPacket.ActionContinueDestroy)
+            {
+                HandleBreakProgress(
+                    session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
             }
         }
     }
@@ -557,13 +609,27 @@ class InGameSessionHandler : ISessionHandler
 
     private static void TrySubmitBreak(Player.Player player, int x, int y, int z)
     {
-        var intent = BlockEditIntent.Set(x, y, z, World.World.AirRuntimeId);
+        BlockEditIntent intent;
+        if (player.GameMode != GameMode.Creative &&
+            player.IsBreakTarget(x, y, z) &&
+            player.BreakRequiredTicks > 0)
+        {
+            intent = BlockEditIntent.BreakWithDig(
+                x, y, z, player.BreakStartedTick, player.BreakRequiredTicks);
+            // Clear dig lock only — StopCrack stays for ApplyEdit success (§27).
+            player.ClearBreakTarget();
+        }
+        else
+        {
+            intent = BlockEditIntent.Set(x, y, z, World.World.AirRuntimeId);
+        }
+
         if (!intent.IsInWorldBounds()) return;
         if (!player.SubmitBlockEdit(intent))
             player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
         else
             player.Session.Context.Logger.Debug(
-                $"Break queued from {player.Username} @ {x},{y},{z}");
+                $"Break queued from {player.Username} @ {x},{y},{z} dig={intent.DigAuthorized}");
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch

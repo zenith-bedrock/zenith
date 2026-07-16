@@ -52,13 +52,39 @@ class LoginSessionHandler : ISessionHandler
         if (!TryAcceptProtocol(session, packet.Protocol, stage: "Login"))
             return;
 
+        var auth = session.Context.Config.Auth;
+        var authType = packet.AuthInfo.AuthenticationType;
+        if (authType == LoginPacket.AuthenticationInfo.TypeGuest)
+        {
+            session.Context.Logger.Warning("Rejected login: guest authentication is not supported.");
+            session.Disconnect();
+            return;
+        }
+
+        if (authType == LoginPacket.AuthenticationInfo.TypeFull && !auth.AllowsXbox)
+        {
+            session.Context.Logger.Warning(
+                "Rejected login: AuthenticationType FULL but auth.accept does not include xbox.");
+            session.Disconnect();
+            return;
+        }
+
+        if (authType == LoginPacket.AuthenticationInfo.TypeSelfSigned && !auth.AllowsSelfSigned)
+        {
+            session.Context.Logger.Warning(
+                "Rejected login: AuthenticationType SELF_SIGNED but auth.accept does not include self-signed.");
+            session.Disconnect();
+            return;
+        }
+
         LoginIdentity.ParsedIdentity identity;
         try
         {
             if (!string.IsNullOrWhiteSpace(packet.AuthInfo.Certificate))
-                LoginIdentity.ValidateIdentityChain(packet.AuthInfo.Certificate);
+                LoginIdentity.ValidateIdentityChain(packet.AuthInfo.Certificate, auth.RequireStrictXbox);
 
-            identity = LoginIdentity.ParseIdentityToken(packet.AuthInfo.Token);
+            identity = LoginIdentity.ParseIdentityToken(
+                packet.AuthInfo.Token, packet.AuthInfo.Certificate, packet.ClientDataJwt, auth);
             identity = LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
         }
         catch (Exception ex)
@@ -68,10 +94,10 @@ class LoginSessionHandler : ISessionHandler
             return;
         }
 
-        if (!identity.IdentityFromJwt)
+        if (!identity.IdentityStable)
         {
             session.Context.Logger.Warning(
-                $"Login '{identity.DisplayName}': JWT missing/unparseable identity claim — " +
+                $"Login '{identity.DisplayName}': no stable identity (identity/xid/chain) — " +
                 $"using ephemeral uuid {identity.Uuid:D}; inventory will not persist across rejoins.");
         }
 
@@ -147,7 +173,7 @@ class LoginSessionHandler : ISessionHandler
             $"Rejected {stage}: client protocol {clientProtocol} vs server {serverProtocol} " +
             $"(PlayStatus={negotiate.RejectPlayStatus}).");
         session.Protocol.Login.SendIncompatibleProtocol(negotiate.RejectPlayStatus);
-        session.Disconnect();
+        session.FlushAndDisconnect();
         return false;
     }
 }

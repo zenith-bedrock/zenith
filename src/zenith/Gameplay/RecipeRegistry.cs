@@ -115,6 +115,77 @@ sealed class RecipeRegistry
         return true;
     }
 
+    /// <summary>
+    /// Match + consume 2×2 grid slots × <paramref name="times"/>; output for CreatedOutput.
+    /// Times clamped by grid affordability and single-slot MaxStack (H0).
+    /// </summary>
+    public bool TryCraftFromGrid(PlayerCraftUi craftUi, uint recipeNetId, out InventorySlot output, int times = 1)
+    {
+        output = InventorySlot.Empty;
+        if (!TryGet(recipeNetId, out var outRid, out var outCount, out var needed))
+            return false;
+
+        if (outCount <= 0 || times < 0)
+            return false;
+
+        if (times == 0)
+            times = 1;
+
+        var inputs = new List<(int RuntimeId, int Count)>(PlayerCraftUi.GridSize);
+        for (var i = 0; i < PlayerCraftUi.GridSize; i++)
+        {
+            var slot = craftUi.GetGrid(i);
+            if (!slot.IsEmpty)
+                inputs.Add((slot.RuntimeId, slot.Count));
+        }
+
+        var agg = Aggregate(inputs);
+        var maxByStack = PlayerInventory.MaxStack / outCount;
+        if (maxByStack < 1)
+            return false;
+
+        var maxAffordable = maxByStack;
+        foreach (var (rid, count) in needed)
+        {
+            if (!agg.TryGetValue(rid, out var have) || have < count)
+                return false;
+            maxAffordable = Math.Min(maxAffordable, have / count);
+        }
+
+        if (maxAffordable < 1)
+            return false;
+
+        times = Math.Clamp(times, 1, maxAffordable);
+
+        var snap = craftUi.CaptureSnapshot();
+        foreach (var (rid, count) in needed)
+        {
+            var remaining = count * times;
+            for (var i = 0; i < PlayerCraftUi.GridSize && remaining > 0; i++)
+            {
+                var slot = craftUi.GetGrid(i);
+                if (slot.IsEmpty || slot.RuntimeId != rid) continue;
+                var take = Math.Min(remaining, slot.Count);
+                remaining -= take;
+                var left = slot.Count - take;
+                if (!craftUi.TrySetGrid(i, left == 0 ? InventorySlot.Empty : slot with { Count = left }))
+                {
+                    craftUi.RestoreSnapshot(snap);
+                    return false;
+                }
+            }
+
+            if (remaining > 0)
+            {
+                craftUi.RestoreSnapshot(snap);
+                return false;
+            }
+        }
+
+        output = new InventorySlot(outRid, outCount * times);
+        return true;
+    }
+
     private static Dictionary<int, int> Aggregate(IReadOnlyList<(int RuntimeId, int Count)> inputs)
     {
         var dict = new Dictionary<int, int>();

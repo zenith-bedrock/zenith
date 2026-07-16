@@ -30,7 +30,7 @@ public class RakNetServer
     private int _tickCount = 0;
     private int _nextSessionId = -1;
 
-    public ulong Guid { get; init; } = GenerateGuid();
+    public ulong Guid { get; init; }
     public IPEndPoint RemoteEndPoint { get; init; }
 
     /// <summary>Snapshot list — allocates. Prefer <see cref="ConnectionCount"/> for occupancy checks.</summary>
@@ -66,8 +66,10 @@ public class RakNetServer
         return BitConverter.ToUInt64(bytes);
     }
 
-    public RakNetServer(int port)
+    /// <param name="serverGuid">Stable LAN identity across restarts; null → random.</param>
+    public RakNetServer(int port, ulong? serverGuid = null)
     {
+        Guid = serverGuid ?? GenerateGuid();
         _listener = CreateListener();
         RemoteEndPoint = new IPEndPoint(IPAddress.Any, port);
         _unconnected = new UnconnectedRakNet(this);

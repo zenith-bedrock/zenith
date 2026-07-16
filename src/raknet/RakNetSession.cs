@@ -81,8 +81,12 @@ public class RakNetSession
         }
     }
 
+    public bool IsClosed => _closed;
+
     public void Disconnect(DisconnectReason reason = DisconnectReason.ServerDisconnect)
     {
+        if (_closed) return;
+
         var disconnect = new Disconnect();
 
         var frame = new Frame
@@ -151,6 +155,17 @@ public class RakNetSession
 
         if (ackPayload is not null) Server.Send(EndPoint, ackPayload);
         if (nackPayload is not null) Server.Send(EndPoint, nackPayload);
+    }
+
+    /// <summary>Drain all pending outbound frames to UDP (call before Close / disconnect kick).</summary>
+    public void FlushOutgoing()
+    {
+        lock (_sessionLock)
+        {
+            if (_closed) return;
+            while (OutputFrames.Count > 0)
+                SendQueueLocked(OutputFrames.Count);
+        }
     }
 
     /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>

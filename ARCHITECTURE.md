@@ -106,7 +106,7 @@ Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Net
 - **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves `c:` / `ov:`. Detalhes: [`libs/leveldb/README.md`](libs/leveldb/README.md).
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
-- JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
+- JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
 - **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = block runtime; map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 - **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
@@ -114,33 +114,38 @@ Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Net
 
 ## Smoke manual
 
-Baseline (multiplayer spine):
+Baseline (multiplayer spine) — status humano Jul 2026 (Dokploy compose + 1–2 clients). Checklist canónico: [`docs/alpha-gate.md`](docs/alpha-gate.md).
 
-1. Cliente A: login → InGame (chão flat sob os pés).
-2. AuthInput: servidor atualiza `Player` position.
-3. Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`).
-4. Movimento de A visível em B (`MoveActorAbsolute`).
-5. Chat A↔B (`TextPacket`).
-6. A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`); hotbar sincroniza (`InventoryContent`).
-7. Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame.
-8. A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity.
-9. B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`).
-10. A anda para fora do raio de spawn → novas colunas flat chegam (`ChunkStreamSystem`); chão continua sob os pés.
-11. **§17 rearrange:** abrir inventário → arrastar slot 0↔9 → fechar/reabrir (item permanece); place a partir da hotbar; break com hotbar cheia → item em storage ≥9; sem rubberband após place/break.
-12. **Held peer:** A troca hotbar / segura bloco → B vê o item na mão (`MobEquipment` / `AddPlayer` held).
+| # | Gate | Status |
+|---|------|--------|
+| 1 | Cliente A: login → InGame (chão flat sob os pés). | **OK** |
+| 2 | AuthInput: servidor atualiza `Player` position. | **OK** |
+| 3 | Cliente B: login → InGame; A e B se veem (`PlayerList` + `AddPlayer`). | **OK** |
+| 4 | Movimento de A visível em B (`MoveActorAbsolute`). | **OK** |
+| 5 | Chat A↔B (`TextPacket`). | **OK** |
+| 6 | A coloca bloco; B (já online ou entrando depois) vê o bloco (`UpdateBlock` após `LevelChunk`); hotbar sync. | **OK** (era PARCIAL AFK join-miss → join-overlay catch-up §14) |
+| 7 | Terreno flat (stone/grass) visível — `UseBlockNetworkIdHashes` + `ItemRegistry` após StartGame. | **OK** |
+| 8 | A quebra bloco → item volta ao inventário (servidor + sync); sem drop entity. | **OK** |
+| 9 | B desconecta: A remove o actor (`PlayerList` REMOVE + `RemoveActor`). | **OK** |
+| 10 | A anda para fora do raio de spawn → novas colunas flat (`ChunkStreamSystem`). | **OK** |
+| 11 | **§17 rearrange:** drag / SHIFT hotbar↔inv; place/break; sem rubberband. | **OK** (press-drag extremo = polish pós-alpha) |
+| 12 | **Held peer:** A troca hotbar → B vê item na mão (`MobEquipment` / `AddPlayer` held). | **OK** |
 
 Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush + crack peers):
 
-| Id | Gate |
-|----|------|
-| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). |
-| **S37** | Creative: pode voar; Survival: sem MayFly. |
-| **S38** | Creative: palette stone → hotbar → place; Survival: CraftCreative rejeitado. |
-| **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. |
-| **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. |
-| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
-| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. |
-| Regressão | Held peer, rearrange, break/crack still OK. |
+| Id | Gate | Status (Jul 2026) |
+|----|------|-------------------|
+| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). | **OK** (cadeia planks→chest após emit CreatedOutput) |
+| **S37** | Creative: pode voar; Survival: sem MayFly. | **OK** |
+| **S38** | Creative: palette click → **cursor**; SHIFT → bag; place; Survival rejeita CraftCreative. | **OK** |
+| **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. | **OK** |
+| **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
+| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
+| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
+| Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
+| Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
+
+**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
 
 Gates: se item **11** falhar, não começar containers. Se **S39**, **S40** ou **S41** falharem, não abrir death/drop-entity.
 
@@ -193,7 +198,7 @@ Não significa “produto completo”: fecha place/break + inventário 36 + ISR 
 
 **Gaps conscientes (ainda abertos):** bag não persiste reconnect; containers/chests deferred (§19); drop/destroy ISR deferred. Held peer sync: §18.
 
-LAN pode usar `auth.require-chain-signatures: false` (aviso no boot). **Exposição pública:** `true` no YAML.
+LAN pode usar `auth.accept` com `self-signed` / `offline` (aviso no boot). **Exposição pública:** `accept: [xbox]` apenas.
 
 ### Fase 4 — LevelDB
 
@@ -211,7 +216,7 @@ Quando extensibilidade externa existir: `EventBus.Subscribe<T>` primeiro — nã
 |------|----------|--------|
 | Parse de skin | Cosmético | Paralelo (ClientData) |
 | UUID do JWT `identity` | Identidade | No login |
-| Verificação de assinatura da chain | Segurança | `auth.require-chain-signatures: true` no YAML; **obrigatório antes de exposição pública** |
+| Verificação de assinatura da chain | Segurança | `auth.accept: [xbox]` no YAML; **obrigatório antes de exposição pública** |
 
 ### Explicitamente fora da sequência curta
 

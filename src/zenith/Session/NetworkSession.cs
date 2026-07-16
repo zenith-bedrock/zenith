@@ -83,6 +83,32 @@ class NetworkSession
     public void Disconnect() => RakSession.Disconnect();
 
     /// <summary>
+    /// Bedrock DisconnectPacket + flush outbound frames, then RakNet close.
+    /// Idempotent if the transport is already closed.
+    /// </summary>
+    public void DisconnectWithMessage(string message)
+    {
+        if (RakSession.IsClosed)
+            return;
+
+        Protocol.Login.SendDisconnect(message);
+        RakSession.FlushOutgoing();
+        RakSession.Disconnect();
+    }
+
+    /// <summary>
+    /// Flush pending game packets then close transport — used after PlayStatus reject (§43).
+    /// </summary>
+    public void FlushAndDisconnect()
+    {
+        if (RakSession.IsClosed)
+            return;
+
+        RakSession.FlushOutgoing();
+        RakSession.Disconnect();
+    }
+
+    /// <summary>
     /// Chamado pelo <see cref="ZenithSessionListener"/> quando a sessão de
     /// transporte é encerrada (client disconnect, kick ou timeout). Avisa o handler ativo
     /// pra ele poder limpar o que precisar, remove o Player do PlayerManager (se já tinha

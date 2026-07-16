@@ -9,7 +9,8 @@ obj/
 *.userosscache
 *.suo
 *.vs
-.vscode/
+.vscode/*
+!.vscode/settings.json
 
 ## Logs and Debugging
 *.log
