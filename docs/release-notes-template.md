@@ -21,7 +21,7 @@
 - Drop-entity wire / WorldEntity; death–Respawn handshake
 - Tool speed / efficiency; block gravity (sand/gravel); biomes / noise; hunger tick
 - Double-chest 54 UI (facing-only is shipped)
-- Public production with `auth.require-chain-signatures: false`
+- Public production with `auth.accept` including `self-signed` or `offline` (use `[xbox]` only)
 - Actor / domain EventHandler frameworks
 
 ### Ops traps

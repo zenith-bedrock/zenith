@@ -7,6 +7,7 @@ sealed class InventoryContentPacket : DataPacket
 {
     public const int WindowInventory = 0;
     public const int WindowChest = 2;
+    public const int WindowUI = 124;
 
     public override int Id => (int)ProtocolInfo.INVENTORY_CONTENT_PACKET;
 

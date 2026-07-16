@@ -106,7 +106,7 @@ Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Net
 - **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves `c:` / `ov:`. Detalhes: [`libs/leveldb/README.md`](libs/leveldb/README.md).
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
-- JWT: parse + skin opcional; `auth.require-chain-signatures: true` no YAML endurece o gate (aviso no boot se false).
+- JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
 - **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = block runtime; map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 - **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
@@ -131,16 +131,18 @@ Baseline (multiplayer spine):
 
 Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush + crack peers):
 
-| Id | Gate |
-|----|------|
-| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). |
-| **S37** | Creative: pode voar; Survival: sem MayFly. |
-| **S38** | Creative: palette stone → hotbar → place; Survival: CraftCreative rejeitado. |
-| **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. |
-| **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. |
-| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. |
-| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. |
-| Regressão | Held peer, rearrange, break/crack still OK. |
+| Id | Gate | Status (Jul 2026) |
+|----|------|-------------------|
+| **S35** | Survival: 1 oak log → 4 planks; 8 planks → 1 chest (2×2 craft). | **Parcial** — craft ok; cadeia planks→chest (take do 2º resultado) a corrigir |
+| **S37** | Creative: pode voar; Survival: sem MayFly. | **OK** |
+| **S38** | Creative: palette click → **cursor**; SHIFT → bag; place; Survival rejeita CraftCreative. | **OK** |
+| **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. | **OK** |
+| **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
+| **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
+| **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **Pendente** |
+| Regressão | Held peer, rearrange, break/crack still OK. | — |
+
+**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente); S35 take em cadeia após craft com itens do resultado.
 
 Gates: se item **11** falhar, não começar containers. Se **S39**, **S40** ou **S41** falharem, não abrir death/drop-entity.
 
@@ -193,7 +195,7 @@ Não significa “produto completo”: fecha place/break + inventário 36 + ISR 
 
 **Gaps conscientes (ainda abertos):** bag não persiste reconnect; containers/chests deferred (§19); drop/destroy ISR deferred. Held peer sync: §18.
 
-LAN pode usar `auth.require-chain-signatures: false` (aviso no boot). **Exposição pública:** `true` no YAML.
+LAN pode usar `auth.accept` com `self-signed` / `offline` (aviso no boot). **Exposição pública:** `accept: [xbox]` apenas.
 
 ### Fase 4 — LevelDB
 
@@ -211,7 +213,7 @@ Quando extensibilidade externa existir: `EventBus.Subscribe<T>` primeiro — nã
 |------|----------|--------|
 | Parse de skin | Cosmético | Paralelo (ClientData) |
 | UUID do JWT `identity` | Identidade | No login |
-| Verificação de assinatura da chain | Segurança | `auth.require-chain-signatures: true` no YAML; **obrigatório antes de exposição pública** |
+| Verificação de assinatura da chain | Segurança | `auth.accept: [xbox]` no YAML; **obrigatório antes de exposição pública** |
 
 ### Explicitamente fora da sequência curta
 

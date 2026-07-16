@@ -38,7 +38,12 @@ docker compose up --build
 
 ## Manual smoke (see ARCHITECTURE.md)
 
-- [ ] Baseline MP 1–12 + S35 / S37 / S38 / S39 / S39b / S40 / **S41** (peer sees crack)
+- [ ] Baseline MP 1–12 + **S41** (peer sees crack) — ainda pendente
+- [x] **S37** Creative fly / Survival no MayFly
+- [x] **S38** Creative palette → cursor / SHIFT → bag (fix CreatedOutput+Place)
+- [x] **S39** / **S39b** LevelDB bag+chest persist (graceful + quit)
+- [x] **S40** void → spawn snap, health 20
+- [ ] **S35** Survival 2×2 craft — **parcial** (cadeia planks→chest take do 2º resultado)
 - [ ] Overlay: place 100 blocks → **graceful** restart → blocks intact (< 10k warn threshold)
 - [ ] Crash soft check (optional): place blocks → brief pause → `kill -9` → restart → LevelDB `CURRENT` world/overlays that already hit WAL may survive; **do not** require recent `inv:`/`ct:` intact — Puts are fire-and-forget until `FlushAsync` on graceful shutdown (§39 / §41)
 
@@ -53,7 +58,7 @@ git push origin v0.0.1-alpha
 
 ## Explicit non-goals on the tag
 
-Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop-entity / WorldEntity; death–Respawn; tool speed / efficiency; block gravity (sand/gravel); biomes / noise; hunger tick; public production with `auth.require-chain-signatures: false`.
+Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop-entity / WorldEntity; death–Respawn; tool speed / efficiency; block gravity (sand/gravel); biomes / noise; hunger tick; public production with `auth.accept` containing `self-signed` or `offline`.
 
 ## Ops traps (must stay in release notes)
 
@@ -61,7 +66,7 @@ Mojang vanilla worlds; `players/` volume; plugins / DI / `/` / `/gamemode`; drop
 |------|---------|
 | `world.path` empty | **InMemory** — wiped on restart, **no warning** |
 | Relative `world.path` | Under `AppContext.BaseDirectory` (DLL dir), not shell cwd |
-| Auth sample | Chain signatures often off for LAN; boot WARNING; enable before public exposure |
+| Auth sample | LAN default `accept` includes self-signed/offline; boot WARNING; use `[xbox]` before public exposure |
 | ZLIB decompression (2 MB cap) | Oversized inflate throws; RakNet receive loop logs and drops the datagram (no explicit session disconnect yet). LAN risk low; public is still a DoS/CPU surface |
 | Docker / Dokploy volume | Persist host dir → `/app/worlds` (compose sample). Redeploy **without** that volume wipes LevelDB even when flush is correct |
 | Docker stop / redeploy | Process handles **SIGTERM** → `ShutdownAsync` / `FlushAsync`. Hard kill still drops in-flight Puts |

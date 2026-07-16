@@ -182,10 +182,18 @@ sealed class ItemStackRequestPacket : DataPacket
                 };
             }
             case ActionDrop:
-                stream.ReadByte();
-                _ = StackRequestSlotInfo.Read(ref stream);
-                stream.ReadBool();
-                return Unsupported(type);
+            {
+                var count = stream.ReadByte();
+                var src = StackRequestSlotInfo.Read(ref stream);
+                _ = stream.ReadBool();
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    Count = count,
+                    Source = src,
+                    Supported = true
+                };
+            }
             case ActionDestroy:
                 stream.ReadByte();
                 _ = StackRequestSlotInfo.Read(ref stream);
@@ -223,11 +231,12 @@ sealed class ItemStackRequestPacket : DataPacket
             case ActionCraftRecipe:
             {
                 var recipeNetId = (uint)stream.ReadUnsignedVarInt();
-                stream.ReadByte(); // times
+                var times = stream.ReadByte();
                 return new DecodedStackRequestAction
                 {
                     ActionType = type,
                     RecipeNetId = recipeNetId,
+                    CraftTimes = times,
                     Supported = true
                 };
             }

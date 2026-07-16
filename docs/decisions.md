@@ -75,11 +75,11 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Relative `zenith.yml` followed the process cwd — broken for service hosts / debuggers / double-click launches. BaseDirectory matches “config next to the binary” mental model.
 
-### 9. Auth verification as config, not hard-fail for LAN
+### 9. Auth accept modes (config visual)
 
-**Choice:** `auth.require-chain-signatures` in YAML; warn on boot if soft.
+**Choice:** `auth.accept` YAML list of named modes: `xbox` | `self-signed` | `offline`. Default LAN = all three + boot WARNING. Public = `[xbox]` only (strict chain checks). `offline` is parse fallbacks only — does not open AuthenticationType SELF_SIGNED. Obsolete `require-chain-signatures` aborts boot with actionable message (no auto-migrate / rewrite).
 
-**Why:** LAN iteration vs public exposure are different threat models. Hard-coding verify-on would slow solo testing; silent never-verify would be dangerous for production. Config makes the trade-off explicit.
+**Why:** Bool soft/hard mixed “who may join” with crypto. Ops need a readable multi-select. Loud fail on bad YAML matches gamemode / unmatched-key DX.
 
 ### 10. LGPL-3.0
 
@@ -254,11 +254,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 29. Crafting 2×2 — RecipeRegistry MVP (wire completed in §35)
 
-**Choice:** `RecipeRegistry` on `ServerContext` (`CreateDefault`: 1 oak_log → 4 oak_planks; 8 oak_planks → 1 chest; shapeless exact `TryMatch`). Static Zenith recipe net ids `1`/`2`. ISR `CraftRecipe` supported (unsigned varint netId + times); `CraftResultsDeprecated` skip = supported no-op. Handler submits `InventoryStackIntent.CreateCraft` when netId known → tick `TryCraft` (consume + `TryAdd`, snapshot rollback).
+**Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid flats `CraftUiBase`+0–3, result `CraftResultFlat`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
 
-**Why:** Wire vanilla recipe ids require `CraftingDataPacket` to remint; shipping registry + tick path first proved gameplay without stalling on Mojang recipe book ids. Remint landed in §35.
+**Why:** Empty ISR OK / bag consume never drove SAI craft UI (S35). Grid + Create matches Dragonfly without full 54-slot UI inventory. Discarding times made shift-click Place N×out fail after craft ×1. Skipping CreatedOutput (60) in ItemStackResponse (PM virtual-output habit) desynced sequential take after planks→chest — **fixed:** emit 60 like Dragonfly; refuse Survival craft while Result still occupied.
 
-**Deferred (original):** full grid Consume/Create ISR chain; 3×3 crafting table; shapeless extras / tags. (`CraftingDataPacket` → §35.)
+**Deferred:** 3×3 crafting table; recipe-book **CraftRecipeAuto**; container 14 preview sync; negative stack-net-id prediction; multi-stack CreatedOutput when out×N > MaxStack; double-click gather (no dedicated ISR opcode — client multi Place/Take, intermittent).
 
 ### 30. CreativeContent after this spine (conscious yes) — superseded by §31
 
@@ -334,11 +334,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
-**Choice:** `CreativeCatalog` on `ServerContext` (net ids 1–7 matching former CreateStarter). Protocol `BuildCreativeContent` from catalog — no second item list in Packets. ISR `CraftCreative` supported → intent → `TryAdd` (Creative mode only; `times` capped at MaxStack). Recipe+Creative in one request rejected.
+**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `CraftResultFlat` (CreatedOutput), then honor same-request Place/Take/Drop/Create — Dragonfly `createResults` + `Grow(MaxCount-1)`. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response omits container 60.
 
-**Why:** Creative fly (§37) without palette→inventory left place dead. Same spine as CraftRecipe.
+**Why:** Palette vanilla is CreatedOutput→cursor/bag, not bag `TryAdd`. The prior `CraftCreativeNetId` parallel intent with empty Actions discarded client Places (click never reached cursor).
 
-**Deferred:** full `creative_items.json` / `block_state_b64`.
+**Deferred:** full `creative_items.json` / `block_state_b64`; ActionDestroy creative trash (Unsupported → whole-request reject today).
 
 ### 39. Inventory + chest LevelDB persist (`ct:` / `inv:`)
 
