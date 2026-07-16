@@ -130,6 +130,7 @@ class InGameSessionHandler : ISessionHandler
             byte craftCreativeTimes = 0;
             var baked = new List<InventoryStackAction>(request.Actions.Length);
             var mapOk = true;
+            var skippedUiCraft = false;
             foreach (var action in request.Actions)
             {
                 if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipe)
@@ -149,6 +150,15 @@ class InGameSessionHandler : ISessionHandler
                     action.ActionType == ItemStackRequestPacket.ActionConsume ||
                     action.ActionType == ItemStackRequestPacket.ActionCreate)
                     continue;
+
+                // Craft UI (13/14) + CreatedOutput (60): no domain window yet. Skip so CraftRecipe /
+                // CraftCreative still reach the tick (bag-only / TryAdd). Pure UI Places get OK below.
+                if (InventoryContainerMap.IsUiCraftContainer(action.Source.Container.ContainerId) ||
+                    InventoryContainerMap.IsUiCraftContainer(action.Destination.Container.ContainerId))
+                {
+                    skippedUiCraft = true;
+                    continue;
+                }
 
                 if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var from) ||
                     !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var to))
@@ -201,6 +211,14 @@ class InGameSessionHandler : ISessionHandler
             }
             else if (baked.Count == 0)
             {
+                // Client placed into craft UI only — ACK without mutating bag (server keeps items
+                // until CraftRecipe). Rejecting here blocked S35 grid + stuck cursor.
+                if (skippedUiCraft)
+                {
+                    session.Protocol.Inventory.SendItemStackResponseOk(request.RequestId, player, []);
+                    continue;
+                }
+
                 RejectIsr(session, player, request.RequestId);
                 continue;
             }

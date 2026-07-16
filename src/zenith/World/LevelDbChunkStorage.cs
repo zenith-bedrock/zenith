@@ -202,14 +202,36 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(Task.Run(() =>
+        return new ValueTask<byte[]?>(GetInventoryAwaitedAsync(uuid, cancellationToken));
+    }
+
+    /// <summary>
+    /// Await in-flight Puts before read — fast quit→rejoin otherwise races Put and loads miss → starter seed (S39b).
+    /// </summary>
+    private async Task<byte[]?> GetInventoryAwaitedAsync(Guid uuid, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var pending = _pendingDiskTasks.Keys.ToArray();
+        if (pending.Length > 0)
+        {
+            try
+            {
+                await Task.WhenAll(pending).WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Still attempt Get — best-effort after failed/canceled Puts.
+            }
+        }
+
+        return await Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
                 return _db.Get(InventoryKey(uuid));
             }
-        }, cancellationToken));
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask FlushAsync(CancellationToken cancellationToken = default)

@@ -132,6 +132,11 @@ sealed class InventorySystem : IGameSystem
         }
 
         protocol.SendItemStackResponseOk(intent.RequestId, player, touched);
+        // Full content after rearrange: ISR Ok remaps to 28/29 while open inv often uses 12 —
+        // without this, press-drag leaves ghost stacks until a later RejectIsr (smoke 11).
+        protocol.SendInventoryContent(inventory);
+        if (chestPos is { } openAfter)
+            protocol.SendChestContent(_world.Chests, openAfter.X, openAfter.Y, openAfter.Z);
         _world.PersistInventory(player.Uuid, inventory);
         if (chestPos is { } openChest)
             _world.PersistChest(openChest.X, openChest.Y, openChest.Z);

@@ -322,6 +322,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay eviction with I/O on tick.
 
+**Adendo (jul 2026 — column index):** Secondary `_overlaysByChunk` map updated only via `StoreOverlay` (same path as LevelDB hydrate). `GetOverlaysInColumn` is O(bucket) instead of scanning all overlays. Flat `_blockOverrides` remains SSOT for `GetBlock` / `OverrideCount` / warn@10k. Break→air still overwrites (no TryRemove). Not zero-alloc — result list is still O(column size). No eviction.
+
 ### 37. UpdateAbilities + AdventureSettings (spawn seed + fly echo)
 
 **Choice:** After §34 `SetActorData`/`UpdateAttributes`, send `UpdateAbilities` (`0xBB`) then `UpdateAdventureSettings` (`0xBC`) before PreSpawn. Shared `AbilityData` writer (SSOT) also used by `AddPlayer` via wire `GameMode` int. Survival mask = pre-refactor golden bits; Creative = Survival + `MayFly` + `InstantBuild` + `Flying` (join already flying — intentional vs Vedrock). `Invulnerable` off. Runtime id = unique id. Inbound `RequestAbility` (`0xB8`) for `FLYING` only: Creative echoes `SendLocalAbilities` with packet bool (stateless); Survival ignore (no kick). Adventure LAN defaults: ShowNameTags + AutoJump.
