@@ -49,4 +49,26 @@ public class ProtocolGateTests
         Assert.Equal((int)ProtocolInfo.PLAY_STATUS_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(PlayStatusPacket.LoginFailedServer, stream.ReadInt());
     }
+
+    [Fact]
+    public void DisconnectPacket_roundtrip_message_visible()
+    {
+        var original = new DisconnectPacket
+        {
+            Reason = DisconnectPacket.ReasonUnknown,
+            HideDisconnectionScreen = false,
+            Message = "Server closed",
+            FilteredMessage = ""
+        };
+        var encoded = original.Encode().ToArray();
+        var stream = new BinaryStream(encoded);
+        Assert.Equal((int)ProtocolInfo.DISCONNECT_PACKET, stream.ReadUnsignedVarInt());
+
+        var decoded = new DisconnectPacket();
+        decoded.Decode(ref stream);
+        Assert.Equal(DisconnectPacket.ReasonUnknown, decoded.Reason);
+        Assert.False(decoded.HideDisconnectionScreen);
+        Assert.Equal("Server closed", decoded.Message);
+        Assert.Equal("", decoded.FilteredMessage);
+    }
 }

@@ -364,9 +364,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` completes the same shutdown path from **CancelKeyPress**, **SIGINT**, and **SIGTERM** (Docker/Dokploy stop) — 5s flush timeout → Warning. Flush **never** on GameLoop tick (ADR §13).
 
+**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `ZenithSessionListener.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (DF/PM — no fixed sleep; DF waits session teardown via WaitGroup, we flush frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong matches gophertunnel trailing `0`; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
+
 **Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts; container SIGTERM previously skipped flush entirely. Operational trust before death/drop-entity surface.
 
-**Smoke:** S39 graceful restart / stop; S40 own-camera snap to world spawn (ARCHITECTURE.md).
+**Smoke:** S39 graceful restart / stop; S40 own-camera snap to world spawn (ARCHITECTURE.md). Ctrl+C with players online → clean disconnect screen.
 
 ### 42. Dig crack LevelEvent peer fan-out
 
@@ -379,6 +381,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 ### 43. Protocol mismatch UX (+ EventBus negotiate seam)
 
 **Choice:** After `NetworkSettings`, `ProtocolGate.Evaluate(client, ServerIdentity.ProtocolVersion)` decides Accepted / FailClient / FailServer. Reject → `LoginProtocol.SendIncompatibleProtocol` (`PlayStatus` 1 or 2) + disconnect; no `Player`. Re-check on `LoginPacket.Protocol`. Before accept/reject, publish mutable `ProtocolNegotiateEvent` (Accepted / RejectPlayStatus) so a future listener can override the gate — **Accepted ≠ second codec** (document: forcing accept without encode support breaks on wire). Multi-codec / YAML supported-protocols / plugins: **Deferred**.
+
+**Adendo (jul 2026 — PlayStatus flush):** Incompatible `PlayStatus` is sent **Immediate** + `NOT_PRESENT` compression, then `FlushOutgoing` before RakNet close. Prior Normal-priority PlayStatus was often lost when `Disconnect` Immediate flushed one random frame and closed — vanilla outdated UI never appeared (DF/PM: PlayStatus only, no custom Disconnect string).
 
 **Why:** Wrong-version clients previously hung or logged in without Bedrock’s classic incompatible UI. Gate stays pure; Protocol only transmits; Handler orchestrates. Cheap multiprotocol seam without inventing PluginAPI now (Rule 7).
 

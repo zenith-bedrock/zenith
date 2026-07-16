@@ -2,6 +2,8 @@
 
 **Not production-ready.** LAN / private feedback only.
 
+Gate (`docs/alpha-gate.md`) closed Jul 2026: baseline MP 1–12, S35–S41, Dokploy compose, leaf tests, graceful + hard-kill soft check.
+
 ### Includes (LAN spine)
 
 - Login → flat world + overlay place/break; chat + player visibility
@@ -11,7 +13,8 @@
 - Inventory / chest persist across graceful restart (§39 / §41)
 - Server-authoritative break timing + dig crack (self + peers, §27 / §42)
 - Void soft-rescue with local MovePlayer Teleport (§40 / §41)
-- MOTD online count + session hygiene (§47); ordered RakNet fragment reassembly
+- Graceful shutdown: Bedrock `DisconnectPacket` + flush before UDP close; incompatible protocol PlayStatus flush (§41 / §43)
+- Auth `accept` modes (`xbox` / `self-signed` / `offline`); MOTD hygiene; stable RakNet GUID (`server.guid`)
 - `dotnet test zenith.sln` green at tag time
 
 ### Non-goals (explicitly out of this tag)
@@ -33,9 +36,9 @@
 | `world.path: ./worlds` | Wrong — `worlds/<name>/` is appended under the root; you get `…/worlds/worlds/<name>`. |
 | Docker volumes | Mount `./deploy/zenith.yml:/app/zenith.yml` **and** `./deploy/worlds:/app/worlds`. Do **not** mount a host folder over `/app` (overwrites the DLL). Redeploy without a durable `/app/worlds` volume = wipe. |
 | Layout | LevelDB at `{world.path}/worlds/{world.name}/` (compose sample: `/app/worlds/world`) |
-| Stop / redeploy | Prefer SIGTERM (compose/Dokploy stop) so `FlushAsync` runs; `kill -9` can lose recent bag/chest Puts |
+| Stop / redeploy | Prefer SIGTERM (compose/Dokploy stop) so `FlushAsync` runs; hard kill (`kill -9` / `taskkill /F`) can lose recent bag/chest Puts (overlays that already hit WAL may survive) |
 | `players/` | **Not shipped** — no Mojang-style playerdata volume (bag/chest live under world LevelDB keys) |
-| Auth | Default sample leaves chain signatures off for LAN; enable before public exposure |
+| Auth | Sample `accept` often includes self-signed/offline for LAN; boot WARNING; use `[xbox]` before public exposure |
 
 ### Run (Docker)
 

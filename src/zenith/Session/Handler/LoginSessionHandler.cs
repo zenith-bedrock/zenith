@@ -173,7 +173,7 @@ class LoginSessionHandler : ISessionHandler
             $"Rejected {stage}: client protocol {clientProtocol} vs server {serverProtocol} " +
             $"(PlayStatus={negotiate.RejectPlayStatus}).");
         session.Protocol.Login.SendIncompatibleProtocol(negotiate.RejectPlayStatus);
-        session.Disconnect();
+        session.FlushAndDisconnect();
         return false;
     }
 }
