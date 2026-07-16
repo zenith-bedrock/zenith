@@ -142,6 +142,7 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
 | **S40** | Cair no void: **própria câmera** snap para **world spawn** `(0, FlatSpawnY, 0)` (`MovePlayer` Teleport); Health permanece 20; peer (se online) vê teleport. | **OK** |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
+| Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
 | Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
 
 **Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
