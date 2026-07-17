@@ -43,6 +43,10 @@ class InGameSessionHandler : ISessionHandler
                 HandleText(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.COMMAND_REQUEST_PACKET:
+                HandleCommandRequest(session, ref stream);
+                return true;
+
             case (int)ProtocolInfo.PLAYER_ACTION_PACKET:
                 HandlePlayerAction(session, ref stream);
                 return true;
@@ -313,19 +317,7 @@ class InGameSessionHandler : ISessionHandler
         // Slash lines never fan-out via ChatSystem (§52).
         if (packet.Message.StartsWith('/'))
         {
-            if (GameModeConfig.TryParseCommand(packet.Message, out var mode, out var badArgs))
-            {
-                player.SubmitGameMode(mode);
-                return;
-            }
-
-            if (badArgs)
-            {
-                session.Protocol.Ui.SendToast(
-                    "Game mode",
-                    "Usage: /gamemode survival|creative");
-            }
-
+            TryHandleGamemodeLine(session, player, packet.Message);
             return;
         }
 
@@ -336,6 +328,32 @@ class InGameSessionHandler : ISessionHandler
         }
 
         player.SubmitChat(message);
+    }
+
+    private static void HandleCommandRequest(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<CommandRequestPacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        // Bedrock slash channel (§52 adendo). Unknown commands: quiet ignore.
+        TryHandleGamemodeLine(session, player, packet.CommandLine);
+    }
+
+    private static void TryHandleGamemodeLine(NetworkSession session, Player.Player player, string line)
+    {
+        if (GameModeConfig.TryParseCommand(line, out var mode, out var badArgs))
+        {
+            player.SubmitGameMode(mode);
+            return;
+        }
+
+        if (badArgs)
+        {
+            session.Protocol.Ui.SendToast(
+                "Game mode",
+                "Usage: /gamemode survival|creative");
+        }
     }
 
     private static void HandleAuthInput(NetworkSession session, ref BinaryStream stream)

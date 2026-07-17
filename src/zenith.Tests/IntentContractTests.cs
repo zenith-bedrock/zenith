@@ -611,6 +611,8 @@ public class IntentContractTests
     [InlineData("/gamemode creative", 1, false)]
     [InlineData("/gamemode s", 0, false)]
     [InlineData("/GAMEMODE 1", 1, false)]
+    [InlineData("gamemode creative", 1, false)]
+    [InlineData("gamemode c", 1, false)]
     public void GameModeConfig_parses_command_line(string line, int expected, bool expectBad)
     {
         var ok = GameModeConfig.TryParseCommand(line, out var mode, out var bad);

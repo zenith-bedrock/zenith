@@ -48,8 +48,9 @@ static class GameModeConfig
     }
 
     /// <summary>
-    /// Tries to parse a full chat line as <c>/gamemode …</c>.
-    /// Returns false for non-matching slash lines (caller ignores) or bad args (<paramref name="badArgs"/>).
+    /// Tries to parse a command line as <c>/gamemode …</c> or <c>gamemode …</c>
+    /// (CommandRequest omits or includes the slash). Returns false for non-matching
+    /// lines (caller ignores) or bad args (<paramref name="badArgs"/>).
     /// </summary>
     public static bool TryParseCommand(string message, out GameMode mode, out bool badArgs)
     {
@@ -58,12 +59,12 @@ static class GameModeConfig
 
         if (string.IsNullOrWhiteSpace(message)) return false;
         var trimmed = message.Trim();
-        if (!trimmed.StartsWith('/')) return false;
+        if (trimmed.StartsWith('/'))
+            trimmed = trimmed[1..].TrimStart();
 
-        // "/gamemode" or "/gamemode <arg>" only — no aliases like /gm
         var parts = trimmed.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return false;
-        if (!parts[0].Equals("/gamemode", StringComparison.OrdinalIgnoreCase))
+        if (!parts[0].Equals("gamemode", StringComparison.OrdinalIgnoreCase))
             return false;
 
         if (parts.Length < 2 || !TryParseArg(parts[1], out mode))
