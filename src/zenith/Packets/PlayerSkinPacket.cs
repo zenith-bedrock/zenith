@@ -24,6 +24,7 @@ sealed class PlayerSkinPacket : DataPacket
     public override Span<byte> Encode()
     {
         var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(Id);
         writer.WriteUuid(Guid.Parse(Uuid));
         Skin.Write(ref writer);
         writer.WriteVarString(SkinName);

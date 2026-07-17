@@ -272,8 +272,13 @@ sealed class BlockSystem : IGameSystem
                 var dy = player.PositionY - (pos.Y + 0.5f);
                 var dz = player.PositionZ - (pos.Z + 0.5f);
                 if (dx * dx + dy * dy + dz * dz > reachSq) continue;
-                if (!player.Inventory.TryAdd(runtimeId, count)) continue;
-                if (!_world.FloorDrops.TryTake(pos.X, pos.Y, pos.Z, out _, out _, out var takenEntity))
+
+                var added = player.Inventory.TryAddUpTo(runtimeId, count);
+                if (added == 0) continue;
+
+                if (!_world.FloorDrops.TryTakeUpTo(
+                        pos.X, pos.Y, pos.Z, added,
+                        out _, out _, out var takenEntity, out var remainingPublish))
                     continue;
 
                 var eid = takenEntity != 0 ? takenEntity : entityRuntimeId;
@@ -286,6 +291,10 @@ sealed class BlockSystem : IGameSystem
                         (ulong)eid,
                         (ulong)player.RuntimeId);
                 }
+
+                // Partial: Take despawns entity; republish remaining stack (same entity id).
+                if (remainingPublish is { } rem)
+                    PublishFloorDrop(online, rem);
 
                 player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
                 _world.PersistInventory(player.Uuid, player.Inventory);

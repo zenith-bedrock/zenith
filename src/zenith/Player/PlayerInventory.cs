@@ -140,11 +140,30 @@ sealed class PlayerInventory
 
     /// <summary>
     /// Adiciona à janela 0–35: empilha em stacks existentes, depois primeiro vazio.
-    /// Retorna false se não couber o pedido inteiro. Não toca no cursor.
+    /// All-or-nothing: se não couber o pedido inteiro, restaura snapshot (ADR §26 adendo).
+    /// Não toca no cursor.
     /// </summary>
     public bool TryAdd(int blockRuntimeId, int count = 1)
     {
         if (count <= 0 || blockRuntimeId == Blocks.Air) return false;
+
+        var snap = CaptureSnapshot();
+        var added = TryAddUpTo(blockRuntimeId, count);
+        if (added != count)
+        {
+            RestoreSnapshot(snap);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Empilha o máximo possível (stacks existentes + vazios). Retorna quantos foram adicionados (0..count).
+    /// </summary>
+    public int TryAddUpTo(int blockRuntimeId, int count)
+    {
+        if (count <= 0 || blockRuntimeId == Blocks.Air) return 0;
 
         var remaining = count;
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
@@ -166,7 +185,7 @@ sealed class PlayerInventory
             remaining -= add;
         }
 
-        return remaining == 0;
+        return count - remaining;
     }
 
     /// <summary>

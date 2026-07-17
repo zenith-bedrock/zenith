@@ -143,7 +143,7 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S40** | Cair no void: death screen (`DeathInfo` + Respawn); Respawn → spawn `(0, FlatSpawnY, 0)`; inventário intacto; Health 20. | **Wire shipped** (§40) — smoke humano |
 | **H1-2** | Survival void → death UI → Respawn limpa; bag/chest inalterados; peer vê pose. | Wire shipped — smoke humano |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
-| **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag. | Wire shipped (§26) — smoke humano |
+| **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag (partial stack space OK). | Wire + partial pickup (§26) — smoke humano |
 | Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
 | Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
 
