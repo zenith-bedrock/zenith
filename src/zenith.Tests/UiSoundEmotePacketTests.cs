@@ -222,6 +222,115 @@ public class UiSoundEmotePacketTests
             () => new ClientboundCloseFormPacket());
     }
 
+    [Fact]
+    public void SetTitle_title_roundtrips_all_fields()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket
+            {
+                Type = SetTitlePacket.TitleType.Title,
+                TitleText = "§aWelcome!",
+                FadeInTime = 5,
+                StayTime = 60,
+                FadeOutTime = 10,
+                Xuid = "xuid123",
+                PlatformOnlineId = "pid456",
+                FilteredTitleMessage = "Welcome!"
+            },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Title, decoded.Type);
+        Assert.Equal("§aWelcome!", decoded.TitleText);
+        Assert.Equal(5, decoded.FadeInTime);
+        Assert.Equal(60, decoded.StayTime);
+        Assert.Equal(10, decoded.FadeOutTime);
+        Assert.Equal("xuid123", decoded.Xuid);
+        Assert.Equal("pid456", decoded.PlatformOnlineId);
+        Assert.Equal("Welcome!", decoded.FilteredTitleMessage);
+    }
+
+    [Fact]
+    public void SetTitle_clear_roundtrips()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket { Type = SetTitlePacket.TitleType.Clear },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Clear, decoded.Type);
+    }
+
+    [Fact]
+    public void SetTitle_reset_roundtrips()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket { Type = SetTitlePacket.TitleType.Reset },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Reset, decoded.Type);
+    }
+
+    [Fact]
+    public void SetTitle_times_roundtrips_only_timing()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket
+            {
+                Type = SetTitlePacket.TitleType.Times,
+                FadeInTime = 10,
+                StayTime = 100,
+                FadeOutTime = 20
+            },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Times, decoded.Type);
+        Assert.Equal(10, decoded.FadeInTime);
+        Assert.Equal(100, decoded.StayTime);
+        Assert.Equal(20, decoded.FadeOutTime);
+    }
+
+    [Fact]
+    public void SetTitle_subtitle_roundtrips()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket
+            {
+                Type = SetTitlePacket.TitleType.Subtitle,
+                TitleText = "Subtitle text"
+            },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Subtitle, decoded.Type);
+        Assert.Equal("Subtitle text", decoded.TitleText);
+    }
+
+    [Fact]
+    public void SetTitle_actionbar_roundtrips()
+    {
+        var decoded = RoundTrip(
+            new SetTitlePacket
+            {
+                Type = SetTitlePacket.TitleType.Actionbar,
+                TitleText = "Actionbar text"
+            },
+            ProtocolInfo.SET_TITLE_PACKET,
+            () => new SetTitlePacket());
+        Assert.Equal(SetTitlePacket.TitleType.Actionbar, decoded.Type);
+        Assert.Equal("Actionbar text", decoded.TitleText);
+    }
+
+    [Fact]
+    public void SetTitle_each_type_roundtrips_its_enum_value()
+    {
+        foreach (SetTitlePacket.TitleType t in Enum.GetValues<SetTitlePacket.TitleType>())
+        {
+            var decoded = RoundTrip(
+                new SetTitlePacket { Type = t },
+                ProtocolInfo.SET_TITLE_PACKET,
+                () => new SetTitlePacket());
+            Assert.Equal(t, decoded.Type);
+        }
+    }
+
     private static T RoundTrip<T>(T original, ProtocolInfo expectedId, Func<T> factory)
         where T : DataPacket
     {

@@ -94,9 +94,12 @@ class InGameSessionHandler : ISessionHandler
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
             case (int)ProtocolInfo.EMOTE_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
-            case (int)ProtocolInfo.MODAL_FORM_RESPONSE_PACKET:
             case (int)ProtocolInfo.SERVER_SETTINGS_REQUEST_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
+                return true;
+
+            case (int)ProtocolInfo.MODAL_FORM_RESPONSE_PACKET:
+                HandleModalFormResponse(session, ref stream);
                 return true;
 
             default:
@@ -720,4 +723,19 @@ class InGameSessionHandler : ISessionHandler
         5 => (x + 1, y, z),
         _ => (x, y, z)
     };
+
+    private static void HandleModalFormResponse(NetworkSession session, ref BinaryStream stream)
+    {
+        var packet = DataPacket.From<ModalFormResponsePacket>(ref stream);
+        var player = session.Player;
+        if (player is null) return;
+
+        if (packet.CancelReason is not null)
+        {
+            session.Context.Logger.Info($"{player.Username} closed form {packet.FormId} (cancel_reason={packet.CancelReason})");
+            return;
+        }
+
+        session.Context.Logger.Info($"{player.Username} submitted form {packet.FormId}: {packet.FormUiJson}");
+    }
 }
