@@ -74,7 +74,10 @@ public class PlayerSkinPacketTests
         var bytes = original.Encode().ToArray();
 
         var stream = new BinaryStream(bytes);
-        var decoded = DataPacket.From<PlayerSkinPacket>(ref stream);
+        Assert.Equal((int)ProtocolInfo.PLAYER_SKIN_PACKET, stream.ReadUnsignedVarInt());
+        var decoded = new PlayerSkinPacket();
+        decoded.Decode(ref stream);
+        stream.Dispose();
 
         Assert.Equal(original.Uuid, decoded.Uuid);
         Assert.Equal(original.Skin.Id, decoded.Skin.Id);

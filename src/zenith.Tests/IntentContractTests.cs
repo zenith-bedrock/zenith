@@ -326,6 +326,28 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_partial_pickup_when_only_stack_space_remains()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("almostfull");
+        // Feet on the drop cell so PickupFloorDrops reach check passes.
+        StandNear(player, 5, 64, 5);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Dirt, PlayerInventory.MaxStack));
+        Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 63));
+
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            5, 64, 5, Blocks.Dirt, 5, entityRuntimeIdIfNew: 100, out _));
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(64, player.Inventory.Get(0).Count);
+        Assert.Equal(1, fx.World.FloorDrops.Count);
+        Assert.True(fx.World.FloorDrops.TryTake(5, 64, 5, out _, out var left, out _));
+        Assert.Equal(4, left);
+    }
+
+    [Fact]
     public void BlockSystem_rejects_survival_break_without_start_break()
     {
         var fx = new IntentTestFixture();

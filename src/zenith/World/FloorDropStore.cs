@@ -103,4 +103,45 @@ sealed class FloorDropStore
         entityRuntimeId = slot.EntityRuntimeId;
         return true;
     }
+
+    /// <summary>
+    /// Removes up to <paramref name="max"/> from the cell. Full take removes the key;
+    /// partial leave updates count and returns a <see cref="DepositResult"/> for Remove+Add republish.
+    /// </summary>
+    public bool TryTakeUpTo(
+        int x,
+        int y,
+        int z,
+        int max,
+        out int runtimeId,
+        out int taken,
+        out long entityRuntimeId,
+        out DepositResult? remainingPublish)
+    {
+        runtimeId = Blocks.Air;
+        taken = 0;
+        entityRuntimeId = 0;
+        remainingPublish = null;
+
+        if (max <= 0) return false;
+        var key = (x, y, z);
+        if (!_drops.TryGetValue(key, out var slot)) return false;
+
+        runtimeId = slot.RuntimeId;
+        entityRuntimeId = slot.EntityRuntimeId;
+        taken = Math.Min(max, slot.Count);
+
+        if (taken >= slot.Count)
+        {
+            _drops.Remove(key);
+            return true;
+        }
+
+        var left = slot.Count - taken;
+        _drops[key] = new DropSlot(slot.RuntimeId, left, slot.EntityRuntimeId);
+        remainingPublish = new DepositResult(
+            x, y, z, slot.RuntimeId, left, slot.EntityRuntimeId,
+            Created: false, CountChanged: true);
+        return true;
+    }
 }

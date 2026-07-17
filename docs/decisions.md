@@ -237,6 +237,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Adendo (jul 2026 — AddItemActor ItemStackWrapper):** Protocol 1001 encodes AddItemActor item as legacy **ItemStackWrapper** (same as AddPlayer held), not NetworkItemStackDescriptor. Wrong shape crashed the Bedrock client after full-inv floor drop. `NetworkItemStack` writers renamed to Mojang/PM vocabulary (`WriteItemStackWrapper` / `WriteNetworkItemStackDescriptor` / `WriteItemStack`); packet Encode picks; skip Add when `DescribeStack` is air.
 
+**Adendo (jul 2026 — partial pickup):** `PickupFloorDrops` uses `TryAddUpTo` + `FloorDropStore.TryTakeUpTo`. Partial fit (e.g. stack 63 + floor count 5) takes what fits, `TakeItemActor`, then Remove+Add republish for remainder. `TryAdd` (break/chest dump) stays all-or-nothing with `CaptureSnapshot`/`RestoreSnapshot` so a failed full add never sticky-fills 63→64.
+
 ### 27. Server-authoritative break timing
 
 **Choice:** Soft blocks use `Blocks.BreakTicks` (empty-hand ≈ hardness×5s @ 20 TPS) snapshotted on AuthInput `start_break`. Same-cell `continue_destroy` does **not** reset the dig timer or re-send `StartCrack` (that finished the crack animation before `SetBlock`). Crack LevelEvent data = `round(65535 / ticks)` (PM/Geyser). Creative InstantBuild skips crack + timing gate. Early/wrong-cell breaks rejected with Debug log.
@@ -460,6 +462,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Why:** Collaborator merge landed broken encode (`BinaryStream` by value), `Player`→Packets leak, self-only echo, and `PieceType` as uint. Chat already forbids handler fan-out loops; skin is rare one-shot so Session helper is enough.
 
 **Smoke:** A changes skin in-game → B sees update; join still SkinWire+RGBA. Spoofed UUID ignored.
+
+**Adendo (jul 2026 — Encode Id):** Outbound `PlayerSkinPacket.Encode` must prefix packet Id (`0x5d`) like every other clientbound DataPacket. Missing Id made peer relay silently ignored by Bedrock (inbound Decode unchanged — header already stripped).
 
 ### 50. Split log levels (server vs RakNet)
 

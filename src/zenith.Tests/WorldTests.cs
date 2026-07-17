@@ -368,6 +368,31 @@ public class PlayerInventoryTests
     }
 
     [Fact]
+    public void TryAdd_failure_does_not_sticky_fill_partial_stack()
+    {
+        var inv = new PlayerInventory();
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(inv.TrySet(i, Blocks.Dirt, 64));
+        Assert.True(inv.TrySet(0, Blocks.Dirt, 63));
+
+        Assert.False(inv.TryAdd(Blocks.Dirt, 5));
+        Assert.Equal(63, inv.Get(0).Count);
+        Assert.Equal(64, inv.Get(1).Count);
+    }
+
+    [Fact]
+    public void TryAddUpTo_fills_partial_stack_space_when_bag_otherwise_full()
+    {
+        var inv = new PlayerInventory();
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(inv.TrySet(i, Blocks.Dirt, 64));
+        Assert.True(inv.TrySet(0, Blocks.Dirt, 63));
+
+        Assert.Equal(1, inv.TryAddUpTo(Blocks.Dirt, 5));
+        Assert.Equal(64, inv.Get(0).Count);
+    }
+
+    [Fact]
     public void Break_into_inventory_matches_BlockSystem_economy()
     {
         Blocks.EnsureLoaded();

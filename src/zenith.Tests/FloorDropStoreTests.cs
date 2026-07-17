@@ -48,4 +48,36 @@ public class FloorDropStoreTests
         Assert.Equal(77, dep.Value.EntityRuntimeId);
         Assert.Equal(Blocks.Dirt, dep.Value.ItemRuntimeId);
     }
+
+    [Fact]
+    public void TryTakeUpTo_partial_leaves_remaining_for_republish()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(3, 64, 3, Blocks.Dirt, 5, entityRuntimeIdIfNew: 42, out _));
+
+        Assert.True(store.TryTakeUpTo(
+            3, 64, 3, max: 1,
+            out var rid, out var taken, out var eid, out var rem));
+        Assert.Equal(Blocks.Dirt, rid);
+        Assert.Equal(1, taken);
+        Assert.Equal(42, eid);
+        Assert.NotNull(rem);
+        Assert.True(rem!.Value.CountChanged);
+        Assert.Equal(4, rem.Value.Count);
+        Assert.Equal(1, store.Count);
+
+        Assert.True(store.TryTake(3, 64, 3, out _, out var left, out _));
+        Assert.Equal(4, left);
+    }
+
+    [Fact]
+    public void TryTakeUpTo_full_removes_cell()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(4, 64, 4, Blocks.Stone, 3, entityRuntimeIdIfNew: 9, out _));
+        Assert.True(store.TryTakeUpTo(4, 64, 4, 3, out _, out var taken, out _, out var rem));
+        Assert.Equal(3, taken);
+        Assert.Null(rem);
+        Assert.Equal(0, store.Count);
+    }
 }
