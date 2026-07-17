@@ -4,7 +4,7 @@ using Zenith.Raknet.Extension;
 
 namespace Zenith.Protocol;
 
-/// <summary>Transmite chat. Sem comandos; higiene de flood/tamanho da config.</summary>
+/// <summary>Transmite chat. Comandos `/` não passam aqui — ver §52 / GameModeSystem.</summary>
 sealed class ChatProtocol
 {
     private readonly NetworkSession _session;

@@ -281,14 +281,16 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Choice:**
 
 1. `ServerConfig.Validate()` accepts only `"Survival"` / `"Creative"` (loud fail; no silent fallback).
-2. Every joiner gets that single mode: `Player.GameMode` plus both `StartGamePacket.GameMode` (PlayerGameMode) and `GameType` (WorldGameMode) from the same config value. **No** per-player override; **no** runtime switch (commands `/` are out of scope — would be required to change mode in-session).
+2. Every joiner gets that single mode from config: `Player.GameMode` plus both `StartGamePacket.GameMode` (PlayerGameMode) and `GameType` (WorldGameMode) from the same config value. Runtime Survival↔Creative is §52 (`/gamemode`); Adventure/Spectator still out.
 3. Creative join: empty hotbar (client Creative UI supplies items). Survival: existing starter seed.
 4. `CreativeContentPacket` after `ItemRegistry`, before empty BiomeDefinitionList — short list from `ItemPalette` (stone/grass/dirt/planks/log/sand/chest). Do **not** parse `creative_items.json` (`block_state_b64`).
 5. `BlockSystem.ApplyEdit` branches: Creative place skips `TryConsumeOne`; Creative break skips timing + inventory/floor loot (still clears chest store). Survival path unchanged.
 
 **Why:** LAN feedback needs Creative UI + infinite place/break without inventing entity wire or admin commands. Uniform config mode is the only source of truth while `/` stays frozen.
 
-**Deferred:** Adventure/Spectator; per-player mode; `/gamemode`; pick-block; rich creative tabs; full creative list / `block_state_b64`; craft ISR quirks unique to Creative.
+**Deferred:** Adventure/Spectator; pick-block; rich creative tabs; full creative list / `block_state_b64`; craft ISR quirks unique to Creative.
+
+**Adendo (jul 2026):** Runtime `/gamemode` → §52 (overrides “no runtime switch” above for Survival↔Creative only).
 
 ### 32. Entity coherence — defer WorldEntity
 
@@ -342,7 +344,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
 
-**Deferred / next honesty:** `/gamemode`; hunger/food/fall damage. (Death/Respawn → §40 adendo; drop-entity → §26.)
+**Deferred / next honesty:** hunger/food/fall damage. (`/gamemode` → §52; Death/Respawn → §40 adendo; drop-entity → §26.)
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
@@ -475,6 +477,21 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Emote peer relay; form intent stack; SetTitle; FormId allocator.
 
+### 52. `/gamemode` mínimo (sem command framework)
+
+**Choice:**
+
+1. Single chat path: inbound `Text` starting with `/gamemode` is parsed in `InGameSessionHandler` (args: `survival|creative|s|c|0|1`). Other `/…` stay quiet ignore (no registry / `/help` / autocomplete).
+2. Valid parse → `Player.SubmitGameMode` (overwrite-latest intent). **Never** `SubmitChat` for slash lines — `ChatSystem` must not fan-out commands to peers.
+3. `GameModeSystem` on tick: `SetGameMode` (private set; inventory **not** reseeded) → Protocol `SetPlayerGameType` + `SendLocalAbilities` + `SendAdventureSettings`; remint `CreativeContent` when switching **to** Creative; Toast feedback via existing `UiProtocol`.
+4. Bad `/gamemode` args → same-session Toast (handler decide + transmit; no world mutation). No Gameplay→Packets.
+
+**Why:** H1-3 LAN need — Survival↔Creative in-session without restart/`zenith.yml`. Modes/abilities already exist (§31/§37). Rule 7: one string parse beats a command framework (`dx.md` freeze). Exception to explicit non-goal “`/` commands” — **one** path only, documented here like void-death in MovementSystem.
+
+**Deferred:** Adventure/Spectator; permissions; Bedrock `AvailableCommands` / autocomplete; `/` registry; peer re-AddPlayer on mode change (late viewers already get current `GameMode` on AddPlayer).
+
+**Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode.
+
 ### OpenInventory / chest UI (note under §28)
 
 Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→Protocol (same-session UI), not GameLoop intents. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`. Opening a window is transmit of a decided view, not world mutation.
@@ -484,7 +501,7 @@ Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→
 Recorded so we don't “accidentally” implement them:
 
 - Plugin API / DI container
-- `/` commands and permissions
+- `/` command **framework** + permissions / autocomplete (single `/gamemode` path is §52 — not a framework)
 - Mojang LevelDB world format
 - Multi-level LSM compaction / PInvoke RocksDB (unless RAM/streaming need is proven)
 - Full creative catalog / `block_state_b64` decode (short CreativeContent list shipped in §31)
