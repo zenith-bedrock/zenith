@@ -67,7 +67,9 @@ Desktop.ini
 tmp-log.txt
 worlds/
 deploy/worlds/
-.cursor/
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**/
 
 artifacts/
 BenchmarkDotNet.Artifacts/

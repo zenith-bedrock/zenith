@@ -22,6 +22,7 @@
 
 - Always-on: [`.cursor/rules/zenith-architecture.mdc`](.cursor/rules/zenith-architecture.mdc), [`.cursor/rules/folder-layout.mdc`](.cursor/rules/folder-layout.mdc)
 - Intent/tick, raknet, testing: other files under `.cursor/rules/`
+- **Agent skills (invoke explicitly):** [`.cursor/skills/zenith-post-impl-audit`](.cursor/skills/zenith-post-impl-audit) — audit git status/diff vs architecture/DX after implementation; [`.cursor/skills/zenith-unit-tests`](.cursor/skills/zenith-unit-tests) — add leaf unit tests when the diff warrants them
 - Decisions: [`docs/decisions.md`](docs/decisions.md) — ADR **before** a new layer/abstraction
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — horizon order (alpha first; no PM parity chase)
 - DX: [`docs/dx.md`](docs/dx.md)
