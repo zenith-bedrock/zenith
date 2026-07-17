@@ -140,16 +140,20 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **S38** | Creative: palette click → **cursor**; SHIFT → bag; place; Survival rejeita CraftCreative. | **OK** |
 | **S39** | `world.path` LevelDB: mutar bag + baú → **graceful shutdown (Ctrl+C)** → restart → mesmo UUID / baú intactos. | **OK** |
 | **S39b** | Quit do cliente (`HandleClose`) ainda persiste inventário. | **OK** |
-| **S40** | Cair no void: death screen (`DeathInfo` + Respawn); Respawn → spawn `(0, FlatSpawnY, 0)`; inventário intacto; Health 20. | **Wire shipped** (§40) — smoke humano |
-| **H1-2** | Survival void → death UI → Respawn limpa; bag/chest inalterados; peer vê pose. | Wire shipped — smoke humano |
+| **S40** | Cair no void: death screen (`DeathInfo` + Respawn); Respawn → spawn `(0, FlatSpawnY, 0)`; inventário intacto; Health 20. | **OK** (Jul 2026) |
+| **H1-2** | Survival void → death UI → Respawn limpa; bag/chest inalterados; peer vê pose. | **OK** (Jul 2026) |
 | **S41** | A diga bloco Survival: **B** vê crack LevelEvent; abort/break limpa crack em B. | **OK** |
-| **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag (partial stack space OK). | Wire + partial pickup (§26) — smoke humano |
+| **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag (partial stack space OK). | AABB expand + delay 10 (§26) — **re-smoke humano** |
+| **H1-1-1** | Stack parcial (ex. grama 62) → break → item **vai ao inventário** (sem cair no chão). | **OK** (Jul 2026) |
+| **H1-3** | `/gamemode creative` → fly + UI; `/gamemode survival`; sem WARNING 77; peer **não** vê `/` no chat. | **OK** (Jul 2026) |
+| **Logs §50** | Boot default: join Info, sem flood `Connected PID`. | **OK** (Jul 2026) |
+| **Skin §49** | A muda skin → B vê update; join tardio de B: skin de A coerente. | Pendente (smoke humano) |
 | Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
 | Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
 
-**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente).
+**Follow-ups (fora do gate, anotados no smoke):** double-click gather de stacks (intermitente). **H1-1 drops após restart do processo** = Known debt §26 (FloorDropStore RAM-only; sem LevelDB). Leave+rejoin **mesmo processo** deve reemitir AddItemActor via overlay resync.
 
-Gates: se item **11** falhar, não começar containers. Se **S39** ou **S41** falharem, não abrir leaves dependentes. **S40** / **H1-2** = smoke humano pós death wire.
+Gates: se item **11** falhar, não começar containers. Se **S39** ou **S41** falharem, não abrir leaves dependentes. **H1-1** pickup = re-smoke após AABB + delay (§26).
 
 ## Roadmap
 

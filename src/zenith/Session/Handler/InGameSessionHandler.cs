@@ -362,7 +362,7 @@ class InGameSessionHandler : ISessionHandler
         // Death screen: still submit pose so MovementSystem can drain; ignore dig/use.
         if (player.IsDead)
         {
-            var deadInput = MovementInputState.From(
+            var deadInput = MovementInputState.FromClientAuthInput(
                 packet.PositionX,
                 packet.PositionY,
                 packet.PositionZ,
@@ -373,7 +373,7 @@ class InGameSessionHandler : ISessionHandler
             return;
         }
 
-        var input = MovementInputState.From(
+        var input = MovementInputState.FromClientAuthInput(
             packet.PositionX,
             packet.PositionY,
             packet.PositionZ,

@@ -393,6 +393,20 @@ public class PlayerInventoryTests
     }
 
     [Fact]
+    public void TryAddUpTo_merges_chest_facings_into_existing_south_stack()
+    {
+        Blocks.EnsureLoaded();
+        var inv = new PlayerInventory();
+        Assert.True(inv.TrySet(0, Blocks.Chest, 32));
+        var north = Blocks.ChestForFacing(Blocks.CardinalNorth);
+        Assert.NotEqual(Blocks.Chest, north);
+
+        Assert.Equal(5, inv.TryAddUpTo(north, 5));
+        Assert.Equal(37, inv.Get(0).Count);
+        Assert.Equal(Blocks.Chest, inv.Get(0).RuntimeId);
+    }
+
+    [Fact]
     public void Break_into_inventory_matches_BlockSystem_economy()
     {
         Blocks.EnsureLoaded();

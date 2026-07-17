@@ -165,15 +165,16 @@ sealed class PlayerInventory
     {
         if (count <= 0 || blockRuntimeId == Blocks.Air) return 0;
 
+        var mergeRid = Blocks.NormalizeMergeRuntimeId(blockRuntimeId);
         var remaining = count;
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             var s = _slots[i];
-            if (s.IsEmpty || s.RuntimeId != blockRuntimeId) continue;
+            if (s.IsEmpty || !Blocks.SameMergeItem(mergeRid, s.RuntimeId)) continue;
             var space = MaxStack - s.Count;
             if (space <= 0) continue;
             var add = Math.Min(space, remaining);
-            _slots[i] = new InventorySlot(blockRuntimeId, s.Count + add);
+            _slots[i] = new InventorySlot(s.RuntimeId, s.Count + add);
             remaining -= add;
         }
 
@@ -181,7 +182,7 @@ sealed class PlayerInventory
         {
             if (!_slots[i].IsEmpty) continue;
             var add = Math.Min(MaxStack, remaining);
-            _slots[i] = new InventorySlot(blockRuntimeId, add);
+            _slots[i] = new InventorySlot(mergeRid, add);
             remaining -= add;
         }
 

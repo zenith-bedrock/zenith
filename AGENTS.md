@@ -8,6 +8,7 @@
 |--------|------|
 | `Gameplay/` | Decide + GameLoop / systems |
 | `World/` | Terrain, Blocks, palettes, chests, floor drops |
+| `Geometry/` | AABB / spatial math pura (sem World/Player) |
 | `Player/` | Player, intents, inventory, manager |
 | `Server/` | Boot, config, identity, context |
 | `Packets/` | Wire models — **serialize only** (no Server/World/Player) |

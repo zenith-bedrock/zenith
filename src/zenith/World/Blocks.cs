@@ -133,6 +133,27 @@ static class Blocks
         };
     }
 
+    /// <summary>
+    /// Inventory / floor-drop merge equivalence (exact rid or same palette name — chest facings, etc.).
+    /// </summary>
+    public static bool SameMergeItem(int a, int b)
+    {
+        if (a == b) return true;
+        if (IsChest(a) && IsChest(b)) return true;
+        return TryGetName(a, out var na) && TryGetName(b, out var nb)
+               && string.Equals(na, nb, StringComparison.Ordinal);
+    }
+
+    /// <summary>Canonical rid for stacking (chest facings → item form; named blocks → preferred palette entry).</summary>
+    public static int NormalizeMergeRuntimeId(int runtimeId)
+    {
+        EnsureLoaded();
+        if (IsChest(runtimeId)) return _chest;
+        if (TryGetName(runtimeId, out var name) && _palette!.TryGet(name, out var canonical))
+            return canonical;
+        return runtimeId;
+    }
+
     public static bool TryGetName(int runtimeId, out string name)
     {
         EnsureLoaded();

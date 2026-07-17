@@ -337,7 +337,8 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 63));
 
         Assert.True(fx.World.FloorDrops.TryAddOrMerge(
-            5, 64, 5, Blocks.Dirt, 5, entityRuntimeIdIfNew: 100, out _));
+            5, 64, 5, Blocks.Dirt, 5, entityRuntimeIdIfNew: 100, out _,
+            pickupDelayTicks: 0));
 
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
@@ -345,6 +346,96 @@ public class IntentContractTests
         Assert.Equal(1, fx.World.FloorDrops.Count);
         Assert.True(fx.World.FloorDrops.TryTake(5, 64, 5, out _, out var left, out _));
         Assert.Equal(4, left);
+    }
+
+    [Fact]
+    public void BlockSystem_partial_pickup_grass_same_cell_when_stack_has_space()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("grasscell");
+        // Feet in the drop cell — AABB expand (1,0.5,1) does not reach one block below.
+        StandNear(player, 8, Blocks.FlatGrassY, 8);
+
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        Assert.True(player.Inventory.TrySet(6, Blocks.GrassBlock, 62));
+
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            8, Blocks.FlatGrassY, 8, Blocks.GrassBlock, 3, entityRuntimeIdIfNew: 200, out _,
+            pickupDelayTicks: 0));
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(64, player.Inventory.Get(6).Count);
+        Assert.True(fx.World.FloorDrops.TryTake(8, Blocks.FlatGrassY, 8, out _, out var left, out _));
+        Assert.Equal(1, left);
+    }
+
+    [Fact]
+    public void BlockSystem_partial_pickup_after_AuthInput_eye_space_converts_to_feet()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("eyepickup");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        Assert.True(player.Inventory.TrySet(6, Blocks.GrassBlock, 62));
+
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            8, Blocks.FlatGrassY, 8, Blocks.GrassBlock, 3, entityRuntimeIdIfNew: 201, out _,
+            pickupDelayTicks: 0));
+
+        // Client AuthInput Y = StartGame eye-space (feet + PlayerEyeHeight); same cell as drop.
+        var feetY = (float)Blocks.FlatGrassY;
+        var eyeY = feetY + Blocks.PlayerEyeHeight;
+        player.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+            8 + 0.5f, eyeY, 8 + 0.5f, pitch: 0f, yaw: 0f));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+        Assert.Equal(feetY, player.PositionY, precision: 3);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(64, player.Inventory.Get(6).Count);
+        Assert.True(fx.World.FloorDrops.TryTake(8, Blocks.FlatGrassY, 8, out _, out var left, out _));
+        Assert.Equal(1, left);
+    }
+
+    [Fact]
+    public void FloorDrop_default_delay_blocks_same_tick_pickup()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("delayblock");
+        StandNear(player, 5, 64, 5);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 1));
+
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            5, 64, 5, Blocks.Dirt, 1, entityRuntimeIdIfNew: 50, out _)); // default delay 10
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(1, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void FloorDrop_after_10_ticks_partial_pickup()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("delayok");
+        StandNear(player, 5, 64, 5);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySet(i, Blocks.Dirt, PlayerInventory.MaxStack));
+        Assert.True(player.Inventory.TrySet(0, Blocks.Dirt, 62));
+
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            5, 64, 5, Blocks.Dirt, 5, entityRuntimeIdIfNew: 51, out _));
+
+        var sys = new BlockSystem(fx.Players, fx.World);
+        for (var t = 0; t < FloorDropStore.DefaultPickupDelay; t++)
+            sys.Tick(fx.Clock);
+
+        Assert.Equal(64, player.Inventory.Get(0).Count);
+        Assert.True(fx.World.FloorDrops.TryTake(5, 64, 5, out _, out var left, out _));
+        Assert.Equal(3, left);
     }
 
     [Fact]
@@ -487,6 +578,29 @@ public class IntentContractTests
         Assert.False(player.Chunks.NeedsOverlayResync);
         Assert.True(fx.Transport.Captured.Count >= 1,
             "NeedsOverlayResync must emit UpdateBlock for known-column overlays");
+    }
+
+    [Fact]
+    public void ChunkStreamSystem_floor_drop_catchup_on_NeedsOverlayResync()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("dropresync");
+        player.Chunks.Radius = 1;
+        player.Chunks.RememberMany([(0, 0)]);
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            3, 64, 3, Blocks.Dirt, 2, entityRuntimeIdIfNew: 77, out _));
+        player.Chunks.NeedsOverlayResync = true;
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        new ChunkStreamSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.False(player.Chunks.NeedsOverlayResync);
+        Assert.Equal(1, fx.World.FloorDrops.Count);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "NeedsOverlayResync must emit AddItemActor for floor drops in known columns");
     }
 
     private static int CountRuntime(PlayerInventory inv, int runtimeId)
