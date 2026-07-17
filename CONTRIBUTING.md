@@ -21,10 +21,10 @@ Unless an ADR says otherwise: Scheduler, Actor/ECS, VisibilitySystem, DI contain
 - Use the PR template. One concern per PR when practical.
 - Keep Gameplay free of `DataPacket` / `BinaryStream`; Packets free of `Player` / `World` / `Server`.
 - Include tests for format/wire/behaviour when the change is testable without a Bedrock client.
-- After implementation, contributors using Cursor agents should run:
+- After implementation, contributors using agents should run:
   - skill **`zenith-post-impl-audit`** — audit `git status`/`diff` against architecture, freeze list, DX
   - skill **`zenith-unit-tests`** — add/extend leaf tests when the diff warrants them  
-  Skills live under [`.cursor/skills/`](.cursor/skills/).
+  Skills are mirrored for Cursor / Claude Code / OpenCode: [`.cursor/skills/`](.cursor/skills/), [`.claude/skills/`](.claude/skills/), [`.opencode/skills/`](.opencode/skills/).
 - Run before requesting review:
 
 ```bash
