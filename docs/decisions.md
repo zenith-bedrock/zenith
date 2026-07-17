@@ -481,8 +481,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:**
 
-1. Single chat path: inbound `Text` starting with `/gamemode` is parsed in `InGameSessionHandler` (args: `survival|creative|s|c|0|1`). Other `/…` stay quiet ignore (no registry / `/help` / autocomplete).
-2. Valid parse → `Player.SubmitGameMode` (overwrite-latest intent). **Never** `SubmitChat` for slash lines — `ChatSystem` must not fan-out commands to peers.
+1. Inbound `/gamemode` via **`CommandRequest` (0x4D)** (canal Bedrock) ou `Text` chat (fallback). Args: `survival|creative|s|c|0|1`. Outros `/…` quiet ignore (no registry / `/help` / autocomplete).
+2. Valid parse → `Player.SubmitGameMode` (overwrite-latest intent). **Never** `SubmitChat` for slash / command lines — `ChatSystem` must not fan-out commands to peers.
 3. `GameModeSystem` on tick: `SetGameMode` (private set; inventory **not** reseeded) → Protocol `SetPlayerGameType` + `SendLocalAbilities` + `SendAdventureSettings`; remint `CreativeContent` when switching **to** Creative; Toast feedback via existing `UiProtocol`.
 4. Bad `/gamemode` args → same-session Toast (handler decide + transmit; no world mutation). No Gameplay→Packets.
 
@@ -490,7 +490,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** Adventure/Spectator; permissions; Bedrock `AvailableCommands` / autocomplete; `/` registry; peer re-AddPlayer on mode change (late viewers already get current `GameMode` on AddPlayer).
 
-**Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode.
+**Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode. No `Unhandled Data Packet: 77`.
+
+**Adendo (jul 2026 — CommandRequest canal):** Bedrock 1.26 envia slash como `CommandRequest` (0x4D), não `Text`. Handler parseia `CommandLine` com o mesmo `GameModeConfig.TryParseCommand` (Text `/gamemode` fica fallback). Origin wire = gophertunnel 1001: origin **string** (`player`, …) + UUID + requestId + **Int64** player unique id (sempre). Sem `AvailableCommands` / `CommandOutput` / palette — quiet ignore outros comandos. Não mergear `dev/commands` framework.
 
 ### OpenInventory / chest UI (note under §28)
 
