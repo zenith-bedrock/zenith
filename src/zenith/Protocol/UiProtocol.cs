@@ -33,4 +33,40 @@ sealed class UiProtocol
 
     public void SendCloseForms() =>
         _session.SendDataPacket(new ClientboundCloseFormPacket());
+
+    public void SendTitle(string text, SetTitlePacket.TitleType titleType = SetTitlePacket.TitleType.Title,
+        int fadeIn = 10, int stay = 70, int fadeOut = 20,
+        string xuid = "", string platformId = "", string filteredText = "") =>
+        _session.SendDataPacket(new SetTitlePacket
+        {
+            Type = titleType,
+            TitleText = text,
+            FadeInTime = fadeIn,
+            StayTime = stay,
+            FadeOutTime = fadeOut,
+            Xuid = xuid,
+            PlatformOnlineId = platformId,
+            FilteredTitleMessage = filteredText
+        });
+
+    public void SendTitleTimes(int fadeIn, int stay, int fadeOut) =>
+        _session.SendDataPacket(new SetTitlePacket
+        {
+            Type = SetTitlePacket.TitleType.Times,
+            FadeInTime = fadeIn,
+            StayTime = stay,
+            FadeOutTime = fadeOut
+        });
+
+    public void SendClearTitle() =>
+        _session.SendDataPacket(new SetTitlePacket
+        {
+            Type = SetTitlePacket.TitleType.Clear
+        });
+
+    public void SendResetTitle() =>
+        _session.SendDataPacket(new SetTitlePacket
+        {
+            Type = SetTitlePacket.TitleType.Reset
+        });
 }
