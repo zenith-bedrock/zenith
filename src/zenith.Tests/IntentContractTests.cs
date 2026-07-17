@@ -593,6 +593,108 @@ public class IntentContractTests
         Assert.False(bob.TryConsumeChat(out _));
     }
 
+    [Theory]
+    [InlineData("survival", 0)]
+    [InlineData("creative", 1)]
+    [InlineData("s", 0)]
+    [InlineData("c", 1)]
+    [InlineData("0", 0)]
+    [InlineData("1", 1)]
+    [InlineData("SURVIVAL", 0)]
+    public void GameModeConfig_parses_known_args(string arg, int expected)
+    {
+        Assert.True(GameModeConfig.TryParseArg(arg, out var mode));
+        Assert.Equal((GameMode)expected, mode);
+    }
+
+    [Theory]
+    [InlineData("/gamemode creative", 1, false)]
+    [InlineData("/gamemode s", 0, false)]
+    [InlineData("/GAMEMODE 1", 1, false)]
+    public void GameModeConfig_parses_command_line(string line, int expected, bool expectBad)
+    {
+        var ok = GameModeConfig.TryParseCommand(line, out var mode, out var bad);
+        Assert.Equal(!expectBad, ok);
+        Assert.Equal(expectBad, bad);
+        if (ok) Assert.Equal((GameMode)expected, mode);
+    }
+
+    [Theory]
+    [InlineData("/gamemode")]
+    [InlineData("/gamemode xyz")]
+    [InlineData("/gamemode adventure")]
+    public void GameModeConfig_bad_gamemode_args_set_badArgs(string line)
+    {
+        Assert.False(GameModeConfig.TryParseCommand(line, out _, out var bad));
+        Assert.True(bad);
+    }
+
+    [Theory]
+    [InlineData("/help")]
+    [InlineData("/tp 0 0 0")]
+    [InlineData("hello")]
+    public void GameModeConfig_non_gamemode_lines_are_not_commands(string line)
+    {
+        Assert.False(GameModeConfig.TryParseCommand(line, out _, out var bad));
+        Assert.False(bad);
+    }
+
+    [Fact]
+    public void GameMode_intent_overwrite_latest_and_system_applies_without_chat_fanout()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice", GameMode.Survival);
+        var bob = fx.AddInGamePlayer("bob", GameMode.Survival);
+        Assert.True(alice.Inventory.TrySet(0, Blocks.Stone, 3));
+
+        alice.SubmitGameMode(GameMode.Creative);
+        alice.SubmitGameMode(GameMode.Survival); // overwrite-latest
+        alice.SubmitGameMode(GameMode.Creative);
+
+        var before = fx.Transport.Captured.Count;
+        new GameModeSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.Equal(GameMode.Creative, alice.GameMode);
+        Assert.Equal(GameMode.Survival, bob.GameMode);
+        Assert.False(alice.TryConsumeGameMode(out _));
+        Assert.Equal(Blocks.Stone, alice.Inventory.Get(0).RuntimeId);
+        Assert.Equal(3, alice.Inventory.Get(0).Count);
+        Assert.True(fx.Transport.Captured.Count > before,
+            "GameModeSystem should transmit SetPlayerGameType/abilities to self.");
+
+        // Slash path must not use SubmitChat — peer must not get a chat fan-out from mode switch.
+        Assert.False(alice.TryConsumeChat(out _));
+        new ChatSystem(fx.Players).Tick(fx.Clock);
+        Assert.False(bob.TryConsumeChat(out _));
+    }
+
+    [Fact]
+    public void GameModeSystem_remints_creative_content_only_when_entering_creative()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("switcher", GameMode.Creative);
+
+        player.SubmitGameMode(GameMode.Creative);
+        var beforeSame = fx.Transport.Captured.Count;
+        new GameModeSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+        var afterSame = fx.Transport.Captured.Count;
+
+        player.SubmitGameMode(GameMode.Survival);
+        new GameModeSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+        Assert.Equal(GameMode.Survival, player.GameMode);
+
+        player.SubmitGameMode(GameMode.Creative);
+        var beforeEnter = fx.Transport.Captured.Count;
+        new GameModeSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+        Assert.Equal(GameMode.Creative, player.GameMode);
+        Assert.True(fx.Transport.Captured.Count > beforeEnter);
+        Assert.True(afterSame > beforeSame);
+    }
+
     [Fact]
     public void InventorySystem_applies_swap_intent_on_tick()
     {

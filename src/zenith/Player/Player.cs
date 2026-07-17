@@ -23,6 +23,8 @@ class Player
     private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
     private readonly object _chatLock = new();
     private string? _pendingChat;
+    private readonly object _gameModeLock = new();
+    private GameMode? _pendingGameMode;
     private readonly object _respawnLock = new();
     private bool _pendingRespawn;
 
@@ -43,8 +45,8 @@ class Player
 
     public PlayerInventory Inventory { get; }
 
-    /// <summary>Join-time mode from config (ADR §31). Not mutated by handlers.</summary>
-    public GameMode GameMode { get; }
+    /// <summary>Join-time from config (§31); runtime via GameModeSystem only (§52). Never handlers.</summary>
+    public GameMode GameMode { get; private set; }
 
     /// <summary>Colunas enviadas / em voo e raio de view (streaming).</summary>
     public PlayerChunkTracker Chunks { get; } = new();
@@ -253,6 +255,33 @@ class Player
             return true;
         }
     }
+
+    /// <summary>Overwrite-latest runtime mode (§52). Applied on GameLoop — not by handlers.</summary>
+    public void SubmitGameMode(GameMode mode)
+    {
+        if (IsDead) return;
+        lock (_gameModeLock)
+            _pendingGameMode = mode;
+    }
+
+    public bool TryConsumeGameMode(out GameMode mode)
+    {
+        lock (_gameModeLock)
+        {
+            if (_pendingGameMode is null)
+            {
+                mode = GameMode;
+                return false;
+            }
+
+            mode = _pendingGameMode.Value;
+            _pendingGameMode = null;
+            return true;
+        }
+    }
+
+    /// <summary>GameLoop only. Does not reseed inventory (§52).</summary>
+    public void SetGameMode(GameMode mode) => GameMode = mode;
 
     /// <summary>
     /// Marks dead on the GameLoop. No-op if already dead. Inventory untouched (§40).

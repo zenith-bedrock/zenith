@@ -306,7 +306,25 @@ class InGameSessionHandler : ISessionHandler
         if (player is null) return;
 
         if (packet.Type != TextPacket.TypeChat) return;
-        if (packet.Message.StartsWith('/')) return;
+
+        // Slash lines never fan-out via ChatSystem (§52).
+        if (packet.Message.StartsWith('/'))
+        {
+            if (GameModeConfig.TryParseCommand(packet.Message, out var mode, out var badArgs))
+            {
+                player.SubmitGameMode(mode);
+                return;
+            }
+
+            if (badArgs)
+            {
+                session.Protocol.Ui.SendToast(
+                    "Game mode",
+                    "Usage: /gamemode survival|creative");
+            }
+
+            return;
+        }
 
         if (!session.Protocol.Chat.TryAcceptOutboundChat(player.Uuid, packet.Message, out var message))
         {

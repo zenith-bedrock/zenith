@@ -236,4 +236,8 @@ sealed class EntityProtocol
     {
         _session.SendDataPacket(UpdateAdventureSettingsPacket.CreateLanDefaults());
     }
+
+    /// <summary>Runtime SetPlayerGameType after GameLoop applies mode (§52).</summary>
+    public void SendPlayerGameType(int wireGameMode) =>
+        _session.SendDataPacket(new SetPlayerGameTypePacket { GameType = wireGameMode });
 }
