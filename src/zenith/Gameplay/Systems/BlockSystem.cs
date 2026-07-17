@@ -166,10 +166,13 @@ sealed class BlockSystem : IGameSystem
                 {
                     foreach (var (rid, count) in dumped)
                     {
-                        if (!player.Inventory.TryAdd(rid, count))
-                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, rid, count);
-                        else
+                        var mergeRid = Blocks.NormalizeMergeRuntimeId(rid);
+                        var added = player.Inventory.TryAddUpTo(mergeRid, count);
+                        if (added > 0)
                             inventoryChanged = true;
+                        var surplus = count - added;
+                        if (surplus > 0)
+                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, mergeRid, surplus);
                     }
                 }
             }
@@ -177,17 +180,15 @@ sealed class BlockSystem : IGameSystem
             if (!creative)
             {
                 // Oriented chest → item form (south) so stacks merge.
-                var dropRid = wasChest ? Blocks.Chest : previous;
-                if (!player.Inventory.TryAdd(dropRid))
-                {
-                    if (DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropRid, 1))
-                    {
-                        player.Session.Context.Logger.Debug(
-                            $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    }
-                }
-                else
+                var dropRid = Blocks.NormalizeMergeRuntimeId(wasChest ? Blocks.Chest : previous);
+                var added = player.Inventory.TryAddUpTo(dropRid, 1);
+                if (added > 0)
                     inventoryChanged = true;
+                if (added < 1 && DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropRid, 1))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                }
             }
         }
 
@@ -262,24 +263,29 @@ sealed class BlockSystem : IGameSystem
     private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
-        const float reachSq = 1.5f * 1.5f;
-        foreach (var (pos, runtimeId, count, entityRuntimeId) in _world.FloorDrops.Snapshot())
+        _world.FloorDrops.TickPickupDelays();
+
+        foreach (var (pos, runtimeId, count, entityRuntimeId, pickupDelay) in _world.FloorDrops.Snapshot())
         {
+            if (pickupDelay > 0) continue;
+
+            var mergeRid = Blocks.NormalizeMergeRuntimeId(runtimeId);
             foreach (var player in online)
             {
                 if (!player.IsInGame || player.IsDead) continue;
-                var dx = player.PositionX - (pos.X + 0.5f);
-                var dy = player.PositionY - (pos.Y + 0.5f);
-                var dz = player.PositionZ - (pos.Z + 0.5f);
-                if (dx * dx + dy * dy + dz * dz > reachSq) continue;
+                if (!IsWithinFloorPickupReach(player, pos.X, pos.Y, pos.Z)) continue;
 
-                var added = player.Inventory.TryAddUpTo(runtimeId, count);
+                var invSnap = player.Inventory.CaptureSnapshot();
+                var added = player.Inventory.TryAddUpTo(mergeRid, count);
                 if (added == 0) continue;
 
                 if (!_world.FloorDrops.TryTakeUpTo(
                         pos.X, pos.Y, pos.Z, added,
                         out _, out _, out var takenEntity, out var remainingPublish))
+                {
+                    player.Inventory.RestoreSnapshot(invSnap);
                     continue;
+                }
 
                 var eid = takenEntity != 0 ? takenEntity : entityRuntimeId;
                 var cx = PlayerChunkTracker.BlockToChunk(pos.X);
@@ -292,7 +298,7 @@ sealed class BlockSystem : IGameSystem
                         (ulong)player.RuntimeId);
                 }
 
-                // Partial: Take despawns entity; republish remaining stack (same entity id).
+                // Partial: Take despawns entity; republish remaining stack (same entity id / delay).
                 if (remainingPublish is { } rem)
                     PublishFloorDrop(online, rem);
 
@@ -301,6 +307,18 @@ sealed class BlockSystem : IGameSystem
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Item pickup — player standing AABB expanded by <see cref="EntityHitboxes.PickupExpand"/>
+    /// vs item entity AABB at cell (PM / wiki). Domain <see cref="Player.Player.PositionY"/> is feet.
+    /// </summary>
+    internal static bool IsWithinFloorPickupReach(global::Zenith.Player.Player player, int x, int y, int z)
+    {
+        var playerBb = EntityHitboxes.PlayerStanding(player.PositionX, player.PositionY, player.PositionZ)
+            .Expand(EntityHitboxes.PickupExpand);
+        var itemBb = EntityHitboxes.ItemAtCell(x, y, z);
+        return playerBb.Intersects(itemBb);
     }
 
     internal static bool IsWithinReach(global::Zenith.Player.Player player, int x, int y, int z)

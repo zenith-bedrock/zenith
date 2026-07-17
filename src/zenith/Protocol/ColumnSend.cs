@@ -54,7 +54,7 @@ static class ColumnSend
     /// <summary>AddItemActor for floor drops in one column (late join / stream catch-up, §26 wire).</summary>
     public static void EmitFloorDropsInColumn(NetworkSession session, World.World world, int chunkX, int chunkZ)
     {
-        foreach (var (pos, itemRid, count, entityId) in world.FloorDrops.Snapshot())
+        foreach (var (pos, itemRid, count, entityId, _) in world.FloorDrops.Snapshot())
         {
             if (PlayerChunkTracker.BlockToChunk(pos.X) != chunkX ||
                 PlayerChunkTracker.BlockToChunk(pos.Z) != chunkZ)

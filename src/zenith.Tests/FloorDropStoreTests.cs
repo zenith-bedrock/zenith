@@ -80,4 +80,42 @@ public class FloorDropStoreTests
         Assert.Null(rem);
         Assert.Equal(0, store.Count);
     }
+
+    [Fact]
+    public void TryAddOrMerge_default_delay_then_tick_to_zero()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(1, 64, 1, Blocks.Dirt, 1, entityRuntimeIdIfNew: 1, out _));
+        var snap = store.Snapshot().Single();
+        Assert.Equal(FloorDropStore.DefaultPickupDelay, snap.PickupDelayTicks);
+
+        store.TickPickupDelays(FloorDropStore.DefaultPickupDelay);
+        snap = store.Snapshot().Single();
+        Assert.Equal(0, snap.PickupDelayTicks);
+    }
+
+    [Fact]
+    public void TryAddOrMerge_merge_uses_max_pickup_delay()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(
+            2, 64, 2, Blocks.Dirt, 1, entityRuntimeIdIfNew: 1, out _, pickupDelayTicks: 0));
+        Assert.True(store.TryAddOrMerge(
+            2, 64, 2, Blocks.Dirt, 1, entityRuntimeIdIfNew: 99, out _, pickupDelayTicks: 10));
+        var snap = store.Snapshot().Single();
+        Assert.Equal(10, snap.PickupDelayTicks);
+        Assert.Equal(2, snap.Count);
+    }
+
+    [Fact]
+    public void TryTakeUpTo_partial_preserves_pickup_delay()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(
+            3, 64, 3, Blocks.Dirt, 5, entityRuntimeIdIfNew: 42, out _, pickupDelayTicks: 7));
+        Assert.True(store.TryTakeUpTo(3, 64, 3, 1, out _, out _, out _, out _));
+        var snap = store.Snapshot().Single();
+        Assert.Equal(7, snap.PickupDelayTicks);
+        Assert.Equal(4, snap.Count);
+    }
 }
