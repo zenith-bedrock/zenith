@@ -21,20 +21,23 @@ public class IpRateLimiter
 
     private readonly double _capacity;
     private readonly double _refillPerMs;
+    private readonly Func<long> _nowMs;
     private readonly ConcurrentDictionary<IPAddress, Bucket> _buckets = new();
 
     /// <param name="capacity">Quantos tokens o bucket aguenta guardar (rajada máxima).</param>
     /// <param name="refillPerSecond">Quantos tokens são devolvidos por segundo.</param>
-    public IpRateLimiter(double capacity, double refillPerSecond)
+    /// <param name="nowMs">Optional clock for tests (unix ms).</param>
+    public IpRateLimiter(double capacity, double refillPerSecond, Func<long>? nowMs = null)
     {
         _capacity = capacity;
         _refillPerMs = refillPerSecond / 1000.0;
+        _nowMs = nowMs ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 
     /// <summary>Tenta consumir <paramref name="cost"/> tokens do bucket do IP. Retorna false se não tem saldo.</summary>
     public bool TryConsume(IPAddress address, double cost = 1)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var now = _nowMs();
         var bucket = _buckets.GetOrAdd(address, _ => new Bucket { Tokens = _capacity, LastRefillMs = now });
 
         lock (bucket)
@@ -59,7 +62,7 @@ public class IpRateLimiter
     /// </summary>
     public void Cleanup(long maxIdleMs)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var now = _nowMs();
         foreach (var (address, bucket) in _buckets)
         {
             bool idle;

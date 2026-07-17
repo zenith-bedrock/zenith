@@ -29,6 +29,28 @@ class LoginPacket : DataPacket
     public AuthenticationInfo AuthInfo { get; set; } = new();
     public string ClientDataJwt { get; set; } = "";
 
+    public override Span<byte> Encode()
+    {
+        var authJson = JsonSerializer.Serialize(AuthInfo);
+        var authBytes = Encoding.UTF8.GetBytes(authJson);
+        var jwtBytes = Encoding.UTF8.GetBytes(ClientDataJwt);
+
+        var body = new BinaryStream();
+        body.WriteInt(authBytes.Length, BinaryStream.Endianess.Little);
+        body.Write(authBytes);
+        body.WriteInt(jwtBytes.Length, BinaryStream.Endianess.Little);
+        body.Write(jwtBytes);
+        var bodyBytes = body.GetBufferDisposing().ToArray();
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(Id);
+        writer.WriteInt(Protocol);
+        // Decode uses ReadVarInt (zigzag) for the connection-request length — mirror it.
+        writer.WriteVarInt(bodyBytes.Length);
+        writer.Write(bodyBytes);
+        return writer.GetBufferDisposing();
+    }
+
     public override void Decode(ref BinaryStream stream)
     {
         Protocol = stream.ReadInt();
@@ -38,28 +60,7 @@ class LoginPacket : DataPacket
         var x = Encoding.UTF8.GetString(stream.ReadSpan(chainDataJsonLength));
         AuthInfo = JsonSerializer.Deserialize<AuthenticationInfo>(x)!;
 
-        // foreach (var chain in ChainDataJwt.Chain)
-        // {
-        //     var handler = new JwtSecurityTokenHandler();
-        //     var token = handler.ReadJwtToken(chain);
-        //     foreach (var claim in token.Claims)
-        //     {
-        //         Console.WriteLine($"{claim.Type}: {claim.Value}");
-        //     }
-        // }
-
         var clientDataJwtLength = stream.ReadInt(BinaryStream.Endianess.Little);
         ClientDataJwt = Encoding.UTF8.GetString(stream.ReadSpan(clientDataJwtLength));
-
-        // var h = new JwtSecurityTokenHandler
-        // {
-        //     MaximumTokenSizeInBytes = 1024 * 1024
-        // };
-
-        // var t = h.ReadJwtToken(ClientDataJwt);
-        // foreach (var claim in t.Claims)
-        // {
-        //     Console.WriteLine($"{claim.Type}: {claim.Value}");
-        // }
     }
 }

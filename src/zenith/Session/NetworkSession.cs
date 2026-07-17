@@ -190,7 +190,7 @@ class NetworkSession
     }
 
     /// <summary>Limite de segurança contra zip bomb.</summary>
-    private const int MaxDecompressedSize = 2 * 1024 * 1024;
+    internal const int MaxDecompressedSize = 2 * 1024 * 1024;
 
     /// <summary>
     /// Descomprime <paramref name="inflater"/> inteiro pra um buffer alugado do ArrayPool,
@@ -198,7 +198,7 @@ class NetworkSession
     /// buffer retornado ao pool (<see cref="ArrayPool{T}.Return"/>) depois de terminar de
     /// usar o <see cref="BinaryStream"/> que o envolve.
     /// </summary>
-    private static byte[] InflateToPooledBuffer(DeflateStream inflater, out int length)
+    internal static byte[] InflateToPooledBuffer(DeflateStream inflater, out int length)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
         length = 0;

@@ -30,5 +30,13 @@ class UpdateBlockPacket : DataPacket
         return writer.GetBufferDisposing();
     }
 
-    public override void Decode(ref BinaryStream stream) { }
+    public override void Decode(ref BinaryStream stream)
+    {
+        X = stream.ReadVarInt();
+        Y = stream.ReadVarInt();
+        Z = stream.ReadVarInt();
+        BlockRuntimeId = stream.ReadUnsignedVarInt();
+        Flags = stream.ReadUnsignedVarInt();
+        DataLayerId = stream.ReadUnsignedVarInt();
+    }
 }
