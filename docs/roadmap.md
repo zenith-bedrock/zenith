@@ -25,7 +25,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 1 | **Drop-entity wire** (minimal) | **Shipped** (Jul 2026): `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
 | 2 | **Death / Respawn** | **Shipped** (Jul 2026): void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
 | 2b | **Block/item registry honesty** | **Shipped** (Jul 2026): palette reverse `runtimeId→name` + `Blocks.IsPlaceable` allowlist (§12 adendo). Before `/gamemode`. |
-| 3 | **`/gamemode` minimal** | One command path, config-backed modes you already have — **not** a command framework or autocomplete stack ([`dx.md`](dx.md) freeze). ADR first. |
+| 3 | **`/gamemode` minimal** | **Shipped** (Jul 2026): chat parse → intent → `GameModeSystem` + SetPlayerGameType/abilities/CreativeContent remint (§52). Not a command framework. |
 | 4 | **Tool dig speed / efficiency** | Extends §27; still no enchants catalogue dump. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | Facing-only (§46) does not unlock this; pair model + store (§28/§39). |
 | 6 | **Block gravity** (sand/gravel) | Static placeable today; fall/landing is a new tick domain — ADR first. |

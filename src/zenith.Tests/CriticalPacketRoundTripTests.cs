@@ -66,4 +66,19 @@ public class CriticalPacketRoundTripTests
             decoded.AuthInfo.Certificate is null ||
             decoded.AuthInfo.Certificate == "");
     }
+
+    [Fact]
+    public void SetPlayerGameType_roundtrips_game_type()
+    {
+        var original = new SetPlayerGameTypePacket { GameType = AbilityBits.WireGameModeCreative };
+        var encoded = original.Encode().ToArray();
+        var stream = new BinaryStream(encoded);
+        Assert.Equal((int)ProtocolInfo.SET_PLAYER_GAME_TYPE_PACKET, stream.ReadUnsignedVarInt());
+
+        var decoded = new SetPlayerGameTypePacket();
+        decoded.Decode(ref stream);
+        stream.Dispose();
+
+        Assert.Equal(original.GameType, decoded.GameType);
+    }
 }

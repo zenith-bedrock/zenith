@@ -47,7 +47,7 @@ LGPL-3.0: share improvements to the library; build applications on top with a cl
 |------------|----------|
 | Plugin API | Wrong extension surface early becomes forever |
 | DI container | Hides dependency direction; architecture relies on it being visible |
-| Command framework | `/` commands deferred until chat/identity semantics settle |
+| Command framework | Frozen; single `/gamemode` path only (§52) — no registry/autocomplete |
 | “God” event framework | EventBus exists for login/quit; domain consumers wait for need |
 
 Good DX is saying **no** until the yes is cheap to maintain.
