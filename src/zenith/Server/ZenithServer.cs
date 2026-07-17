@@ -57,6 +57,7 @@ class ZenithServer
         gameLoop.Register(new MovementSystem(players));
         gameLoop.Register(new EquipmentSystem(players));
         gameLoop.Register(new ChatSystem(players));
+        gameLoop.Register(new GameModeSystem(players));
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
