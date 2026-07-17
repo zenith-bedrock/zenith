@@ -475,7 +475,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Contributor landed DTOs without Id-in-Encode and with broken EmoteList handler decode — unusable outbound and Warning-prone inbound. Wire fix ≠ shipping toast/forms/emote product; H1 smoke stays death/drops.
 
-**Deferred:** Emote peer relay; form intent stack; SetTitle; FormId allocator.
+**Deferred:** Emote peer relay; form intent stack; FormId allocator; product title banners (TextObject / timed UI as gameplay).
+
+**Adendo (jul 2026 — SetTitle wire):** `SetTitlePacket` (0x58) + `UiProtocol.SendTitle` / `SendSubtitle` / `SendActionbar` / `SendTitleTimes` / Clear / Reset shipped as transmit hygiene. Times is a separate packet from text. Inbound ModalFormResponse remains quiet ignore (no Info decode path). Product title use stays Deferred.
 
 ### 52. `/gamemode` mínimo (sem command framework)
 
