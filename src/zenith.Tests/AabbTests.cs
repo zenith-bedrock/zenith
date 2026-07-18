@@ -6,7 +6,6 @@ namespace Zenith.Tests;
 
 public class AabbTests
 {
-
     [Fact]
     public void AbsoluteWireY_adds_network_offset_not_bare_feet()
     {
@@ -14,6 +13,23 @@ public class AabbTests
         Assert.Equal(1.621f, EntityHitboxes.PlayerNetworkOffset);
         Assert.Equal(Blocks.FlatSpawnY + 1.621f, EntityHitboxes.AbsoluteWireY(Blocks.FlatSpawnY));
         Assert.NotEqual(Blocks.FlatSpawnY, EntityHitboxes.AbsoluteWireY(Blocks.FlatSpawnY));
+    }
+
+    [Fact]
+    public void StandingForPlaceCheck_does_not_intersect_flush_adjacent_BlockCell()
+    {
+        // Feet at x+1.5 (StandForPlace) vs cell at x — flush face, no volume overlap.
+        var cell = EntityHitboxes.BlockCell(7, 64, 7);
+        var standing = EntityHitboxes.StandingForPlaceCheck(7 + 1.5f, 64f, 7 + 0.5f);
+        Assert.False(cell.Intersects(standing));
+    }
+
+    [Fact]
+    public void StandingForPlaceCheck_intersects_own_BlockCell()
+    {
+        var cell = EntityHitboxes.BlockCell(6, 64, 6);
+        var standing = EntityHitboxes.StandingForPlaceCheck(6 + 0.5f, 64f, 6 + 0.5f);
+        Assert.True(cell.Intersects(standing));
     }
 
     [Fact]

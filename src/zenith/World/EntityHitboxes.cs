@@ -25,9 +25,23 @@ static class EntityHitboxes
     /// <summary>Pickup reach: expand standing player AABB by this amount on each axis.</summary>
     public static readonly (float X, float Y, float Z) PickupExpand = (1f, 0.5f, 1f);
 
+    /// <summary>
+    /// Shrink standing BB for place-obstruction checks (float flush against a face).
+    /// </summary>
+    public const float PlaceCollisionEpsilon = 1e-4f;
+
     /// <summary>Standing player AABB from feet position.</summary>
     public static Aabb PlayerStanding(float feetX, float feetY, float feetZ) =>
         Aabb.FromCenterSize(feetX, feetY, feetZ, PlayerWidth, PlayerHeight);
+
+    /// <summary>Full solid cell for place-obstruction (starter placeables are full cubes).</summary>
+    public static Aabb BlockCell(int x, int y, int z) =>
+        Aabb.FromMinMax(x, y, z, x + 1f, y + 1f, z + 1f);
+
+    /// <summary>Standing BB inset by <see cref="PlaceCollisionEpsilon"/> for place ∩ body checks.</summary>
+    public static Aabb StandingForPlaceCheck(float feetX, float feetY, float feetZ) =>
+        PlayerStanding(feetX, feetY, feetZ)
+            .Expand(-PlaceCollisionEpsilon, -PlaceCollisionEpsilon, -PlaceCollisionEpsilon);
 
     /// <summary>Item entity AABB at floor-drop cell (feet at integer Y, center XZ).</summary>
     public static Aabb ItemAtCell(int x, int y, int z) =>
