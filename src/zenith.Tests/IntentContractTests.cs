@@ -104,6 +104,16 @@ public class IntentContractTests
         player.PositionZ = z + 0.5f;
     }
 
+    /// <summary>
+    /// Feet in the +X adjacent cell so place into (x,y,z) is not self-obstructed (§15).
+    /// </summary>
+    private static void StandForPlace(Player.Player player, int x, int y, int z)
+    {
+        player.PositionX = x + 1.5f;
+        player.PositionY = y;
+        player.PositionZ = z + 0.5f;
+    }
+
     private static void BeginBreakReady(GameClock clock, World.World world, Player.Player player, int x, int y, int z)
     {
         var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
@@ -186,11 +196,167 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void MovementSystem_sneak_fans_SetActorData_flags_to_peer()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("alice");
+        var b = fx.AddInGamePlayer("bob");
+        StandNear(a, 0, 64, 0);
+        StandNear(b, 2, 64, 0);
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        a.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+            a.PositionX,
+            a.PositionY + Blocks.PlayerEyeHeight,
+            a.PositionZ,
+            pitch: 0f,
+            yaw: 0f,
+            sneaking: true));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.True(a.IsSneaking);
+        Assert.True(a.LastReplicatedSneaking);
+        Assert.False(a.IsSprinting);
+        Assert.True(fx.Transport.Captured.Count >= 1, "peer must receive SetActorData FLAGS");
+        _ = b;
+    }
+
+    [Fact]
+    public void MovementSystem_sprint_start_clears_sneak()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("sprinter");
+        var b = fx.AddInGamePlayer("viewer");
+        a.IsSneaking = true;
+        a.LastReplicatedSneaking = true;
+
+        a.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+            a.PositionX,
+            a.PositionY + Blocks.PlayerEyeHeight,
+            a.PositionZ,
+            pitch: 0f,
+            yaw: 0f,
+            sneaking: false,
+            sprintStart: true));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+
+        Assert.True(a.IsSprinting);
+        Assert.False(a.IsSneaking);
+        Assert.True(a.LastReplicatedSprinting);
+        Assert.False(a.LastReplicatedSneaking);
+        _ = b;
+    }
+
+    [Fact]
+    public void MovementSystem_missed_swing_fans_Animate_to_peer()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("puncher");
+        var b = fx.AddInGamePlayer("viewer");
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        // Same pose so Absolute is not dirty — only swing fan-out.
+        a.LastReplicatedX = a.PositionX;
+        a.LastReplicatedY = a.PositionY;
+        a.LastReplicatedZ = a.PositionZ;
+        a.LastReplicatedPitch = a.Pitch;
+        a.LastReplicatedYaw = a.Yaw;
+        a.LastReplicatedHeadYaw = a.HeadYaw;
+
+        a.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+            a.PositionX,
+            a.PositionY + Blocks.PlayerEyeHeight,
+            a.PositionZ,
+            pitch: a.Pitch,
+            yaw: a.Yaw,
+            missedSwing: true));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.True(fx.Transport.Captured.Count >= 1, "peer must receive Animate SwingArm");
+        _ = b;
+    }
+
+    [Fact]
+    public void MovementSystem_respawn_clears_sneak_sprint()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("croucher");
+        player.IsSneaking = true;
+        player.IsSprinting = true;
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 0f,
+            y: MovementSystem.VoidRescueY - 1f,
+            z: 0f,
+            pitch: 0f,
+            yaw: 0f));
+        var movement = new MovementSystem(fx.Players);
+        movement.Tick(fx.Clock);
+        Assert.True(player.IsDead);
+        Assert.False(player.IsSneaking);
+        Assert.False(player.IsSprinting);
+
+        player.SubmitRespawn();
+        movement.Tick(fx.Clock);
+        Assert.False(player.IsDead);
+        Assert.False(player.IsSneaking);
+        Assert.False(player.IsSprinting);
+        Assert.False(player.LastReplicatedSneaking);
+        Assert.False(player.LastReplicatedSprinting);
+    }
+
+    [Fact]
+    public void PlayerVisibility_RelayEmote_sends_to_other_InGame_peers()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("emoter");
+        var b = fx.AddInGamePlayer("audience");
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        PlayerVisibility.RelayEmote(
+            a,
+            emoteId: "4c8cc107-7341-4d95-91eb-5386cc311b25",
+            tickLength: 40,
+            xuid: "",
+            platformChatId: "",
+            fx.Players.Online);
+        FlushRaknet(fx.Players);
+
+        Assert.True(fx.Transport.Captured.Count >= 1);
+        _ = b;
+    }
+
+    [Fact]
+    public void PlayerVisibility_RelaySwingArm_sends_to_other_InGame_peers()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("miner");
+        var b = fx.AddInGamePlayer("viewer");
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        PlayerVisibility.RelaySwingArm(a, fx.Players.Online, swingSource: "mine");
+        FlushRaknet(fx.Players);
+
+        Assert.True(fx.Transport.Captured.Count >= 1);
+        _ = b;
+    }
+
+    [Fact]
     public void BlockSystem_drains_fifo_queue_in_one_tick()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("builder");
-        StandNear(player, 2, 64, 0);
+        // Stand on top of the middle cell (Y+1): in reach of 1–3, no body ∩ place cells at Y=64.
+        StandNear(player, 2, 65, 0);
         Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 10));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 0, Blocks.Stone, hotbarSlot: 0)));
@@ -211,7 +377,7 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("swapper");
-        StandNear(player, 5, 70, 5);
+        StandForPlace(player, 5, 70, 5);
         Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
         Assert.True(player.Inventory.TrySet(2, Blocks.GrassBlock, 5));
         player.SelectedHotbarSlot = 0; // network race: client swapped selection after submit
@@ -226,11 +392,72 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_rejects_place_into_own_body_cell_without_consuming()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("selftrap");
+        StandNear(player, 6, 64, 6);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
+
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(6, 64, 6, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(6, 64, 6));
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void BlockSystem_allows_place_flush_adjacent_to_standing_player()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("sideplace");
+        StandForPlace(player, 7, 64, 7);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 3));
+
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(7, 64, 7, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(7, 64, 7));
+        Assert.Equal(2, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void BlockSystem_rejects_place_into_peer_body_cell()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("alice");
+        var b = fx.AddInGamePlayer("bob");
+        StandNear(a, 10, 64, 10);
+        StandForPlace(b, 10, 64, 10);
+        Assert.True(b.Inventory.TrySet(0, Blocks.Stone, 4));
+
+        Assert.True(b.SubmitBlockEdit(BlockEditIntent.Set(10, 64, 10, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
+        Assert.Equal(4, b.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void BlockSystem_creative_rejects_place_into_own_body_cell()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("cself", GameMode.Creative);
+        StandNear(player, 11, 64, 11);
+        Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 1));
+
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(11, 64, 11, Blocks.Stone, hotbarSlot: 0)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(11, 64, 11));
+    }
+
+    [Fact]
     public void BlockSystem_rejects_place_when_HotbarSlot_invalid()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("badslot");
-        StandNear(player, 1, 64, 1);
+        StandForPlace(player, 1, 64, 1);
         Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Stone, hotbarSlot: -1)));
@@ -544,7 +771,7 @@ public class IntentContractTests
         var joiner = fx.AddInGamePlayer("joiner");
         joiner.IsInGame = false;
         joiner.Chunks.RememberMany([(0, 0)]);
-        StandNear(placer, 2, 64, 2);
+        StandForPlace(placer, 2, 64, 2);
         Assert.True(placer.Inventory.TrySet(0, Blocks.Stone, 5));
 
         FlushRaknet(fx.Players);
@@ -620,7 +847,7 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("deeplace");
-        StandNear(player, 1, 64, 1);
+        StandForPlace(player, 1, 64, 1);
         Assert.True(player.Inventory.TrySet(9, Blocks.Stone, 5));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Stone, hotbarSlot: 9)));
@@ -968,7 +1195,7 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("fast");
-        StandNear(player, 9, 64, 9);
+        StandForPlace(player, 9, 64, 9);
         Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 3));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(9, 64, 9, Blocks.Stone, hotbarSlot: 0)));
 
@@ -981,7 +1208,7 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("chestor");
-        StandNear(player, 4, 64, 4);
+        StandForPlace(player, 4, 64, 4);
         Assert.True(player.Inventory.TrySet(0, Blocks.Chest, 2));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, Blocks.Chest, hotbarSlot: 0)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
@@ -1298,7 +1525,7 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("cplace", GameMode.Creative);
-        StandNear(player, 2, 64, 2);
+        StandForPlace(player, 2, 64, 2);
         Assert.True(player.Inventory.TrySet(0, Blocks.Stone, 5));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);

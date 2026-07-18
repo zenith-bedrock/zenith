@@ -64,7 +64,21 @@ Good DX is saying **no** until the yes is cheap to maintain.
 7. Folders = roles under `src/zenith/` — look in `Packets/` / `Protocol/` / `Session/`, not a revived `Network/` junk drawer
 8. Item wire: `NetworkItemStack` has three writers (`WriteNetworkItemStackDescriptor`, `WriteItemStackWrapper`, `WriteItemStack`). **Packet Encode picks** — never call a “default Write”. AddPlayer/AddItemActor → Wrapper; InventoryContent/MobEquipment → Descriptor; Creative/CraftingData → ItemStack
 9. Block→item bridge: Protocol maps via `Blocks.TryGetName` + `ItemPalette` only — reverse lookup must cover the dump (`BlockPalette.TryGetName`), not only curated `Blocks.*` consts. Placeables are an explicit allowlist (`IsPlaceable`), not “any palette rid”
+10. Protocol packet shapes: see “Bedrock protocol docs” below before inventing field order
 ```
+
+### Bedrock protocol docs (official)
+
+Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/bedrock-protocol-docs) branch **`r/26_u4`** → typically `~/Development/references/bedrock/bedrock-protocol-docs/`.
+
+| Source | Role for Zenith |
+|--------|-----------------|
+| `ServerIdentity.ProtocolVersion` (**1001**) / `VersionName` (**1.26.33**) | What we encode today |
+| Docs JSON `x-protocol-version` on `r/26_u4` (**2169** / **1.26.50**) | Newer train — shapes useful, **bit indices / new fields may shift** |
+| `previous_changelogs/changelog_1001_*.md` | What changed at 1001 |
+| PocketMine `BedrockProtocol` @ 1001 / Endstone BDS headers | Wire cross-check when docs are ahead of our protocol |
+
+**Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against the protocol we speak (1001), not blindly against 2169 enums. AuthInput flag indices: keep Endstone/PM 1001 (`Sneaking=8`, …) until we bump protocol.
 
 Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live in [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 

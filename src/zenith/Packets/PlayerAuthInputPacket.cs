@@ -12,8 +12,7 @@ readonly struct PlayerBlockAction
 }
 
 /// <summary>
-/// UseItem embedded in AuthInput when <see cref="PlayerAuthInputPacket.InputFlagPerformItemInteraction"/> is set
-/// (gophertunnel <c>PlayerInventoryAction</c>).
+/// UseItem embedded in AuthInput when <see cref="PlayerAuthInputPacket.InputFlagPerformItemInteraction"/> is set.
 /// </summary>
 readonly struct AuthItemInteraction
 {
@@ -31,9 +30,13 @@ readonly struct AuthItemInteraction
 /// </summary>
 class PlayerAuthInputPacket : DataPacket
 {
+    public const int InputFlagSneaking = 8;
+    public const int InputFlagStartSprinting = 25;
+    public const int InputFlagStopSprinting = 26;
     public const int InputFlagPerformItemInteraction = 34;
     public const int InputFlagPerformBlockActions = 35;
     public const int InputFlagPerformItemStackRequest = 36;
+    public const int InputFlagMissedSwing = 39;
     public const int InputFlagClientPredictedVehicle = 45;
 
     public const int ActionStartBreak = 0;
@@ -52,6 +55,13 @@ class PlayerAuthInputPacket : DataPacket
     public PlayerBlockAction[] BlockActions { get; set; } = [];
     public AuthItemInteraction? ItemInteraction { get; set; }
 
+    /// <summary>Continuous sneak level (AuthInput bit 8) — §53.</summary>
+    public bool InputSneaking { get; set; }
+
+    public bool InputStartSprinting { get; set; }
+    public bool InputStopSprinting { get; set; }
+    public bool InputMissedSwing { get; set; }
+
     public override Span<byte> Encode() => Array.Empty<byte>();
 
     public override void Decode(ref BinaryStream stream)
@@ -68,6 +78,11 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
         var inputData = ReadInputBitset(ref stream);
+        InputSneaking = InputBitsetTest(inputData, InputFlagSneaking);
+        InputStartSprinting = InputBitsetTest(inputData, InputFlagStartSprinting);
+        InputStopSprinting = InputBitsetTest(inputData, InputFlagStopSprinting);
+        InputMissedSwing = InputBitsetTest(inputData, InputFlagMissedSwing);
+
         _ = stream.ReadUnsignedVarInt(); // input_mode
         _ = stream.ReadUnsignedVarInt(); // play_mode
         _ = stream.ReadUnsignedVarInt(); // interaction_model
@@ -159,7 +174,7 @@ class PlayerAuthInputPacket : DataPacket
         return list;
     }
 
-    /// <summary>Vedrock/gophertunnel: 7 data bits per byte, continuation bit 0x80.</summary>
+    /// <summary>AuthInput flag bitset: 7 data bits per byte, continuation bit 0x80.</summary>
     internal static byte[] ReadInputBitset(ref BinaryStream stream)
     {
         var bytes = new List<byte>(16);
@@ -182,7 +197,7 @@ class PlayerAuthInputPacket : DataPacket
         return (bitset[idx] & (1 << pos)) != 0;
     }
 
-    /// <summary>gophertunnel Reader.PlayerInventoryAction — AuthInput item-interaction branch.</summary>
+    /// <summary>Decode AuthInput item-interaction branch (legacy request + UseItem fields).</summary>
     private static AuthItemInteraction ReadUseItemTransactionData(ref BinaryStream stream)
     {
         var legacyRequestId = stream.ReadVarInt();
@@ -244,7 +259,7 @@ class PlayerAuthInputPacket : DataPacket
         SkipItemInstance(ref stream);
     }
 
-    /// <summary>gophertunnel ItemInstance (VarInt network id) — AuthInput item interaction.</summary>
+    /// <summary>Skip legacy ItemInstance (VarInt network id) inside AuthInput item interaction.</summary>
     private static void SkipItemInstance(ref BinaryStream stream)
     {
         var networkId = stream.ReadVarInt();

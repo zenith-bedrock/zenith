@@ -96,11 +96,15 @@ class InGameSessionHandler : ISessionHandler
 
             case (int)ProtocolInfo.ANIMATE_PACKET:
             case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
-            case (int)ProtocolInfo.EMOTE_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
             case (int)ProtocolInfo.MODAL_FORM_RESPONSE_PACKET:
             case (int)ProtocolInfo.SERVER_SETTINGS_REQUEST_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
+            case (int)ProtocolInfo.SET_PLAYER_INVENTORY_OPTIONS_PACKET:
+                return true;
+
+            case (int)ProtocolInfo.EMOTE_PACKET:
+                HandleEmote(session, ref stream);
                 return true;
 
             default:
@@ -164,7 +168,7 @@ class InGameSessionHandler : ISessionHandler
             {
                 if (action.ActionType == ItemStackRequestPacket.ActionCraftCreative)
                 {
-                    // NumberOfCrafts / CraftTimes is protocol boilerplate — ignored (PM/DF).
+                    // NumberOfCrafts / CraftTimes is protocol boilerplate — ignored.
                     baked.Add(InventoryStackAction.CraftCreative(action.CreativeNetId));
                     continue;
                 }
@@ -359,7 +363,7 @@ class InGameSessionHandler : ISessionHandler
         var player = session.Player;
         if (player is null) return;
 
-        // Death screen: still submit pose so MovementSystem can drain; ignore dig/use.
+        // Death screen: still submit pose so MovementSystem can drain; ignore dig/use/pose modes.
         if (player.IsDead)
         {
             var deadInput = MovementInputState.FromClientAuthInput(
@@ -378,7 +382,11 @@ class InGameSessionHandler : ISessionHandler
             packet.PositionY,
             packet.PositionZ,
             packet.Pitch,
-            packet.Yaw);
+            packet.Yaw,
+            sneaking: packet.InputSneaking,
+            sprintStart: packet.InputStartSprinting,
+            sprintStop: packet.InputStopSprinting,
+            missedSwing: packet.InputMissedSwing);
 
         if (!input.IsSecure())
         {
@@ -504,6 +512,15 @@ class InGameSessionHandler : ISessionHandler
                     packet.BlockFace,
                     packet.HotbarSlot);
                 break;
+            case InventoryTransactionPacket.TypeItemUseOnActor:
+                if (packet.ActorActionType == InventoryTransactionPacket.ActorAttack)
+                {
+                    PlayerVisibility.RelaySwingArm(
+                        player,
+                        session.Context.PlayerManager.Online,
+                        swingSource: "attack");
+                }
+                break;
         }
     }
 
@@ -550,6 +567,17 @@ class InGameSessionHandler : ISessionHandler
             return;
         }
 
+        if (useActionType is InventoryTransactionPacket.UseClickAir
+            or InventoryTransactionPacket.UseAsAttack)
+        {
+            // Air punch / attack-style use — peer arm swing (§53). MissedSwing AuthInput also covers this.
+            PlayerVisibility.RelaySwingArm(
+                player,
+                session.Context.PlayerManager.Online,
+                swingSource: "attack");
+            return;
+        }
+
         if (useActionType != InventoryTransactionPacket.UseClickBlock) return;
 
         var stack = player.Inventory.Get(hotbarSlot);
@@ -592,8 +620,14 @@ class InGameSessionHandler : ISessionHandler
         if (!player.SubmitBlockEdit(intent))
             session.Context.Logger.Debug($"Dropped place from {player.Username}: block-edit queue full.");
         else
+        {
+            PlayerVisibility.RelaySwingArm(
+                player,
+                session.Context.PlayerManager.Online,
+                swingSource: "build");
             session.Context.Logger.Debug(
                 $"Place queued from {player.Username} @ {tx},{ty},{tz} rid={runtimeId}");
+        }
     }
 
     private static void HandleRequestAbility(NetworkSession session, ref BinaryStream stream)
@@ -664,6 +698,47 @@ class InGameSessionHandler : ISessionHandler
             session.Context.PlayerManager.Online);
     }
 
+    /// <summary>Emote peer relay (§53) — validate self runtime id + 1s rate-limit.</summary>
+    private static void HandleEmote(NetworkSession session, ref BinaryStream stream)
+    {
+        EmotePacket packet;
+        try
+        {
+            packet = DataPacket.From<EmotePacket>(ref stream);
+        }
+        catch (Exception ex)
+        {
+            session.Context.Logger.Debug($"Emote decode rejected: {ex.Message}");
+            return;
+        }
+
+        var player = session.Player;
+        if (player is null || player.IsDead) return;
+
+        if ((long)packet.ActorRuntimeId != player.RuntimeId)
+        {
+            session.Context.Logger.Debug(
+                $"Emote ignored for {player.Username}: runtime id mismatch.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(packet.EmoteId))
+            return;
+
+        var tick = session.Context.Clock.CurrentTick;
+        if (player.LastEmoteTick != 0 && tick - player.LastEmoteTick < 20)
+            return;
+
+        player.LastEmoteTick = tick;
+        PlayerVisibility.RelayEmote(
+            player,
+            packet.EmoteId,
+            packet.TickLength,
+            packet.Xuid,
+            packet.PlatformChatId,
+            session.Context.PlayerManager.Online);
+    }
+
     private static void OpenChestUi(NetworkSession session, Player.Player player, int x, int y, int z)
     {
         session.Context.World.Chests.Ensure(x, y, z);
@@ -708,6 +783,10 @@ class InGameSessionHandler : ISessionHandler
 
         // Always cue crack for breakable cells — CrackProgressMax = one-tick snap for soft blocks.
         BlockCrackFanout.Start(session.Context.PlayerManager, session, x, y, z, need);
+        PlayerVisibility.RelaySwingArm(
+            player,
+            session.Context.PlayerManager.Online,
+            swingSource: "mine");
 
         var label = action switch
         {
@@ -742,8 +821,19 @@ class InGameSessionHandler : ISessionHandler
         if (!player.SubmitBlockEdit(intent))
             player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
         else
+        {
+            // Creative instant / predict destroy — Survival dig already swung on start_break.
+            if (player.GameMode == GameMode.Creative || !intent.DigAuthorized)
+            {
+                PlayerVisibility.RelaySwingArm(
+                    player,
+                    player.Session.Context.PlayerManager.Online,
+                    swingSource: "mine");
+            }
+
             player.Session.Context.Logger.Debug(
                 $"Break queued from {player.Username} @ {x},{y},{z} dig={intent.DigAuthorized}");
+        }
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch

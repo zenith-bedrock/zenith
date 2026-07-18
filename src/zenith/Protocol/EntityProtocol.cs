@@ -129,7 +129,9 @@ sealed class EntityProtocol
         float yaw,
         float headYaw,
         NetworkItemStack heldItem,
-        int gameMode = AbilityBits.WireGameModeSurvival)
+        int gameMode = AbilityBits.WireGameModeSurvival,
+        bool sneaking = false,
+        bool sprinting = false)
     {
         _session.SendDataPacket(new AddPlayerPacket
         {
@@ -143,7 +145,9 @@ sealed class EntityProtocol
             Yaw = yaw,
             HeadYaw = headYaw,
             HeldItem = heldItem,
-            GameMode = gameMode
+            GameMode = gameMode,
+            Sneaking = sneaking,
+            Sprinting = sprinting
         });
     }
 
@@ -193,14 +197,66 @@ sealed class EntityProtocol
         });
     }
 
-    /// <summary>Local-player metadata seed (Breathing) — HUD honesty at spawn (§34).</summary>
-    public void SendLocalActorData(ulong actorRuntimeId, string name)
+    /// <summary>Local-player metadata seed (Breathing + pose) — HUD honesty at spawn (§34 / §53).</summary>
+    public void SendLocalActorData(
+        ulong actorRuntimeId,
+        string name,
+        bool sneaking = false,
+        bool sprinting = false)
     {
         _session.SendDataPacket(new SetActorDataPacket
         {
             ActorRuntimeId = actorRuntimeId,
             Name = name,
+            Tick = 0,
+            Sneaking = sneaking,
+            Sprinting = sprinting
+        });
+    }
+
+    /// <summary>Peer pose FLAGS-only update (sneak/sprint) — §53.</summary>
+    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting)
+    {
+        _session.SendDataPacket(new SetActorDataPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            FlagsOnly = true,
+            Sneaking = sneaking,
+            Sprinting = sprinting,
             Tick = 0
+        });
+    }
+
+    /// <summary>Arm swing to a viewer (§53).</summary>
+    /// <summary>Arm swing to a viewer (§53). <paramref name="swingSource"/> e.g. attack/mine/build.</summary>
+    public void SendAnimateSwingArm(ulong actorRuntimeId, string? swingSource = "attack")
+    {
+        _session.SendDataPacket(new AnimatePacket
+        {
+            Action = AnimatePacket.ActionSwingArm,
+            ActorRuntimeId = actorRuntimeId,
+            Data = 0f,
+            SwingSource = swingSource
+        });
+    }
+
+    /// <summary>Emote rebroadcast to a viewer (§53).</summary>
+    public void SendEmote(
+        ulong actorRuntimeId,
+        string emoteId,
+        uint tickLength,
+        string xuid,
+        string platformChatId,
+        byte flags)
+    {
+        _session.SendDataPacket(new EmotePacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            EmoteId = emoteId,
+            TickLength = tickLength,
+            Xuid = xuid,
+            PlatformChatId = platformChatId,
+            Flags = flags
         });
     }
 

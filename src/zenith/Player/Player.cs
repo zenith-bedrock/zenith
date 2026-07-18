@@ -89,6 +89,15 @@ class Player
     public float LastReplicatedYaw { get; set; }
     public float LastReplicatedHeadYaw { get; set; }
 
+    /// <summary>AuthInput pose modes applied on tick (§53).</summary>
+    public bool IsSneaking { get; set; }
+    public bool IsSprinting { get; set; }
+    public bool LastReplicatedSneaking { get; set; }
+    public bool LastReplicatedSprinting { get; set; }
+
+    /// <summary>GameClock tick of last relayed emote (rate-limit §53).</summary>
+    public ulong LastEmoteTick { get; set; }
+
     /// <summary>Server-authoritative break progress (AuthInput start → predict). Cleared on abort/success.</summary>
     public int BreakTargetX { get; private set; }
     public int BreakTargetY { get; private set; }
@@ -292,6 +301,8 @@ class Player
         IsDead = true;
         Health = 0f;
         DeathCause = cause;
+        IsSneaking = false;
+        IsSprinting = false;
         AbortBreak();
         OpenChest = null;
         InventoryWindowOpen = false;
@@ -325,6 +336,10 @@ class Player
         IsDead = false;
         Health = 20f;
         DeathCause = "";
+        IsSneaking = false;
+        IsSprinting = false;
+        LastReplicatedSneaking = false;
+        LastReplicatedSprinting = false;
         lock (_respawnLock)
             _pendingRespawn = false;
     }

@@ -109,7 +109,7 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Deferred:** full vanilla `creative_items.json` / `block_state_b64` parse (file remains embedded, intentionally unused — wire CreativeContent comes from `CreativeCatalog` only); behavioral item classes.
 
-**Adendo (jul 2026 — registry maturity):** Dump-driven stance confirmed vs DF/PM/Endstone: full palettes for wire fidelity; curated `Blocks` façade for gameplay; creative/recipes stay separate SSOTs. `BlockPalette` records every `network_id → name` at NBT parse (`TryGetName`); `Blocks.TryGetName` uses curated map then palette reverse so Protocol name→ItemPalette bridge does not air-fallback for in-dump states outside the starter set. `Blocks.IsPlaceable` allowlists curated placeables (+ chest facings); handler + `BlockSystem` reject others. Still **not** PM dual-ID, typed mega-registry, or Blocks→Context (§25).
+**Adendo (jul 2026 — registry maturity):** Dump-driven stance: full palettes for wire fidelity; curated `Blocks` façade for gameplay; creative/recipes stay separate SSOTs. `BlockPalette` records every `network_id → name` at NBT parse (`TryGetName`); `Blocks.TryGetName` uses curated map then palette reverse so Protocol name→ItemPalette bridge does not air-fallback for in-dump states outside the starter set. `Blocks.IsPlaceable` allowlists curated placeables (+ chest facings); handler + `BlockSystem` reject others. Still **not** dual block-id registries, a typed mega-registry, or Blocks→Context (§25).
 
 ### 13. GameLoop never waits on LevelDB overlay Put
 
@@ -127,7 +127,7 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Closes the “world dies outside spawn radius” gap without Actor/EventHandlers or vanilla LevelDB. Matches early Zenith spine: continuous flat multiplayer before effects/gen.
 
-**Deferred (conscious):** food/effects, creative inventory, biomes/noise, Actor/EventHandler frameworks (Vedrock early path items we will not mirror).
+**Deferred (conscious):** food/effects, creative inventory, biomes/noise, Actor/EventHandler frameworks (not mirroring early “everything is an Actor” stacks).
 
 ### 15. Block authority harden + quiet Animate / LevelSoundEvent
 
@@ -135,13 +135,11 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Why:** Closes Fase 3 gaps (occupied place / full-hotbar break / unreachable edits) without Actor or domain EventHandlers. Log spam from swing/sound was WARNING noise, not missing gameplay. Reach is intentionally simple (not AABB/physics).
 
-**Deferred:** AuthInput block path, sound/animate peer fan-out, food/effects. (Inventory storage closed in §16.)
-
-**Adendo (jul 2026 — place vs player AABB):** After air + placeable checks, before `TryConsumeOne`, reject place when the full-cell block AABB intersects the placer or any other InGame player's standing AABB (inset `1e-4` to avoid flush-face false positives). Reuses `Geometry/Aabb` + `EntityHitboxes` (no Entity/ECS). Reject → `ResyncCellToBreaker` only (no neighbor fan-out — avoids self-place sync glitches). Floor drops are not colliders. Creative uses the same rule. **Known debt:** fixed standing BB (no sneak/swim); full-cube cells only until slab models; jump-place while BB still overlaps stays reject (no separate physics). **Smoke:** place into body → reject / no item loss / no stuck; flush adjacent → OK; A in cell + B places → B rejected.
-
-
+**Deferred:** AuthInput block path, sound peer fan-out, food/effects. (Inventory storage closed in §16. Animate peer fan-out → §53.)
 
 **Adendo (jul 2026 — break path):** Survival destroy arrives via `PlayerAuthInputPacket.BlockActions` when `ServerAuthoritativeBlockBreaking=true` in StartGame. Decode past the position prefix (bitset + flags → `PlayerBlockAction`); map `predict_destroy` (26) → `TrySubmitBreak` / `BlockEditIntent` air. Keep `PlayerAction` (13/26) and `InventoryTransaction` UseDestroy as fallbacks. Progress actions (`start_break` / `crack_break` / `continue_destroy`) ignored until §27.
+
+**Adendo (jul 2026 — place vs player AABB):** After air + placeable checks, before `TryConsumeOne`, reject place when the full-cell block AABB intersects the placer or any other InGame player's standing AABB (inset `1e-4` to avoid flush-face false positives). Reuses `Geometry/Aabb` + `EntityHitboxes` (no Entity/ECS). Reject → `ResyncCellToBreaker` only (no neighbor fan-out — avoids self-place sync glitches). Floor drops are not colliders. Creative uses the same rule. **Known debt:** fixed standing BB (no sneak/swim); full-cube cells only until slab models; jump-place while BB still overlaps stays reject (no separate physics). **Smoke:** place into body → reject / no item loss / no stuck; flush adjacent → OK; A in cell + B places → B rejected.
 
 ### 16. Main inventory 36 slots; place stays hotbar-only
 
@@ -239,19 +237,21 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Adendo (jul 2026 — drop-entity wire MVP):** Each floor cell also holds `EntityRuntimeId` (from `PlayerManager.AllocateRuntimeId`). Spawn → `AddItemActor` (0x0f) to peers with `Chunks.Knows`; pickup → `TakeItemActor` (0x11). Merge count change → `RemoveActor` + `AddItemActor`. Late join / column stream catch-up emits Add for drops in known columns. Position = cell center, velocity zero (floating OK). Still **no** WorldEntity/ECS, gravity tick, despawn TTL, Q-throw, or LevelDB persist of drops (§32).
 
-**Adendo (jul 2026 — AddItemActor ItemStackWrapper):** Protocol 1001 encodes AddItemActor item as legacy **ItemStackWrapper** (same as AddPlayer held), not NetworkItemStackDescriptor. Wrong shape crashed the Bedrock client after full-inv floor drop. `NetworkItemStack` writers renamed to Mojang/PM vocabulary (`WriteItemStackWrapper` / `WriteNetworkItemStackDescriptor` / `WriteItemStack`); packet Encode picks; skip Add when `DescribeStack` is air.
+**Adendo (jul 2026 — AddItemActor ItemStackWrapper):** Protocol 1001 encodes AddItemActor item as legacy **ItemStackWrapper** (same as AddPlayer held), not NetworkItemStackDescriptor. Wrong shape crashed the Bedrock client after full-inv floor drop. `NetworkItemStack` writers use Mojang wire names (`WriteItemStackWrapper` / `WriteNetworkItemStackDescriptor` / `WriteItemStack`); packet Encode picks; skip Add when `DescribeStack` is air.
 
 **Adendo (jul 2026 — partial pickup):** `PickupFloorDrops` uses `TryAddUpTo` + `FloorDropStore.TryTakeUpTo`. Partial fit (e.g. stack 63 + floor count 5) takes what fits, `TakeItemActor`, then Remove+Add republish for remainder. `TryAdd` (break/chest dump) stays all-or-nothing with `CaptureSnapshot`/`RestoreSnapshot` so a failed full add never sticky-fills 63→64.
 
 **Adendo (jul 2026 — pickup reach + break partial):** Pickup reach uses item-entity Y (`+0.125`, same as `AddItemActor`) and player torso (`feet + 0.75`), radius **2** blocks — old cell-center `+0.5` / 1.5 from feet failed rim-of-hole smoke. Break/chest dump uses `TryAddUpTo` + floor surplus (not all-or-nothing before drop). `Blocks.SameMergeItem` / `NormalizeMergeRuntimeId` stack chest facings and same-name palette rids. Roll back inventory if `TryTakeUpTo` fails after `TryAddUpTo`.
 
-**Adendo (jul 2026 — AuthInput eye→feet):** StartGame / AuthInput wire Y is eye-space (Vedrock). Domain `Player.PositionY` is feet (`FlatSpawnY`, block reach `+ PlayerEyeHeight`). `InGameSessionHandler` submits via `MovementInputState.FromClientAuthInput` (`eyeY - PlayerEyeHeight`).
+**Adendo (jul 2026 — AuthInput eye→feet):** StartGame / AuthInput wire Y is eye-space. Domain `Player.PositionY` is feet (`FlatSpawnY`, block reach `+ PlayerEyeHeight`). `InGameSessionHandler` submits via `MovementInputState.FromClientAuthInput` (`eyeY - PlayerEyeHeight`).
 
-**Adendo (jul 2026 — AABB pickup + delay):** Sphere/`torso+0.75` retired. Pickup = player standing AABB (`0.6×1.8` feet) **expanded** `(1, 0.5, 1)` ∩ item AABB `0.25³` at cell (PM/wiki; not DF item-side expand). Pure math in `Geometry/Aabb`; Bedrock sizes in `World/EntityHitboxes`. `FloorDropStore` default **pickup delay 10** ticks (new cell); merge delay = `max(existing, incoming)`; partial `TryTakeUpTo` / republish **does not** reset delay. `TickPickupDelays` once per `BlockSystem` tick before reach checks — same-tick deposit becomes 10→9, not vacuum. Wire still shows item during delay. Expand `+0.5` Y does **not** reach an item one full block below feet (rim-of-hole) — step into the cell / same Y (vanilla-shaped, not the old sphere). **Known debt:** fixed standing BB (no sneak/swim); no off-hand preference; block interact reach stays Euclidean eyes (§15). Proximity gameplay going forward prefers AABB (orientation, not a mandate to rewrite §15 this PR).
+**Adendo (jul 2026 — Absolute network offset):** Bedrock player `MoveActorAbsolute` / local `MovePlayer` need wire Y = feet **+ 1.621** (`PlayerEyeHeight` + 0.001 so Absolute does not clip into the block top). `AddPlayer` stays at bare feet. Before AuthInput→feet, raw eye Y on Absolute accidentally looked correct; after feet domain, bare Absolute sank peers into the floor. `EntityProtocol` applies `EntityHitboxes.AbsoluteWireY`.
+
+**Adendo (jul 2026 — AABB pickup + delay):** Sphere/`torso+0.75` retired. Pickup = player standing AABB (`0.6×1.8` feet) **expanded** `(1, 0.5, 1)` ∩ item AABB `0.25³` at cell (expand player side, not item). Pure math in `Geometry/Aabb`; Bedrock sizes in `World/EntityHitboxes`. `FloorDropStore` default **pickup delay 10** ticks (new cell); merge delay = `max(existing, incoming)`; partial `TryTakeUpTo` / republish **does not** reset delay. `TickPickupDelays` once per `BlockSystem` tick before reach checks — same-tick deposit becomes 10→9, not vacuum. Wire still shows item during delay. Expand `+0.5` Y does **not** reach an item one full block below feet (rim-of-hole) — step into the cell / same Y (vanilla-shaped, not the old sphere). **Known debt:** fixed standing BB (no sneak/swim); no off-hand preference; block interact reach stays Euclidean eyes (§15). Proximity gameplay going forward prefers AABB (orientation, not a mandate to rewrite §15 this PR).
 
 ### 27. Server-authoritative break timing
 
-**Choice:** Soft blocks use `Blocks.BreakTicks` (empty-hand ≈ hardness×5s @ 20 TPS) snapshotted on AuthInput `start_break`. Same-cell `continue_destroy` does **not** reset the dig timer or re-send `StartCrack` (that finished the crack animation before `SetBlock`). Crack LevelEvent data = `round(65535 / ticks)` (PM/Geyser). Creative InstantBuild skips crack + timing gate. Early/wrong-cell breaks rejected with Debug log.
+**Choice:** Soft blocks use `Blocks.BreakTicks` (empty-hand ≈ hardness×5s @ 20 TPS) snapshotted on AuthInput `start_break`. Same-cell `continue_destroy` does **not** reset the dig timer or re-send `StartCrack` (that finished the crack animation before `SetBlock`). Crack LevelEvent data = `round(65535 / ticks)`. Creative InstantBuild skips crack + timing gate. Early/wrong-cell breaks rejected with Debug log.
 
 **Adendo (jul 2026 — dig desync):** Survival `predict_destroy` freezes dig auth (`DigStartedTick` / `DigRequiredTicks`) into `BlockEditIntent`, then `ClearBreakTarget` without StopCrack so same-AuthInput Continue can retarget. `BlockSystem` validates from the intent snapshot, not live `HasBreakTarget`. Reject (break/place) → self `UpdateBlock` of server truth to the breaker only. AuthInput break order: **Abort → Start/Crack → Predict → Continue** (cancel+redig needs Start before Predict; chain-break needs Predict before Continue). Abort always `StopCrack` at Abort packet coords (even when dig already cleared) and does **not** dequeue DigAuthorized intents (`predict` = commit). Same-cell MP: first DigAuthorized in tick order wins loot; loser sees air + Resync — no per-cell dig lock.
 
@@ -278,7 +278,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid flats `CraftUiBase`+0–3, result `CraftResultFlat`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
 
-**Why:** Empty ISR OK / bag consume never drove SAI craft UI (S35). Grid + Create matches Dragonfly without full 54-slot UI inventory. Discarding times made shift-click Place N×out fail after craft ×1. Skipping CreatedOutput (60) in ItemStackResponse (PM virtual-output habit) desynced sequential take after planks→chest — **fixed:** emit 60 like Dragonfly; refuse Survival craft while Result still occupied.
+**Why:** Empty ISR OK / bag consume never drove SAI craft UI (S35). Grid + Create is enough without a full 54-slot UI inventory. Discarding times made shift-click Place N×out fail after craft ×1. Skipping CreatedOutput (60) in ItemStackResponse desynced sequential take after planks→chest — **fixed:** always emit container 60 on OK; refuse Survival craft while Result still occupied.
 
 **Deferred:** 3×3 crafting table; recipe-book **CraftRecipeAuto**; container 14 preview sync; negative stack-net-id prediction; multi-stack CreatedOutput when out×N > MaxStack; double-click gather (no dedicated ISR opcode — client multi Place/Take, intermittent).
 
@@ -352,7 +352,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 37. UpdateAbilities + AdventureSettings (spawn seed + fly echo)
 
-**Choice:** After §34 `SetActorData`/`UpdateAttributes`, send `UpdateAbilities` (`0xBB`) then `UpdateAdventureSettings` (`0xBC`) before PreSpawn. Shared `AbilityData` writer (SSOT) also used by `AddPlayer` via wire `GameMode` int. Survival mask = pre-refactor golden bits; Creative = Survival + `MayFly` + `InstantBuild` + `Flying` (join already flying — intentional vs Vedrock). `Invulnerable` off. Runtime id = unique id. Inbound `RequestAbility` (`0xB8`) for `FLYING` only: Creative echoes `SendLocalAbilities` with packet bool (stateless); Survival ignore (no kick). Adventure LAN defaults: ShowNameTags + AutoJump.
+**Choice:** After §34 `SetActorData`/`UpdateAttributes`, send `UpdateAbilities` (`0xBB`) then `UpdateAdventureSettings` (`0xBC`) before PreSpawn. Shared `AbilityData` writer (SSOT) also used by `AddPlayer` via wire `GameMode` int. Survival mask = pre-refactor golden bits; Creative = Survival + `MayFly` + `InstantBuild` + `Flying` (join already flying — intentional). `Invulnerable` off. Runtime id = unique id. Inbound `RequestAbility` (`0xB8`) for `FLYING` only: Creative echoes `SendLocalAbilities` with packet bool (stateless); Survival ignore (no kick). Adventure LAN defaults: ShowNameTags + AutoJump.
 
 **Why:** StartGame gamemode without abilities is cosmetic; clients need ability layers for fly/instant-build feel. RequestAbility must be consumed or Warning-spams. Seed pattern matches §34 — no `Player.MayFly` / AbilitySystem.
 
@@ -360,7 +360,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
-**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `CraftResultFlat` (CreatedOutput), then honor same-request Place/Take/Drop/Create — Dragonfly `createResults` + `Grow(MaxCount-1)`. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response omits container 60.
+**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `CraftResultFlat` (CreatedOutput), then honor same-request Place/Take/Drop/Create. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response includes CreatedOutput (60) for craft path.
 
 **Why:** Palette vanilla is CreatedOutput→cursor/bag, not bag `TryAdd`. The prior `CraftCreativeNetId` parallel intent with empty Actions discarded client Places (click never reached cursor).
 
@@ -388,7 +388,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` completes the same shutdown path from **CancelKeyPress**, **SIGINT**, and **SIGTERM** (Docker/Dokploy stop) — 5s flush timeout → Warning. Flush **never** on GameLoop tick (ADR §13).
 
-**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `ZenithSessionListener.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (DF/PM — no fixed sleep; DF waits session teardown via WaitGroup, we flush frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong matches gophertunnel trailing `0`; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
+**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `ZenithSessionListener.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (no fixed sleep — drain outbound frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong trailing `0` matches common Bedrock list clients; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
 
 **Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts; container SIGTERM previously skipped flush entirely. Operational trust before death/drop-entity surface.
 
@@ -406,7 +406,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** After `NetworkSettings`, `ProtocolGate.Evaluate(client, ServerIdentity.ProtocolVersion)` decides Accepted / FailClient / FailServer. Reject → `LoginProtocol.SendIncompatibleProtocol` (`PlayStatus` 1 or 2) + disconnect; no `Player`. Re-check on `LoginPacket.Protocol`. Before accept/reject, publish mutable `ProtocolNegotiateEvent` (Accepted / RejectPlayStatus) so a future listener can override the gate — **Accepted ≠ second codec** (document: forcing accept without encode support breaks on wire). Multi-codec / YAML supported-protocols / plugins: **Deferred**.
 
-**Adendo (jul 2026 — PlayStatus flush):** Incompatible `PlayStatus` is sent **Immediate** + `NOT_PRESENT` compression, then `FlushOutgoing` before RakNet close. Prior Normal-priority PlayStatus was often lost when `Disconnect` Immediate flushed one random frame and closed — vanilla outdated UI never appeared (DF/PM: PlayStatus only, no custom Disconnect string).
+**Adendo (jul 2026 — PlayStatus flush):** Incompatible `PlayStatus` is sent **Immediate** + `NOT_PRESENT` compression, then `FlushOutgoing` before RakNet close. Prior Normal-priority PlayStatus was often lost when `Disconnect` Immediate flushed one random frame and closed — vanilla outdated UI never appeared (PlayStatus alone is enough; no custom Disconnect string required).
 
 **Why:** Wrong-version clients previously hung or logged in without Bedrock’s classic incompatible UI. Gate stays pure; Protocol only transmits; Handler orchestrates. Cheap multiprotocol seam without inventing PluginAPI now (Rule 7).
 
@@ -420,7 +420,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Smoke:** Idle LAN — peers idle without Absolute flood; look-turn still updates peer yaw; multi-place same tick → one envelope per peer.
 
-**Adendo (jul 2026 — join settle):** Dirty-check left late joiners with AddPlayer only until the subject moved — peer entities often floated until Absolute. `PlayerVisibility.SendAddPlayer` now follows with `MoveActorAbsolute` (`FLAG_ON_GROUND`) for that recipient so new viewers settle without forcing idle Absolute spam.
+**Adendo (jul 2026 — join settle):** Dirty-check left late joiners with AddPlayer only until the subject moved — peer entities often floated until Absolute. `PlayerVisibility.SendAddPlayer` now follows with `MoveActorAbsolute` (`FLAG_ON_GROUND`, feet + network offset) for that recipient so new viewers settle without forcing idle Absolute spam.
 
 ### 45. Sparse flat columns (miss without Put)
 
@@ -461,7 +461,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Promote `Packets/`, `Protocol/`, and `Session/` to siblings under `src/zenith/` (namespaces `Zenith.Packets` / `Zenith.Protocol` / `Zenith.Session`). Relocate glue: `ProtocolGate` + `ColumnSend` → Protocol; `ZenithSessionListener` + `PlayerVisibility` → Session. Delete `Network/`. Fix Packets→domain leaks (`StartGame` version strings from Protocol; `ItemRegistryWireEntry` DTO; drop unused World using on CreativeContent). Refresh ARCHITECTURE Layout + dx workflow.
 
-**Why:** ~⅔ of the server tree lived under `Network/`, mixing serialize / transmit / session SM — folders contradicted ARCHITECTURE roles and reference projects (Vedrock/PM/gophertunnel).
+**Why:** ~⅔ of the server tree lived under `Network/`, mixing serialize / transmit / session SM — folders contradicted ARCHITECTURE roles (decide ≠ transmit ≠ serialize).
 
 **Deferred:** Split `World/` (ItemPalette / chests → `Item/` etc.); rename type `NetworkSession`.
 
@@ -485,11 +485,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 51. Collaborator UI/sound/emote packets — wire hygiene (not product feature)
 
-**Choice:** Keep Toast / PlaySound / StopSound / ModalForm / ServerSettings / CloseForm / Emote / EmoteList as Packets DTOs. Fix Encode (packet Id prefix), gophertunnel shapes (SoundPos×8, Emote unsigned runtime + byte flags, EmoteList count/runtime), and expose transmit-only `UiProtocol` + `WorldProtocol.SendPlaySound/StopSound`. Inbound Emote / EmoteList / ModalFormResponse / ServerSettingsRequest stay on the quiet ignore-list (no Systems stub). Round-trips in `zenith.Tests`.
+**Choice:** Keep Toast / PlaySound / StopSound / ModalForm / ServerSettings / CloseForm / Emote / EmoteList as Packets DTOs. Fix Encode (packet Id prefix), Bedrock wire shapes (SoundPos×8, Emote unsigned runtime + byte flags, EmoteList count/runtime), and expose transmit-only `UiProtocol` + `WorldProtocol.SendPlaySound/StopSound`. Inbound Emote / EmoteList / ModalFormResponse / ServerSettingsRequest stay on the quiet ignore-list (no Systems stub). Round-trips in `zenith.Tests`.
 
 **Why:** Contributor landed DTOs without Id-in-Encode and with broken EmoteList handler decode — unusable outbound and Warning-prone inbound. Wire fix ≠ shipping toast/forms/emote product; H1 smoke stays death/drops.
 
-**Deferred:** Emote peer relay; form intent stack; FormId allocator; product title banners (TextObject / timed UI as gameplay).
+**Deferred:** Form intent stack; FormId allocator; product title banners (TextObject / timed UI as gameplay). (Emote peer relay → §53.)
 
 **Adendo (jul 2026 — SetTitle wire):** `SetTitlePacket` (0x58) + `UiProtocol.SendTitle` / `SendSubtitle` / `SendActionbar` / `SendTitleTimes` / Clear / Reset shipped as transmit hygiene. Times is a separate packet from text. Inbound ModalFormResponse remains quiet ignore (no Info decode path). Product title use stays Deferred.
 
@@ -508,7 +508,23 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode. No `Unhandled Data Packet: 77`.
 
-**Adendo (jul 2026 — CommandRequest canal):** Bedrock 1.26 envia slash como `CommandRequest` (0x4D), não `Text`. Handler parseia `CommandLine` com o mesmo `GameModeConfig.TryParseCommand` (Text `/gamemode` fica fallback). Origin wire = gophertunnel 1001: origin **string** (`player`, …) + UUID + requestId + **Int64** player unique id (sempre). Sem `AvailableCommands` / `CommandOutput` / palette — quiet ignore outros comandos. Não mergear `dev/commands` framework.
+**Adendo (jul 2026 — CommandRequest canal):** Bedrock 1.26 envia slash como `CommandRequest` (0x4D), não `Text`. Handler parseia `CommandLine` com o mesmo `GameModeConfig.TryParseCommand` (Text `/gamemode` fica fallback). Origin wire (protocol 1001): origin **string** (`player`, …) + UUID + requestId + **Int64** player unique id (sempre). Sem `AvailableCommands` / `CommandOutput` / palette — quiet ignore outros comandos. Não mergear `dev/commands` framework.
+
+### 53. Pose flags + emote relay + arm swing (peer interaction feel)
+
+**Choice:**
+
+1. **Sneak / sprint (Leaf A):** AuthInput bitset → `MovementInputState` (handler queues only) → `MovementSystem` applies `Player.IsSneaking` / `IsSprinting` → dirty `SetActorData` **FLAGS-only** to other InGame peers via `EntityProtocol.SendActorFlags`. No PoseSystem / ECS / VisibilitySystem. Protocol 1001 bit indices (Endstone): continuous `Sneaking=8`; sprint edges `StartSprinting=25` / `StopSprinting=26`. Actor FLAGS: `SNEAKING=1`, `SPRINTING=3`. Mutual exclusion (sprint clears sneak and vice versa) in `MovementSystem`. Spawn / AddPlayer / local seed use full metadata with pose bits OR’d in. Height stays **1.8** this leaf.
+2. **Emote (Leaf B):** Inbound `EmotePacket` → validate runtime id == self → rate-limit (1s) → `PlayerVisibility.RelayEmote` (Session helper, like skin) with `FlagServerSide | FlagMuteChat`. EmoteList stays quiet ignore. No EmoteSystem.
+3. **Arm swing (Leaf C):** AuthInput `MissedSwing=39` → tick fan-out; dig start / place queue / creative break / `ItemUseOnActor` Attack / UseClickAir → `PlayerVisibility.RelaySwingArm` (immediate). Wire (protocol 1001): action **u8**, runtime id, **data f32** (0), optional swingSource string (`attack` / `mine` / `build`). Inbound client `Animate` stays quiet ignore (no rebroadcast). No combat damage.
+
+**Why:** Peers only saw XYZ+look; crouch/sprint/emote/swing are the minimum LAN “other player is alive” signals. Same decide≠transmit≠serialize path as Absolute (§44) and equipment (§18).
+
+**Deferred:** Swim/glide/crawl flags; sneak BB height (~1.5) + WIDTH/HEIGHT metadata; sneak-place-on-chest (§28); LevelSound peer fan-out; ActorEvent arm-swing; client Animate relay.
+
+**Smoke:** A holds sneak → B sees crouch; A sprints → B sees sprint; late join while A sneaks → AddPlayer metadata crouch; A emotes → B plays emote; A swings at air → B sees arm swing (Animate 1001: u8 action + runtime + f32 data + optional swingSource string).
+
+**Adendo (jul 2026 — Mojang protocol docs):** Official docs clone at `~/Development/references/bedrock/bedrock-protocol-docs` branch `r/26_u4`. That tip stamps protocol **2169** / game **1.26.50**; Zenith speaks **1001** / **1.26.33**. Use docs for packet field trees; use PM BedrockProtocol 1001 + Endstone headers for AuthInput bit indices and 1001-era Animate swingSource (optional string). Quiet-ACK `SetPlayerInventoryOptions` (`0x133` / 307) — UI prefs only, no product leaf.
 
 ### OpenInventory / chest UI (note under §28)
 
