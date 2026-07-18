@@ -2,7 +2,7 @@
 
 namespace Zenith.Packets;
 
-/// <summary>Emote (0x8a) — client ↔ server. Flags are bitfield bytes (gophertunnel).</summary>
+/// <summary>Emote (0x8a) — client ↔ server. Flags are a bitfield byte (server-side, mute chat, …).</summary>
 sealed class EmotePacket : DataPacket
 {
     public const byte FlagServerSide = 1 << 0;

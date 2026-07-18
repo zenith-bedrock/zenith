@@ -3,7 +3,7 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>
-/// Command origin blob (gophertunnel protocol 1001): origin string + UUID + requestId + Int64 unique id.
+/// Command origin blob (protocol 1001): origin string + UUID + requestId + Int64 unique id.
 /// </summary>
 readonly struct CommandOriginData
 {

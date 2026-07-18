@@ -2,7 +2,7 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
-/// <summary>One UpdateAttributes entry (gophertunnel Attribute marshal — frozen HUD seed §34).</summary>
+/// <summary>One UpdateAttributes entry (name + min/max/value/defaults — frozen HUD seed §34).</summary>
 readonly record struct AttributeEntry(
     string Name,
     float Min,

@@ -8,8 +8,8 @@ namespace Zenith.Session.Handler;
 
 /// <summary>
 /// Estado entre StartGame e loading completo.
-/// Ordem Vedrock/PNX: ChunkRadiusUpdated → NetworkChunkPublisherUpdate → LevelChunks (batched) → PlayStatus.
-/// gophertunnel: sem publisher o cliente ignora terrain independentemente dos LevelChunks.
+/// Ordem no wire: ChunkRadiusUpdated → NetworkChunkPublisherUpdate → LevelChunks (batched) → PlayStatus.
+/// Sem NetworkChunkPublisherUpdate o cliente ignora terrain mesmo com LevelChunks válidos.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
@@ -76,7 +76,7 @@ class PreSpawnSessionHandler : ISessionHandler
             if (session.Player is null)
                 return;
 
-            // Publisher BEFORE LevelChunks (Vedrock/PNX). Radius in blocks.
+            // Publisher before LevelChunks — radius is in blocks, not chunks.
             session.Protocol.World.SendChunkPublisher(
                 blockX: 0,
                 blockY: Blocks.FlatSpawnY,

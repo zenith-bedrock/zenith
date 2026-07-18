@@ -2,7 +2,7 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
-/// <summary>One shapeless recipe entry for CraftingData (gophertunnel RecipeShapeless).</summary>
+/// <summary>One shapeless recipe entry for CraftingData (type 0 + unlock context).</summary>
 sealed class ShapelessCraftingRecipe
 {
     public const int TypeShapeless = 0;

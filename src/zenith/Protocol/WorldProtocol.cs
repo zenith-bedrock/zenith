@@ -56,13 +56,13 @@ sealed class WorldProtocol
         _session.SendDataPacket(new ChunkRadiusUpdatedPacket { Radius = radius });
     }
 
-    /// <summary>Empty BiomeDefinitionList (0x7a) — Vedrock sends after ItemRegistry.</summary>
+    /// <summary>Empty BiomeDefinitionList (0x7a) — clients expect this once after ItemRegistry.</summary>
     public void SendEmptyBiomeDefinitionList()
     {
         _session.SendDataPacket(new BiomeDefinitionListPacket());
     }
 
-    /// <summary>Vedrock flush cadence: several LevelChunks per GamePacket batch.</summary>
+    /// <summary>How many LevelChunks to pack into one GamePacket envelope on spawn stream.</summary>
     public const int LevelChunkBatchSize = 4;
 
     public void PublishChunks(IReadOnlyList<ChunkColumn> columns)
@@ -188,7 +188,7 @@ sealed class WorldProtocol
 
     public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks)
     {
-        // PocketMine uses integer block coords for START/STOP break LevelEvents.
+        // START/STOP crack LevelEvents use integer block coordinates (not float entity pos).
         SendLevelEvent(
             LevelEventPacket.EventStartBlockCracking,
             blockX,

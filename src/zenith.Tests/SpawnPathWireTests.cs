@@ -57,7 +57,7 @@ public class SpawnPathWireTests
         Assert.Equal(0xfe, wire[0]);
         Assert.Equal(PacketCompression.ZLIB, wire[1]);
 
-        // Must be raw deflate-decompressible (Vedrock flate framing).
+        // Must be raw deflate-decompressible (algorithm 0xff framing under threshold).
         using var ms = new MemoryStream(wire, 2, wire.Length - 2);
         using var inflate = new DeflateStream(ms, CompressionMode.Decompress);
         using var outMs = new MemoryStream();

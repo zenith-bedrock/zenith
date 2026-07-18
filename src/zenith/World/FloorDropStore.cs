@@ -5,7 +5,7 @@ namespace Zenith.World;
 
 /// <summary>
 /// Floor drops with Bedrock item-entity wire (ADR §26): sparse cells holding a stack
-/// + entity runtime id + pickup delay. Pickup uses player AABB expand vs item AABB (PM/wiki).
+/// + entity runtime id + pickup delay. Pickup = expanded player AABB ∩ item AABB at cell.
 /// SoftCap refuses new cell keys (lossy vs entities — honest LAN bound).
 /// </summary>
 sealed class FloorDropStore
@@ -13,7 +13,7 @@ sealed class FloorDropStore
     public const int MaxStack = 64;
     internal const int SoftCap = 2048;
 
-    /// <summary>Default delay after deposit before pickup (PM <c>dropItem</c> / DF 0.5s).</summary>
+    /// <summary>Ticks after deposit before the drop may be picked up (~0.5s at 20 TPS).</summary>
     public const int DefaultPickupDelay = 10;
 
     private readonly Dictionary<(int X, int Y, int Z), DropSlot> _drops = new();
@@ -44,8 +44,9 @@ sealed class FloorDropStore
     /// <summary>
     /// Merge into an existing same-item cell, or place a new cell under <see cref="SoftCap"/>.
     /// <paramref name="entityRuntimeIdIfNew"/> is used only when creating a new cell.
-    /// Merge delay = <c>max(existing, incoming)</c> (PM). New cell uses <paramref name="pickupDelayTicks"/>.
-    /// Returns false when a new cell would exceed the soft cap (existing cells may still merge).
+    /// Merge delay = <c>max(existing, incoming)</c> so a fresh deposit cannot clear an older delay.
+    /// New cell uses <paramref name="pickupDelayTicks"/>. Returns false when a new cell would
+    /// exceed the soft cap (existing cells may still merge).
     /// </summary>
     public bool TryAddOrMerge(
         int x,

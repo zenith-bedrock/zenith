@@ -13,7 +13,7 @@ class GamePacket : IPacket
     /// <summary>
     /// Wire compression algorithm preference. After NetworkSettings, typically
     /// <see cref="PacketCompression.ZLIB"/>; under-threshold batches use
-    /// <see cref="PacketCompression.NONE"/> (0xff) like Vedrock.
+    /// <see cref="PacketCompression.NONE"/> (0xff) + raw payload.
     /// </summary>
     public byte Compression = PacketCompression.NOT_PRESENT;
 
@@ -44,7 +44,7 @@ class GamePacket : IPacket
         }
         else if (Compression == PacketCompression.ZLIB && uncompressed.Length < CompressionThreshold)
         {
-            // Vedrock batch.v: below threshold → algorithm 0xff + raw batch.
+            // Below threshold: algorithm 0xff + uncompressed batch (no flate).
             writer.WriteByte(PacketCompression.NONE);
             writer.Write(uncompressed);
         }

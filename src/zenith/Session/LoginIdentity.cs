@@ -112,7 +112,7 @@ static class LoginIdentity
         return a;
     }
 
-    /// <summary>MD5 v3 UUID from Xbox XUID — matches gophertunnel/PocketMine.</summary>
+    /// <summary>MD5 v3 UUID from Xbox XUID (<c>pocket-auth-1-xuid:</c> salt — Bedrock soft-auth convention).</summary>
     internal static Guid IdentityFromXuid(string xuid)
     {
         var hash = MD5.HashData(Encoding.UTF8.GetBytes("pocket-auth-1-xuid:" + xuid));

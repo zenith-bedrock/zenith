@@ -43,8 +43,7 @@ public class RakNetSession
     // ser retransmitido dentro de um FrameSet novo (sequence diferente) quando o servidor
     // não confirma a tempo; sem isso, o mesmo MessageIndex é processado de novo e pode
     // duplicar efeitos do lado do jogo (ex: LoginPacket reprocessado -> PlayerManager.TryAdd
-    // falha achando que já tem alguém logado -> Disconnect indevido). Espelha
-    // reliableWindowStart/End/reliableWindow do RakLib (ReceiveReliabilityLayer.php).
+    // falha achando que já tem alguém logado -> Disconnect indevido).
     private const uint RELIABLE_WINDOW_SIZE = 2048;
     protected uint ReliableWindowStart;
     protected uint ReliableWindowEnd = RELIABLE_WINDOW_SIZE;
@@ -366,8 +365,7 @@ public class RakNetSession
     /// FrameSet com Sequence diferente, se o ACK anterior se perdeu ou chegou tarde).
     /// Fora da janela (mais velho que o início ou longe demais à frente) também é
     /// descartado - nesse segundo caso seria um MessageIndex implausível vindo de um
-    /// peer malicioso/quebrado, não vale a pena guardar. Espelha reliableWindowStart/
-    /// reliableWindowEnd/reliableWindow do RakLib (ReceiveReliabilityLayer::handleEncapsulatedPacket).
+    /// peer malicioso/quebrado, não vale a pena guardar.
     /// </summary>
     private bool TryAcceptReliableMessage(uint messageIndex)
     {
@@ -531,8 +529,7 @@ public class RakNetSession
         // (InputOrderIndex, InputHighestSequenceIndex) têm exatamente Frame.MAX_ORDER_CHANNELS
         // slots. Sem essa validação, um frame malformado/hostil com OrderChannel >= 32 derruba
         // a sessão inteira com IndexOutOfRangeException assim que qualquer código abaixo tenta
-        // indexar por ele. RakLib rejeita a mesma condição (ver ReceiveReliabilityLayer, "bad
-        // order channel").
+        // indexar por ele — drop instead.
         if (Frame.IsSequencedOrOrdered(frame.Reliability) && frame.OrderChannel >= Frame.MAX_ORDER_CHANNELS)
         {
             Server.Logger?.Warning($"[{EndPoint}] Dropped frame with invalid order channel {frame.OrderChannel}.");

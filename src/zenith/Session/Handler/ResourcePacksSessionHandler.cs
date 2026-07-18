@@ -33,7 +33,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
-                // StartGame position = eyes (Vedrock spawn_y + player_eye_height).
+                // StartGame position is eye-space (feet + PlayerEyeHeight), not domain feet.
                 session.Protocol.World.SendStartGame(
                     levelName: session.Context.Config.World.Name,
                     entityRuntimeId: player.RuntimeId,
@@ -50,7 +50,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 session.Protocol.Inventory.SendItemRegistry();
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.Inventory.SendCraftingData();
-                // Empty BiomeDefinitionList — required once by modern clients (Vedrock/PNX parity).
+                // Empty BiomeDefinitionList — required once by modern clients after ItemRegistry.
                 session.Protocol.World.SendEmptyBiomeDefinitionList();
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).
                 session.Protocol.Entity.SendLocalActorData((ulong)player.RuntimeId, player.Username);

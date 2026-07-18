@@ -187,7 +187,7 @@ static class Blocks
         return 60;
     }
 
-    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to <see cref="CrackProgressMax"/> (PM/Geyser).</summary>
+    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to <see cref="CrackProgressMax"/>.</summary>
     public const int CrackProgressMax = 65535;
 
     public static int CrackEventData(int breakTicks)

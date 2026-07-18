@@ -12,7 +12,7 @@ static class ServerIdentity
 
     /// <summary>
     /// Bedrock protocol number (client <c>RequestNetworkSettings</c> / MOTD).
-    /// Encode de StartGame / LevelChunk segue o layout 1001 (refs Vedrock / gophertunnel).
+    /// StartGame / LevelChunk encode follow the protocol 1001 layouts this build speaks.
     /// </summary>
     public const int ProtocolVersion = 1001;
 

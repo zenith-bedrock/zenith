@@ -60,7 +60,8 @@ sealed class InventorySystem : IGameSystem
             switch (action.Kind)
             {
                 case InventoryStackActionKind.CraftRecipe:
-                    // DF: materialize CreatedOutput so same-request Take works; refuse if prior result untaken.
+                    // Materialize CreatedOutput so same-request Take/Place can move it;
+                    // refuse if a prior result is still sitting untaken.
                     if (!GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty ||
                         !_recipes.TryCraftFromGrid(player.CraftUi, action.RecipeNetId, out var crafted, action.CraftTimes) ||
                         !TrySetSlot(player, InventoryContainerMap.CraftResultFlat, crafted))
@@ -83,7 +84,7 @@ sealed class InventorySystem : IGameSystem
                     break;
 
                 case InventoryStackActionKind.CraftCreative:
-                    // DF: MaxStack → CreatedOutput; same-request Place/Take/Drop moves it.
+                    // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
                     if (player.GameMode != GameMode.Creative ||
                         !_creative.TryGet(action.CreativeNetId, out var creativeRid, out _) ||
                         !TrySetSlot(player, InventoryContainerMap.CraftResultFlat,
@@ -99,7 +100,7 @@ sealed class InventorySystem : IGameSystem
                     break;
 
                 case InventoryStackActionKind.Create:
-                    // Idempotent ack after CraftRecipe/CraftCreative wrote CraftResultFlat (PM skips 60 in OK).
+                    // Idempotent ack after CraftRecipe/CraftCreative wrote CraftResultFlat.
                     if (GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty)
                     {
                         ok = false;
