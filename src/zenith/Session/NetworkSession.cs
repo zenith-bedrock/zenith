@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.IO.Compression;
 using Zenith.Event;
+using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Server;
@@ -121,8 +122,13 @@ class NetworkSession
 
         if (Player is not null)
         {
+            var online = Context.PlayerManager.Online;
             if (Player.IsInGame)
-                PlayerVisibility.AnnounceLeave(Player, Context.PlayerManager.Online);
+                PlayerVisibility.AnnounceLeave(Player, online);
+
+            // Release chest lid opener before leaving Online (ADR §28 adendo).
+            if (Player.OpenChest.HasValue)
+                ChestLidFanout.ReleaseOpener(online, Context.World, Player);
 
             Context.World.PersistInventory(Player.Uuid, Player.Inventory);
 

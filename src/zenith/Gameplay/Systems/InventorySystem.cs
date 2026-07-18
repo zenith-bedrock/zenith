@@ -53,6 +53,7 @@ sealed class InventorySystem : IGameSystem
     private void ApplyWindow(global::Zenith.Player.Player player, in InventoryWindowIntent intent)
     {
         var inv = player.Session.Protocol.Inventory;
+        var online = _players.Online;
         switch (intent.Action)
         {
             case InventoryWindowIntent.Kind.OpenInventory:
@@ -65,8 +66,15 @@ sealed class InventorySystem : IGameSystem
                 break;
 
             case InventoryWindowIntent.Kind.OpenChest:
+                if (player.OpenChest is { } previous &&
+                    (previous.X != intent.X || previous.Y != intent.Y || previous.Z != intent.Z))
+                    ChestLidFanout.ReleaseOpener(online, _world, player);
+
                 _world.Chests.Ensure(intent.X, intent.Y, intent.Z);
                 player.OpenChest = (intent.X, intent.Y, intent.Z);
+                if (_world.Chests.TryAddOpener(intent.X, intent.Y, intent.Z, player.RuntimeId))
+                    ChestLidFanout.Open(online, player.Session, intent.X, intent.Y, intent.Z);
+
                 inv.SendChestOpen(intent.X, intent.Y, intent.Z);
                 inv.SendChestContent(_world.Chests, intent.X, intent.Y, intent.Z);
                 inv.SendInventoryContent(player.Inventory);
@@ -77,7 +85,10 @@ sealed class InventorySystem : IGameSystem
             case InventoryWindowIntent.Kind.Close:
                 if (intent.WindowId == InventoryContentPacket.WindowInventory)
                     player.InventoryWindowOpen = false;
-                player.OpenChest = null;
+                if (player.OpenChest.HasValue)
+                    ChestLidFanout.ReleaseOpener(online, _world, player);
+                else
+                    player.OpenChest = null;
                 inv.SendContainerClose(intent.WindowId, intent.WindowType);
                 break;
         }

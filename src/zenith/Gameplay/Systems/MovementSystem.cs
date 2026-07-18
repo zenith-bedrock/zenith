@@ -174,8 +174,14 @@ sealed class MovementSystem : IGameSystem
     }
 
     /// <summary>Void fall → death screen (inventory kept). Respawn restores world spawn.</summary>
-    private static void BeginVoidDeath(global::Zenith.Player.Player player)
+    private void BeginVoidDeath(global::Zenith.Player.Player player)
     {
+        // Capture before BeginDeath clears OpenChest — release lid opener (§28).
+        var online = _players.Online;
+        var world = player.Session.Context.World;
+        if (player.OpenChest.HasValue)
+            ChestLidFanout.ReleaseOpener(online, world, player);
+
         if (!player.BeginDeath("generic")) return;
 
         var entity = player.Session.Protocol.Entity;

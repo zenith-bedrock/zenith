@@ -14,12 +14,55 @@ sealed class ChestStore
     internal const int WarnThreshold = 10_000;
 
     private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
+    /// <summary>Open UI viewers per cell (runtime id) — lid BlockEvent on 0→1 / 1→0 (§28).</summary>
+    private readonly Dictionary<(int X, int Y, int Z), HashSet<long>> _openers = new();
     private readonly ILogger? _logger;
     private int _thresholdWarned;
 
     public ChestStore(ILogger? logger = null) => _logger = logger;
 
     public int Count => _chests.Count;
+
+    public int OpenerCount(int x, int y, int z) =>
+        _openers.TryGetValue((x, y, z), out var set) ? set.Count : 0;
+
+    /// <summary>Returns true when this was the first opener (0→1) — animate lid open.</summary>
+    public bool TryAddOpener(int x, int y, int z, long playerRuntimeId)
+    {
+        var key = (x, y, z);
+        if (!_openers.TryGetValue(key, out var set))
+        {
+            set = new HashSet<long>();
+            _openers[key] = set;
+        }
+
+        if (!set.Add(playerRuntimeId))
+            return false;
+        return set.Count == 1;
+    }
+
+    /// <summary>Returns true when this was the last opener (1→0) — animate lid close.</summary>
+    public bool TryRemoveOpener(int x, int y, int z, long playerRuntimeId)
+    {
+        var key = (x, y, z);
+        if (!_openers.TryGetValue(key, out var set))
+            return false;
+        if (!set.Remove(playerRuntimeId))
+            return false;
+        if (set.Count > 0)
+            return false;
+        _openers.Remove(key);
+        return true;
+    }
+
+    /// <summary>Clears all openers; returns true if the lid was open (count &gt; 0).</summary>
+    public bool ClearOpeners(int x, int y, int z)
+    {
+        var key = (x, y, z);
+        if (!_openers.Remove(key, out var set))
+            return false;
+        return set.Count > 0;
+    }
 
     public void Ensure(int x, int y, int z)
     {
@@ -59,6 +102,7 @@ sealed class ChestStore
     /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (runtimeId, count).</summary>
     public List<(int RuntimeId, int Count)> RemoveAndDump(int x, int y, int z)
     {
+        ClearOpeners(x, y, z);
         var list = new List<(int, int)>();
         if (!_chests.Remove((x, y, z), out var slots))
             return list;

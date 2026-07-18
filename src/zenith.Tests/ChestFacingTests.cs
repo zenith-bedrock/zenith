@@ -21,8 +21,17 @@ public class ChestFacingTests
     [InlineData(360f, Blocks.CardinalNorth)]
     public void FromYaw_opposite_of_look(float yaw, string expectedCardinal)
     {
+        Assert.Equal(expectedCardinal, PlaceFacing.FrontTowardPlayerFromYaw(yaw));
         Assert.Equal(expectedCardinal, ChestFacing.FromYaw(yaw));
         Assert.Equal(Blocks.ChestForFacing(expectedCardinal), ChestFacing.RuntimeIdFromYaw(yaw));
+    }
+
+    [Fact]
+    public void PlaceFacing_LookFromYaw_then_Opposite_matches_front()
+    {
+        Assert.Equal(Blocks.CardinalSouth, PlaceFacing.LookFromYaw(0f));
+        Assert.Equal(Blocks.CardinalNorth, PlaceFacing.Opposite(Blocks.CardinalSouth));
+        Assert.Equal(Blocks.CardinalNorth, PlaceFacing.FrontTowardPlayerFromYaw(0f));
     }
 
     [Fact]
