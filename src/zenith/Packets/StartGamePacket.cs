@@ -40,7 +40,7 @@ class StartGamePacket : DataPacket
     public string BaseGameVersion { get; set; } = "";
     public string GameVersion { get; set; } = "";
 
-    /// <summary>Must be true when chunk palettes use FNV network_id hashes (Vedrock flat).</summary>
+    /// <summary>Must be true when chunk palettes use FNV network_id hashes (not legacy runtime ids).</summary>
     public bool UseBlockNetworkIdHashes { get; set; } = true;
 
     public override Span<byte> Encode()

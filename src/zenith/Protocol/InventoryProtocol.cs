@@ -69,7 +69,7 @@ static class InventoryContainerMap
 
             case CombinedHotbarAndInventory:
             case Inventory:
-                // PM/Dragonfly: containers 12 and 29 use absolute bag slots 0–35 (not relative 0–26).
+                // Containers 12 and 29: slot is absolute bag index 0–35 (not “first inventory = 0”).
                 if (slot >= PlayerInventory.FullInventorySize)
                 {
                     flat = 0;
@@ -159,7 +159,7 @@ static class InventoryContainerMap
 
         if (PlayerInventory.IsValidInventorySlot(flat))
         {
-            // Absolute slot on container 29 (PM parity) — not flat-9 relative.
+            // Container 29 slot = absolute bag index (0–35), not hotbar-relative 0–8.
             containerId = Inventory;
             wireSlot = (byte)flat;
             return true;
@@ -306,7 +306,7 @@ sealed class InventoryProtocol
     }
 
     /// <summary>
-    /// Window 124 layout (Endstone CONTAINER_ID_PLAYER_ONLY_UI / Mojang PlayerUISlot).
+    /// Window 124 (player-only UI) slot map — cursor at Mojang PlayerUISlot 0.
     /// Omitting slot 0 wiped ISR cursor after OK (smoke 11).
     /// </summary>
     internal NetworkItemStack[] BuildUiInventorySlots(global::Zenith.Player.Player player)
@@ -419,7 +419,7 @@ sealed class InventoryProtocol
         var byContainer = new Dictionary<byte, List<StackResponseSlotInfo>>();
         foreach (var touch in wireTouches)
         {
-            // DF emits CreatedOutput; skipping it desyncs sequential craft take (S35 planks→chest).
+            // Always include CreatedOutput (60) in OK — omitting it desyncs sequential craft take.
             var stack = ResolveStack(player, touch.Flat);
             RefreshNetId(touch.Flat, stack);
             var netId = GetNetId(touch.Flat);

@@ -200,7 +200,7 @@ sealed class ItemStackRequestPacket : DataPacket
                 return Unsupported(type);
             case ActionConsume:
             {
-                // Dragonfly: acknowledged no-op (craft already consumed in domain tick).
+                // Consume already applied in the domain craft tick — acknowledge and skip payload.
                 stream.ReadByte();
                 _ = StackRequestSlotInfo.Read(ref stream);
                 return new DecodedStackRequestAction

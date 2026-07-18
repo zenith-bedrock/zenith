@@ -11,7 +11,7 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     public static NetworkItemStack Empty => new(0, 0, 0);
 
     /// <summary>
-    /// NetworkItemStackDescriptor / gophertunnel ItemInstanceNew (i16 LE network id).
+    /// NetworkItemStackDescriptor — i16 LE network id + count + meta + optional stack net id.
     /// Use from: InventoryContent, MobEquipment.
     /// </summary>
     public void WriteNetworkItemStackDescriptor(ref BinaryStream writer)
@@ -53,7 +53,7 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     }
 
     /// <summary>
-    /// ItemStack without stack net id (gophertunnel Item / PM WithoutStackId).
+    /// ItemStack without stack net id (VarInt network id + block runtime + empty extra blob).
     /// Use from: CreativeContent, CraftingData outputs.
     /// </summary>
     public void WriteItemStack(ref BinaryStream writer)
@@ -69,7 +69,7 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         writer.WriteUnsignedVarInt(Meta);
         writer.WriteVarInt(BlockRuntimeId);
 
-        // Extra blob: int16 NBT length 0 + empty can_place/can_break uint32 lists (gophertunnel Item).
+        // Extra blob: int16 NBT length 0 + empty can_place / can_break uint32 lists.
         Span<byte> extra = stackalloc byte[10];
         extra[0] = 0;
         extra[1] = 0; // int16 LE length

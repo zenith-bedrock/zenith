@@ -4,8 +4,8 @@ namespace Zenith.Packets;
 
 /// <summary>
 /// Tells the client which area around a block position now has usable chunk data.
-/// gophertunnel: if this packet is never sent, no chunks are shown regardless of LevelChunks.
-/// Vedrock/PNX send this before LevelChunks on spawn; Zenith PreSpawn matches that order.
+/// Without this packet the client ignores terrain even if LevelChunks arrive.
+/// PreSpawn sends it before LevelChunks.
 /// </summary>
 class NetworkChunkPublisherUpdatePacket : DataPacket
 {

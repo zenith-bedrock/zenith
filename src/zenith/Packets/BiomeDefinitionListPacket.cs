@@ -3,7 +3,7 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>
-/// BiomeDefinitionList (0x7a) — Vedrock/PNX send an empty list after ItemRegistry.
+/// BiomeDefinitionList (0x7a) — empty list after ItemRegistry.
 /// Clients that expect this packet once can otherwise mis-handle biome/terrain rendering.
 /// </summary>
 sealed class BiomeDefinitionListPacket : DataPacket

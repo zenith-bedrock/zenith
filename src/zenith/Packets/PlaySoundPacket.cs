@@ -4,7 +4,7 @@ namespace Zenith.Packets;
 
 /// <summary>
 /// PlaySound (0x56) — server → client. Position is SoundPos (BlockPos of world*8).
-/// Optional handle is fixed LE uint64 (gophertunnel).
+/// Optional handle is fixed LE uint64 when present.
 /// </summary>
 sealed class PlaySoundPacket : DataPacket
 {
