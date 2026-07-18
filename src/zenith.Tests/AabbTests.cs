@@ -6,6 +6,16 @@ namespace Zenith.Tests;
 
 public class AabbTests
 {
+
+    [Fact]
+    public void AbsoluteWireY_adds_network_offset_not_bare_feet()
+    {
+        // Regression: feet domain + bare Absolute sank peers (~eye height into floor).
+        Assert.Equal(1.621f, EntityHitboxes.PlayerNetworkOffset);
+        Assert.Equal(Blocks.FlatSpawnY + 1.621f, EntityHitboxes.AbsoluteWireY(Blocks.FlatSpawnY));
+        Assert.NotEqual(Blocks.FlatSpawnY, EntityHitboxes.AbsoluteWireY(Blocks.FlatSpawnY));
+    }
+
     [Fact]
     public void Intersects_overlapping_boxes()
     {
@@ -48,7 +58,7 @@ public class AabbTests
     [Fact]
     public void Player_one_block_above_item_does_not_intersect_with_pickup_expand()
     {
-        // PM expand +0.5 Y from feet does not reach an item entity one full block below.
+        // Expand +0.5 Y from feet does not reach an item entity one full block below.
         Blocks.EnsureLoaded();
         var feetY = Blocks.FlatGrassY + 1f;
         var playerBb = EntityHitboxes.PlayerStanding(8.5f, feetY, 8.5f)

@@ -1,5 +1,6 @@
 using Zenith.Packets;
 using Zenith.Session;
+using Zenith.World;
 
 namespace Zenith.Protocol;
 
@@ -22,6 +23,7 @@ sealed class EntityProtocol
 
     public EntityProtocol(NetworkSession session) => _session = session;
 
+    /// <param name="y">Domain feet Y — wire adds <see cref="EntityHitboxes.PlayerNetworkOffset"/>.</param>
     public void SendMoveAbsolute(
         ulong actorRuntimeId,
         float x,
@@ -56,6 +58,9 @@ sealed class EntityProtocol
         _session.SendDataPacket(packets);
     }
 
+    /// <summary>
+    /// <paramref name="y"/> is domain feet; packet Y is <see cref="EntityHitboxes.AbsoluteWireY"/>.
+    /// </summary>
     private static MoveActorAbsolutePacket CreateMoveAbsolute(
         ulong actorRuntimeId,
         float x,
@@ -70,14 +75,17 @@ sealed class EntityProtocol
             ActorRuntimeId = actorRuntimeId,
             Flags = flags,
             PositionX = x,
-            PositionY = y,
+            PositionY = EntityHitboxes.AbsoluteWireY(y),
             PositionZ = z,
             Pitch = pitch,
             Yaw = yaw,
             HeadYaw = headYaw
         };
 
-    /// <summary>Local camera snap — MovePlayer Teleport (ADR §41). Not for peers.</summary>
+    /// <summary>
+    /// Local camera snap — MovePlayer Teleport (ADR §41). Not for peers.
+    /// <paramref name="y"/> is domain feet; packet Y is <see cref="EntityHitboxes.AbsoluteWireY"/>.
+    /// </summary>
     public void SendMovePlayerTeleport(
         ulong entityRuntimeId,
         float x,
@@ -89,7 +97,7 @@ sealed class EntityProtocol
         ulong tick = 0)
     {
         _session.SendDataPacket(MovePlayerPacket.CreateTeleport(
-            entityRuntimeId, x, y, z, pitch, yaw, headYaw, tick));
+            entityRuntimeId, x, EntityHitboxes.AbsoluteWireY(y), z, pitch, yaw, headYaw, tick));
     }
 
     public void SendPlayerListAdd(Guid uuid, long actorUniqueId, string username, byte[]? skinRgba = null, uint skinWidth = 0, uint skinHeight = 0)
