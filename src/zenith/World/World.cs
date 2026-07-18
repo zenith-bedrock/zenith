@@ -6,8 +6,8 @@ namespace Zenith.World;
 
 /// <summary>
 /// Mundo: colunas base via <see cref="IChunkStorage"/> + overlay esparso permanente.
-/// Overlay warn-once at threshold (ADR §36) — SoftCap refuse deferred (break→air keys).
-/// Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
+/// Overlay SoftCap (§36): refuse new keys at <see cref="OverrideSoftCap"/>; compact when rid == base;
+/// overwrite / hydrate always allowed. Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
 /// Column index (§36 adendo): <see cref="GetOverlaysInColumn"/> O(bucket), not O(all overlays).
 /// </summary>
 sealed class World
@@ -15,7 +15,8 @@ sealed class World
     /// <summary>Wire Overworld — keep equal to Network.Packets.DimensionId.Overworld (dual layer SSOT).</summary>
     internal const int OverworldDimensionId = 0;
 
-    internal const int OverrideWarnThreshold = 10_000;
+    /// <summary>SoftCap for new overlay keys (same order as historical warn threshold).</summary>
+    internal const int OverrideSoftCap = 10_000;
 
     private readonly IChunkStorage _storage;
     private readonly byte[] _flatOverworldPayload;
@@ -23,11 +24,11 @@ sealed class World
     private readonly ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
     /// <summary>
     /// Secondary index by chunk for column stream. SSOT for GetBlock remains <see cref="_blockOverrides"/>;
-    /// both updated only via <see cref="StoreOverlay"/> (no drift).
+    /// both updated only via <see cref="StoreOverlay"/> / <see cref="RemoveOverlay"/> (no drift).
     /// </summary>
     private readonly ConcurrentDictionary<(int Cx, int Cz), ConcurrentDictionary<(int X, int Y, int Z), int>> _overlaysByChunk = new();
     private readonly ILogger? _logger;
-    private int _overrideWarned;
+    private int _softCapWarned;
 
     public FloorDropStore FloorDrops { get; }
     public ChestStore Chests { get; }
@@ -120,26 +121,65 @@ sealed class World
     public static int AirRuntimeId => Blocks.Air;
 
     /// <summary>
-    /// Autoridade em RAM no tick. Persistência de overlay é fire-and-forget
-    /// (fila no storage) — o GameLoop nunca espera disco.
+    /// True when <see cref="TrySetBlock"/> would not SoftCap-refuse this write
+    /// (compact-to-base and overwrite of existing keys always OK).
     /// </summary>
-    public void SetBlock(int x, int y, int z, int blockRuntimeId)
+    public bool CanAcceptBlockWrite(int x, int y, int z, int blockRuntimeId)
     {
-        StoreOverlay(x, y, z, blockRuntimeId);
-        _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
-
-        if (_blockOverrides.Count >= OverrideWarnThreshold &&
-            Interlocked.Exchange(ref _overrideWarned, 1) == 0)
-        {
-            _logger?.Warning(
-                $"World overlays crossed OverrideWarnThreshold ({OverrideWarnThreshold}). " +
-                "Still warn-only — SoftCap refuse deferred (break→air creates overlay keys; ADR §36 adendo).");
-        }
+        if (blockRuntimeId == SampleBaseBlock(x, y, z))
+            return true;
+        if (_blockOverrides.ContainsKey((x, y, z)))
+            return true;
+        return _blockOverrides.Count < OverrideSoftCap;
     }
 
     /// <summary>
+    /// Autoridade em RAM no tick. Persistência de overlay é fire-and-forget
+    /// (fila no storage) — o GameLoop nunca espera disco.
+    /// SoftCap: refuse only when inserting a <b>new</b> key at <see cref="OverrideSoftCap"/>.
+    /// Writing the flat base rid removes the overlay (compaction). Existing keys always overwrite.
+    /// </summary>
+    public bool TrySetBlock(int x, int y, int z, int blockRuntimeId)
+    {
+        var cell = (x, y, z);
+        var baseRid = SampleBaseBlock(x, y, z);
+        var had = _blockOverrides.ContainsKey(cell);
+
+        if (blockRuntimeId == baseRid)
+        {
+            if (had)
+            {
+                RemoveOverlay(x, y, z);
+                _ = _storage.DeleteOverlayAsync(x, y, z);
+            }
+
+            return true;
+        }
+
+        if (!had && _blockOverrides.Count >= OverrideSoftCap)
+        {
+            if (Interlocked.Exchange(ref _softCapWarned, 1) == 0)
+            {
+                _logger?.Warning(
+                    $"World overlays at SoftCap ({OverrideSoftCap}): refusing new overlay cells " +
+                    "(overwrite / compact-to-base still allowed — ADR §36).");
+            }
+
+            return false;
+        }
+
+        StoreOverlay(x, y, z, blockRuntimeId);
+        _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
+        return true;
+    }
+
+    /// <summary>Legacy void API — prefers <see cref="TrySetBlock"/> when refuse matters.</summary>
+    public void SetBlock(int x, int y, int z, int blockRuntimeId) =>
+        _ = TrySetBlock(x, y, z, blockRuntimeId);
+
+    /// <summary>
     /// Single write path for flat map + chunk index (SetBlock + LevelDB hydrate).
-    /// Break → air overwrites in place (no TryRemove) — same as pre-index behavior.
+    /// Hydrate bypasses SoftCap (world already on disk).
     /// </summary>
     private void StoreOverlay(int x, int y, int z, int blockRuntimeId)
     {
@@ -148,6 +188,19 @@ sealed class World
         var chunk = (ToChunk(x), ToChunk(z));
         var bucket = _overlaysByChunk.GetOrAdd(chunk, static _ => new ConcurrentDictionary<(int X, int Y, int Z), int>());
         bucket[cell] = blockRuntimeId;
+    }
+
+    private void RemoveOverlay(int x, int y, int z)
+    {
+        var cell = (x, y, z);
+        _blockOverrides.TryRemove(cell, out _);
+        var chunk = (ToChunk(x), ToChunk(z));
+        if (_overlaysByChunk.TryGetValue(chunk, out var bucket))
+        {
+            bucket.TryRemove(cell, out _);
+            if (bucket.IsEmpty)
+                _overlaysByChunk.TryRemove(chunk, out _);
+        }
     }
 
     /// <summary>Overlay se existir; senão amostra do terreno base flat.</summary>

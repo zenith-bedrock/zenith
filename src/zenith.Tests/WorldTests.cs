@@ -125,17 +125,45 @@ public class WorldOverlayTests
     }
 
     [Fact]
-    public void SetBlock_air_overwrite_stays_in_index()
+    public void SetBlock_restore_base_compacts_overlay()
     {
-        // Break path: SetBlock(air) does not TryRemove — index must mirror flat map.
+        // FlatSpawnY base is air — stone→air matches base → remove key (§36 SoftCap).
         var world = new World.World(new InMemoryChunkStorage());
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
+        Assert.Equal(1, world.OverrideCount);
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Air);
+
+        Assert.Empty(world.GetOverlaysInColumn(0, 0));
+        Assert.Equal(0, world.OverrideCount);
+        Assert.Equal(Blocks.Air, world.GetBlock(3, Blocks.FlatSpawnY, 5));
+    }
+
+    [Fact]
+    public void SetBlock_break_base_terrain_keeps_air_overlay()
+    {
+        var world = new World.World(new InMemoryChunkStorage());
+        world.SetBlock(0, Blocks.FlatGrassY, 0, Blocks.Air);
 
         var column = world.GetOverlaysInColumn(0, 0);
         Assert.Single(column);
         Assert.Equal(Blocks.Air, column[0].BlockRuntimeId);
-        Assert.Equal(Blocks.Air, world.GetBlock(3, Blocks.FlatSpawnY, 5));
+        Assert.Equal(Blocks.Air, world.GetBlock(0, Blocks.FlatGrassY, 0));
+    }
+
+    [Fact]
+    public void TrySetBlock_softcap_refuses_new_key_allows_overwrite()
+    {
+        var world = new World.World(new InMemoryChunkStorage());
+        for (var i = 0; i < World.World.OverrideSoftCap; i++)
+            Assert.True(world.TrySetBlock(i, Blocks.FlatSpawnY, 0, Blocks.Stone));
+
+        Assert.Equal(World.World.OverrideSoftCap, world.OverrideCount);
+        Assert.False(world.TrySetBlock(World.World.OverrideSoftCap, Blocks.FlatSpawnY, 0, Blocks.Dirt));
+        Assert.Equal(World.World.OverrideSoftCap, world.OverrideCount);
+        Assert.True(world.TrySetBlock(0, Blocks.FlatSpawnY, 0, Blocks.Dirt)); // overwrite
+        Assert.True(world.TrySetBlock(0, Blocks.FlatSpawnY, 0, Blocks.Air)); // compact frees a slot
+        Assert.Equal(World.World.OverrideSoftCap - 1, world.OverrideCount);
+        Assert.True(world.TrySetBlock(World.World.OverrideSoftCap, Blocks.FlatSpawnY, 0, Blocks.Sand));
     }
 
     [Fact]

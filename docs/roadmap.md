@@ -34,7 +34,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 
 If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
 
-**Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows.
+**Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows. **Delivery risks (hard):** dirty&gt;remote, SoftCap honesty, leaf CI vs missing Bedrock E2E — recorded in that debt doc; do not soft-pedal.
 
 **Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — **Shipped** on `develop` (`3649391`, Jul 2026). Structural honesty so later leaves do not rewrite inventory identity.
 

@@ -32,6 +32,7 @@ interface IChunkStorage
     ValueTask PutAsync(ChunkColumnData column, CancellationToken cancellationToken = default);
 
     ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default);
+    ValueTask DeleteOverlayAsync(int x, int y, int z, CancellationToken cancellationToken = default);
     ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default);
 
     ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default);
@@ -72,6 +73,9 @@ sealed class InMemoryChunkStorage : IChunkStorage
     }
 
     public ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
+
+    public ValueTask DeleteOverlayAsync(int x, int y, int z, CancellationToken cancellationToken = default) =>
         ValueTask.CompletedTask;
 
     public ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default) =>

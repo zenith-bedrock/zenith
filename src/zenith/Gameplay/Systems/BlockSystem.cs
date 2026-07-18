@@ -206,6 +206,15 @@ sealed class BlockSystem : IGameSystem
                 return false;
             }
 
+            if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
+                (Blocks.IsChest(edit.BlockRuntimeId) && !_world.Chests.CanAcceptNew(edit.X, edit.Y, edit.Z)))
+            {
+                player.Session.Context.Logger.Debug(
+                    $"Place refused (store SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                return false;
+            }
+
             if (!creative)
             {
                 var slot = edit.HotbarSlot;
@@ -215,6 +224,36 @@ sealed class BlockSystem : IGameSystem
                     return false;
                 }
                 inventoryChanged = true;
+            }
+
+            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
+            {
+                if (!creative && PlayerInventory.IsValidHotbarSlot(edit.HotbarSlot))
+                {
+                    player.Inventory.TryAddUpTo(
+                        StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(edit.BlockRuntimeId)), 1);
+                }
+
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                return false;
+            }
+
+            if (Blocks.IsChest(edit.BlockRuntimeId))
+            {
+                if (!_world.Chests.TryEnsure(edit.X, edit.Y, edit.Z))
+                {
+                    _ = _world.TrySetBlock(edit.X, edit.Y, edit.Z, World.World.AirRuntimeId);
+                    if (!creative && PlayerInventory.IsValidHotbarSlot(edit.HotbarSlot))
+                    {
+                        player.Inventory.TryAddUpTo(
+                            StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(edit.BlockRuntimeId)), 1);
+                    }
+
+                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                    return false;
+                }
+
+                _world.PersistChest(edit.X, edit.Y, edit.Z);
             }
         }
         else
@@ -257,19 +296,34 @@ sealed class BlockSystem : IGameSystem
                 }
             }
 
+            // Resolve pair + SoftCap check while the broken cell still has its chest rid (§56 / §36).
+            var wasChest = Blocks.IsChest(previous);
+            OpenChestView pairView = default;
+            if (wasChest)
+                pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
+
+            if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
+                !_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
+            {
+                player.Session.Context.Logger.Debug(
+                    $"Break refused (overlay SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                return false;
+            }
+
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
             BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);
             if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
                 player.AbortBreak();
 
-            var wasChest = Blocks.IsChest(previous);
             if (wasChest)
             {
-                // Resolve pair while both cells still exist (§56).
-                var pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
                 var lidBroken = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
                 var lidPartner = false;
-                if (pairView.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
+                var partnerX = 0;
+                var partnerY = 0;
+                var partnerZ = 0;
+                if (pairView.TryGetPartner(out partnerX, out partnerY, out partnerZ))
                     lidPartner = _world.Chests.ClearOpeners(partnerX, partnerY, partnerZ);
 
                 foreach (var peer in online)
@@ -316,14 +370,6 @@ sealed class BlockSystem : IGameSystem
                         $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                 }
             }
-        }
-
-        _world.SetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
-
-        if (Blocks.IsChest(edit.BlockRuntimeId))
-        {
-            _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
-            _world.PersistChest(edit.X, edit.Y, edit.Z);
         }
 
         if (inventoryChanged)
