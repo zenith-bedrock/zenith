@@ -1,0 +1,15 @@
+---
+description: Zenith architecture pointers — decide ≠ transmit ≠ serialize
+alwaysApply: true
+---
+
+# Zenith architecture
+
+Read **[`ARCHITECTURE.md`](../../ARCHITECTURE.md)** and **[`AGENTS.md`](../../AGENTS.md)** before changing layers.
+
+**Rule:** who decides ≠ who transmits ≠ who serializes.
+
+- `Gameplay/` decides; `Protocol/` transmits; `Packets/` serialize only.
+- Do **not** recreate `Network/` as a catch-all.
+- Freeze unless ADR: Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` command framework.
+- Platform health (not H1 product): [`docs/robustness-dx-debt.md`](../../docs/robustness-dx-debt.md) §54.

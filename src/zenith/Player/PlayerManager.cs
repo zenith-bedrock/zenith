@@ -14,10 +14,20 @@ class PlayerManager
     public int Count => _players.Count;
 
     /// <summary>
-    /// Snapshot of who is online (allocates). Capture once per Tick and reuse the list;
-    /// do not read <see cref="Online"/> inside a nested loop.
+    /// Snapshot of who is online (allocates). Prefer <see cref="FillOnline"/> once per tick
+    /// and reuse that list; do not call this inside a nested peer loop.
     /// </summary>
     public IReadOnlyList<Player> Online => _players.Values.ToArray();
+
+    /// <summary>
+    /// Clear <paramref name="buffer"/> and copy current online players into it (GameLoop once/tick).
+    /// </summary>
+    public void FillOnline(List<Player> buffer)
+    {
+        buffer.Clear();
+        foreach (var player in _players.Values)
+            buffer.Add(player);
+    }
 
     /// <summary>Próximo runtime entity id estável (sem EntityManager).</summary>
     public long AllocateRuntimeId() => Interlocked.Increment(ref _nextRuntimeId);

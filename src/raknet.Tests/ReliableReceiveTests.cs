@@ -28,7 +28,8 @@ public class ReliableReceiveTests
 
         public RecordingServer() : base(port: 0) { }
 
-        public override void Send(IPEndPoint endPoint, byte[] buffer) => Captured.Add(buffer);
+        public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) =>
+            Captured.Add(buffer.ToArray());
     }
 
     private sealed class ProbeSession : RakNetSession

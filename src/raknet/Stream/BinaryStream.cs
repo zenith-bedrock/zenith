@@ -56,6 +56,26 @@ public ref struct BinaryStream : IDisposable
         return span;
     }
 
+    /// <summary>
+    /// Take ownership of the write buffer as a <see cref="byte"/>[] (trim-copy only when
+    /// capacity &gt; length). Prefer over <c>GetBufferDisposing().ToArray()</c> on send paths.
+    /// </summary>
+    public byte[] TakeOwnedBuffer()
+    {
+        ThrowIfDisposed();
+        var len = Length;
+        var buf = Buffer;
+        Buffer = Array.Empty<byte>();
+        Length = 0;
+        Offset = 0;
+        _disposed = true;
+        if (len == 0) return Array.Empty<byte>();
+        if (buf.Length == len) return buf;
+        var exact = GC.AllocateUninitializedArray<byte>(len);
+        buf.AsSpan(0, len).CopyTo(exact);
+        return exact;
+    }
+
     /// <summary>Modo de escrita: começa vazio e cresce conforme Write/WriteX são chamados.</summary>
     public BinaryStream()
     {
@@ -176,9 +196,9 @@ public ref struct BinaryStream : IDisposable
 
     public void WriteString(string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        WriteUShort((ushort)bytes.Length);
-        Write(bytes);
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        WriteUShort((ushort)byteCount);
+        WriteUtf8(value, byteCount);
     }
 
     public string ReadString()
@@ -190,9 +210,9 @@ public ref struct BinaryStream : IDisposable
 
     public void WriteVarString(string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        WriteUnsignedVarInt(bytes.Length);
-        Write(bytes);
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        WriteUnsignedVarInt(byteCount);
+        WriteUtf8(value, byteCount);
     }
 
     public string ReadVarString()
@@ -200,6 +220,29 @@ public ref struct BinaryStream : IDisposable
         var length = ReadUnsignedVarInt();
         var bytes = ReadSpan(length);
         return Encoding.UTF8.GetString(bytes);
+    }
+
+    private void WriteUtf8(string value, int byteCount)
+    {
+        if (byteCount == 0) return;
+        if (byteCount <= 512)
+        {
+            Span<byte> tmp = stackalloc byte[byteCount];
+            Encoding.UTF8.GetBytes(value, tmp);
+            Write(tmp);
+            return;
+        }
+
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(value, rented.AsSpan(0, byteCount));
+            Write(rented.AsSpan(0, written));
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     /// <summary>

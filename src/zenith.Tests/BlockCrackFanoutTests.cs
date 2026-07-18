@@ -21,7 +21,7 @@ public class BlockCrackFanoutTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         BlockCrackFanout.Start(
-            fx.Players,
+            fx.Players.Online,
             miner.Session,
             blockX: 1,
             blockY: -60,
@@ -43,7 +43,7 @@ public class BlockCrackFanoutTests
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        BlockCrackFanout.Stop(fx.Players, miner.Session, 3, -60, 4);
+        BlockCrackFanout.Stop(fx.Players.Online, miner.Session, 3, -60, 4);
         FlushRaknet(fx.Players);
 
         Assert.True(fx.Transport.Captured.Count >= 2,
@@ -59,7 +59,7 @@ public class BlockCrackFanoutTests
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        BlockCrackFanout.Start(fx.Players, miner.Session, 0, -60, 0, 15);
+        BlockCrackFanout.Start(fx.Players.Online, miner.Session, 0, -60, 0, 15);
         FlushRaknet(fx.Players);
 
         Assert.Equal(1, fx.Transport.Captured.Count);

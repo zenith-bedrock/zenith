@@ -160,17 +160,39 @@ sealed class World
 
     public IReadOnlyList<BlockOverride> GetOverlaysInColumn(int chunkX, int chunkZ)
     {
-        if (!_overlaysByChunk.TryGetValue((chunkX, chunkZ), out var bucket) || bucket.IsEmpty)
-            return Array.Empty<BlockOverride>();
+        var list = new List<BlockOverride>();
+        FillOverlaysInColumn(chunkX, chunkZ, list);
+        return list.Count == 0 ? Array.Empty<BlockOverride>() : list;
+    }
 
-        var list = new List<BlockOverride>(bucket.Count);
+    /// <summary>
+    /// Clear <paramref name="buffer"/> and fill with overlays in the column (no per-call List alloc
+    /// when the caller reuses the buffer — §54 Phase 3).
+    /// </summary>
+    public void FillOverlaysInColumn(int chunkX, int chunkZ, List<BlockOverride> buffer)
+    {
+        buffer.Clear();
+        if (!_overlaysByChunk.TryGetValue((chunkX, chunkZ), out var bucket) || bucket.IsEmpty)
+            return;
+
         foreach (var kv in bucket)
         {
             var (bx, by, bz) = kv.Key;
-            list.Add(new BlockOverride(bx, by, bz, kv.Value));
+            buffer.Add(new BlockOverride(bx, by, bz, kv.Value));
         }
+    }
 
-        return list;
+    /// <summary>Visit overlays in a column without allocating a list.</summary>
+    public void ForEachOverlayInColumn(int chunkX, int chunkZ, Action<BlockOverride> visitor)
+    {
+        if (!_overlaysByChunk.TryGetValue((chunkX, chunkZ), out var bucket) || bucket.IsEmpty)
+            return;
+
+        foreach (var kv in bucket)
+        {
+            var (bx, by, bz) = kv.Key;
+            visitor(new BlockOverride(bx, by, bz, kv.Value));
+        }
     }
 
     private static int SampleBaseBlock(int x, int y, int z)

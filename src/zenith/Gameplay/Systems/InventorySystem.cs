@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
+using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
@@ -26,12 +27,20 @@ sealed class InventorySystem : IGameSystem
         _creative = creative;
     }
 
-    public void Tick(GameClock clock)
+    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+
+    public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
-        if (_players.Count == 0) return;
+        if (online.Count == 0) return;
 
-        foreach (var player in _players.Online)
+        foreach (var player in online)
+        {
+            while (player.TryConsumeWindowIntent(out var window))
+                ApplyWindow(player, window);
+        }
+
+        foreach (var player in online)
         {
             while (player.TryConsumeInventoryStack(out var intent))
             {
@@ -41,10 +50,56 @@ sealed class InventorySystem : IGameSystem
         }
     }
 
+    private void ApplyWindow(global::Zenith.Player.Player player, in InventoryWindowIntent intent)
+    {
+        var inv = player.Session.Protocol.Inventory;
+        switch (intent.Action)
+        {
+            case InventoryWindowIntent.Kind.OpenInventory:
+                player.InventoryWindowOpen = true;
+                inv.SendContainerOpen(
+                    (int)MathF.Floor(player.PositionX),
+                    (int)MathF.Floor(player.PositionY),
+                    (int)MathF.Floor(player.PositionZ));
+                inv.SendUiInventoryContent(player);
+                break;
+
+            case InventoryWindowIntent.Kind.OpenChest:
+                _world.Chests.Ensure(intent.X, intent.Y, intent.Z);
+                player.OpenChest = (intent.X, intent.Y, intent.Z);
+                inv.SendChestOpen(intent.X, intent.Y, intent.Z);
+                inv.SendChestContent(_world.Chests, intent.X, intent.Y, intent.Z);
+                inv.SendInventoryContent(player.Inventory);
+                player.Session.Context.Logger.Debug(
+                    $"Chest open for {player.Username} @ {intent.X},{intent.Y},{intent.Z}");
+                break;
+
+            case InventoryWindowIntent.Kind.Close:
+                if (intent.WindowId == InventoryContentPacket.WindowInventory)
+                    player.InventoryWindowOpen = false;
+                player.OpenChest = null;
+                inv.SendContainerClose(intent.WindowId, intent.WindowType);
+                break;
+        }
+    }
+
     private void Apply(global::Zenith.Player.Player player, in InventoryStackIntent intent)
     {
         var protocol = player.Session.Protocol.Inventory;
         var inventory = player.Inventory;
+
+        if (!ValidateClientStackNetIds(protocol, intent.Actions))
+        {
+            protocol.SendItemStackResponseError(intent.RequestId);
+            protocol.SendInventoryContent(inventory);
+            protocol.SendUiInventoryContent(player);
+            if (player.OpenChest is { } openMismatch)
+                protocol.SendChestContent(_world.Chests, openMismatch.X, openMismatch.Y, openMismatch.Z);
+            player.Session.Context.Logger.Debug(
+                $"ISR rejected for {player.Username}: stack net id mismatch (request {intent.RequestId}).");
+            return;
+        }
+
         var invSnap = inventory.CaptureSnapshot();
         var craftSnap = player.CraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
@@ -180,6 +235,33 @@ sealed class InventorySystem : IGameSystem
         _world.PersistInventory(player.Uuid, inventory);
         if (chestPos is { } openChest)
             _world.PersistChest(openChest.X, openChest.Y, openChest.Z);
+    }
+
+    /// <summary>
+    /// Soft match before mutate (§54). Positive client ids must equal last DescribeForWire;
+    /// ≤0 skipped (air / deferred prediction).
+    /// </summary>
+    private static bool ValidateClientStackNetIds(InventoryProtocol protocol, InventoryStackAction[] actions)
+    {
+        foreach (var action in actions)
+        {
+            switch (action.Kind)
+            {
+                case InventoryStackActionKind.Transfer:
+                case InventoryStackActionKind.Swap:
+                    if (!protocol.MatchesAdvertisedStackNetId(action.From, action.FromWire.StackNetworkId) ||
+                        !protocol.MatchesAdvertisedStackNetId(action.To, action.ToWire.StackNetworkId))
+                        return false;
+                    break;
+
+                case InventoryStackActionKind.Drop:
+                    if (!protocol.MatchesAdvertisedStackNetId(action.From, action.FromWire.StackNetworkId))
+                        return false;
+                    break;
+            }
+        }
+
+        return true;
     }
 
     private InventorySlot GetSlot(global::Zenith.Player.Player player, int flat)

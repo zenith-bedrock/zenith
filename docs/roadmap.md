@@ -34,6 +34,8 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 
 If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
 
+**Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows.
+
 ---
 
 ## Horizon 2 — Later (explicitly not “next”)

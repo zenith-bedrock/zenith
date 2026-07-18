@@ -52,7 +52,7 @@ class ZenithServer
 
         var players = new PlayerManager();
         var clock = new GameClock();
-        var gameLoop = new GameLoop(clock, serverLogger);
+        var gameLoop = new GameLoop(clock, players, serverLogger);
         gameLoop.Register(new TimeSyncSystem(players));
         gameLoop.Register(new MovementSystem(players));
         gameLoop.Register(new EquipmentSystem(players));

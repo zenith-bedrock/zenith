@@ -32,7 +32,8 @@ internal sealed class RecordingRakNetServer : RakNetServer
 
     public RecordingRakNetServer() : base(port: 0) { }
 
-    public override void Send(IPEndPoint endPoint, byte[] buffer) => Captured.Enqueue(buffer);
+    public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) =>
+        Captured.Enqueue(buffer.ToArray());
 }
 
 file sealed class StubSessionHandler : ISessionHandler
@@ -735,6 +736,68 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_dig_start_intent_applies_BeginBreak_on_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("digger");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        var start = fx.Clock.CurrentTick;
+
+        Assert.True(player.SubmitDigStart(0, 90, 0, start, need));
+        Assert.False(player.HasBreakTarget);
+        Assert.True(player.TryGetDigAuth(0, 90, 0, out var authStart, out var authNeed));
+        Assert.Equal(start, authStart);
+        Assert.Equal(need, authNeed);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.True(player.IsBreakTarget(0, 90, 0));
+        Assert.Equal(need, player.BreakRequiredTicks);
+    }
+
+    [Fact]
+    public void BlockSystem_dig_abort_intent_clears_auth_before_tick_predict_rejects()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("abort");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+
+        Assert.True(player.SubmitDigAbort(0, 90, 0));
+        Assert.False(player.HasBreakTarget);
+        Assert.False(player.TryGetDigAuth(0, 90, 0, out _, out _));
+
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_same_packet_dig_start_and_authorized_break()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fastbreak");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        var start = fx.Clock.CurrentTick;
+        fx.Clock.AdvanceBy(need);
+
+        Assert.True(player.SubmitDigStart(0, 90, 0, start, need));
+        Assert.True(player.TryGetDigAuth(0, 90, 0, out var authStart, out var authNeed));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, authStart, authNeed)));
+        player.ClearBreakTarget();
+        player.CancelPendingDigStart(0, 90, 0);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.False(player.HasBreakTarget);
+    }
+
+    [Fact]
     public void BlockSystem_same_cell_two_digs_first_writer_wins_loot()
     {
         var fx = new IntentTestFixture();
@@ -919,17 +982,42 @@ public class IntentContractTests
         var alice = fx.AddInGamePlayer("alice");
         _ = fx.AddInGamePlayer("bob");
 
-        alice.SubmitChat("hello");
+        Assert.True(alice.SubmitChat("hello"));
         Assert.True(alice.TryConsumeChat(out var msg));
         Assert.Equal("hello", msg);
 
-        alice.SubmitChat("hello");
+        Assert.True(alice.SubmitChat("hello"));
         var before = fx.Transport.Captured.Count;
         new ChatSystem(fx.Players).Tick(fx.Clock);
         FlushRaknet(fx.Players);
 
         Assert.False(alice.TryConsumeChat(out _));
         Assert.True(fx.Transport.Captured.Count > before);
+    }
+
+    [Fact]
+    public void Chat_fifo_drains_all_pending_on_tick()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice");
+        _ = fx.AddInGamePlayer("bob");
+
+        Assert.True(alice.SubmitChat("one"));
+        Assert.True(alice.SubmitChat("two"));
+        Assert.True(alice.SubmitChat("three"));
+        new ChatSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+        Assert.False(alice.TryConsumeChat(out _));
+    }
+
+    [Fact]
+    public void Chat_fifo_rejects_when_full()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice");
+        for (var i = 0; i < Player.Player.MaxPendingChat; i++)
+            Assert.True(alice.SubmitChat($"m{i}"));
+        Assert.False(alice.SubmitChat("overflow"));
     }
 
     [Fact]

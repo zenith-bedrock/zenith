@@ -74,7 +74,7 @@ class NetworkSession
         {
             Reliability = GamePacketReliability,
             OrderChannel = 0,
-            Buffer = gamePacket.Encode().ToArray()
+            Buffer = gamePacket.EncodeOwned()
         };
 
         RakSession.SendFrame(frame, priority);

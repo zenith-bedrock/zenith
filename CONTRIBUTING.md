@@ -12,6 +12,13 @@ Thanks for helping. Zenith is early alpha — small, reviewable PRs beat large �
 
 Philosophy in one line: **who decides ≠ who transmits ≠ who serializes.**
 
+## Hot-path conventions
+
+- **Online-once:** `GameLoop` fills a shared online list per tick (`PlayerManager.FillOnline`); systems take `IReadOnlyList<Player> online` — do not call `PlayerManager.Online` inside nested peer loops ([`docs/dx.md`](docs/dx.md)).
+- **Item wire:** `NetworkItemStack` has three writers — packet Encode picks; never invent a “default Write”. Inventory content / ISR OK: **`DescribeForWire` only**; soft ISR match via `MatchesAdvertisedStackNetId` ([`docs/dx.md`](docs/dx.md), ADR §54).
+- **Measured / benchmarks:** optional ShortRun numbers in [`docs/dx.md`](docs/dx.md) Measured — not a CI gate.
+- **Platform health** (not Horizon‑1 product): [`docs/robustness-dx-debt.md`](docs/robustness-dx-debt.md) + ADR §54.
+
 ## Deferred / frozen (do not sneak in)
 
 Unless an ADR says otherwise: Scheduler, Actor/ECS, VisibilitySystem, DI container, plugin API, `/` command frameworks, Mojang LevelDB world format.

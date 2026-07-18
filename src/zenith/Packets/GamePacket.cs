@@ -22,7 +22,10 @@ class GamePacket : IPacket
 
     public List<DataPacket> Packets = new();
 
-    public Span<byte> Encode()
+    public Span<byte> Encode() => EncodeOwned();
+
+    /// <summary>Owned buffer for Frame send — avoids <c>Encode().ToArray()</c> double copy.</summary>
+    public byte[] EncodeOwned()
     {
         var writer = new BinaryStream();
         writer.WriteByte(Id);
@@ -65,7 +68,7 @@ class GamePacket : IPacket
             writer.Write(uncompressed);
         }
 
-        return writer.GetBufferDisposing();
+        return writer.TakeOwnedBuffer();
     }
 
     public void Decode(ref BinaryStream stream)

@@ -286,10 +286,15 @@ public class RakNetServer
         }
     }
 
-    public virtual void Send(IPEndPoint endPoint, byte[] buffer)
-    {
-        _listener.Send(buffer, buffer.Length, endPoint);
-    }
+    public virtual void Send(IPEndPoint endPoint, byte[] buffer) =>
+        Send(endPoint, (ReadOnlySpan<byte>)buffer);
 
-    public void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) => Send(endPoint, buffer.ToArray());
+    /// <summary>
+    /// UDP send without an extra <c>ToArray</c>. Test doubles override this (not only the
+    /// <see cref="byte"/>[] overload) so capture stays accurate.
+    /// </summary>
+    public virtual void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer)
+    {
+        _listener.Client.SendTo(buffer, SocketFlags.None, endPoint);
+    }
 }
