@@ -204,9 +204,16 @@ sealed class BlockSystem : IGameSystem
             var wasChest = Blocks.IsChest(previous);
             if (wasChest)
             {
-                if (player.OpenChest is { } open &&
-                    open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
-                    player.OpenChest = null;
+                var lidWasOpen = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
+                foreach (var peer in online)
+                {
+                    if (peer.OpenChest is { } open &&
+                        open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
+                        peer.OpenChest = null;
+                }
+
+                if (lidWasOpen)
+                    ChestLidFanout.Close(online, player.Session, edit.X, edit.Y, edit.Z);
 
                 var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);

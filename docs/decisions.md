@@ -276,6 +276,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Known debt (updated §36):** Warn once when Ensure count crosses `10_000` — still no refuse/eviction (needs LevelDB redesign).
 
+**Adendo (jul 2026 — chest lid BlockEvent):** Lid animation is wire-only — `BlockEvent` (0x1a) `ChangeChestState` (type **1**), `EventData` **1** open / **0** close. No BlockActor NBT. `ChestStore` keeps opener refcount per cell (player runtime id set): animate open on **0→1**, close on **1→0**. `WorldProtocol.SendBlockEvent` is session-scoped; `ChestLidFanout` sends to opener + `IsInGame` peers with `Chunks.Knows` of the chest column (same Knows pattern as UpdateBlock joiners — not VisibilitySystem). Hooks: `InventorySystem` ApplyWindow OpenChest / Close; break clears openers + fans close if needed; disconnect / void-death release opener. Optional LevelSound later — not required for lid honesty.
+
 ### 29. Crafting 2×2 — RecipeRegistry MVP (wire completed in §35)
 
 **Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid flats `CraftUiBase`+0–3, result `CraftResultFlat`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
@@ -443,6 +445,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Known:** Two adjacent chests with the same cardinal still mesh as a double on the Bedrock client — not a 54-slot container.
 
 **Smoke:** Place chest while looking each cardinal → UpdateBlock rid matches; break always returns stackable south item; open/break works on any facing.
+
+**Adendo (jul 2026 — PlaceFacing):** Yaw→cardinal (+ opposite / front-toward-player) lives in `PlaceFacing`; `ChestFacing` is a thin chest place wrapper. Next directional block reuses the helper and stays allowlisted in `Blocks` — still no furnace/stairs product stack, BlockBehavior framework, or double-chest (roadmap / Deferred above). Lid wire is §28 adendo.
 
 ### 47. MOTD online count + ghost session hygiene
 

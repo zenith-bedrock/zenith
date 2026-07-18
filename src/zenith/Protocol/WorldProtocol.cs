@@ -186,6 +186,30 @@ sealed class WorldProtocol
         });
     }
 
+    public void SendBlockEvent(int x, int y, int z, int eventType, int eventData)
+    {
+        _session.SendDataPacket(new BlockEventPacket
+        {
+            X = x,
+            Y = y,
+            Z = z,
+            EventType = eventType,
+            EventData = eventData
+        });
+    }
+
+    public void SendChestLidOpen(int blockX, int blockY, int blockZ) =>
+        SendBlockEvent(
+            blockX, blockY, blockZ,
+            BlockEventPacket.EventChangeChestState,
+            BlockEventPacket.ChestStateOpen);
+
+    public void SendChestLidClose(int blockX, int blockY, int blockZ) =>
+        SendBlockEvent(
+            blockX, blockY, blockZ,
+            BlockEventPacket.EventChangeChestState,
+            BlockEventPacket.ChestStateClosed);
+
     public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks)
     {
         // START/STOP crack LevelEvents use integer block coordinates (not float entity pos).
