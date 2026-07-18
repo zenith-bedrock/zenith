@@ -5,12 +5,17 @@ using Zenith.Raknet.Log;
 namespace Zenith.World;
 
 /// <summary>
-/// RAM chest inventories keyed by block position (ADR §28 / §36).
-/// Persistência LevelDB fica fora deste MVP. Warn once when crossing Ensure threshold — no silent drop.
+/// RAM chest inventories keyed by block position (ADR §28 / §36 / §56).
+/// Per-cell size is always <see cref="SingleSize"/>; open UI may be 27 or 54 via <see cref="OpenChestView"/>.
 /// </summary>
 sealed class ChestStore
 {
-    public const int Size = 27;
+    public const int SingleSize = 27;
+    public const int DoubleSize = 54;
+
+    /// <summary>Per-cell slot count (persist / Ensure). Prefer <see cref="SingleSize"/> in new code.</summary>
+    public const int Size = SingleSize;
+
     internal const int WarnThreshold = 10_000;
 
     private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
@@ -68,8 +73,8 @@ sealed class ChestStore
     {
         var key = (x, y, z);
         if (_chests.ContainsKey(key)) return;
-        var slots = new InventorySlot[Size];
-        for (var i = 0; i < Size; i++)
+        var slots = new InventorySlot[SingleSize];
+        for (var i = 0; i < SingleSize; i++)
             slots[i] = InventorySlot.Empty;
         _chests[key] = slots;
 
@@ -86,17 +91,57 @@ sealed class ChestStore
 
     public InventorySlot Get(int x, int y, int z, int slot)
     {
-        if ((uint)slot >= Size) return InventorySlot.Empty;
+        if ((uint)slot >= SingleSize) return InventorySlot.Empty;
         if (!_chests.TryGetValue((x, y, z), out var slots)) return InventorySlot.Empty;
         return slots[slot];
     }
 
     public bool TrySet(int x, int y, int z, int slot, InventorySlot value)
     {
-        if ((uint)slot >= Size) return false;
+        if ((uint)slot >= SingleSize) return false;
         if (!_chests.TryGetValue((x, y, z), out var slots)) return false;
         slots[slot] = value.IsEmpty ? InventorySlot.Empty : value;
         return true;
+    }
+
+    /// <summary>Open-UI slot: 0..26 primary cell; 27..53 partner when double (ADR §56).</summary>
+    public InventorySlot GetOpen(in OpenChestView view, int openSlot)
+    {
+        if ((uint)openSlot >= (uint)view.SlotCount) return InventorySlot.Empty;
+        if (openSlot < SingleSize)
+            return Get(view.PrimaryX, view.PrimaryY, view.PrimaryZ, openSlot);
+        if (!view.TryGetPartner(out var px, out var py, out var pz))
+            return InventorySlot.Empty;
+        return Get(px, py, pz, openSlot - SingleSize);
+    }
+
+    public bool TrySetOpen(in OpenChestView view, int openSlot, InventorySlot value)
+    {
+        if ((uint)openSlot >= (uint)view.SlotCount) return false;
+        if (openSlot < SingleSize)
+            return TrySet(view.PrimaryX, view.PrimaryY, view.PrimaryZ, openSlot, value);
+        if (!view.TryGetPartner(out var px, out var py, out var pz))
+            return false;
+        return TrySet(px, py, pz, openSlot - SingleSize, value);
+    }
+
+    /// <summary>Snapshot all open slots (27 or 54) for ISR rollback.</summary>
+    public InventorySlot[] CaptureOpenSnapshot(in OpenChestView view)
+    {
+        var copy = new InventorySlot[view.SlotCount];
+        for (var i = 0; i < view.SlotCount; i++)
+            copy[i] = GetOpen(view, i);
+        return copy;
+    }
+
+    public void RestoreOpenSnapshot(in OpenChestView view, InventorySlot[] snapshot)
+    {
+        if (snapshot.Length != view.SlotCount) return;
+        Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+        if (view.TryGetPartner(out var px, out var py, out var pz))
+            Ensure(px, py, pz);
+        for (var i = 0; i < view.SlotCount; i++)
+            TrySetOpen(view, i, snapshot[i]);
     }
 
     /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (StackId, count).</summary>
@@ -120,16 +165,16 @@ sealed class ChestStore
     {
         if (!_chests.TryGetValue((x, y, z), out var slots))
             return Array.Empty<InventorySlot>();
-        var copy = new InventorySlot[Size];
-        Array.Copy(slots, copy, Size);
+        var copy = new InventorySlot[SingleSize];
+        Array.Copy(slots, copy, SingleSize);
         return copy;
     }
 
     public void RestoreSnapshot(int x, int y, int z, InventorySlot[] snapshot)
     {
-        if (snapshot.Length != Size) return;
+        if (snapshot.Length != SingleSize) return;
         Ensure(x, y, z);
-        Array.Copy(snapshot, _chests[(x, y, z)], Size);
+        Array.Copy(snapshot, _chests[(x, y, z)], SingleSize);
     }
 
     public byte[]? PackBlob(int x, int y, int z)
@@ -141,7 +186,7 @@ sealed class ChestStore
 
     public bool TryLoadFromBlob(int x, int y, int z, ReadOnlySpan<byte> data)
     {
-        Span<InventorySlot> slots = stackalloc InventorySlot[Size];
+        Span<InventorySlot> slots = stackalloc InventorySlot[SingleSize];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
         Ensure(x, y, z);

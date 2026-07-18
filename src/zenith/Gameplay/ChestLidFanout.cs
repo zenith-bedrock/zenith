@@ -5,8 +5,9 @@ using Zenith.World;
 namespace Zenith.Gameplay;
 
 /// <summary>
-/// Fan-out chest lid BlockEvents (ADR §28 adendo). Protocol stays session-scoped;
+/// Fan-out chest lid BlockEvents (ADR §28 / §56). Protocol stays session-scoped;
 /// recipients = subject + InGame peers who <see cref="PlayerChunkTracker.Knows"/> the column.
+/// Double-chest fans both cells.
 /// </summary>
 static class ChestLidFanout
 {
@@ -41,11 +42,19 @@ static class ChestLidFanout
         World.World world,
         Player.Player player)
     {
-        if (player.OpenChest is not { } pos) return;
+        if (player.OpenChest is not { } view) return;
         player.OpenChest = null;
-        if (!world.Chests.TryRemoveOpener(pos.X, pos.Y, pos.Z, player.RuntimeId))
-            return;
-        Close(online, player.Session, pos.X, pos.Y, pos.Z);
+
+        var primaryClosed = world.Chests.TryRemoveOpener(
+            view.PrimaryX, view.PrimaryY, view.PrimaryZ, player.RuntimeId);
+        var partnerClosed = false;
+        if (view.TryGetPartner(out var px, out var py, out var pz))
+            partnerClosed = world.Chests.TryRemoveOpener(px, py, pz, player.RuntimeId);
+
+        if (primaryClosed)
+            Close(online, player.Session, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+        if (partnerClosed)
+            Close(online, player.Session, px, py, pz);
     }
 
     private static void FanPeers(

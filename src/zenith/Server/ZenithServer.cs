@@ -54,6 +54,7 @@ class ZenithServer
         var clock = new GameClock();
         var gameLoop = new GameLoop(clock, players, serverLogger);
         gameLoop.Register(new TimeSyncSystem(players));
+        // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
         gameLoop.Register(new MovementSystem(players));
         gameLoop.Register(new EquipmentSystem(players));
         gameLoop.Register(new ChatSystem(players));

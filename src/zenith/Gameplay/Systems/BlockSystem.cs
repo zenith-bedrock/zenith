@@ -258,16 +258,23 @@ sealed class BlockSystem : IGameSystem
             var wasChest = Blocks.IsChest(previous);
             if (wasChest)
             {
-                var lidWasOpen = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
+                // Resolve pair while both cells still exist (§56).
+                var pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
+                var lidBroken = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
+                var lidPartner = false;
+                if (pairView.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
+                    lidPartner = _world.Chests.ClearOpeners(partnerX, partnerY, partnerZ);
+
                 foreach (var peer in online)
                 {
-                    if (peer.OpenChest is { } open &&
-                        open.X == edit.X && open.Y == edit.Y && open.Z == edit.Z)
+                    if (peer.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
                         peer.OpenChest = null;
                 }
 
-                if (lidWasOpen)
+                if (lidBroken)
                     ChestLidFanout.Close(online, player.Session, edit.X, edit.Y, edit.Z);
+                if (lidPartner)
+                    ChestLidFanout.Close(online, player.Session, partnerX, partnerY, partnerZ);
 
                 var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);

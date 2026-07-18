@@ -35,7 +35,9 @@ public class InventoryContainerMapTests
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Hotbar, 9, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CombinedHotbarAndInventory, 36, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Inventory, 36, out _));
-        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out _));
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 54, out _));
+        Assert.True(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out var chest27));
+        Assert.Equal(InventoryContainerMap.ChestBase + 27, chest27);
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 27, out _));

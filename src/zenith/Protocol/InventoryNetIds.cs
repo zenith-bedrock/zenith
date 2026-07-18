@@ -7,11 +7,12 @@ namespace Zenith.Protocol;
 /// Per-session stack network ids for ISR (wire map SSOT:
 /// <see cref="InventoryContainerMap"/>). Callers must not Refresh+Get ad hoc —
 /// use <see cref="InventoryProtocol.DescribeForWire"/> / <see cref="InventoryProtocol.MatchesAdvertisedStackNetId"/>.
+/// Chest array sized for <see cref="ChestStore.DoubleSize"/> (ADR §56).
 /// </summary>
 sealed class InventoryNetIds
 {
     private readonly int[] _slotNetIds = new int[PlayerInventory.FullInventorySize];
-    private readonly int[] _chestNetIds = new int[ChestStore.Size];
+    private readonly int[] _chestNetIds = new int[ChestStore.DoubleSize];
     private readonly int[] _craftNetIds = new int[PlayerCraftUi.GridSize + 1];
     private readonly Dictionary<int, (StackId Id, int Count)> _stackIdentity = new();
     private int _cursorNetId;
@@ -43,7 +44,7 @@ sealed class InventoryNetIds
     }
 
     /// <summary>
-    /// Remint when empty→air or (runtimeId, count) changes — Protocol-side identity until
+    /// Remint when empty→air or (StackId, count) changes — Protocol-side identity until
     /// domain stacks own ids (DF-style). Deferred: NBT/damage identity.
     /// </summary>
     public int Refresh(int flat, InventorySlot slot)

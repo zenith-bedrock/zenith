@@ -176,7 +176,7 @@ partial class InGameSessionHandler
         session.Protocol.Inventory.SendInventoryContent(player.Inventory);
         session.Protocol.Inventory.SendUiInventoryContent(player);
         if (player.OpenChest is { } chest)
-            session.Protocol.Inventory.SendChestContent(session.Context.World.Chests, chest.X, chest.Y, chest.Z);
+            session.Protocol.Inventory.SendChestContent(session.Context.World.Chests, chest);
     }
 
     private static void HandleMobEquipment(NetworkSession session, ref BinaryStream stream)

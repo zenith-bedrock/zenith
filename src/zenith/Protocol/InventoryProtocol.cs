@@ -102,17 +102,17 @@ sealed class InventoryProtocol
         return wire;
     }
 
-    public void SendChestContent(ChestStore chests, int x, int y, int z)
+    public void SendChestContent(ChestStore chests, in OpenChestView view)
     {
-        chests.Ensure(x, y, z);
-        if (!chests.TryGetSlots(x, y, z, out var slots))
-            return;
+        chests.Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+        if (view.TryGetPartner(out var px, out var py, out var pz))
+            chests.Ensure(px, py, pz);
 
-        var wire = new NetworkItemStack[ChestStore.Size];
-        for (var i = 0; i < ChestStore.Size; i++)
+        var wire = new NetworkItemStack[view.SlotCount];
+        for (var i = 0; i < view.SlotCount; i++)
         {
             var flat = InventoryContainerMap.ChestBase + i;
-            wire[i] = DescribeForWire(flat, slots[i]);
+            wire[i] = DescribeForWire(flat, chests.GetOpen(view, i));
         }
 
         _session.SendDataPacket(new InventoryContentPacket
@@ -121,6 +121,10 @@ sealed class InventoryProtocol
             Slots = wire
         });
     }
+
+    /// <summary>Legacy single-cell content (tests / call sites that only know a cell).</summary>
+    public void SendChestContent(ChestStore chests, int x, int y, int z) =>
+        SendChestContent(chests, OpenChestView.Single(x, y, z));
 
     /// <summary>
     /// Single path for InventoryContent / UI / chest / ISR OK: refresh advertisement then
@@ -257,9 +261,10 @@ sealed class InventoryProtocol
     {
         if (InventoryContainerMap.IsChestFlat(flat))
         {
-            if (player.OpenChest is not { } pos) return InventorySlot.Empty;
-            return _session.Context.World.Chests.Get(
-                pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase);
+            if (player.OpenChest is not { } view) return InventorySlot.Empty;
+            var openSlot = flat - InventoryContainerMap.ChestBase;
+            if (openSlot < 0 || openSlot >= view.SlotCount) return InventorySlot.Empty;
+            return _session.Context.World.Chests.GetOpen(view, openSlot);
         }
 
         if (InventoryContainerMap.IsCraftGridFlat(flat))

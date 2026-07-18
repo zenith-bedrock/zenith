@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
@@ -67,23 +66,36 @@ sealed class InventorySystem : IGameSystem
 
             case InventoryWindowIntent.Kind.OpenChest:
                 if (player.OpenChest is { } previous &&
-                    (previous.X != intent.X || previous.Y != intent.Y || previous.Z != intent.Z))
+                    !previous.Contains(intent.X, intent.Y, intent.Z))
                     ChestLidFanout.ReleaseOpener(online, _world, player);
 
-                _world.Chests.Ensure(intent.X, intent.Y, intent.Z);
-                player.OpenChest = (intent.X, intent.Y, intent.Z);
-                if (_world.Chests.TryAddOpener(intent.X, intent.Y, intent.Z, player.RuntimeId))
-                    ChestLidFanout.Open(online, player.Session, intent.X, intent.Y, intent.Z);
+                var view = ChestPairing.ViewFor(_world, intent.X, intent.Y, intent.Z);
+                _world.Chests.Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+                if (view.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
+                    _world.Chests.Ensure(partnerX, partnerY, partnerZ);
+
+                player.OpenChest = view;
+
+                var primaryFirst = _world.Chests.TryAddOpener(
+                    view.PrimaryX, view.PrimaryY, view.PrimaryZ, player.RuntimeId);
+                var partnerFirst = false;
+                if (view.TryGetPartner(out partnerX, out partnerY, out partnerZ))
+                    partnerFirst = _world.Chests.TryAddOpener(partnerX, partnerY, partnerZ, player.RuntimeId);
+
+                if (primaryFirst)
+                    ChestLidFanout.Open(online, player.Session, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+                if (partnerFirst)
+                    ChestLidFanout.Open(online, player.Session, partnerX, partnerY, partnerZ);
 
                 inv.SendChestOpen(intent.X, intent.Y, intent.Z);
-                inv.SendChestContent(_world.Chests, intent.X, intent.Y, intent.Z);
+                inv.SendChestContent(_world.Chests, view);
                 inv.SendInventoryContent(player.Inventory);
                 player.Session.Context.Logger.Debug(
-                    $"Chest open for {player.Username} @ {intent.X},{intent.Y},{intent.Z}");
+                    $"Chest open for {player.Username} @ {intent.X},{intent.Y},{intent.Z} slots={view.SlotCount}");
                 break;
 
             case InventoryWindowIntent.Kind.Close:
-                if (intent.WindowId == InventoryContentPacket.WindowInventory)
+                if (intent.WindowId == InventoryContainerMap.WindowInventory)
                     player.InventoryWindowOpen = false;
                 if (player.OpenChest.HasValue)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
@@ -105,7 +117,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
             if (player.OpenChest is { } openMismatch)
-                protocol.SendChestContent(_world.Chests, openMismatch.X, openMismatch.Y, openMismatch.Z);
+                protocol.SendChestContent(_world.Chests, openMismatch);
             player.Session.Context.Logger.Debug(
                 $"ISR rejected for {player.Username}: stack net id mismatch (request {intent.RequestId}).");
             return;
@@ -114,9 +126,9 @@ sealed class InventorySystem : IGameSystem
         var invSnap = inventory.CaptureSnapshot();
         var craftSnap = player.CraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
-        (int X, int Y, int Z)? chestPos = player.OpenChest;
-        if (chestPos is { } pos)
-            chestSnap = _world.Chests.CaptureSnapshot(pos.X, pos.Y, pos.Z);
+        OpenChestView? chestView = player.OpenChest;
+        if (chestView is { } cv)
+            chestSnap = _world.Chests.CaptureOpenSnapshot(cv);
 
         var wireTouches = new List<WireTouch>();
         var ok = true;
@@ -228,24 +240,28 @@ sealed class InventorySystem : IGameSystem
         {
             inventory.RestoreSnapshot(invSnap);
             player.CraftUi.RestoreSnapshot(craftSnap);
-            if (chestPos is { } cp && chestSnap is not null && chestSnap.Length == ChestStore.Size)
-                _world.Chests.RestoreSnapshot(cp.X, cp.Y, cp.Z, chestSnap);
+            if (chestView is { } cvFail && chestSnap is not null)
+                _world.Chests.RestoreOpenSnapshot(cvFail, chestSnap);
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
-            if (chestPos is { } open)
-                protocol.SendChestContent(_world.Chests, open.X, open.Y, open.Z);
+            if (chestView is { } open)
+                protocol.SendChestContent(_world.Chests, open);
             return;
         }
 
         protocol.SendItemStackResponseOk(intent.RequestId, player, wireTouches);
         if (player.InventoryWindowOpen)
             protocol.SendUiInventoryContent(player);
-        if (chestPos is { } openAfter)
-            protocol.SendChestContent(_world.Chests, openAfter.X, openAfter.Y, openAfter.Z);
+        if (chestView is { } openAfter)
+            protocol.SendChestContent(_world.Chests, openAfter);
         _world.PersistInventory(player.Uuid, inventory);
-        if (chestPos is { } openChest)
-            _world.PersistChest(openChest.X, openChest.Y, openChest.Z);
+        if (chestView is { } openChest)
+        {
+            _world.PersistChest(openChest.PrimaryX, openChest.PrimaryY, openChest.PrimaryZ);
+            if (openChest.TryGetPartner(out var ppx, out var ppy, out var ppz))
+                _world.PersistChest(ppx, ppy, ppz);
+        }
     }
 
     /// <summary>
@@ -279,8 +295,10 @@ sealed class InventorySystem : IGameSystem
     {
         if (InventoryContainerMap.IsChestFlat(flat))
         {
-            if (player.OpenChest is not { } pos) return InventorySlot.Empty;
-            return _world.Chests.Get(pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase);
+            if (player.OpenChest is not { } view) return InventorySlot.Empty;
+            var openSlot = flat - InventoryContainerMap.ChestBase;
+            if (openSlot < 0 || openSlot >= view.SlotCount) return InventorySlot.Empty;
+            return _world.Chests.GetOpen(view, openSlot);
         }
 
         if (InventoryContainerMap.IsCraftGridFlat(flat))
@@ -296,8 +314,10 @@ sealed class InventorySystem : IGameSystem
     {
         if (InventoryContainerMap.IsChestFlat(flat))
         {
-            if (player.OpenChest is not { } pos) return false;
-            return _world.Chests.TrySet(pos.X, pos.Y, pos.Z, flat - InventoryContainerMap.ChestBase, value);
+            if (player.OpenChest is not { } view) return false;
+            var openSlot = flat - InventoryContainerMap.ChestBase;
+            if (openSlot < 0 || openSlot >= view.SlotCount) return false;
+            return _world.Chests.TrySetOpen(view, openSlot, value);
         }
 
         if (InventoryContainerMap.IsCraftGridFlat(flat))
@@ -360,7 +380,8 @@ sealed class InventorySystem : IGameSystem
     private static bool IsValidFlat(global::Zenith.Player.Player player, int flat)
     {
         if (InventoryContainerMap.IsChestFlat(flat))
-            return player.OpenChest.HasValue;
+            return player.OpenChest is { } view &&
+                   flat - InventoryContainerMap.ChestBase < view.SlotCount;
         if (InventoryContainerMap.IsCraftUiFlat(flat))
             return true;
         return PlayerInventory.IsValidLocation(flat);
