@@ -4,6 +4,20 @@ Platform-health work tracked separately from Horizon‑1 product ([`roadmap.md`]
 
 **ADR:** [`decisions.md`](decisions.md) §54.
 
+## Critical delivery risks (audit refresh — jul 2026)
+
+These are **harder** than the soft LAN-alpha grade. Do not sand them down in the next write-up.
+
+| Risk | Why it hurts | Stance |
+|------|----------------|--------|
+| **Dirty tree better than `origin`** | Product truth lived only on one machine; remote lied (Online-once semi-fake, stale docs). Anti-pattern of process, not “WIP”. | **Rule:** hygiene that closes an audit/ADR gap lands as **commit + push the same day**. Dirty &gt; remote = process failure. |
+| **Overlay / store grief** | Warn-only unbounded `_blockOverrides` / chests = RAM+disk DoS under place/dig grief. SoftCap deferred “because dig→air” was too kind to attackers. | **Shipped (jul 2026):** overlay SoftCap + compact-to-base; chest SoftCap on new cells (§36 adendo). Eviction/compaction redesign still open for true production. |
+| **No Bedrock E2E in CI** | ~leaf tests without automated client smoke puts the entire join/place/chest/dig gate on one human. Bus factor × missing E2E = beta blocker. | **Shipped:** leaf `dotnet test` on every push/PR to `develop`/`main` (`.github/workflows/ci.yml`). **Still open (beta-hard):** automated Bedrock client / protocol harness — tag gates stay human smoke until that exists. |
+
+**Bus factor** remains high (dominant author). Skills/docs help agents; they do **not** replace peer review of dig/ISR or Bedrock smoke.
+
+**Feature pressure:** skipping ADR → smoke → tag while chasing gravity/`players/` recreates “declare done before the last 20%.”
+
 ## Three baskets
 
 | Basket | What | Action |
@@ -12,7 +26,7 @@ Platform-health work tracked separately from Horizon‑1 product ([`roadmap.md`]
 | **B** | Dig/UI mutation on RakNet thread; dual Online fan-out; fat `InGameSessionHandler`; chat overwrite-latest; mega `InventoryProtocol`; GC on send/tick | Prioritize in Phases 1–5 |
 | **C** | Stale ARCHITECTURE Fase 3, missing `.cursor/rules` stubs, dead `ChunkUtils` / usings | Cheap cleanup (Phase 4) |
 
-Spine (decide → transmit → serialize) is healthy. Limits are cross-thread mutation, handler size, and allocs on hot paths — not missing ECS/plugins.
+Spine (decide → transmit → serialize) is healthy. Limits are cross-thread mutation, handler size, and allocs on hot paths — not missing ECS/plugins. Delivery discipline and proof (CI + smoke) are now first-class risks alongside basket B.
 
 ## Priority tables
 
@@ -44,6 +58,8 @@ Spine (decide → transmit → serialize) is healthy. Limits are cross-thread mu
 | ARCHITECTURE / CONTRIBUTING honesty | 4 | **Partial:** ARCHITECTURE double-chest gap synced (jul 2026) |
 | Dead `ChunkUtils`, unused usings | 4 | Open |
 | `InventoryProtocol` builders + façade | 5 | **Closed** (§54 Phase 5) |
+| Leaf CI on push/PR | — | **Closed (jul 2026):** `.github/workflows/ci.yml` |
+| Bedrock E2E CI | — | **Open — beta-hard** (human smoke remains release gate) |
 
 ## Suggested order
 

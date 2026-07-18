@@ -16,13 +16,13 @@ sealed class ChestStore
     /// <summary>Per-cell slot count (persist / Ensure). Prefer <see cref="SingleSize"/> in new code.</summary>
     public const int Size = SingleSize;
 
-    internal const int WarnThreshold = 10_000;
+    internal const int SoftCap = 10_000;
 
     private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
     /// <summary>Open UI viewers per cell (runtime id) — lid BlockEvent on 0→1 / 1→0 (§28).</summary>
     private readonly Dictionary<(int X, int Y, int Z), HashSet<long>> _openers = new();
     private readonly ILogger? _logger;
-    private int _thresholdWarned;
+    private int _softCapWarned;
 
     public ChestStore(ILogger? logger = null) => _logger = logger;
 
@@ -69,22 +69,38 @@ sealed class ChestStore
         return set.Count > 0;
     }
 
-    public void Ensure(int x, int y, int z)
+    /// <summary>True when <see cref="TryEnsure"/> would accept a new cell (or cell already exists).</summary>
+    public bool CanAcceptNew(int x, int y, int z) =>
+        _chests.ContainsKey((x, y, z)) || _chests.Count < SoftCap;
+
+    /// <summary>
+    /// Ensure a 27-slot chest cell. SoftCap refuses <b>new</b> cells (§36) — existing keys always OK.
+    /// Hydrate via <see cref="TryLoadFromBlob"/> bypasses SoftCap.
+    /// </summary>
+    public bool TryEnsure(int x, int y, int z)
     {
         var key = (x, y, z);
-        if (_chests.ContainsKey(key)) return;
+        if (_chests.ContainsKey(key)) return true;
+        if (_chests.Count >= SoftCap)
+        {
+            if (Interlocked.Exchange(ref _softCapWarned, 1) == 0)
+            {
+                _logger?.Warning(
+                    $"ChestStore at SoftCap ({SoftCap}): refusing new chest cells.");
+            }
+
+            return false;
+        }
+
         var slots = new InventorySlot[SingleSize];
         for (var i = 0; i < SingleSize; i++)
             slots[i] = InventorySlot.Empty;
         _chests[key] = slots;
-
-        if (_chests.Count >= WarnThreshold && Interlocked.Exchange(ref _thresholdWarned, 1) == 0)
-        {
-            _logger?.Warning(
-                $"ChestStore crossed WarnThreshold ({WarnThreshold} chests in RAM). " +
-                "No refuse/eviction — LevelDB persistence redesign needed for honesty at scale.");
-        }
+        return true;
     }
+
+    /// <summary>Legacy void API — prefers <see cref="TryEnsure"/> when refuse matters.</summary>
+    public void Ensure(int x, int y, int z) => _ = TryEnsure(x, y, z);
 
     public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots) =>
         _chests.TryGetValue((x, y, z), out slots!);

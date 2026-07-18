@@ -26,6 +26,7 @@
 - Decisions: [`docs/decisions.md`](docs/decisions.md) — ADR **before** a new layer/abstraction
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — horizon order (alpha first; no PM parity chase)
 - DX: [`docs/dx.md`](docs/dx.md) — includes how to use Mojang `bedrock-protocol-docs` (`r/26_u4`) vs Zenith protocol **1001**
-- Platform health (not H1 product): [`docs/robustness-dx-debt.md`](docs/robustness-dx-debt.md) + ADR §54
+- Platform health (not H1 product): [`docs/robustness-dx-debt.md`](docs/robustness-dx-debt.md) + ADR §54 — includes **critical delivery risks** (dirty&gt;remote, store SoftCap, leaf CI vs Bedrock E2E)
+- **Delivery:** if you close an audit/hygiene gap, **commit + push the same day** — dirty tree ahead of `origin` is a process failure, not WIP
 
 Frozen: Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` commands — unless a concrete feature forces them (record in decisions first).

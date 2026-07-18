@@ -23,7 +23,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     private volatile bool _stopping;
     private bool _disposed;
 
-    private readonly record struct OverlayWrite(int X, int Y, int Z, int BlockRuntimeId);
+    private readonly record struct OverlayWrite(int X, int Y, int Z, int BlockRuntimeId, bool Delete);
 
     public LevelDbChunkStorage(string directory)
     {
@@ -80,7 +80,18 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
 
-        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, blockRuntimeId));
+        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, blockRuntimeId, Delete: false));
+        _overlaySignal.Set();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Enfileira Delete de <c>ov:</c> (compactação quando rid == base flat — ADR §36 SoftCap).</summary>
+    public ValueTask DeleteOverlayAsync(int x, int y, int z, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+
+        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, BlockRuntimeId: 0, Delete: true));
         _overlaySignal.Set();
         return ValueTask.CompletedTask;
     }
@@ -274,10 +285,12 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         while (_overlayWrites.TryDequeue(out var write))
         {
             var key = OverlayKey(write.X, write.Y, write.Z);
-            var value = BitConverter.GetBytes(write.BlockRuntimeId);
             lock (_gate)
             {
-                _db.Put(key, value);
+                if (write.Delete)
+                    _db.Delete(key);
+                else
+                    _db.Put(key, BitConverter.GetBytes(write.BlockRuntimeId));
             }
         }
     }
