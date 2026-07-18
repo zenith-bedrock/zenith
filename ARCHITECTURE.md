@@ -109,7 +109,7 @@ C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarq
 - Dig Survival sem entrada em `DigProfiles` = sem auth (não inventar DestroySpeed).
 - Protocol mapeia `StackId` → `NetworkItemStack` (`ItemNetworkId` + `BlockRuntimeId` + `StackNetworkId` ISR).
 - Recipes = exact `StackId` (sem merge de facing).
-- Domínios pesados (double-chest, gravity, fluid, redstone) = ADR + system próprios — não colunas num DigProfile.
+- Domínios pesados (double-chest §56, gravity §57, fluid, redstone) = ADR + system próprios — não colunas num DigProfile. Gravity = cell-tick pending + UpdateBlock (sem Tile / FallingBlock entity).
 - Glossário e receita de contribuidor: [`docs/dx.md`](docs/dx.md), ADR §55.
 
 ## Notas deste estágio
