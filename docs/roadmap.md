@@ -28,7 +28,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 3 | **`/gamemode` minimal** | **Shipped** (Jul 2026): chat parse → intent → `GameModeSystem` + SetPlayerGameType/abilities/CreativeContent remint (§52). Not a command framework. |
 | 4 | **Tool dig speed / efficiency** | **Shipped** (Jul 2026): DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | **Shipped** on develop (ADR §56) — pair + 54 UI + 2×`ct:`; Bedrock smoke before `v0.0.2-alpha` tag. |
-| 6 | **Block gravity** (sand/gravel) | Static placeable today; fall/landing is a new tick domain — ADR first. |
+| 6 | **Block gravity** (sand/gravel) | **ADR §57 written** — cell-tick pending set + UpdateBlock (no Tile/FallingBlock). Implement as next product spike after §56 Bedrock smoke / tag honesty. |
 | 7 | **`players/` or position persist** | After identity/reconnect story is clear; no silent path reinterpret (§20). |
 | 8 | **World beyond flat** | Noise/biomes or import strategy — only when flat+overlay no longer answers LAN product questions. |
 
