@@ -11,7 +11,18 @@ static class EntityHitboxes
     public const float PlayerHeight = 1.8f;
     public const float ItemEntitySize = 0.25f;
 
-    /// <summary>Player BB expand for item pickup (PocketMine / wiki).</summary>
+    /// <summary>
+    /// Client player model anchor for <c>MoveActorAbsolute</c> / local <c>MovePlayer</c>:
+    /// wire Y = feet + this offset. <see cref="Packets.AddPlayerPacket"/> uses bare feet.
+    /// Value is <see cref="Blocks.PlayerEyeHeight"/> + 0.001 so Absolute does not settle
+    /// the body slightly into the block top (float error / underground clip).
+    /// </summary>
+    public const float PlayerNetworkOffset = 1.621f;
+
+    /// <summary>Domain feet → Absolute / MovePlayer wire Y.</summary>
+    public static float AbsoluteWireY(float feetY) => feetY + PlayerNetworkOffset;
+
+    /// <summary>Pickup reach: expand standing player AABB by this amount on each axis.</summary>
     public static readonly (float X, float Y, float Z) PickupExpand = (1f, 0.5f, 1f);
 
     /// <summary>Standing player AABB from feet position.</summary>
