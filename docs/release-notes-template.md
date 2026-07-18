@@ -1,3 +1,21 @@
+## Zenith v0.0.2-alpha (draft)
+
+**Product:** `0.0.2-alpha`. Protocol wire unchanged: **1001** / Bedrock **1.26.33**.
+
+### Since 0.0.1-alpha
+- Survival dig speed from curated tools (wood→diamond pick/axe/shovel) — Dragonfly/wiki break formula
+- Creative catalog includes those tools; grant in Creative then `/gamemode Survival` to dig faster
+- Mid-dig hotbar tool swap preserves progress; crack rate updates via LevelEvent 3602 when needed
+- Chest lid BlockEvent + PlaceFacing (prior leaf on develop)
+
+### Smoke (tool dig)
+- Creative → diamond pick → Survival → dig stone faster than empty hand; peer sees crack; swap wood→iron mid-dig updates rate without pop-finish
+
+### Still not in this build
+- Enchants / durability / tool recipes / gold-netherite / wrong-tool no-drop / gravity / double-chest
+
+---
+
 ## Zenith v0.0.1-alpha
 
 **First public alpha.** Not production-ready — LAN / private feedback only.

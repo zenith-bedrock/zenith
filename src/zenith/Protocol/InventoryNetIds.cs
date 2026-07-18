@@ -13,7 +13,7 @@ sealed class InventoryNetIds
     private readonly int[] _slotNetIds = new int[PlayerInventory.FullInventorySize];
     private readonly int[] _chestNetIds = new int[ChestStore.Size];
     private readonly int[] _craftNetIds = new int[PlayerCraftUi.GridSize + 1];
-    private readonly Dictionary<int, (int RuntimeId, int Count)> _stackIdentity = new();
+    private readonly Dictionary<int, (StackId Id, int Count)> _stackIdentity = new();
     private int _cursorNetId;
     private int _nextNetId = 1;
 
@@ -56,12 +56,12 @@ sealed class InventoryNetIds
         }
 
         if (_stackIdentity.TryGetValue(flat, out var prev) &&
-            prev.RuntimeId == slot.RuntimeId && prev.Count == slot.Count)
+            prev.Id == slot.Id && prev.Count == slot.Count)
             return Peek(flat);
 
         var id = Allocate();
         Set(flat, id);
-        _stackIdentity[flat] = (slot.RuntimeId, slot.Count);
+        _stackIdentity[flat] = (slot.Id, slot.Count);
         return id;
     }
 }

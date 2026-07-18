@@ -5,7 +5,9 @@ using Zenith.World;
 namespace Zenith.Gameplay;
 
 /// <summary>
-/// Receitas shapeless mínimas (ADR §29 / §35). NetIds estáticos reminted via CraftingDataPacket.
+/// Receitas shapeless mínimas (ADR §29 / §35 / §55).
+/// Exact <see cref="StackId"/> match — no SameMergeItem / facing normalize on craft.
+/// NetIds estáticos reminted via CraftingDataPacket.
 /// </summary>
 sealed class RecipeRegistry
 {
@@ -14,13 +16,13 @@ sealed class RecipeRegistry
 
     private readonly Dictionary<uint, Recipe> _byNetId = new();
 
-    readonly record struct Recipe(uint NetId, (int RuntimeId, int Count)[] Inputs, int OutRuntimeId, int OutCount);
+    readonly record struct Recipe(uint NetId, (StackId Id, int Count)[] Inputs, StackId Output, int OutCount);
 
     /// <summary>Wire/DTO-facing recipe rows — no packets dependency.</summary>
     public readonly record struct RecipeSnapshot(
         uint NetId,
-        (int RuntimeId, int Count)[] Inputs,
-        int OutRuntimeId,
+        (StackId Id, int Count)[] Inputs,
+        StackId Output,
         int OutCount);
 
     public static RecipeRegistry CreateDefault()
@@ -29,13 +31,13 @@ sealed class RecipeRegistry
         var reg = new RecipeRegistry();
         reg.Register(new Recipe(
             OakLogToPlanks,
-            [(Blocks.OakLog, 1)],
-            Blocks.OakPlanks,
+            [(StackId.FromBlock(Blocks.OakLog), 1)],
+            StackId.FromBlock(Blocks.OakPlanks),
             4));
         reg.Register(new Recipe(
             OakPlanksToChest,
-            [(Blocks.OakPlanks, 8)],
-            Blocks.Chest,
+            [(StackId.FromBlock(Blocks.OakPlanks), 8)],
+            StackId.FromBlock(Blocks.Chest),
             1));
         return reg;
     }
@@ -51,7 +53,7 @@ sealed class RecipeRegistry
             list.Add(new RecipeSnapshot(
                 recipe.NetId,
                 recipe.Inputs,
-                recipe.OutRuntimeId,
+                recipe.Output,
                 recipe.OutCount));
         }
 
@@ -59,30 +61,34 @@ sealed class RecipeRegistry
         return list;
     }
 
-    public bool TryGet(uint recipeNetId, out int outRuntimeId, out int outCount, out (int RuntimeId, int Count)[] inputs)
+    public bool TryGet(
+        uint recipeNetId,
+        out StackId output,
+        out int outCount,
+        out (StackId Id, int Count)[] inputs)
     {
         if (!_byNetId.TryGetValue(recipeNetId, out var recipe))
         {
-            outRuntimeId = Blocks.Air;
+            output = default;
             outCount = 0;
             inputs = [];
             return false;
         }
 
-        outRuntimeId = recipe.OutRuntimeId;
+        output = recipe.Output;
         outCount = recipe.OutCount;
         inputs = recipe.Inputs;
         return true;
     }
 
-    /// <summary>Shapeless: contagens agregadas por runtimeId devem casar exactamente uma receita.</summary>
-    public bool TryMatch(IReadOnlyList<(int RuntimeId, int Count)> inputs, out InventorySlot output)
+    /// <summary>Shapeless: aggregated counts per exact <see cref="StackId"/> must match one recipe.</summary>
+    public bool TryMatch(IReadOnlyList<(StackId Id, int Count)> inputs, out InventorySlot output)
     {
         var agg = Aggregate(inputs);
         foreach (var recipe in _byNetId.Values)
         {
             if (!ExactMatch(agg, recipe.Inputs)) continue;
-            output = new InventorySlot(recipe.OutRuntimeId, recipe.OutCount);
+            output = new InventorySlot(recipe.Output, recipe.OutCount);
             return true;
         }
 
@@ -93,20 +99,20 @@ sealed class RecipeRegistry
     /// <summary>Consome inputs do inventário e adiciona output (all-or-nothing via snapshot).</summary>
     public bool TryCraft(PlayerInventory inventory, uint recipeNetId)
     {
-        if (!TryGet(recipeNetId, out var outRid, out var outCount, out var needed))
+        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed))
             return false;
 
         var snapshot = inventory.CaptureSnapshot();
-        foreach (var (rid, count) in needed)
+        foreach (var (id, count) in needed)
         {
-            if (!inventory.TryConsume(rid, count))
+            if (!inventory.TryConsume(id, count))
             {
                 inventory.RestoreSnapshot(snapshot);
                 return false;
             }
         }
 
-        if (!inventory.TryAdd(outRid, outCount))
+        if (!inventory.TryAdd(outId, outCount))
         {
             inventory.RestoreSnapshot(snapshot);
             return false;
@@ -118,11 +124,12 @@ sealed class RecipeRegistry
     /// <summary>
     /// Match + consume 2×2 grid slots × <paramref name="times"/>; output for CreatedOutput.
     /// Times clamped by grid affordability and single-slot MaxStack (H0).
+    /// Item stacks in the grid do not match block recipes (exact StackId).
     /// </summary>
     public bool TryCraftFromGrid(PlayerCraftUi craftUi, uint recipeNetId, out InventorySlot output, int times = 1)
     {
         output = InventorySlot.Empty;
-        if (!TryGet(recipeNetId, out var outRid, out var outCount, out var needed))
+        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed))
             return false;
 
         if (outCount <= 0 || times < 0)
@@ -131,12 +138,12 @@ sealed class RecipeRegistry
         if (times == 0)
             times = 1;
 
-        var inputs = new List<(int RuntimeId, int Count)>(PlayerCraftUi.GridSize);
+        var inputs = new List<(StackId Id, int Count)>(PlayerCraftUi.GridSize);
         for (var i = 0; i < PlayerCraftUi.GridSize; i++)
         {
             var slot = craftUi.GetGrid(i);
             if (!slot.IsEmpty)
-                inputs.Add((slot.RuntimeId, slot.Count));
+                inputs.Add((slot.Id, slot.Count));
         }
 
         var agg = Aggregate(inputs);
@@ -145,9 +152,9 @@ sealed class RecipeRegistry
             return false;
 
         var maxAffordable = maxByStack;
-        foreach (var (rid, count) in needed)
+        foreach (var (id, count) in needed)
         {
-            if (!agg.TryGetValue(rid, out var have) || have < count)
+            if (!agg.TryGetValue(id, out var have) || have < count)
                 return false;
             maxAffordable = Math.Min(maxAffordable, have / count);
         }
@@ -158,13 +165,13 @@ sealed class RecipeRegistry
         times = Math.Clamp(times, 1, maxAffordable);
 
         var snap = craftUi.CaptureSnapshot();
-        foreach (var (rid, count) in needed)
+        foreach (var (id, count) in needed)
         {
             var remaining = count * times;
             for (var i = 0; i < PlayerCraftUi.GridSize && remaining > 0; i++)
             {
                 var slot = craftUi.GetGrid(i);
-                if (slot.IsEmpty || slot.RuntimeId != rid) continue;
+                if (slot.IsEmpty || slot.Id != id) continue;
                 var take = Math.Min(remaining, slot.Count);
                 remaining -= take;
                 var left = slot.Count - take;
@@ -182,28 +189,28 @@ sealed class RecipeRegistry
             }
         }
 
-        output = new InventorySlot(outRid, outCount * times);
+        output = new InventorySlot(outId, outCount * times);
         return true;
     }
 
-    private static Dictionary<int, int> Aggregate(IReadOnlyList<(int RuntimeId, int Count)> inputs)
+    private static Dictionary<StackId, int> Aggregate(IReadOnlyList<(StackId Id, int Count)> inputs)
     {
-        var dict = new Dictionary<int, int>();
-        foreach (var (rid, count) in inputs)
+        var dict = new Dictionary<StackId, int>();
+        foreach (var (id, count) in inputs)
         {
-            if (count <= 0 || rid == Blocks.Air) continue;
-            dict[rid] = dict.GetValueOrDefault(rid) + count;
+            if (count <= 0 || id.IsEmpty) continue;
+            dict[id] = dict.GetValueOrDefault(id) + count;
         }
 
         return dict;
     }
 
-    private static bool ExactMatch(Dictionary<int, int> agg, (int RuntimeId, int Count)[] needed)
+    private static bool ExactMatch(Dictionary<StackId, int> agg, (StackId Id, int Count)[] needed)
     {
         if (agg.Count != needed.Length) return false;
-        foreach (var (rid, count) in needed)
+        foreach (var (id, count) in needed)
         {
-            if (!agg.TryGetValue(rid, out var have) || have != count)
+            if (!agg.TryGetValue(id, out var have) || have != count)
                 return false;
         }
 

@@ -67,7 +67,49 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 8. Block→item bridge: Protocol maps via `Blocks.TryGetName` + `ItemPalette` only — reverse lookup must cover the dump (`BlockPalette.TryGetName`), not only curated `Blocks.*` consts. Placeables are an explicit allowlist (`IsPlaceable`), not “any palette rid”
 9. Protocol packet shapes: see “Bedrock protocol docs” below before inventing field order
 10. GameLoop fills Online once per tick (`FillOnline`); systems take `IReadOnlyList<Player> online` — do not call `PlayerManager.Online` inside nested peer loops
+11. Block/item foundation (ADR §55): inventário usa `StackId` — nunca `int runtimeId` ambíguo. Overlay = só `BlockRuntimeId`. Três ids distintos: `BlockRuntimeId`, `ItemNetworkId`, `StackNetworkId` (ISR). Ver “Adding block/item capabilities” abaixo.
 ```
+
+### Adding block/item capabilities (ADR §55)
+
+**Glossary (Mojang-aligned):**
+
+| Name | Means |
+|------|--------|
+| `BlockRuntimeId` | Block palette id (world cell / UpdateBlock) |
+| `ItemNetworkId` | Item palette id (wire item) |
+| `StackNetworkId` | ISR per-slot prediction id |
+| `EntityRuntimeId` | Actor/entity id |
+| `DestroySpeed` | Dig hardness (= dump `destroy_speed`) |
+| `CreativeNetId` | CreativeCatalog remint id only |
+
+**Add a Survival placeable + diggable block:**
+
+```text
+1. Name exists in block palette dump
+2. Blocks.* const if hot path needs it
+3. IsPlaceable allowlist (= PlaceAllowlist; no second set)
+4. DigProfiles.Register(rid, DestroySpeed, harvest, effective, requiresCorrectTool)
+   (tests: DigProfiles.OverrideForTests — scoped, no full-table reset)
+5. Leaf test: BreakTicks (and place reject if needed); no Packets / no class BlockFoo
+```
+
+**Add a tool:**
+
+```text
+1. Name in ItemPalette
+2. Tools.Register path (Tools = ToolProfiles façade — kind + tier)
+3. CreativeCatalog Item StackId
+4. Test: StackKind.Item + ToNetworkStack BlockRuntimeId=0
+```
+
+**Recipes:** exact `StackId` match (no facing merge). Block recipes use `StackKind.Block` only.
+
+**Missing DigProfiles** = Survival cannot dig that rid (reject). Not the same as an explicit unbreakable profile later.
+
+**Persistence:** `SlotBlob` v2 on write; v1 `inv:`/`ct:` migrate-on-read (`Tools.IsTool` → Item).
+
+**Add a new capability axis (e.g. food):** short ADR → `World/*Profiles.cs` sparse map → intent + system → Protocol transmits only. Do **not** invent `IBlockBehavior` or a plugin registry.
 
 ### Bedrock protocol docs (official)
 

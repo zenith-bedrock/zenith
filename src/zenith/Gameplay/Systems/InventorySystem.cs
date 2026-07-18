@@ -152,9 +152,9 @@ sealed class InventorySystem : IGameSystem
                 case InventoryStackActionKind.CraftCreative:
                     // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
                     if (player.GameMode != GameMode.Creative ||
-                        !_creative.TryGet(action.CreativeNetId, out var creativeRid, out _) ||
+                        !_creative.TryGet(action.CreativeNetId, out var creativeId, out _) ||
                         !TrySetSlot(player, InventoryContainerMap.CraftResultFlat,
-                            new InventorySlot(creativeRid, PlayerInventory.MaxStack)))
+                            new InventorySlot(creativeId, PlayerInventory.MaxStack)))
                     {
                         ok = false;
                         break;
@@ -306,7 +306,7 @@ sealed class InventorySystem : IGameSystem
         if (flat == InventoryContainerMap.CraftResultFlat)
             return player.CraftUi.TrySetResult(value);
 
-        return player.Inventory.TrySet(flat, value.RuntimeId, value.IsEmpty ? 0 : value.Count);
+        return player.Inventory.TrySet(flat, value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id, value.IsEmpty ? 0 : value.Count);
     }
 
     private bool TryTransfer(global::Zenith.Player.Player player, int from, int to, int count)
@@ -319,7 +319,7 @@ sealed class InventorySystem : IGameSystem
         if (src.IsEmpty || count > src.Count) return false;
 
         var dst = GetSlot(player, to);
-        if (!dst.IsEmpty && dst.RuntimeId != src.RuntimeId) return false;
+        if (!dst.IsEmpty && dst.Id != src.Id) return false;
 
         var space = dst.IsEmpty ? PlayerInventory.MaxStack : PlayerInventory.MaxStack - dst.Count;
         if (count > space) return false;
@@ -327,7 +327,7 @@ sealed class InventorySystem : IGameSystem
         var newDstCount = (dst.IsEmpty ? 0 : dst.Count) + count;
         var newSrcCount = src.Count - count;
 
-        if (!TrySetSlot(player, to, new InventorySlot(src.RuntimeId, newDstCount))) return false;
+        if (!TrySetSlot(player, to, new InventorySlot(src.Id, newDstCount))) return false;
         if (!TrySetSlot(player, from, newSrcCount == 0 ? InventorySlot.Empty : src with { Count = newSrcCount }))
             return false;
         return true;

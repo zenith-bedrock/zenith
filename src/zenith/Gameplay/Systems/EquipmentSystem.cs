@@ -1,5 +1,6 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
 
@@ -29,16 +30,16 @@ sealed class EquipmentSystem : IGameSystem
                 slot = 0;
 
             var held = player.Inventory.Get(slot);
-            var runtimeId = held.IsEmpty ? 0 : held.RuntimeId;
+            var heldId = held.IsEmpty ? StackId.FromBlock(Blocks.Air) : held.Id;
             var count = held.IsEmpty ? 0 : held.Count;
 
             if (slot == player.LastReplicatedHotbarSlot &&
-                runtimeId == player.LastReplicatedHeldRuntimeId &&
+                heldId == player.LastReplicatedHeldStackId &&
                 count == player.LastReplicatedHeldCount)
                 continue;
 
             player.LastReplicatedHotbarSlot = slot;
-            player.LastReplicatedHeldRuntimeId = runtimeId;
+            player.LastReplicatedHeldStackId = heldId;
             player.LastReplicatedHeldCount = count;
 
             if (online.Count < 2) continue;

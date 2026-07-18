@@ -97,6 +97,21 @@ src/
 
 Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Network/`.
 
+## Blocos / itens — fundação (§55)
+
+```
+A Wire registry     BlockPalette / ItemPalette (dump completo)
+B Stack identity    StackId(Kind=Block|Item, Value) — inventário/chest/floor
+C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarquia Item/Block
+```
+
+- Overlay / `GetBlock` = só `BlockRuntimeId`.
+- Dig Survival sem entrada em `DigProfiles` = sem auth (não inventar DestroySpeed).
+- Protocol mapeia `StackId` → `NetworkItemStack` (`ItemNetworkId` + `BlockRuntimeId` + `StackNetworkId` ISR).
+- Recipes = exact `StackId` (sem merge de facing).
+- Domínios pesados (double-chest, gravity, fluid, redstone) = ADR + system próprios — não colunas num DigProfile.
+- Glossário e receita de contribuidor: [`docs/dx.md`](docs/dx.md), ADR §55.
+
 ## Notas deste estágio
 
 - PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
@@ -107,7 +122,7 @@ Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Net
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), fonte da verdade operacional (porta, MOTD, auth, world.path, chat, compression). Sem `ZENITH_*` env.
 - JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
-- **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = block runtime; map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
+- **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = `StackId` (ADR §55); map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
 - **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
 - **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.

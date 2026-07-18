@@ -15,11 +15,27 @@ static class CreativeContentBuilder
         for (var i = 0; i < snapshots.Count; i++)
         {
             var snap = snapshots[i];
-            if (!Blocks.TryGetName(snap.RuntimeId, out var name))
-                throw new InvalidOperationException($"CreativeContent: unknown runtime {snap.RuntimeId}.");
+            string name;
+            int wireBlockRid;
+            short networkId;
+            if (snap.IsBlock)
+            {
+                if (!Blocks.TryGetName(snap.StackTypeId, out name!))
+                    throw new InvalidOperationException($"CreativeContent: unknown block runtime {snap.StackTypeId}.");
+                networkId = palette.Require(name);
+                wireBlockRid = snap.StackTypeId;
+            }
+            else
+            {
+                if (!Tools.TryGetName(snap.StackTypeId, out name!))
+                    throw new InvalidOperationException($"CreativeContent: unknown tool network id {snap.StackTypeId}.");
+                networkId = palette.Require(name);
+                wireBlockRid = 0;
+            }
+
             items[i] = new CreativeItemEntry(
                 snap.NetId,
-                new NetworkItemStack(palette.Require(name), (ushort)snap.BaseCount, snap.RuntimeId),
+                new NetworkItemStack(networkId, (ushort)snap.BaseCount, wireBlockRid),
                 GroupIndex: 0);
         }
 
@@ -35,5 +51,4 @@ static class CreativeContentBuilder
             Items = items
         };
     }
-
 }

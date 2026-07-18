@@ -125,6 +125,8 @@ sealed class InventoryProtocol
     /// <summary>
     /// Single path for InventoryContent / UI / chest / ISR OK: refresh advertisement then
     /// build wire DTO. Prefer this over separate Refresh+Get (ADR §54).
+    /// Wire fields: <c>ItemNetworkId</c> + optional <c>BlockRuntimeId</c> + <c>StackNetworkId</c> (ISR) —
+    /// three distinct ids (ADR §55 glossary); do not confuse with <c>CreativeNetId</c>.
     /// </summary>
     public NetworkItemStack DescribeForWire(int flat, InventorySlot slot)
     {
@@ -151,12 +153,12 @@ sealed class InventoryProtocol
         return ToNetworkStack(stack, stackNetworkId: 0);
     }
 
-    /// <summary>Floor-drop / AddItemActor — domain runtime id + count → wire stack.</summary>
-    public NetworkItemStack DescribeStack(int blockRuntimeId, int count)
+    /// <summary>Floor-drop / AddItemActor — domain StackId + count → wire stack (ADR §55).</summary>
+    public NetworkItemStack DescribeStack(StackId id, int count)
     {
-        if (count <= 0 || blockRuntimeId == Blocks.Air)
+        if (count <= 0 || id.IsEmpty)
             return NetworkItemStack.Empty;
-        return ToNetworkStack(new InventorySlot(blockRuntimeId, count), stackNetworkId: 0);
+        return ToNetworkStack(new InventorySlot(id, count), stackNetworkId: 0);
     }
 
     public void SendContainerOpen(int blockX, int blockY, int blockZ)
@@ -275,12 +277,21 @@ sealed class InventoryProtocol
             return NetworkItemStack.Empty;
 
         var palette = _session.Context.ItemPalette;
-        if (Blocks.TryGetName(slot.RuntimeId, out var name) && palette.TryGet(name, out var networkId))
-            return new NetworkItemStack(networkId, (ushort)slot.Count, slot.RuntimeId, StackNetworkId: stackNetworkId);
+        if (slot.Id.IsItem)
+        {
+            if (Tools.TryGetName(slot.Id.Value, out var toolName) && palette.TryGet(toolName, out var toolNetId))
+                return new NetworkItemStack(toolNetId, (ushort)slot.Count, BlockRuntimeId: 0, StackNetworkId: stackNetworkId);
+            WarnUnknownBlockOnce(slot.Id.Value);
+            var airId = palette.Require("minecraft:air");
+            return new NetworkItemStack(airId, 0, Blocks.Air);
+        }
 
-        WarnUnknownBlockOnce(slot.RuntimeId);
-        var airId = palette.Require("minecraft:air");
-        return new NetworkItemStack(airId, 0, Blocks.Air);
+        if (Blocks.TryGetName(slot.Id.Value, out var blockName) && palette.TryGet(blockName, out var blockNetId))
+            return new NetworkItemStack(blockNetId, (ushort)slot.Count, slot.Id.Value, StackNetworkId: stackNetworkId);
+
+        WarnUnknownBlockOnce(slot.Id.Value);
+        var air = palette.Require("minecraft:air");
+        return new NetworkItemStack(air, 0, Blocks.Air);
     }
 
     private void WarnUnknownBlockOnce(int runtimeId)

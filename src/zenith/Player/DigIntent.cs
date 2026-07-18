@@ -1,3 +1,5 @@
+using Zenith.World;
+
 namespace Zenith.Player;
 
 /// <summary>
@@ -13,8 +15,11 @@ readonly struct DigIntent
     public int Z { get; init; }
     public int RequiredTicks { get; init; }
     public ulong StartedTick { get; init; }
+    /// <summary>Held stack at dig start (ADR §55).</summary>
+    public StackId HeldStackId { get; init; }
 
-    public static DigIntent Start(int x, int y, int z, ulong startedTick, int requiredTicks) => new()
+    public static DigIntent Start(
+        int x, int y, int z, ulong startedTick, int requiredTicks, StackId heldStackId = default) => new()
     {
         HasValue = true,
         IsAbort = false,
@@ -22,7 +27,8 @@ readonly struct DigIntent
         Y = y,
         Z = z,
         StartedTick = startedTick,
-        RequiredTicks = requiredTicks
+        RequiredTicks = requiredTicks,
+        HeldStackId = heldStackId
     };
 
     public static DigIntent Abort(int x, int y, int z) => new()

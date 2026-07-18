@@ -29,8 +29,7 @@ public class BlockCrackFanoutTests
             breakTicks: Blocks.BreakTicks(Blocks.Dirt));
         FlushRaknet(fx.Players);
 
-        Assert.True(fx.Transport.Captured.Count >= 2,
-            $"expected ≥2 outbound frames (miner+peer), got {fx.Transport.Captured.Count}");
+        Assert.True(fx.Transport.Captured.Count >= 2, $"expected ≥2 outbound frames (miner+peer), got {fx.Transport.Captured.Count}");
     }
 
     [Fact]

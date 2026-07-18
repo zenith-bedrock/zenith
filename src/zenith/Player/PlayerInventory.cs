@@ -1,13 +1,20 @@
-using Zenith.Player;
 using Zenith.World;
 
 namespace Zenith.Player;
 
-readonly record struct InventorySlot(int RuntimeId, int Count)
+/// <summary>Domain inventory stack (ADR §55). Identity is <see cref="StackId"/> — never a bare ambiguous runtime id.</summary>
+readonly record struct InventorySlot(StackId Id, int Count)
 {
-    public static InventorySlot Empty => new(Blocks.Air, 0);
+    public static InventorySlot Empty => new(StackId.FromBlock(Blocks.Air), 0);
 
-    public bool IsEmpty => Count <= 0 || RuntimeId == Blocks.Air;
+    public static InventorySlot OfBlock(int blockRuntimeId, int count) =>
+        new(StackId.FromBlock(blockRuntimeId), count);
+
+    public static InventorySlot OfItem(int itemNetworkId, int count) =>
+        new(StackId.FromItem(itemNetworkId), count);
+
+    public bool IsEmpty =>
+        Count <= 0 || Id.IsAirBlock || (Id.IsBlock && Id.Value == Blocks.Air);
 }
 
 /// <summary>
@@ -34,12 +41,12 @@ sealed class PlayerInventory
     {
         if (seedStarterHotbar)
         {
-            _slots[0] = new InventorySlot(Blocks.Stone, MaxStack);
-            _slots[1] = new InventorySlot(Blocks.Dirt, MaxStack);
-            _slots[2] = new InventorySlot(Blocks.OakPlanks, MaxStack);
-            _slots[3] = new InventorySlot(Blocks.OakLog, 32);
-            _slots[4] = new InventorySlot(Blocks.Sand, MaxStack);
-            _slots[5] = new InventorySlot(Blocks.Chest, 16);
+            _slots[0] = InventorySlot.OfBlock(Blocks.Stone, MaxStack);
+            _slots[1] = InventorySlot.OfBlock(Blocks.Dirt, MaxStack);
+            _slots[2] = InventorySlot.OfBlock(Blocks.OakPlanks, MaxStack);
+            _slots[3] = InventorySlot.OfBlock(Blocks.OakLog, 32);
+            _slots[4] = InventorySlot.OfBlock(Blocks.Sand, MaxStack);
+            _slots[5] = InventorySlot.OfBlock(Blocks.Chest, 16);
             for (var i = 6; i < FullInventorySize; i++)
                 _slots[i] = InventorySlot.Empty;
         }
@@ -68,40 +75,47 @@ sealed class PlayerInventory
         return _slots[slot];
     }
 
-    public bool TrySet(int slot, int runtimeId, int count)
+    public bool TrySet(int slot, StackId id, int count)
     {
         if (slot == CursorSlot)
         {
             if (!IsValidStackCount(count)) return false;
-            _cursor = count == 0 || runtimeId == Blocks.Air
+            _cursor = count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air)
                 ? InventorySlot.Empty
-                : new InventorySlot(runtimeId, count);
+                : new InventorySlot(id, count);
             return true;
         }
 
         if (!IsValidInventorySlot(slot) || !IsValidStackCount(count)) return false;
-        if (count == 0 || runtimeId == Blocks.Air)
+        if (count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air))
         {
             _slots[slot] = InventorySlot.Empty;
             return true;
         }
 
-        _slots[slot] = new InventorySlot(runtimeId, count);
+        _slots[slot] = new InventorySlot(id, count);
         return true;
     }
 
-    public int GetRuntimeId(int slot)
+    /// <summary>Convenience for block stacks (placeable / recipes).</summary>
+    public bool TrySetBlock(int slot, int blockRuntimeId, int count) =>
+        TrySet(slot, StackId.FromBlock(blockRuntimeId), count);
+
+    public bool TrySetItem(int slot, int itemNetworkId, int count) =>
+        TrySet(slot, StackId.FromItem(itemNetworkId), count);
+
+    public StackId GetStackId(int slot)
     {
         var s = Get(slot);
-        return s.Count > 0 ? s.RuntimeId : Blocks.Air;
+        return s.IsEmpty ? StackId.FromBlock(Blocks.Air) : s.Id;
     }
 
-    /// <summary>Consome 1 do slot de hotbar no tick (place). Slots 9–35 / cursor não são placeáveis.</summary>
+    /// <summary>Consome 1 do slot de hotbar no tick (place). Só stacks Block placeable.</summary>
     public bool TryConsumeOne(int slot)
     {
         if (!IsValidHotbarSlot(slot)) return false;
         var s = _slots[slot];
-        if (s.IsEmpty) return false;
+        if (s.IsEmpty || !s.Id.IsBlock) return false;
         if (s.Count == 1)
             _slots[slot] = InventorySlot.Empty;
         else
@@ -109,16 +123,16 @@ sealed class PlayerInventory
         return true;
     }
 
-    /// <summary>Remove <paramref name="count"/> de <paramref name="runtimeId"/> na janela 0–35 (all-or-nothing parcial falha).</summary>
-    public bool TryConsume(int runtimeId, int count)
+    /// <summary>Remove count of exact <paramref name="id"/> in window 0–35 (all-or-nothing).</summary>
+    public bool TryConsume(StackId id, int count)
     {
-        if (count <= 0 || runtimeId == Blocks.Air) return false;
+        if (count <= 0 || id.IsAirBlock) return false;
 
         var available = 0;
         for (var i = 0; i < FullInventorySize; i++)
         {
             var s = _slots[i];
-            if (!s.IsEmpty && s.RuntimeId == runtimeId)
+            if (!s.IsEmpty && s.Id == id)
                 available += s.Count;
         }
 
@@ -128,7 +142,7 @@ sealed class PlayerInventory
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             var s = _slots[i];
-            if (s.IsEmpty || s.RuntimeId != runtimeId) continue;
+            if (s.IsEmpty || s.Id != id) continue;
             var take = Math.Min(s.Count, remaining);
             var left = s.Count - take;
             _slots[i] = left == 0 ? InventorySlot.Empty : s with { Count = left };
@@ -138,17 +152,16 @@ sealed class PlayerInventory
         return true;
     }
 
-    /// <summary>
-    /// Adiciona à janela 0–35: empilha em stacks existentes, depois primeiro vazio.
-    /// All-or-nothing: se não couber o pedido inteiro, restaura snapshot (ADR §26 adendo).
-    /// Não toca no cursor.
-    /// </summary>
-    public bool TryAdd(int blockRuntimeId, int count = 1)
+    /// <summary>Block-only consume (recipes). Exact block runtime id match.</summary>
+    public bool TryConsumeBlock(int blockRuntimeId, int count) =>
+        TryConsume(StackId.FromBlock(blockRuntimeId), count);
+
+    public bool TryAdd(StackId id, int count = 1)
     {
-        if (count <= 0 || blockRuntimeId == Blocks.Air) return false;
+        if (count <= 0 || id.IsAirBlock) return false;
 
         var snap = CaptureSnapshot();
-        var added = TryAddUpTo(blockRuntimeId, count);
+        var added = TryAddUpTo(id, count);
         if (added != count)
         {
             RestoreSnapshot(snap);
@@ -158,23 +171,28 @@ sealed class PlayerInventory
         return true;
     }
 
-    /// <summary>
-    /// Empilha o máximo possível (stacks existentes + vazios). Retorna quantos foram adicionados (0..count).
-    /// </summary>
-    public int TryAddUpTo(int blockRuntimeId, int count)
-    {
-        if (count <= 0 || blockRuntimeId == Blocks.Air) return 0;
+    public bool TryAddBlock(int blockRuntimeId, int count = 1) =>
+        TryAdd(StackId.FromBlock(blockRuntimeId), count);
 
-        var mergeRid = Blocks.NormalizeMergeRuntimeId(blockRuntimeId);
+    public int TryAddUpTo(StackId id, int count)
+    {
+        if (count <= 0 || id.IsAirBlock) return 0;
+
+        if (id.IsItem)
+            return TryAddUpToExact(id, count);
+
+        var mergeRid = Blocks.NormalizeMergeRuntimeId(id.Value);
+        var mergeId = StackId.FromBlock(mergeRid);
         var remaining = count;
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             var s = _slots[i];
-            if (s.IsEmpty || !Blocks.SameMergeItem(mergeRid, s.RuntimeId)) continue;
+            if (s.IsEmpty || !s.Id.IsBlock || !Blocks.SameMergeItem(mergeRid, s.Id.Value))
+                continue;
             var space = MaxStack - s.Count;
             if (space <= 0) continue;
             var add = Math.Min(space, remaining);
-            _slots[i] = new InventorySlot(s.RuntimeId, s.Count + add);
+            _slots[i] = new InventorySlot(s.Id, s.Count + add);
             remaining -= add;
         }
 
@@ -182,17 +200,41 @@ sealed class PlayerInventory
         {
             if (!_slots[i].IsEmpty) continue;
             var add = Math.Min(MaxStack, remaining);
-            _slots[i] = new InventorySlot(mergeRid, add);
+            _slots[i] = new InventorySlot(mergeId, add);
             remaining -= add;
         }
 
         return count - remaining;
     }
 
-    /// <summary>
-    /// Move <paramref name="count"/> de <paramref name="from"/> → <paramref name="to"/> (flat ou cursor).
-    /// Dest Occupied com runtime diferente: falha (usar <see cref="TrySwap"/>).
-    /// </summary>
+    public int TryAddUpToBlock(int blockRuntimeId, int count) =>
+        TryAddUpTo(StackId.FromBlock(blockRuntimeId), count);
+
+    private int TryAddUpToExact(StackId id, int count)
+    {
+        var remaining = count;
+        for (var i = 0; i < FullInventorySize && remaining > 0; i++)
+        {
+            var s = _slots[i];
+            if (s.IsEmpty || s.Id != id) continue;
+            var space = MaxStack - s.Count;
+            if (space <= 0) continue;
+            var add = Math.Min(space, remaining);
+            _slots[i] = new InventorySlot(s.Id, s.Count + add);
+            remaining -= add;
+        }
+
+        for (var i = 0; i < FullInventorySize && remaining > 0; i++)
+        {
+            if (!_slots[i].IsEmpty) continue;
+            var add = Math.Min(MaxStack, remaining);
+            _slots[i] = new InventorySlot(id, add);
+            remaining -= add;
+        }
+
+        return count - remaining;
+    }
+
     public bool TryTransfer(int from, int to, int count)
     {
         if (from == to) return false;
@@ -203,7 +245,7 @@ sealed class PlayerInventory
         if (src.IsEmpty || count > src.Count) return false;
 
         var dst = Get(to);
-        if (!dst.IsEmpty && dst.RuntimeId != src.RuntimeId) return false;
+        if (!dst.IsEmpty && dst.Id != src.Id) return false;
 
         var space = dst.IsEmpty ? MaxStack : MaxStack - dst.Count;
         if (count > space) return false;
@@ -211,7 +253,7 @@ sealed class PlayerInventory
         var newDstCount = (dst.IsEmpty ? 0 : dst.Count) + count;
         var newSrcCount = src.Count - count;
 
-        SetLocation(to, new InventorySlot(src.RuntimeId, newDstCount));
+        SetLocation(to, new InventorySlot(src.Id, newDstCount));
         SetLocation(from, newSrcCount == 0 ? InventorySlot.Empty : src with { Count = newSrcCount });
         return true;
     }
@@ -228,7 +270,6 @@ sealed class PlayerInventory
         return true;
     }
 
-    /// <summary>Snapshot para rollback all-or-nothing de uma ISR request.</summary>
     public InventorySnapshot CaptureSnapshot()
     {
         var slots = new InventorySlot[FullInventorySize];
@@ -242,7 +283,6 @@ sealed class PlayerInventory
         _cursor = snapshot.Cursor;
     }
 
-    /// <summary>Cópia dos 36 slots para sync InventoryContent (window 0). Sem cursor.</summary>
     public InventorySlot[] SnapshotMainInventory()
     {
         var all = new InventorySlot[FullInventorySize];
@@ -250,7 +290,6 @@ sealed class PlayerInventory
         return all;
     }
 
-    /// <summary>Restore 36 main slots from packed blob; clears cursor (ADR §39).</summary>
     public bool TryLoadMainFromBlob(ReadOnlySpan<byte> data)
     {
         Span<InventorySlot> slots = stackalloc InventorySlot[FullInventorySize];

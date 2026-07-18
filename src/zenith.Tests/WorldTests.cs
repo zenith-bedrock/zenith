@@ -237,8 +237,8 @@ public class PlayerInventoryTests
     public void TrySet_accepts_storage_slots()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(9, Blocks.Stone, 3));
-        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+        Assert.True(inv.TrySetBlock(9, Blocks.Stone, 3));
+        Assert.Equal(Blocks.Stone, inv.Get(9).Id.Value);
         Assert.Equal(3, inv.Get(9).Count);
     }
 
@@ -246,7 +246,7 @@ public class PlayerInventoryTests
     public void TryConsumeOne_rejects_storage_slot()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(9, Blocks.Stone, 5));
+        Assert.True(inv.TrySetBlock(9, Blocks.Stone, 5));
         Assert.False(inv.TryConsumeOne(9));
         Assert.Equal(5, inv.Get(9).Count);
     }
@@ -256,10 +256,10 @@ public class PlayerInventoryTests
     {
         var inv = new PlayerInventory();
         for (var i = 0; i < PlayerInventory.HotbarSize; i++)
-            Assert.True(inv.TrySet(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+            Assert.True(inv.TrySetBlock(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
 
-        Assert.True(inv.TryAdd(Blocks.Stone, 1));
-        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+        Assert.True(inv.TryAddBlock(Blocks.Stone, 1));
+        Assert.Equal(Blocks.Stone, inv.Get(9).Id.Value);
         Assert.Equal(1, inv.Get(9).Count);
     }
 
@@ -267,13 +267,13 @@ public class PlayerInventoryTests
     public void SnapshotMainInventory_reflects_all_36_slots()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(9, Blocks.Stone, 2));
-        Assert.True(inv.TrySet(35, Blocks.GrassBlock, 4));
+        Assert.True(inv.TrySetBlock(9, Blocks.Stone, 2));
+        Assert.True(inv.TrySetBlock(35, Blocks.GrassBlock, 4));
         var snap = inv.SnapshotMainInventory();
         Assert.Equal(PlayerInventory.FullInventorySize, snap.Length);
-        Assert.Equal(Blocks.Stone, snap[9].RuntimeId);
+        Assert.Equal(Blocks.Stone, snap[9].Id.Value);
         Assert.Equal(2, snap[9].Count);
-        Assert.Equal(Blocks.GrassBlock, snap[35].RuntimeId);
+        Assert.Equal(Blocks.GrassBlock, snap[35].Id.Value);
         Assert.Equal(4, snap[35].Count);
     }
 
@@ -281,10 +281,10 @@ public class PlayerInventoryTests
     public void TrySet_rejects_out_of_range_before_mutating()
     {
         var inv = new PlayerInventory();
-        Assert.False(inv.TrySet(-2, Blocks.Stone, 1));
-        Assert.False(inv.TrySet(36, Blocks.Stone, 1));
-        Assert.False(inv.TrySet(0, Blocks.Stone, -3));
-        Assert.False(inv.TrySet(0, Blocks.Stone, 99));
+        Assert.False(inv.TrySetBlock(-2, Blocks.Stone, 1));
+        Assert.False(inv.TrySetBlock(36, Blocks.Stone, 1));
+        Assert.False(inv.TrySetBlock(0, Blocks.Stone, -3));
+        Assert.False(inv.TrySetBlock(0, Blocks.Stone, 99));
         Assert.Equal(64, inv.Get(0).Count);
     }
 
@@ -292,11 +292,11 @@ public class PlayerInventoryTests
     public void TryTransfer_and_TrySwap_move_between_hotbar_and_storage()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Stone, 10));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 10));
         Assert.True(inv.TryTransfer(0, 9, 4));
         Assert.Equal(6, inv.Get(0).Count);
         Assert.Equal(4, inv.Get(9).Count);
-        Assert.Equal(Blocks.Stone, inv.Get(9).RuntimeId);
+        Assert.Equal(Blocks.Stone, inv.Get(9).Id.Value);
 
         Assert.True(inv.TrySwap(0, 9));
         Assert.Equal(4, inv.Get(0).Count);
@@ -307,8 +307,8 @@ public class PlayerInventoryTests
     public void TryTransfer_rejects_different_runtime_on_dest()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Stone, 5));
-        Assert.True(inv.TrySet(9, Blocks.GrassBlock, 3));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 5));
+        Assert.True(inv.TrySetBlock(9, Blocks.GrassBlock, 3));
         Assert.False(inv.TryTransfer(0, 9, 1));
         Assert.Equal(5, inv.Get(0).Count);
         Assert.Equal(3, inv.Get(9).Count);
@@ -318,7 +318,7 @@ public class PlayerInventoryTests
     public void Cursor_round_trip_via_transfer()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Stone, 8));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 8));
         Assert.True(inv.TryTransfer(0, PlayerInventory.CursorSlot, 3));
         Assert.Equal(5, inv.Get(0).Count);
         Assert.Equal(3, inv.Cursor.Count);
@@ -331,11 +331,11 @@ public class PlayerInventoryTests
     public void Snapshot_restore_round_trip()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Stone, 2));
-        Assert.True(inv.TrySet(PlayerInventory.CursorSlot, Blocks.GrassBlock, 1));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 2));
+        Assert.True(inv.TrySetBlock(PlayerInventory.CursorSlot, Blocks.GrassBlock, 1));
         var snap = inv.CaptureSnapshot();
-        Assert.True(inv.TrySet(0, Blocks.Air, 0));
-        Assert.True(inv.TrySet(PlayerInventory.CursorSlot, Blocks.Air, 0));
+        Assert.True(inv.TrySetBlock(0, Blocks.Air, 0));
+        Assert.True(inv.TrySetBlock(PlayerInventory.CursorSlot, Blocks.Air, 0));
         inv.RestoreSnapshot(snap);
         Assert.Equal(2, inv.Get(0).Count);
         Assert.Equal(1, inv.Cursor.Count);
@@ -354,16 +354,16 @@ public class PlayerInventoryTests
     {
         var inv = new PlayerInventory();
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySet(i, Blocks.Air, 0));
+            Assert.True(inv.TrySetBlock(i, Blocks.Air, 0));
 
-        Assert.True(inv.TrySet(0, Blocks.Stone, 60));
-        Assert.True(inv.TryAdd(Blocks.Stone, 5));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 60));
+        Assert.True(inv.TryAddBlock(Blocks.Stone, 5));
         Assert.Equal(64, inv.Get(0).Count);
-        Assert.Equal(Blocks.Stone, inv.Get(1).RuntimeId);
+        Assert.Equal(Blocks.Stone, inv.Get(1).Id.Value);
         Assert.Equal(1, inv.Get(1).Count);
 
-        Assert.True(inv.TryAdd(Blocks.GrassBlock, 3));
-        Assert.Equal(Blocks.GrassBlock, inv.Get(2).RuntimeId);
+        Assert.True(inv.TryAddBlock(Blocks.GrassBlock, 3));
+        Assert.Equal(Blocks.GrassBlock, inv.Get(2).Id.Value);
         Assert.Equal(3, inv.Get(2).Count);
     }
 
@@ -372,10 +372,10 @@ public class PlayerInventoryTests
     {
         var inv = new PlayerInventory();
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySet(i, Blocks.Dirt, 64));
-        Assert.True(inv.TrySet(0, Blocks.Dirt, 63));
+            Assert.True(inv.TrySetBlock(i, Blocks.Dirt, 64));
+        Assert.True(inv.TrySetBlock(0, Blocks.Dirt, 63));
 
-        Assert.False(inv.TryAdd(Blocks.Dirt, 5));
+        Assert.False(inv.TryAddBlock(Blocks.Dirt, 5));
         Assert.Equal(63, inv.Get(0).Count);
         Assert.Equal(64, inv.Get(1).Count);
     }
@@ -385,10 +385,10 @@ public class PlayerInventoryTests
     {
         var inv = new PlayerInventory();
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySet(i, Blocks.Dirt, 64));
-        Assert.True(inv.TrySet(0, Blocks.Dirt, 63));
+            Assert.True(inv.TrySetBlock(i, Blocks.Dirt, 64));
+        Assert.True(inv.TrySetBlock(0, Blocks.Dirt, 63));
 
-        Assert.Equal(1, inv.TryAddUpTo(Blocks.Dirt, 5));
+        Assert.Equal(1, inv.TryAddUpToBlock(Blocks.Dirt, 5));
         Assert.Equal(64, inv.Get(0).Count);
     }
 
@@ -397,13 +397,13 @@ public class PlayerInventoryTests
     {
         Blocks.EnsureLoaded();
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Chest, 32));
+        Assert.True(inv.TrySetBlock(0, Blocks.Chest, 32));
         var north = Blocks.ChestForFacing(Blocks.CardinalNorth);
         Assert.NotEqual(Blocks.Chest, north);
 
-        Assert.Equal(5, inv.TryAddUpTo(north, 5));
+        Assert.Equal(5, inv.TryAddUpToBlock(north, 5));
         Assert.Equal(37, inv.Get(0).Count);
-        Assert.Equal(Blocks.Chest, inv.Get(0).RuntimeId);
+        Assert.Equal(Blocks.Chest, inv.Get(0).Id.Value);
     }
 
     [Fact]
@@ -412,7 +412,7 @@ public class PlayerInventoryTests
         Blocks.EnsureLoaded();
         var world = new World.World(new InMemoryChunkStorage());
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySet(0, Blocks.Stone, 1));
+        Assert.True(inv.TrySetBlock(0, Blocks.Stone, 1));
 
         // Place: consume one
         Assert.True(inv.TryConsumeOne(0));
@@ -422,10 +422,10 @@ public class PlayerInventoryTests
         // Break: give previous block back
         var previous = world.GetBlock(0, Blocks.FlatGrassY, 0);
         Assert.Equal(Blocks.Stone, previous);
-        Assert.True(inv.TryAdd(previous));
+        Assert.True(inv.TryAddBlock(previous));
         world.SetBlock(0, Blocks.FlatGrassY, 0, Blocks.Air);
         Assert.Equal(1, inv.Get(0).Count);
-        Assert.Equal(Blocks.Stone, inv.Get(0).RuntimeId);
+        Assert.Equal(Blocks.Stone, inv.Get(0).Id.Value);
     }
 }
 

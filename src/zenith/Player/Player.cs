@@ -59,8 +59,8 @@ class Player
     /// <summary>Colunas enviadas / em voo e raio de view (streaming).</summary>
     public PlayerChunkTracker Chunks { get; } = new();
 
-    /// <summary>Runtime id do bloco no slot selecionado (via inventário).</summary>
-    public int HeldBlockRuntimeId => Inventory.GetRuntimeId(SelectedHotbarSlot);
+    /// <summary>Held hotbar stack identity (ADR §55).</summary>
+    public StackId HeldStackId => Inventory.GetStackId(SelectedHotbarSlot);
 
     /// <summary>Skin RGBA opcional parseada do login (senão PlayerList usa placeholder).</summary>
     public byte[]? SkinRgba { get; set; }
@@ -86,7 +86,7 @@ class Player
 
     /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
     public int LastReplicatedHotbarSlot { get; set; } = -1;
-    public int LastReplicatedHeldRuntimeId { get; set; } = int.MinValue;
+    public StackId LastReplicatedHeldStackId { get; set; }
     public int LastReplicatedHeldCount { get; set; } = int.MinValue;
 
     /// <summary>Última pose enviada a peers via MoveActorAbsolute (MovementSystem dirty-check).</summary>
@@ -111,8 +111,10 @@ class Player
     public int BreakTargetY { get; private set; }
     public int BreakTargetZ { get; private set; }
     public ulong BreakStartedTick { get; private set; }
-    /// <summary>Empty-hand dig duration snapshotted at <see cref="BeginBreak"/> (GameLoop ticks).</summary>
+    /// <summary>Dig duration snapshotted at <see cref="BeginBreak"/> (GameLoop ticks).</summary>
     public int BreakRequiredTicks { get; private set; }
+    /// <summary>Held <see cref="StackId"/> at dig start / last retarget (ADR §55).</summary>
+    public StackId DigHeldStackId { get; private set; }
     public bool HasBreakTarget { get; private set; }
 
     /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
@@ -124,20 +126,31 @@ class Player
     /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
     public PlayerCraftUi CraftUi { get; } = new();
 
-    public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks)
+    public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks, StackId heldStackId = default)
     {
         BreakTargetX = x;
         BreakTargetY = y;
         BreakTargetZ = z;
         BreakStartedTick = tick;
         BreakRequiredTicks = requiredTicks;
+        DigHeldStackId = heldStackId;
         HasBreakTarget = true;
+    }
+
+    /// <summary>Progress-preserving dig retarget when held tool changes mid-break (ADR §27).</summary>
+    public void RetargetBreakTiming(ulong startedTick, int requiredTicks, StackId heldStackId)
+    {
+        if (!HasBreakTarget) return;
+        BreakStartedTick = startedTick;
+        BreakRequiredTicks = requiredTicks;
+        DigHeldStackId = heldStackId;
     }
 
     public void AbortBreak()
     {
         HasBreakTarget = false;
         BreakRequiredTicks = 0;
+        DigHeldStackId = default;
     }
 
     /// <summary>
@@ -183,10 +196,11 @@ class Player
     }
 
     /// <summary>Queue dig start (handler). Provisional auth for same-packet Predict.</summary>
-    public bool SubmitDigStart(int x, int y, int z, ulong startedTick, int requiredTicks)
+    public bool SubmitDigStart(
+        int x, int y, int z, ulong startedTick, int requiredTicks, StackId heldStackId = default)
     {
         if (IsDead) return false;
-        var intent = DigIntent.Start(x, y, z, startedTick, requiredTicks);
+        var intent = DigIntent.Start(x, y, z, startedTick, requiredTicks, heldStackId);
         lock (_digLock)
         {
             if (_digIntents.Count >= MaxPendingDig)
