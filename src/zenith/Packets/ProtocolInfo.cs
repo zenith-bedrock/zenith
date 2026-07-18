@@ -57,6 +57,8 @@ enum ProtocolInfo : int
     DEATH_INFO_PACKET = 0xbd,
     PLAYER_SKIN_PACKET = 0x5d,
     SERVERBOUND_LOADING_SCREEN_PACKET = 0x138,
+    /// <summary>Client inventory UI tabs/layout prefs — quiet-ACK only (no product persist).</summary>
+    SET_PLAYER_INVENTORY_OPTIONS_PACKET = 0x133,
     EMOTE_PACKET = 0x8a,
     TOAST_REQUEST_PACKET = 0xba,
     MODAL_FORM_REQUEST_PACKET = 0x64,

@@ -62,6 +62,43 @@ static class PlayerVisibility
         }
     }
 
+    /// <summary>
+    /// Emote relay to other InGame peers (§53). Caller validates runtime id + rate-limit.
+    /// </summary>
+    public static void RelayEmote(
+        Player.Player subject,
+        string emoteId,
+        uint tickLength,
+        string xuid,
+        string platformChatId,
+        IReadOnlyCollection<Player.Player> online)
+    {
+        const byte flags = (byte)(EmotePacket.FlagServerSide | EmotePacket.FlagMuteChat);
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendEmote(rid, emoteId, tickLength, xuid, platformChatId, flags);
+        }
+    }
+
+    /// <summary>
+    /// Arm swing to other InGame peers (§53) — dig / place / attack / MissedSwing.
+    /// </summary>
+    public static void RelaySwingArm(
+        Player.Player subject,
+        IReadOnlyCollection<Player.Player> online,
+        string? swingSource = "attack")
+    {
+        if (subject.IsDead) return;
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendAnimateSwingArm(rid, swingSource);
+        }
+    }
+
     private static void SendPlayerListAdd(Player.Player recipient, Player.Player subject)
     {
         recipient.Session.Protocol.Entity.SendPlayerListAdd(
@@ -89,10 +126,12 @@ static class PlayerVisibility
             subject.Yaw,
             subject.HeadYaw,
             held,
-            gameMode: (int)subject.GameMode);
-        // ADR §44 dirty-check suppresses Absolute while pose is unchanged. New viewers only
-        // get AddPlayer until the subject moves — Bedrock often leaves the entity mid-air
-        // until the first Absolute settles. Mirror Vedrock: Absolute (on-ground) right after Add.
+            gameMode: (int)subject.GameMode,
+            sneaking: subject.IsSneaking,
+            sprinting: subject.IsSprinting);
+        // ADR §44: dirty-check suppresses Absolute while pose is unchanged. New viewers only
+        // get AddPlayer (feet) until the subject moves. Follow with Absolute (feet→wire +1.621)
+        // so peers settle on the ground — bare feet Absolute sinks the model (~eye height).
         recipient.Session.Protocol.Entity.SendMoveAbsolute(
             (ulong)subject.RuntimeId,
             subject.PositionX,

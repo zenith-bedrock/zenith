@@ -24,6 +24,8 @@ sealed class AddPlayerPacket : DataPacket
     public string DeviceId { get; set; } = "";
     public int BuildPlatform { get; set; } = -1;
     public NetworkItemStack HeldItem { get; set; } = NetworkItemStack.Empty;
+    public bool Sneaking { get; set; }
+    public bool Sprinting { get; set; }
 
     public override Span<byte> Encode()
     {
@@ -44,7 +46,7 @@ sealed class AddPlayerPacket : DataPacket
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
         HeldItem.WriteItemStackWrapper(ref writer);
         writer.WriteVarInt(GameMode);
-        EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Username);
+        EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Username, Sneaking, Sprinting);
         writer.WriteUnsignedVarInt(0); // property sync ints
         writer.WriteUnsignedVarInt(0); // property sync floats
         AbilityData.Write(ref writer, (long)ActorRuntimeId, AbilityData.ValuesForGameMode(GameMode));

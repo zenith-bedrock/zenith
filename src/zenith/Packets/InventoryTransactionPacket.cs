@@ -8,7 +8,12 @@ namespace Zenith.Packets;
 class InventoryTransactionPacket : DataPacket
 {
     public const int UseClickBlock = 0;
+    public const int UseClickAir = 1;
     public const int UseDestroyBlock = 2;
+    public const int UseAsAttack = 3;
+
+    public const int ActorInteract = 0;
+    public const int ActorAttack = 1;
 
     public const uint TypeNormal = 0;
     public const uint TypeMismatch = 1;
@@ -32,6 +37,9 @@ class InventoryTransactionPacket : DataPacket
     public float HitX { get; set; }
     public float HitY { get; set; }
     public float HitZ { get; set; }
+
+    public long TargetActorRuntimeId { get; set; }
+    public int ActorActionType { get; set; }
 
     public override Span<byte> Encode() => Array.Empty<byte>();
 
@@ -111,9 +119,9 @@ class InventoryTransactionPacket : DataPacket
 
     private void SkipItemUseOnActorAction(ref BinaryStream stream)
     {
-        _ = stream.ReadUnsignedVarLong(); // actor runtime id
-        _ = stream.ReadVarInt(); // action type (Interact/Attack)
-        _ = stream.ReadVarInt(); // slot
+        TargetActorRuntimeId = stream.ReadUnsignedVarLong();
+        ActorActionType = stream.ReadVarInt();
+        HotbarSlot = stream.ReadVarInt();
         SkipNetworkItem(ref stream);
         FromX = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromY = stream.ReadFloat(BinaryStream.Endianess.Little);

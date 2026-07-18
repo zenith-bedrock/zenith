@@ -26,6 +26,8 @@ static class EntityMetaType
 
 static class EntityFlag
 {
+    public const int Sneaking = 1;
+    public const int Sprinting = 3;
     public const int ShowName = 14;
     public const int AlwaysShowName = 15;
     public const int CanClimb = 19;
@@ -39,8 +41,8 @@ static class EntityFlag
 /// <summary>Shared metadata wire for AddPlayer / SetActorData (no domain types).</summary>
 static class EntityMetadataWriter
 {
-    /// <summary>FLAGS(+Breathing) + visible-name entries used by peer AddPlayer and local SetActorData.</summary>
-    public static void WriteVisibleNameMetadata(ref BinaryStream writer, string name)
+    /// <summary>Base spawn FLAGS (Breathing, collision, name) plus optional pose bits (§53).</summary>
+    public static long BuildSpawnFlags(bool sneaking = false, bool sprinting = false)
     {
         long flags =
             EntityFlag.Bit(EntityFlag.Breathing) |
@@ -49,6 +51,26 @@ static class EntityMetadataWriter
             EntityFlag.Bit(EntityFlag.AffectedByGravity) |
             EntityFlag.Bit(EntityFlag.ShowName) |
             EntityFlag.Bit(EntityFlag.AlwaysShowName);
+
+        if (sneaking)
+            flags |= EntityFlag.Bit(EntityFlag.Sneaking);
+        if (sprinting)
+            flags |= EntityFlag.Bit(EntityFlag.Sprinting);
+        return flags;
+    }
+
+    /// <summary>FLAGS long for dirty pose updates (seed bits + sneak/sprint).</summary>
+    public static long BuildPoseFlags(bool sneaking, bool sprinting) =>
+        BuildSpawnFlags(sneaking, sprinting);
+
+    /// <summary>FLAGS(+Breathing) + visible-name entries used by peer AddPlayer and local SetActorData.</summary>
+    public static void WriteVisibleNameMetadata(
+        ref BinaryStream writer,
+        string name,
+        bool sneaking = false,
+        bool sprinting = false)
+    {
+        var flags = BuildSpawnFlags(sneaking, sprinting);
 
         writer.WriteUnsignedVarInt(8);
 
@@ -83,5 +105,14 @@ static class EntityMetadataWriter
         writer.WriteUnsignedVarInt(EntityMetaKey.AlwaysShowNameTag);
         writer.WriteUnsignedVarInt(EntityMetaType.Byte);
         writer.WriteByte(1);
+    }
+
+    /// <summary>Single FLAGS entry for runtime sneak/sprint dirty fan-out (§53).</summary>
+    public static void WriteFlagsOnly(ref BinaryStream writer, long flags)
+    {
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
+        writer.WriteUnsignedVarInt(EntityMetaType.Long);
+        writer.WriteVarLong(flags);
     }
 }
