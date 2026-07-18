@@ -289,6 +289,14 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>Server → client: searching for spawn (Gameplay must not reference Packets constants).</summary>
+    public void SendRespawnSearching(float eyeX, float eyeY, float eyeZ, ulong entityRuntimeId) =>
+        SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateSearchingForSpawn, entityRuntimeId);
+
+    /// <summary>Server → client: ready to spawn at position.</summary>
+    public void SendRespawnReady(float eyeX, float eyeY, float eyeZ, ulong entityRuntimeId) =>
+        SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateReadyToSpawn, entityRuntimeId);
+
     /// <summary>Local UpdateAbilities seed / RequestAbility echo — runtime id = unique id (§37).</summary>
     public void SendLocalAbilities(long uniqueId, int wireGameMode, bool flying = true)
     {

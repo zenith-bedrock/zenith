@@ -6,7 +6,7 @@ namespace Zenith.World;
 
 /// <summary>
 /// Mundo: colunas base via <see cref="IChunkStorage"/> + overlay esparso permanente.
-/// Overlay warn-once at threshold (ADR §36) — sem refuse/eviction nesta leva.
+/// Overlay warn-once at threshold (ADR §36) — SoftCap refuse deferred (break→air keys).
 /// Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
 /// Column index (§36 adendo): <see cref="GetOverlaysInColumn"/> O(bucket), not O(all overlays).
 /// </summary>
@@ -133,7 +133,7 @@ sealed class World
         {
             _logger?.Warning(
                 $"World overlays crossed OverrideWarnThreshold ({OverrideWarnThreshold}). " +
-                "No refuse/eviction — persistence redesign needed; continuing unbounded.");
+                "Still warn-only — SoftCap refuse deferred (break→air creates overlay keys; ADR §36 adendo).");
         }
     }
 

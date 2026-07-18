@@ -217,7 +217,7 @@ Não significa “produto completo”: fecha place/break + inventário 36 + ISR 
 - Storage 9–35 no domínio (`TryAdd` / sync `SendInventoryContent`); place / consume permanece 0–8.
 - Rearrange 0–35 via ISR: intent → `InventorySystem` tick → `ItemStackResponse` (SAI on; net IDs no Protocol).
 
-**Gaps conscientes (ainda abertos):** bag persist reconnect is partial (`players/` leaf still Horizon‑1); double-chest / sneak-place deferred (§28/§39); drop/destroy ISR deferred. **Shipped since this checklist was written:** chests (§28), held peer sync (§18), inventory persist on quit (§39), Survival dig timing (§27), floor drops (§26).
+**Gaps conscientes (ainda abertos):** bag persist reconnect is partial (`players/` leaf still Horizon‑1); drop/destroy ISR deferred. **Shipped since this checklist was written:** chests (§28) + double-chest sneak-place/54 UI (§56); held peer sync (§18); inventory persist on quit (§39); Survival dig timing (§27); floor drops (§26).
 
 LAN pode usar `auth.accept` com `self-signed` / `offline` (aviso no boot). **Exposição pública:** `accept: [xbox]` apenas.
 

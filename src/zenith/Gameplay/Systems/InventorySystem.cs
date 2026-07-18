@@ -17,6 +17,7 @@ sealed class InventorySystem : IGameSystem
     private readonly World.World _world;
     private readonly RecipeRegistry _recipes;
     private readonly CreativeCatalog _creative;
+    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
 
     public InventorySystem(PlayerManager players, World.World world, RecipeRegistry recipes, CreativeCatalog creative)
     {
@@ -26,7 +27,11 @@ sealed class InventorySystem : IGameSystem
         _creative = creative;
     }
 
-    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+    public void Tick(GameClock clock)
+    {
+        _players.FillOnline(_onlineScratch);
+        Tick(clock, _onlineScratch);
+    }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -36,7 +41,7 @@ sealed class InventorySystem : IGameSystem
         foreach (var player in online)
         {
             while (player.TryConsumeWindowIntent(out var window))
-                ApplyWindow(player, window);
+                ApplyWindow(player, window, online);
         }
 
         foreach (var player in online)
@@ -49,10 +54,12 @@ sealed class InventorySystem : IGameSystem
         }
     }
 
-    private void ApplyWindow(global::Zenith.Player.Player player, in InventoryWindowIntent intent)
+    private void ApplyWindow(
+        global::Zenith.Player.Player player,
+        in InventoryWindowIntent intent,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         var inv = player.Session.Protocol.Inventory;
-        var online = _players.Online;
         switch (intent.Action)
         {
             case InventoryWindowIntent.Kind.OpenInventory:

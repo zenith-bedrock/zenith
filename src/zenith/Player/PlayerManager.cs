@@ -14,10 +14,21 @@ class PlayerManager
     public int Count => _players.Count;
 
     /// <summary>
-    /// Snapshot of who is online (allocates). Prefer <see cref="FillOnline"/> once per tick
-    /// and reuse that list; do not call this inside a nested peer loop.
+    /// Snapshot of who is online (allocates <c>ToArray</c>). Prefer <see cref="FillOnline"/> /
+    /// <see cref="SnapshotOnline"/> — do not call this inside nested peer loops.
     /// </summary>
     public IReadOnlyList<Player> Online => _players.Values.ToArray();
+
+    /// <summary>
+    /// Snapshot online players into a new list (Session helpers / disconnect).
+    /// Prefer tick-scoped <see cref="FillOnline"/> inside GameLoop systems.
+    /// </summary>
+    public List<Player> SnapshotOnline()
+    {
+        var list = new List<Player>(_players.Count);
+        FillOnline(list);
+        return list;
+    }
 
     /// <summary>
     /// Clear <paramref name="buffer"/> and copy current online players into it (GameLoop once/tick).

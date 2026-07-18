@@ -219,7 +219,7 @@ partial class InGameSessionHandler
                 {
                     PlayerVisibility.RelaySwingArm(
                         player,
-                        session.Context.PlayerManager.Online,
+                        session.Context.PlayerManager.SnapshotOnline(),
                         swingSource: "attack");
                 }
                 break;

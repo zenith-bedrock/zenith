@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Protocol;
 using Zenith.Player;
@@ -17,6 +18,7 @@ sealed class ChunkStreamSystem : IGameSystem
     public const int MaxStartsPerTick = 8;
 
     private readonly PlayerManager _players;
+    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
     private readonly World.World _world;
     private readonly List<(int X, int Z)> _knownScratch = new();
 
@@ -26,7 +28,12 @@ sealed class ChunkStreamSystem : IGameSystem
         _world = world;
     }
 
-    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+    public void Tick(GameClock clock)
+    {
+        _players.FillOnline(_onlineScratch);
+        Tick(clock, _onlineScratch);
+    }
+
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
