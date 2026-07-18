@@ -73,12 +73,13 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:oak_log");
         _ = itemPalette.Require("minecraft:sand");
         _ = itemPalette.Require("minecraft:chest");
-        serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries)");
+        Tools.Load(itemPalette);
+        serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
 
         _chunkStorage = CreateChunkStorage(config, serverLogger);
         var world = new World.World(_chunkStorage, serverLogger);
         var recipes = RecipeRegistry.CreateDefault();
-        var creative = CreativeCatalog.CreateDefault();
+        var creative = CreativeCatalog.CreateDefault(itemPalette);
         gameLoop.Register(new BlockSystem(players, world));
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));

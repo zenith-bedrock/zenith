@@ -24,8 +24,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Version>0.0.1-alpha</Version>
-    <InformationalVersion>0.0.1-alpha</InformationalVersion>
+    <Version>0.0.2-alpha</Version>
+    <InformationalVersion>0.0.2-alpha</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

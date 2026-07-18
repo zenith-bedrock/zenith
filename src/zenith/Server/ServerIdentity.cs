@@ -8,7 +8,7 @@ namespace Zenith.Server;
 static class ServerIdentity
 {
     /// <summary>Zenith product / release version (changelog, Docker tags, logs). Not on Bedrock wire.</summary>
-    public const string ProductVersion = "0.0.1-alpha";
+    public const string ProductVersion = "0.0.2-alpha";
 
     /// <summary>
     /// Bedrock protocol number (client <c>RequestNetworkSettings</c> / MOTD).

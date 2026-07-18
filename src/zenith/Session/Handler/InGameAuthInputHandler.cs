@@ -155,9 +155,19 @@ partial class InGameSessionHandler
             return;
 
         var block = session.Context.World.GetBlock(x, y, z);
-        var need = Blocks.BreakTicks(block);
+        var held = player.Inventory.Get(player.SelectedHotbarSlot);
+        var heldId = held.IsEmpty ? default : held.Id;
+        var need = Blocks.BreakTicks(block, heldId);
+        // Unknown DigProfile → no Survival dig auth (ADR §55).
+        if (need < 0)
+        {
+            session.Context.Logger.Debug(
+                $"AuthInput dig ignored (no DigProfile) for {player.Username} @ {x},{y},{z} block={block}");
+            return;
+        }
+
         var tick = session.Context.Clock.CurrentTick;
-        if (!player.SubmitDigStart(x, y, z, tick, need))
+        if (!player.SubmitDigStart(x, y, z, tick, need, heldId))
             session.Context.Logger.Debug($"Dropped dig start from {player.Username}: dig queue full.");
         else
         {
@@ -168,7 +178,7 @@ partial class InGameSessionHandler
                 _ => "continue_destroy"
             };
             session.Context.Logger.Debug(
-                $"AuthInput {label} from {player.Username} @ {x},{y},{z} need={need} ticks");
+                $"AuthInput {label} from {player.Username} @ {x},{y},{z} need={need} ticks held={heldId}");
         }
     }
 

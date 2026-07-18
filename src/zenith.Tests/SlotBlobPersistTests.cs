@@ -12,15 +12,40 @@ public class SlotBlobPersistTests
     public void SlotBlob_round_trips_36_slots()
     {
         var slots = new InventorySlot[PlayerInventory.FullInventorySize];
-        slots[0] = new InventorySlot(Blocks.Stone, 10);
-        slots[5] = new InventorySlot(Blocks.Chest, 2);
+        slots[0] = InventorySlot.OfBlock(Blocks.Stone, 10);
+        slots[5] = InventorySlot.OfBlock(Blocks.Chest, 2);
         var blob = SlotBlob.Pack(slots);
+        Assert.Equal(SlotBlob.Version2, blob[0]);
         var dest = new InventorySlot[PlayerInventory.FullInventorySize];
         Assert.True(SlotBlob.TryUnpack(blob, dest));
-        Assert.Equal(Blocks.Stone, dest[0].RuntimeId);
+        Assert.Equal(Blocks.Stone, dest[0].Id.Value);
+        Assert.Equal(StackKind.Block, dest[0].Id.Kind);
         Assert.Equal(10, dest[0].Count);
-        Assert.Equal(Blocks.Chest, dest[5].RuntimeId);
+        Assert.Equal(Blocks.Chest, dest[5].Id.Value);
         Assert.True(dest[1].IsEmpty);
+    }
+
+    [Fact]
+    public void SlotBlob_v1_migrate_tool_network_id_to_Item_kind()
+    {
+        Tools.EnsureLoaded();
+        var pick = Tools.Require("minecraft:iron_pickaxe");
+        // v1: version + (i32 value, i32 count) × 36
+        var blob = new byte[1 + PlayerInventory.FullInventorySize * 8];
+        blob[0] = SlotBlob.Version1;
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(blob.AsSpan(1, 4), pick);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(blob.AsSpan(5, 4), 1);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(blob.AsSpan(1 + 8, 4), Blocks.Dirt);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(blob.AsSpan(1 + 8 + 4, 4), 3);
+
+        var dest = new InventorySlot[PlayerInventory.FullInventorySize];
+        Assert.True(SlotBlob.TryUnpack(blob, dest));
+        Assert.Equal(StackKind.Item, dest[0].Id.Kind);
+        Assert.Equal(pick, dest[0].Id.Value);
+        Assert.Equal(1, dest[0].Count);
+        Assert.Equal(StackKind.Block, dest[1].Id.Kind);
+        Assert.Equal(Blocks.Dirt, dest[1].Id.Value);
+        Assert.Equal(3, dest[1].Count);
     }
 
     [Fact]
@@ -28,7 +53,7 @@ public class SlotBlobPersistTests
     {
         var storage = new InMemoryChunkStorage();
         var slots = new InventorySlot[36];
-        slots[0] = new InventorySlot(Blocks.Dirt, 3);
+        slots[0] = InventorySlot.OfBlock(Blocks.Dirt, 3);
         var invBlob = SlotBlob.Pack(slots);
 
         var uuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -37,7 +62,7 @@ public class SlotBlobPersistTests
         Assert.NotNull(got);
 
         var chestSlots = new InventorySlot[ChestStore.Size];
-        chestSlots[0] = new InventorySlot(Blocks.Stone, 1);
+        chestSlots[0] = InventorySlot.OfBlock(Blocks.Stone, 1);
         var chestBlob = SlotBlob.Pack(chestSlots);
         await storage.PutChestAsync(1, 2, 3, chestBlob);
 
@@ -59,12 +84,12 @@ public class SlotBlobPersistTests
         var world = new World.World(storage);
         var uuid = Guid.NewGuid();
         var packed = new PlayerInventory(seedStarterHotbar: false);
-        Assert.True(packed.TrySet(0, Blocks.Sand, 7));
+        Assert.True(packed.TrySetBlock(0, Blocks.Sand, 7));
         world.PersistInventory(uuid, packed);
 
         var loaded = new PlayerInventory(seedStarterHotbar: true);
         Assert.True(world.TryLoadInventory(uuid, loaded));
-        Assert.Equal(Blocks.Sand, loaded.Get(0).RuntimeId);
+        Assert.Equal(Blocks.Sand, loaded.Get(0).Id.Value);
         Assert.Equal(7, loaded.Get(0).Count);
         Assert.True(loaded.Get(1).IsEmpty);
     }
@@ -75,14 +100,14 @@ public class SlotBlobPersistTests
         var storage = new InMemoryChunkStorage();
         var uuid = Guid.NewGuid();
         var slots = new InventorySlot[36];
-        slots[0] = new InventorySlot(Blocks.Dirt, 4);
+        slots[0] = InventorySlot.OfBlock(Blocks.Dirt, 4);
         await storage.PutInventoryAsync(uuid, SlotBlob.Pack(slots));
         await storage.FlushAsync();
         var got = await storage.GetInventoryAsync(uuid);
         Assert.NotNull(got);
         var dest = new InventorySlot[36];
         Assert.True(SlotBlob.TryUnpack(got!, dest));
-        Assert.Equal(Blocks.Dirt, dest[0].RuntimeId);
+        Assert.Equal(Blocks.Dirt, dest[0].Id.Value);
         Assert.Equal(4, dest[0].Count);
     }
 
@@ -94,7 +119,7 @@ public class SlotBlobPersistTests
         {
             var uuid = Guid.NewGuid();
             var slots = new InventorySlot[36];
-            slots[2] = new InventorySlot(Blocks.Chest, 1);
+            slots[2] = InventorySlot.OfBlock(Blocks.Chest, 1);
             var blob = SlotBlob.Pack(slots);
 
             {
@@ -110,7 +135,7 @@ public class SlotBlobPersistTests
                 Assert.NotNull(got);
                 var dest = new InventorySlot[36];
                 Assert.True(SlotBlob.TryUnpack(got!, dest));
-                Assert.Equal(Blocks.Chest, dest[2].RuntimeId);
+                Assert.Equal(Blocks.Chest, dest[2].Id.Value);
                 Assert.Equal(1, dest[2].Count);
             }
         }

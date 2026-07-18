@@ -43,4 +43,23 @@ static class BlockCrackFanout
             peer.Session.Protocol.World.SendBlockStopCrack(blockX, blockY, blockZ);
         }
     }
+
+    /// <summary>LevelEvent 3602 — crack rate change only (ADR §27 / Mojang UpdateBlockCracking).</summary>
+    public static void UpdateSpeed(
+        IReadOnlyList<Player.Player> online,
+        NetworkSession miner,
+        int blockX,
+        int blockY,
+        int blockZ,
+        int breakTicks)
+    {
+        miner.Protocol.World.SendBlockBreakSpeed(blockX, blockY, blockZ, breakTicks);
+        if (online.Count < 2) return;
+
+        foreach (var peer in online)
+        {
+            if (ReferenceEquals(peer.Session, miner) || !peer.IsInGame) continue;
+            peer.Session.Protocol.World.SendBlockBreakSpeed(blockX, blockY, blockZ, breakTicks);
+        }
+    }
 }

@@ -26,7 +26,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 2 | **Death / Respawn** | **Shipped** (Jul 2026): void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
 | 2b | **Block/item registry honesty** | **Shipped** (Jul 2026): palette reverse `runtimeId→name` + `Blocks.IsPlaceable` allowlist (§12 adendo). Before `/gamemode`. |
 | 3 | **`/gamemode` minimal** | **Shipped** (Jul 2026): chat parse → intent → `GameModeSystem` + SetPlayerGameType/abilities/CreativeContent remint (§52). Not a command framework. |
-| 4 | **Tool dig speed / efficiency** | Extends §27; still no enchants catalogue dump. |
+| 4 | **Tool dig speed / efficiency** | **Shipped** (Jul 2026): DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | Facing-only (§46) does not unlock this; pair model + store (§28/§39). |
 | 6 | **Block gravity** (sand/gravel) | Static placeable today; fall/landing is a new tick domain — ADR first. |
 | 7 | **`players/` or position persist** | After identity/reconnect story is clear; no silent path reinterpret (§20). |
@@ -35,6 +35,8 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
 
 **Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows.
+
+**Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — structural honesty so later leaves do not rewrite inventory identity. Ship as docs + spike PR; does not replace double-chest / gravity rows.
 
 ---
 

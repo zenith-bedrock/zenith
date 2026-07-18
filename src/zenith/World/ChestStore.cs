@@ -99,18 +99,18 @@ sealed class ChestStore
         return true;
     }
 
-    /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (runtimeId, count).</summary>
-    public List<(int RuntimeId, int Count)> RemoveAndDump(int x, int y, int z)
+    /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (StackId, count).</summary>
+    public List<(StackId Id, int Count)> RemoveAndDump(int x, int y, int z)
     {
         ClearOpeners(x, y, z);
-        var list = new List<(int, int)>();
+        var list = new List<(StackId, int)>();
         if (!_chests.Remove((x, y, z), out var slots))
             return list;
 
         foreach (var s in slots)
         {
             if (!s.IsEmpty)
-                list.Add((s.RuntimeId, s.Count));
+                list.Add((s.Id, s.Count));
         }
 
         return list;

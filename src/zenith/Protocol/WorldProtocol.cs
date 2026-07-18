@@ -228,6 +228,17 @@ sealed class WorldProtocol
             blockY,
             blockZ);
 
+    /// <summary>LevelEvent UpdateBlockCracking (3602) — rate change only.</summary>
+    public void SendBlockBreakSpeed(int blockX, int blockY, int blockZ, int breakTicks)
+    {
+        SendLevelEvent(
+            LevelEventPacket.EventBlockBreakSpeed,
+            blockX,
+            blockY,
+            blockZ,
+            Blocks.CrackEventData(breakTicks));
+    }
+
     public void SendPlaySound(string soundName, float x, float y, float z, float volume = 1f, float pitch = 1f) =>
         _session.SendDataPacket(new PlaySoundPacket
         {

@@ -31,6 +31,7 @@ sealed class BlockSystem : IGameSystem
         {
             while (player.TryConsumeDig(out var dig))
                 ApplyDig(player, dig, clock, online);
+            MaybeUpdateDigTool(player, clock, online);
         }
 
         var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
@@ -104,9 +105,59 @@ sealed class BlockSystem : IGameSystem
                 player.BreakTargetY,
                 player.BreakTargetZ);
 
-        player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks);
-        BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
+        player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
+        if (dig.RequiredTicks > 0)
+            BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
         PlayerVisibility.RelaySwingArm(player, online, swingSource: "mine");
+    }
+
+    /// <summary>
+    /// Mid-dig held tool change → progress-preserving retarget + 3602 when crack rate changes (§27).
+    /// </summary>
+    private void MaybeUpdateDigTool(
+        global::Zenith.Player.Player player,
+        GameClock clock,
+        IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (!player.HasBreakTarget || player.IsDead) return;
+        if (player.GameMode == GameMode.Creative) return;
+
+        var held = player.Inventory.Get(player.SelectedHotbarSlot);
+        var heldId = held.IsEmpty ? default : held.Id;
+        if (heldId == player.DigHeldStackId) return;
+
+        var block = _world.GetBlock(player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+        var oldNeed = player.BreakRequiredTicks;
+        var newNeed = Blocks.BreakTicks(block, heldId);
+        // Unknown dig profile mid-break → abort (ADR §55).
+        if (newNeed < 0)
+        {
+            BlockCrackFanout.Stop(
+                online, player.Session,
+                player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
+            player.AbortBreak();
+            return;
+        }
+
+        var now = clock.CurrentTick;
+        var elapsed = now >= player.BreakStartedTick ? now - player.BreakStartedTick : 0ul;
+        var progress = oldNeed > 0 ? Math.Clamp(elapsed / (double)oldNeed, 0.0, 1.0) : 1.0;
+        var newStarted = newNeed <= 0
+            ? now
+            : now - (ulong)Math.Round(progress * newNeed);
+
+        player.RetargetBreakTiming(newStarted, newNeed, heldId);
+
+        if (Blocks.CrackEventData(oldNeed) != Blocks.CrackEventData(newNeed) && newNeed > 0)
+        {
+            BlockCrackFanout.UpdateSpeed(
+                online,
+                player.Session,
+                player.BreakTargetX,
+                player.BreakTargetY,
+                player.BreakTargetZ,
+                newNeed);
+        }
     }
 
     /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
@@ -170,19 +221,22 @@ sealed class BlockSystem : IGameSystem
 
             if (!creative)
             {
+                var held = player.Inventory.Get(player.SelectedHotbarSlot);
+                var heldId = held.IsEmpty ? default : held.Id;
                 var need = edit.DigAuthorized
                     ? edit.DigRequiredTicks
-                    : Blocks.BreakTicks(previous);
+                    : Blocks.BreakTicks(previous, heldId);
+                // need < 0 = no DigProfile (ADR §55); need > 0 requires dig auth + elapsed.
+                if (need < 0 || (need > 0 && !edit.DigAuthorized))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                    return false;
+                }
+
                 if (need > 0)
                 {
-                    if (!edit.DigAuthorized)
-                    {
-                        player.Session.Context.Logger.Debug(
-                            $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                        ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                        return false;
-                    }
-
                     var elapsed = clock.CurrentTick >= edit.DigStartedTick
                         ? clock.CurrentTick - edit.DigStartedTick
                         : 0;
@@ -219,15 +273,17 @@ sealed class BlockSystem : IGameSystem
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
                 if (!creative)
                 {
-                    foreach (var (rid, count) in dumped)
+                    foreach (var (stackId, count) in dumped)
                     {
-                        var mergeRid = Blocks.NormalizeMergeRuntimeId(rid);
-                        var added = player.Inventory.TryAddUpTo(mergeRid, count);
+                        var id = stackId.IsBlock
+                            ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
+                            : stackId;
+                        var added = player.Inventory.TryAddUpTo(id, count);
                         if (added > 0)
                             inventoryChanged = true;
                         var surplus = count - added;
                         if (surplus > 0)
-                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, mergeRid, surplus);
+                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, surplus);
                     }
                 }
             }
@@ -236,10 +292,11 @@ sealed class BlockSystem : IGameSystem
             {
                 // Oriented chest → item form (south) so stacks merge.
                 var dropRid = Blocks.NormalizeMergeRuntimeId(wasChest ? Blocks.Chest : previous);
-                var added = player.Inventory.TryAddUpTo(dropRid, 1);
+                var dropId = StackId.FromBlock(dropRid);
+                var added = player.Inventory.TryAddUpTo(dropId, 1);
                 if (added > 0)
                     inventoryChanged = true;
-                if (added < 1 && DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropRid, 1))
+                if (added < 1 && DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropId, 1))
                 {
                     player.Session.Context.Logger.Debug(
                         $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -276,11 +333,11 @@ sealed class BlockSystem : IGameSystem
         int x,
         int y,
         int z,
-        int itemRuntimeId,
+        StackId id,
         int count)
     {
         var entityId = _players.AllocateRuntimeId();
-        if (!_world.FloorDrops.TryAddOrMerge(x, y, z, itemRuntimeId, count, entityId, out var deposit) ||
+        if (!_world.FloorDrops.TryAddOrMerge(x, y, z, id, count, entityId, out var deposit) ||
             deposit is null)
             return false;
 
@@ -307,7 +364,7 @@ sealed class BlockSystem : IGameSystem
             if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
 
             var entity = peer.Session.Protocol.Entity;
-            var item = peer.Session.Protocol.Inventory.DescribeStack(deposit.ItemRuntimeId, deposit.Count);
+            var item = peer.Session.Protocol.Inventory.DescribeStack(deposit.Id, deposit.Count);
             if (!deposit.Created && deposit.CountChanged)
                 entity.SendRemoveActor(deposit.EntityRuntimeId);
             if (item.NetworkId == 0) continue; // invalid/air item crashes Bedrock near player
@@ -320,18 +377,20 @@ sealed class BlockSystem : IGameSystem
         _ = clock;
         _world.FloorDrops.TickPickupDelays();
 
-        foreach (var (pos, runtimeId, count, entityRuntimeId, pickupDelay) in _world.FloorDrops.Snapshot())
+        foreach (var (pos, stackId, count, entityRuntimeId, pickupDelay) in _world.FloorDrops.Snapshot())
         {
             if (pickupDelay > 0) continue;
 
-            var mergeRid = Blocks.NormalizeMergeRuntimeId(runtimeId);
+            var pickupId = stackId.IsBlock
+                ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
+                : stackId;
             foreach (var player in online)
             {
                 if (!player.IsInGame || player.IsDead) continue;
                 if (!IsWithinFloorPickupReach(player, pos.X, pos.Y, pos.Z)) continue;
 
                 var invSnap = player.Inventory.CaptureSnapshot();
-                var added = player.Inventory.TryAddUpTo(mergeRid, count);
+                var added = player.Inventory.TryAddUpTo(pickupId, count);
                 if (added == 0) continue;
 
                 if (!_world.FloorDrops.TryTakeUpTo(
