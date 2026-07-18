@@ -10,7 +10,7 @@ namespace Zenith.Gameplay;
 static class BlockCrackFanout
 {
     public static void Start(
-        PlayerManager players,
+        IReadOnlyList<Player.Player> online,
         NetworkSession miner,
         int blockX,
         int blockY,
@@ -18,9 +18,9 @@ static class BlockCrackFanout
         int breakTicks)
     {
         miner.Protocol.World.SendBlockStartCrack(blockX, blockY, blockZ, breakTicks);
-        if (players.Count < 2) return;
+        if (online.Count < 2) return;
 
-        foreach (var peer in players.Online)
+        foreach (var peer in online)
         {
             if (ReferenceEquals(peer.Session, miner) || !peer.IsInGame) continue;
             peer.Session.Protocol.World.SendBlockStartCrack(blockX, blockY, blockZ, breakTicks);
@@ -28,16 +28,16 @@ static class BlockCrackFanout
     }
 
     public static void Stop(
-        PlayerManager players,
+        IReadOnlyList<Player.Player> online,
         NetworkSession miner,
         int blockX,
         int blockY,
         int blockZ)
     {
         miner.Protocol.World.SendBlockStopCrack(blockX, blockY, blockZ);
-        if (players.Count < 2) return;
+        if (online.Count < 2) return;
 
-        foreach (var peer in players.Online)
+        foreach (var peer in online)
         {
             if (ReferenceEquals(peer.Session, miner) || !peer.IsInGame) continue;
             peer.Session.Protocol.World.SendBlockStopCrack(blockX, blockY, blockZ);

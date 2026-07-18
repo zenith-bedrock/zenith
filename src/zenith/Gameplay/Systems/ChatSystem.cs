@@ -12,20 +12,22 @@ sealed class ChatSystem : IGameSystem
 
     public ChatSystem(PlayerManager players) => _players = players;
 
-    public void Tick(GameClock clock)
+    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+
+    public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
-        if (_players.Count == 0) return;
+        if (online.Count == 0) return;
 
-        var online = _players.Online;
         foreach (var player in online)
         {
-            if (!player.TryConsumeChat(out var message)) continue;
-
-            foreach (var peer in online)
+            while (player.TryConsumeChat(out var message))
             {
-                if (!peer.IsInGame) continue;
-                peer.Session.Protocol.Chat.SendChat(player.Username, message);
+                foreach (var peer in online)
+                {
+                    if (!peer.IsInGame) continue;
+                    peer.Session.Protocol.Chat.SendChat(player.Username, message);
+                }
             }
         }
     }

@@ -1,3 +1,4 @@
+using Zenith.Player;
 using Zenith.Raknet.Log;
 
 namespace Zenith.Gameplay.Runtime;
@@ -10,13 +11,16 @@ sealed class GameLoop
 {
     private readonly GameClock _clock;
     private readonly ILogger _logger;
+    private readonly PlayerManager _players;
     private readonly List<IGameSystem> _systems = new();
+    private readonly List<Player.Player> _onlineScratch = new();
 
     public GameClock Clock => _clock;
 
-    public GameLoop(GameClock clock, ILogger logger)
+    public GameLoop(GameClock clock, PlayerManager players, ILogger logger)
     {
         _clock = clock;
+        _players = players;
         _logger = logger;
     }
 
@@ -32,11 +36,12 @@ sealed class GameLoop
         while (!cancellationToken.IsCancellationRequested)
         {
             _clock.Advance();
+            _players.FillOnline(_onlineScratch);
             foreach (var system in _systems)
             {
                 try
                 {
-                    system.Tick(_clock);
+                    system.Tick(_clock, _onlineScratch);
                 }
                 catch (Exception ex)
                 {

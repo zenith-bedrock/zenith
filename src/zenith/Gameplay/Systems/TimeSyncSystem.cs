@@ -12,13 +12,15 @@ sealed class TimeSyncSystem : IGameSystem
 
     public TimeSyncSystem(PlayerManager players) => _players = players;
 
-    public void Tick(GameClock clock)
+    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+
+    public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        if (_players.Count == 0) return;
+        if (online.Count == 0) return;
         if (clock.CurrentTick % GameClock.TicksPerSecond != 0) return;
 
         var time = clock.WorldTime;
-        foreach (var player in _players.Online)
+        foreach (var player in online)
         {
             player.Session.Protocol.World.SendTime(time);
         }

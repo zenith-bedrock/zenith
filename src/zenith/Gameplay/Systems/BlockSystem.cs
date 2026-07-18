@@ -1,5 +1,6 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Session;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
@@ -20,11 +21,18 @@ sealed class BlockSystem : IGameSystem
         _world = world;
     }
 
-    public void Tick(GameClock clock)
-    {
-        if (_players.Count == 0) return;
+    public void Tick(GameClock clock) => Tick(clock, _players.Online);
 
-        var online = _players.Online;
+    public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (online.Count == 0) return;
+
+        foreach (var player in online)
+        {
+            while (player.TryConsumeDig(out var dig))
+                ApplyDig(player, dig, clock, online);
+        }
+
         var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
         foreach (var player in online)
         {
@@ -66,6 +74,39 @@ sealed class BlockSystem : IGameSystem
         }
 
         PickupFloorDrops(clock, online);
+    }
+
+    private static void ApplyDig(
+        global::Zenith.Player.Player player,
+        in DigIntent dig,
+        GameClock clock,
+        IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        _ = clock;
+        if (player.IsDead) return;
+
+        if (dig.IsAbort)
+        {
+            BlockCrackFanout.Stop(online, player.Session, dig.X, dig.Y, dig.Z);
+            if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
+                player.AbortBreak();
+            return;
+        }
+
+        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
+            return;
+
+        if (player.HasBreakTarget)
+            BlockCrackFanout.Stop(
+                online,
+                player.Session,
+                player.BreakTargetX,
+                player.BreakTargetY,
+                player.BreakTargetZ);
+
+        player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks);
+        BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
+        PlayerVisibility.RelaySwingArm(player, online, swingSource: "mine");
     }
 
     /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
@@ -156,7 +197,7 @@ sealed class BlockSystem : IGameSystem
             }
 
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
-            BlockCrackFanout.Stop(_players, player.Session, edit.X, edit.Y, edit.Z);
+            BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);
             if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
                 player.AbortBreak();
 

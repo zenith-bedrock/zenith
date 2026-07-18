@@ -9,6 +9,9 @@ namespace Zenith.Protocol;
 /// </summary>
 static class ColumnSend
 {
+    [ThreadStatic]
+    private static List<BlockOverride>? t_overlayScratch;
+
     public static void EmitToSession(NetworkSession session, in ColumnReadResult column)
     {
         ColumnTerrainEmitter.Emit(
@@ -33,14 +36,15 @@ static class ColumnSend
     {
         if (columns.Count == 0) return;
 
+        var overlayScratch = t_overlayScratch ??= new List<BlockOverride>(64);
         var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
         for (var i = 0; i < columns.Count; i++)
         {
             var (cx, cz) = columns[i];
-            var overlays = world.GetOverlaysInColumn(cx, cz);
-            for (var j = 0; j < overlays.Count; j++)
+            world.FillOverlaysInColumn(cx, cz, overlayScratch);
+            for (var j = 0; j < overlayScratch.Count; j++)
             {
-                var o = overlays[j];
+                var o = overlayScratch[j];
                 updates.Add((o.X, o.Y, o.Z, o.BlockRuntimeId));
             }
 

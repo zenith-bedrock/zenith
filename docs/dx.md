@@ -52,6 +52,8 @@ LGPL-3.0: share improvements to the library; build applications on top with a cl
 
 Good DX is saying **no** until the yes is cheap to maintain.
 
+Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robustness-dx-debt.md`](robustness-dx-debt.md) — not Horizon‑1 product.
+
 ## Workflow suggestions
 
 ```text
@@ -60,11 +62,11 @@ Good DX is saying **no** until the yes is cheap to maintain.
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream
 5. If you need a new abstraction (Factory, ECS, Scheduler): justify against freeze list
-6. `PlayerManager.Online` allocates a snapshot — capture once per Tick (`var online = _players.Online`); do not read Online inside a nested loop
+6. Item wire: `NetworkItemStack` has three writers (`WriteNetworkItemStackDescriptor`, `WriteItemStackWrapper`, `WriteItemStack`). **Packet Encode picks** — never call a “default Write”. AddPlayer/AddItemActor → Wrapper; InventoryContent/MobEquipment → Descriptor; Creative/CraftingData → ItemStack. Inventory content / ISR OK: **`InventoryProtocol.DescribeForWire` only** (not Refresh+Get). Soft ISR match via `MatchesAdvertisedStackNetId` (§54).
 7. Folders = roles under `src/zenith/` — look in `Packets/` / `Protocol/` / `Session/`, not a revived `Network/` junk drawer
-8. Item wire: `NetworkItemStack` has three writers (`WriteNetworkItemStackDescriptor`, `WriteItemStackWrapper`, `WriteItemStack`). **Packet Encode picks** — never call a “default Write”. AddPlayer/AddItemActor → Wrapper; InventoryContent/MobEquipment → Descriptor; Creative/CraftingData → ItemStack
-9. Block→item bridge: Protocol maps via `Blocks.TryGetName` + `ItemPalette` only — reverse lookup must cover the dump (`BlockPalette.TryGetName`), not only curated `Blocks.*` consts. Placeables are an explicit allowlist (`IsPlaceable`), not “any palette rid”
-10. Protocol packet shapes: see “Bedrock protocol docs” below before inventing field order
+8. Block→item bridge: Protocol maps via `Blocks.TryGetName` + `ItemPalette` only — reverse lookup must cover the dump (`BlockPalette.TryGetName`), not only curated `Blocks.*` consts. Placeables are an explicit allowlist (`IsPlaceable`), not “any palette rid”
+9. Protocol packet shapes: see “Bedrock protocol docs” below before inventing field order
+10. GameLoop fills Online once per tick (`FillOnline`); systems take `IReadOnlyList<Player> online` — do not call `PlayerManager.Online` inside nested peer loops
 ```
 
 ### Bedrock protocol docs (official)
@@ -131,11 +133,10 @@ Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as ord
 | World overlay | SetBlock | overlays 0 / 1k / 10k | ~140 ns / ~7.4 µs / ~15 µs | 0 B |
 | World overlay | GetBlock | overlays 0 / 1k / 10k | ~6–7 ns | 0 B |
 | World overlay | GetOverlaysInColumn | overlays 0 / 1k / 10k | ~44 ns / ~6.2 µs / ~255 µs | 0 / ~33 KB / ~525 KB |
-| Palette | Blocks.Stone/Chest/Air (cached fields) | — | ~0 ns (noise floor) | 0 B |
-| Palette | ItemPalette.Require (stone/chest/oak_log) | — | ~12–13 ns | 0 B |
-| EventBus | Publish | 0 / 1 / 8 listeners | ~4 / ~18 / ~37 ns | 0 B |
 
-**Improvement signals from this run:** ZLIB Deflate on 32-block batches (~6 µs) dwarfs uncompressed encode; `GetOverlaysInColumn` allocates and scales poorly at 10k overlays (~525 KB / ~255 µs) — primary post-alpha RAM scan candidate. Palette `Blocks.*` is already a field hit; item name lookup stays cheap.
+**Phase 3 note (2026-07-18):** hot pack leaves landed — `FillOverlaysInColumn` / `ForEachOverlayInColumn` (ColumnSend reuses scratch), `WriteVarString` stackalloc/ArrayPool, AuthInput bitset into `stackalloc`, FloorDrop delay keys via reused list. Refresh ShortRun numbers when convenient; prior `GetOverlaysInColumn` alloc row is the pre-Phase‑3 signal.
+
+**Improvement signals from this run:** ZLIB Deflate on 32-block batches (~6 µs) dwarfs uncompressed encode; `GetOverlaysInColumn` allocated and scaled poorly at 10k overlays (~525 KB / ~255 µs) — addressed for stream path via fill/callback (§54). Palette `Blocks.*` is already a field hit; item name lookup stays cheap.
 
 ## Related
 

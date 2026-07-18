@@ -16,7 +16,8 @@ file sealed class RecordingRakNetServer : RakNetServer
     {
     }
 
-    public override void Send(IPEndPoint endPoint, byte[] buffer) => Captured.Enqueue(buffer);
+    public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) =>
+        Captured.Enqueue(buffer.ToArray());
 }
 
 /// <summary>Expõe índices/fila só para asserts dos invariantes de saída.</summary>

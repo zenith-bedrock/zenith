@@ -124,9 +124,6 @@ public class RakNetSession
             return;
         }
 
-        byte[]? ackPayload = null;
-        byte[]? nackPayload = null;
-
         lock (_sessionLock)
         {
             if (ReceivedFrameSequences.Count > 0)
@@ -136,7 +133,7 @@ public class RakNetSession
                     Sequences = ReceivedFrameSequences.ToList()
                 };
                 ReceivedFrameSequences.Clear();
-                ackPayload = ack.Encode().ToArray();
+                Server.Send(EndPoint, ack.Encode());
             }
 
             if (LostFrameSequences.Count > 0)
@@ -146,14 +143,11 @@ public class RakNetSession
                     Sequences = LostFrameSequences.ToList()
                 };
                 LostFrameSequences.Clear();
-                nackPayload = nack.Encode().ToArray();
+                Server.Send(EndPoint, nack.Encode());
             }
 
             SendQueueLocked(OutputFrames.Count);
         }
-
-        if (ackPayload is not null) Server.Send(EndPoint, ackPayload);
-        if (nackPayload is not null) Server.Send(EndPoint, nackPayload);
     }
 
     /// <summary>Drain all pending outbound frames to UDP (call before Close / disconnect kick).</summary>

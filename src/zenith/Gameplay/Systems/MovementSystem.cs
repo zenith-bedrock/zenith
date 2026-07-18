@@ -25,12 +25,12 @@ sealed class MovementSystem : IGameSystem
 
     public static float VoidRescueY => Blocks.FlatMinY - VoidRescueMargin;
 
-    public void Tick(GameClock clock)
+    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+
+    public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
-        if (_players.Count == 0) return;
-
-        var online = _players.Online;
+        if (online.Count == 0) return;
         _dirtyPose.Clear();
         _dirtyFlags.Clear();
         _swing.Clear();

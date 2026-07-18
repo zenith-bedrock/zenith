@@ -11,6 +11,9 @@ class Player
 {
     public const int MaxPendingBlockEdits = 8;
     public const int MaxPendingInventoryStacks = 8;
+    public const int MaxPendingDig = 4;
+    public const int MaxPendingWindowIntents = 4;
+    public const int MaxPendingChat = 8;
 
     /// <summary>Euclidean interact reach (blocks) from eye to target center — Fase 3 simple authority.</summary>
     public const float MaxBlockReach = 6f;
@@ -21,8 +24,13 @@ class Player
     private readonly Queue<BlockEditIntent> _blockEdits = new();
     private readonly object _inventoryStackLock = new();
     private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
+    private readonly object _digLock = new();
+    private readonly Queue<DigIntent> _digIntents = new();
+    private DigIntent? _provisionalDig;
+    private readonly object _windowLock = new();
+    private readonly Queue<InventoryWindowIntent> _windowIntents = new();
     private readonly object _chatLock = new();
-    private string? _pendingChat;
+    private readonly Queue<string> _pendingChat = new();
     private readonly object _gameModeLock = new();
     private GameMode? _pendingGameMode;
     private readonly object _respawnLock = new();
@@ -136,10 +144,148 @@ class Player
     /// Clears dig lock without crack fan-out — used after queueing a Survival break so
     /// Continue can retarget without poisoning the pending intent (§27).
     /// </summary>
-    public void ClearBreakTarget() => AbortBreak();
+    public void ClearBreakTarget()
+    {
+        AbortBreak();
+        lock (_digLock)
+            _provisionalDig = null;
+    }
 
     public bool IsBreakTarget(int x, int y, int z) =>
         HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;
+
+    /// <summary>
+    /// Dig auth for same-packet Predict before tick applies <see cref="BeginBreak"/> (§27/§54).
+    /// </summary>
+    public bool TryGetDigAuth(int x, int y, int z, out ulong startedTick, out int requiredTicks)
+    {
+        if (IsBreakTarget(x, y, z))
+        {
+            startedTick = BreakStartedTick;
+            requiredTicks = BreakRequiredTicks;
+            return true;
+        }
+
+        lock (_digLock)
+        {
+            if (_provisionalDig is { HasValue: true, IsAbort: false } dig &&
+                dig.X == x && dig.Y == y && dig.Z == z)
+            {
+                startedTick = dig.StartedTick;
+                requiredTicks = dig.RequiredTicks;
+                return true;
+            }
+        }
+
+        startedTick = 0;
+        requiredTicks = 0;
+        return false;
+    }
+
+    /// <summary>Queue dig start (handler). Provisional auth for same-packet Predict.</summary>
+    public bool SubmitDigStart(int x, int y, int z, ulong startedTick, int requiredTicks)
+    {
+        if (IsDead) return false;
+        var intent = DigIntent.Start(x, y, z, startedTick, requiredTicks);
+        lock (_digLock)
+        {
+            if (_digIntents.Count >= MaxPendingDig)
+                return false;
+            _digIntents.Enqueue(intent);
+            _provisionalDig = intent;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Queue dig abort (handler). Clears live dig lock + provisional immediately so same-packet
+    /// stale Predict rejects (§27); crack Stop still fans on tick.
+    /// </summary>
+    public bool SubmitDigAbort(int x, int y, int z)
+    {
+        if (IsBreakTarget(x, y, z))
+            AbortBreak();
+
+        var intent = DigIntent.Abort(x, y, z);
+        lock (_digLock)
+        {
+            if (_digIntents.Count >= MaxPendingDig)
+                return false;
+            _digIntents.Enqueue(intent);
+            _provisionalDig = null;
+            return true;
+        }
+    }
+
+    public bool TryConsumeDig(out DigIntent intent)
+    {
+        lock (_digLock)
+        {
+            if (_digIntents.Count == 0)
+            {
+                intent = default;
+                return false;
+            }
+
+            intent = _digIntents.Dequeue();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Drop a queued Start for the cell after DigAuthorized break is queued (same-packet Start+Predict).
+    /// </summary>
+    public void CancelPendingDigStart(int x, int y, int z)
+    {
+        lock (_digLock)
+        {
+            _provisionalDig = null;
+            if (_digIntents.Count == 0) return;
+            var kept = new Queue<DigIntent>(_digIntents.Count);
+            var removed = false;
+            while (_digIntents.Count > 0)
+            {
+                var d = _digIntents.Dequeue();
+                if (!removed && !d.IsAbort && d.X == x && d.Y == y && d.Z == z)
+                {
+                    removed = true;
+                    continue;
+                }
+
+                kept.Enqueue(d);
+            }
+
+            while (kept.Count > 0)
+                _digIntents.Enqueue(kept.Dequeue());
+        }
+    }
+
+    public bool SubmitWindowIntent(in InventoryWindowIntent intent)
+    {
+        if (IsDead && intent.Action != InventoryWindowIntent.Kind.Close) return false;
+        lock (_windowLock)
+        {
+            if (_windowIntents.Count >= MaxPendingWindowIntents)
+                return false;
+            _windowIntents.Enqueue(intent);
+            return true;
+        }
+    }
+
+    public bool TryConsumeWindowIntent(out InventoryWindowIntent intent)
+    {
+        lock (_windowLock)
+        {
+            if (_windowIntents.Count == 0)
+            {
+                intent = default;
+                return false;
+            }
+
+            intent = _windowIntents.Dequeue();
+            return true;
+        }
+    }
 
     public Player(
         string username,
@@ -240,12 +386,18 @@ class Player
         }
     }
 
-    /// <summary>Mensagem já validada pelo ChatProtocol; fan-out no ChatSystem.</summary>
-    public void SubmitChat(string message)
+    /// <summary>
+    /// Mensagem já validada pelo ChatProtocol; fan-out no ChatSystem (FIFO, cap
+    /// <see cref="MaxPendingChat"/> — overflow rejeita o mais novo, §54).
+    /// </summary>
+    public bool SubmitChat(string message)
     {
         lock (_chatLock)
         {
-            _pendingChat = message;
+            if (_pendingChat.Count >= MaxPendingChat)
+                return false;
+            _pendingChat.Enqueue(message);
+            return true;
         }
     }
 
@@ -253,14 +405,13 @@ class Player
     {
         lock (_chatLock)
         {
-            if (_pendingChat is null)
+            if (_pendingChat.Count == 0)
             {
                 message = "";
                 return false;
             }
 
-            message = _pendingChat;
-            _pendingChat = null;
+            message = _pendingChat.Dequeue();
             return true;
         }
     }

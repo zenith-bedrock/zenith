@@ -137,6 +137,8 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Deferred:** AuthInput block path, sound peer fan-out, food/effects. (Inventory storage closed in §16. Animate peer fan-out → §53.)
 
+**Adendo (jul 2026 — chat FIFO §54):** `SubmitChat` is a capped FIFO (`MaxPendingChat = 8`, like block edits) — overflow rejects the newest. `ChatSystem` drains all pending messages per player per tick (not overwrite-latest).
+
 **Adendo (jul 2026 — break path):** Survival destroy arrives via `PlayerAuthInputPacket.BlockActions` when `ServerAuthoritativeBlockBreaking=true` in StartGame. Decode past the position prefix (bitset + flags → `PlayerBlockAction`); map `predict_destroy` (26) → `TrySubmitBreak` / `BlockEditIntent` air. Keep `PlayerAction` (13/26) and `InventoryTransaction` UseDestroy as fallbacks. Progress actions (`start_break` / `crack_break` / `continue_destroy`) ignored until §27.
 
 **Adendo (jul 2026 — place vs player AABB):** After air + placeable checks, before `TryConsumeOne`, reject place when the full-cell block AABB intersects the placer or any other InGame player's standing AABB (inset `1e-4` to avoid flush-face false positives). Reuses `Geometry/Aabb` + `EntityHitboxes` (no Entity/ECS). Reject → `ResyncCellToBreaker` only (no neighbor fan-out — avoids self-place sync glitches). Floor drops are not colliders. Creative uses the same rule. **Known debt:** fixed standing BB (no sneak/swim); full-cube cells only until slab models; jump-place while BB still overlaps stays reject (no separate physics). **Smoke:** place into body → reject / no item loss / no stuck; flush adjacent → OK; A in cell + B places → B rejected.
@@ -528,7 +530,29 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### OpenInventory / chest UI (note under §28)
 
-Interact → inventory `ContainerOpen` and chest empty-hand open stay handler→Protocol (same-session UI), not GameLoop intents. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`. Opening a window is transmit of a decided view, not world mutation.
+**Superseded for mutation by §54 Phase 2:** handler queues open/close intent; `OpenChest` / `InventoryWindowOpen` apply on GameLoop tick; same-session `ContainerOpen` / contents still Protocol after decide. Slot mutations stay ISR → `InventoryStackIntent` → `InventorySystem`.
+
+### 54. Platform health (Robustness / DX) — separate from Horizon‑1 product
+
+**Choice:**
+
+1. Platform-health leaves (Online-once, dig/UI on tick, zero-alloc hot pack, DX cleanup, InventoryProtocol split) are tracked in [`robustness-dx-debt.md`](robustness-dx-debt.md), **not** as Horizon‑1 product rows.
+2. Three baskets: **A** = roadmap product (tools, double-chest, …); **B** = cross-thread / fan-out / GC / fat handler; **C** = docs/dead code. Phases address B then C; A stays in [`roadmap.md`](roadmap.md).
+3. Freeze list unchanged: no Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` command framework, `Network/` revival.
+4. C# modernization only on measured hot paths (`Span` / `ArrayPool` / reused lists) — no mass primary-ctor / switch rewrite.
+5. One leaf ≈ one ADR adendo (or §54 sub-leaf) + one PR.
+
+**Why:** Spine is healthy; rediscovering “why not ECS” every PR wastes context. Debt doc is the cite target.
+
+**Adendo — Peer FX rule (Phase 2):** Peer-visible FX (crack, swing, Absolute FLAGS, equipment, chat) apply on GameLoop tick. Documented exceptions: Session helpers for join/skin/emote (already §49/§53). Crack + dig swing move to tick with dig intents. §53 “immediate” dig/place swing is updated: dig start/abort swing fans on tick; place/attack/missed-swing paths keep tick or Session helper as already specified.
+
+**Adendo — SelectedHotbarSlot:** Handler may write `SelectedHotbarSlot` as overwrite-latest input (like movement). EquipmentSystem fingerprints held on tick — no locks on Player fields.
+
+**Adendo — InventoryProtocol split (Phase 5):** `InventoryContainerMap` (wire map SSOT), `CreativeContentBuilder`, `CraftingDataBuilder`, `InventoryNetIds` are Protocol-adjacent files; `InventoryProtocol` remains the transmit façade. No new layer names / Mapper framework. `World/` → `Item/` folder cut stays deferred (debt doc).
+
+**Adendo — stack net id wire contract:** Callers use `DescribeForWire(flat, slot)` (refresh + DTO) — never ad-hoc Refresh+Get. `MatchesAdvertisedStackNetId(flat, clientId)` soft-checks ISR: `clientId ≤ 0` accept; positive must equal last advertisement; mismatch → Error + full inventory/UI/(chest) resync before mutate. Domain `InventorySlot` still has no id (DF-style deferred). Negative prediction ids deferred (§35).
+
+**Deferred:** `World/` → `Item/` folder cut until H1 registry/dimension forces it (see debt doc). Domain-owned stack net ids / NBT identity.
 
 ## Explicit non-goals (so far)
 

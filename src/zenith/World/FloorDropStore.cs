@@ -17,6 +17,7 @@ sealed class FloorDropStore
     public const int DefaultPickupDelay = 10;
 
     private readonly Dictionary<(int X, int Y, int Z), DropSlot> _drops = new();
+    private readonly List<(int X, int Y, int Z)> _delayScratch = new();
     private readonly ILogger? _logger;
     private int _capWarned;
 
@@ -95,13 +96,16 @@ sealed class FloorDropStore
     {
         if (tickDiff <= 0 || _drops.Count == 0) return;
 
-        // Copy keys — cannot mutate dictionary while enumerating.
-        var keys = new List<(int X, int Y, int Z)>(_drops.Count);
-        foreach (var key in _drops.Keys)
-            keys.Add(key);
-
-        foreach (var key in keys)
+        _delayScratch.Clear();
+        foreach (var (key, slot) in _drops)
         {
+            if (slot.PickupDelayTicks > 0)
+                _delayScratch.Add(key);
+        }
+
+        for (var i = 0; i < _delayScratch.Count; i++)
+        {
+            var key = _delayScratch[i];
             if (!_drops.TryGetValue(key, out var slot) || slot.PickupDelayTicks <= 0)
                 continue;
             var next = slot.PickupDelayTicks - tickDiff;

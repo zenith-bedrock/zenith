@@ -12,7 +12,11 @@ enum InventoryStackActionKind : byte
 }
 
 /// <summary>Wire container + slot from client ISR — echoed in ItemStackResponse.</summary>
-readonly record struct WireSlot(byte ContainerId, byte Slot);
+/// <param name="StackNetworkId">
+/// Client-advertised stack net id (0 / negative = soft-skip match; positive must match
+/// last InventoryProtocol advertisement — ADR §54).
+/// </param>
+readonly record struct WireSlot(byte ContainerId, byte Slot, int StackNetworkId = 0);
 
 /// <summary>Domain flat + wire coords for ISR OK echo.</summary>
 readonly record struct WireTouch(int Flat, byte ContainerId, byte Slot);

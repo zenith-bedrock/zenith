@@ -77,11 +77,29 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
-        var inputData = ReadInputBitset(ref stream);
-        InputSneaking = InputBitsetTest(inputData, InputFlagSneaking);
-        InputStartSprinting = InputBitsetTest(inputData, InputFlagStartSprinting);
-        InputStopSprinting = InputBitsetTest(inputData, InputFlagStopSprinting);
-        InputMissedSwing = InputBitsetTest(inputData, InputFlagMissedSwing);
+        Span<byte> inputFlags = stackalloc byte[16];
+        var inputLen = 0;
+        while (inputLen < inputFlags.Length)
+        {
+            var b = stream.ReadByte();
+            inputFlags[inputLen++] = b;
+            if ((b & 0x80) == 0) break;
+        }
+
+        if (inputLen > 0 && (inputFlags[inputLen - 1] & 0x80) != 0)
+        {
+            while (true)
+            {
+                var b = stream.ReadByte();
+                if ((b & 0x80) == 0) break;
+            }
+        }
+
+        inputFlags = inputFlags[..inputLen];
+        InputSneaking = InputBitsetTest(inputFlags, InputFlagSneaking);
+        InputStartSprinting = InputBitsetTest(inputFlags, InputFlagStartSprinting);
+        InputStopSprinting = InputBitsetTest(inputFlags, InputFlagStopSprinting);
+        InputMissedSwing = InputBitsetTest(inputFlags, InputFlagMissedSwing);
 
         _ = stream.ReadUnsignedVarInt(); // input_mode
         _ = stream.ReadUnsignedVarInt(); // play_mode
@@ -93,20 +111,20 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
-        if (InputBitsetTest(inputData, InputFlagPerformItemInteraction))
+        if (InputBitsetTest(inputFlags, InputFlagPerformItemInteraction))
             ItemInteraction = ReadUseItemTransactionData(ref stream);
         else
             ItemInteraction = null;
 
-        if (InputBitsetTest(inputData, InputFlagPerformItemStackRequest))
+        if (InputBitsetTest(inputFlags, InputFlagPerformItemStackRequest))
             ItemStackRequestPacket.SkipEmbeddedRequest(ref stream);
 
-        if (InputBitsetTest(inputData, InputFlagPerformBlockActions))
+        if (InputBitsetTest(inputFlags, InputFlagPerformBlockActions))
             BlockActions = ReadBlockActions(ref stream);
         else
             BlockActions = [];
 
-        if (InputBitsetTest(inputData, InputFlagClientPredictedVehicle))
+        if (InputBitsetTest(inputFlags, InputFlagClientPredictedVehicle))
         {
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -174,19 +192,31 @@ class PlayerAuthInputPacket : DataPacket
         return list;
     }
 
-    /// <summary>AuthInput flag bitset: 7 data bits per byte, continuation bit 0x80.</summary>
+    /// <summary>
+    /// AuthInput flag bitset: 7 data bits per byte, continuation bit 0x80.
+    /// Allocates — Decode inlines a stackalloc path (ref struct + Span cannot share a helper).
+    /// </summary>
     internal static byte[] ReadInputBitset(ref BinaryStream stream)
     {
-        var bytes = new List<byte>(16);
-        while (true)
+        Span<byte> tmp = stackalloc byte[16];
+        var count = 0;
+        while (count < tmp.Length)
         {
             var b = stream.ReadByte();
-            bytes.Add(b);
+            tmp[count++] = b;
             if ((b & 0x80) == 0) break;
-            if (bytes.Count > 16) break; // hard cap (~112 flags)
         }
 
-        return bytes.ToArray();
+        if (count > 0 && (tmp[count - 1] & 0x80) != 0)
+        {
+            while (true)
+            {
+                var b = stream.ReadByte();
+                if ((b & 0x80) == 0) break;
+            }
+        }
+
+        return tmp[..count].ToArray();
     }
 
     internal static bool InputBitsetTest(ReadOnlySpan<byte> bitset, int flag)
