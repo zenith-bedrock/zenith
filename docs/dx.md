@@ -68,6 +68,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 9. Protocol packet shapes: see “Bedrock protocol docs” below before inventing field order
 10. GameLoop fills Online once per tick (`FillOnline`); systems take `IReadOnlyList<Player> online` — do not call `PlayerManager.Online` inside nested peer loops
 11. Block/item foundation (ADR §55): inventário usa `StackId` — nunca `int runtimeId` ambíguo. Overlay = só `BlockRuntimeId`. Três ids distintos: `BlockRuntimeId`, `ItemNetworkId`, `StackNetworkId` (ISR). Ver “Adding block/item capabilities” abaixo.
+12. Double-chest (ADR §56): pairing is World adjacency+facing (`ChestPairing`); open UI is `OpenChestView` 27|54; persist stays two `ct:` blobs of 27 — no BlockActor.
 ```
 
 ### Adding block/item capabilities (ADR §55)
@@ -108,6 +109,8 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 **Missing DigProfiles** = Survival cannot dig that rid (reject). Not the same as an explicit unbreakable profile later.
 
 **Persistence:** `SlotBlob` v2 on write; v1 `inv:`/`ct:` migrate-on-read (`Tools.IsTool` → Item).
+
+**Double-chest (ADR §56):** pair = adjacent same-facing cells; UI 54 = concat of two `ct:` halves; sneak+click chest places on face (no open).
 
 **Add a new capability axis (e.g. food):** short ADR → `World/*Profiles.cs` sparse map → intent + system → Protocol transmits only. Do **not** invent `IBlockBehavior` or a plugin registry.
 

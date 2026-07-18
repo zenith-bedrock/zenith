@@ -117,8 +117,8 @@ class Player
     public StackId DigHeldStackId { get; private set; }
     public bool HasBreakTarget { get; private set; }
 
-    /// <summary>Baú aberto (UI) — slots no <see cref="World.ChestStore"/>; limpar no ContainerClose.</summary>
-    public (int X, int Y, int Z)? OpenChest { get; set; }
+    /// <summary>Open chest UI (ADR §56) — primary + optional partner; SlotCount 27|54.</summary>
+    public OpenChestView? OpenChest { get; set; }
 
     /// <summary>Player inventory UI open (ContainerOpen window 0).</summary>
     public bool InventoryWindowOpen { get; set; }
@@ -321,6 +321,24 @@ class Player
         lock (_movementInputLock)
         {
             _movementInput = input;
+        }
+    }
+
+    /// <summary>
+    /// Peek pending AuthInput without consuming — UseItem may need same-packet sneak (§56).
+    /// </summary>
+    public bool TryPeekMovementInput(out MovementInputState input)
+    {
+        lock (_movementInputLock)
+        {
+            if (!_movementInput.HasValue)
+            {
+                input = default;
+                return false;
+            }
+
+            input = _movementInput;
+            return true;
         }
     }
 

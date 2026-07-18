@@ -1333,7 +1333,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("loot");
         fx.World.Chests.Ensure(1, 70, 1);
-        player.OpenChest = (1, 70, 1);
+        player.OpenChest = OpenChestView.Single(1, 70, 1);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [

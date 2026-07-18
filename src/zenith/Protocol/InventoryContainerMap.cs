@@ -21,11 +21,19 @@ static class InventoryContainerMap
     public const byte CreatedOutput = 60;
     public const byte Chest = 7;
 
+    /// <summary>Wire window ids — Gameplay must not reference <c>InventoryContentPacket</c> (ADR §56 hygiene).</summary>
+    public const int WindowInventory = 0;
+    public const int WindowChest = 2;
+    public const int WindowUI = 124;
+
     /// <summary>Flat domínio para slots do baú aberto (não vive em <see cref="PlayerInventory"/>).</summary>
     public const int ChestBase = 100;
 
-    /// <summary>Flat domínio craft UI 2×2 (ephemeral, ADR §35).</summary>
-    public const int CraftUiBase = 150;
+    /// <summary>
+    /// Flat domínio craft UI 2×2 (ephemeral, ADR §35).
+    /// Must sit above <see cref="ChestBase"/>+<see cref="ChestStore.DoubleSize"/> (ADR §56).
+    /// </summary>
+    public const int CraftUiBase = 200;
 
     /// <summary>Created output slot (container 60 wire slot 50).</summary>
     public const int CraftResultFlat = CraftUiBase + PlayerCraftUi.GridSize;
@@ -38,7 +46,7 @@ static class InventoryContainerMap
     public const int UiCursorSlot = 0;
 
     public static bool IsChestFlat(int flat) =>
-        flat is >= ChestBase and < ChestBase + ChestStore.Size;
+        flat is >= ChestBase and < ChestBase + ChestStore.DoubleSize;
 
     public static bool IsCraftUiFlat(int flat) =>
         flat is >= CraftUiBase and <= CraftResultFlat;
@@ -80,7 +88,7 @@ static class InventoryContainerMap
                 return true;
 
             case Chest:
-                if (slot >= ChestStore.Size)
+                if (slot >= ChestStore.DoubleSize)
                 {
                     flat = 0;
                     return false;

@@ -68,14 +68,24 @@ partial class InGameSessionHandler
         if (useActionType != InventoryTransactionPacket.UseClickBlock) return;
 
         var stack = player.Inventory.Get(hotbarSlot);
-        var clicked = session.Context.World.GetBlock(blockX, blockY, blockZ);
+        var world = session.Context.World;
+        var clicked = world.GetBlock(blockX, blockY, blockZ);
 
-        // Empty hand on chest → open UI on tick (§28/§54). Sneak+place not modeled yet.
-        if (Blocks.IsChest(clicked) && (stack.IsEmpty || stack.Count <= 0))
+        // Chest interact (§56): empty-hand or non-sneak → open; sneak + held placeable → place on face.
+        // Prefer pending AuthInput sneak (same packet as UseItem) over last-tick IsSneaking.
+        if (Blocks.IsChest(clicked))
         {
-            if (!player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ)))
-                session.Context.Logger.Debug($"Dropped chest open from {player.Username}: window queue full.");
-            return;
+            var sneaking = player.IsSneaking;
+            if (player.TryPeekMovementInput(out var pendingMove))
+                sneaking = pendingMove.Sneaking;
+
+            var emptyHand = stack.IsEmpty || stack.Count <= 0;
+            if (emptyHand || !sneaking)
+            {
+                if (!player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ)))
+                    session.Context.Logger.Debug($"Dropped chest open from {player.Username}: window queue full.");
+                return;
+            }
         }
 
         if (!PlayerInventory.IsValidStackCount(stack.Count) || stack.Count <= 0)
@@ -99,6 +109,9 @@ partial class InGameSessionHandler
         }
 
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
+        if (Blocks.IsChest(runtimeId))
+            runtimeId = ChestPairing.AlignFacingWithNeighbor(world, tx, ty, tz, runtimeId);
+
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot);
         if (!intent.IsInWorldBounds())
         {

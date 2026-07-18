@@ -274,7 +274,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Inventory rearrange (§17) without chests still left Survival “storage furniture” incomplete; dual-store keeps decide≠transmit without stuffing chest into `PlayerInventory`.
 
-**Deferred:** LevelDB hydrate/Put; sneak-to-place-on-chest; double-chest; BlockActor; hopper; full creative item list / `block_state_b64`; window-scoped net-id isolation beyond protocol arrays.
+**Deferred:** LevelDB hydrate/Put; BlockActor; hopper; full creative item list / `block_state_b64`; window-scoped net-id isolation beyond protocol arrays. **Sneak-place + double-chest → §56.**
 
 **Known debt (updated §36):** Warn once when Ensure count crosses `10_000` — still no refuse/eviction (needs LevelDB redesign).
 
@@ -380,7 +380,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Process restart was wiping bags/chests — ops honesty without Mojang playerdata.
 
-**Deferred:** Ender chest, armor, posição DB, double-chest; `players/` volume.
+**Deferred:** Ender chest, armor, posição DB; `players/` volume. **Double-chest → §56** (persist still 2×`ct:`).
 
 ### 40. Vitals fields + void soft-rescue
 
@@ -444,9 +444,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Adjacent south-south chests client-merge as a visual double while server keeps 2×27 (`ct:`). Correct facing is medium polish without BlockActor / pair model.
 
-**Deferred:** Double-chest (54 slots, sneak-pair, UI); trapped/ender/copper; stairs/beds/doors facing stack.
+**Deferred:** Trapped/ender/copper; stairs/beds/doors facing stack. **Double-chest → §56.**
 
-**Known:** Two adjacent chests with the same cardinal still mesh as a double on the Bedrock client — not a 54-slot container.
+**Known (historical):** Two adjacent chests with the same cardinal still meshed as a double on the Bedrock client while server kept 2×27 — fixed by §56 pair open.
 
 **Smoke:** Place chest while looking each cardinal → UpdateBlock rid matches; break always returns stackable south item; open/break works on any facing.
 
@@ -596,6 +596,26 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Contributor recipe:** see [`docs/dx.md`](dx.md) “Adding block/item capabilities”.
 
 **Spike (same ADR era):** introduce `StackId`, migrate stores + Protocol, wrap dig behind `DigProfiles`, unknown dig policy — product dig formula unchanged (§27).
+
+### 56. Double-chest — pair model + 54 UI (no BlockActor)
+
+**Choice:**
+
+1. **Pair resolve (World):** two axis-adjacent chest cells, same Y, **same** `minecraft:cardinal_direction`. Pair axis = perpendicular to facing (N/S face → ±X neighbors; E/W face → ±Z). No BlockActor / tile-entity graph.
+2. **Primary (UI left half):** lexicographically smaller `(X, Z)` of the two cells (Y equal). Wire slots `0..26` = primary cell; `27..53` = partner.
+3. **Storage:** still **two** `InventorySlot[27]` keyed by cell (`StackId`). Persist remains **`ct:x:y:z`** SlotBlob v2 per cell (§39) — never a single 54-blob.
+4. **Open view:** `Player.OpenChest` is `OpenChestView?` (primary + optional partner + `SlotCount` 27|54). Empty-hand (or non-sneak interact) on either half opens the **pair** UI when a partner resolves. Same-packet AuthInput sneak is read via `TryPeekMovementInput` (not only last-tick `IsSneaking`).
+5. **Sneak-place:** holding a placeable + sneaking + click chest → place on clicked face (do **not** open). Non-sneak + click chest → open (even with a held item). Chest place next to a compatible neighbor forms a pair for subsequent opens (adjacency resolve — no separate pair registry).
+6. **Lid:** opener refcount on **both** cells when double; BlockEvent fan-out both positions (§28).
+7. **Break:** dump/dissolve clicked cell only; partner stays single 27; clear openers on both if either was open; peers with that UI open get closed.
+
+**Why:** §46 admitted client-mesh double while server kept 2×27 — honesty gap for LAN. Pair-at-open + sneak-place matches Bedrock UX without BlockActor.
+
+**Non-goals:** trapped/ender/copper; hopper; left/right palette `type` states unless smoke forces them; 54-slot LevelDB blob.
+
+**Domain flats:** chest open slots remain `ChestBase` (100) + 0..53; craft UI moved to `CraftUiBase` **200** so 54-slot chest flats do not collide with craft (was 150).
+
+**Supersedes:** §28/§39/§46 Deferred “double-chest” lines — product leaf is this ADR.
 
 ## Explicit non-goals (so far)
 

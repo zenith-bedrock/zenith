@@ -1,6 +1,7 @@
 using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Player;
+using Zenith.Protocol;
 using Zenith.World;
 using Xunit;
 
@@ -45,12 +46,13 @@ public class ChestLidTests
 
         Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock);
-        Assert.Equal((4, 64, 4), player.OpenChest);
+        Assert.NotNull(player.OpenChest);
+        Assert.Equal(OpenChestView.Single(4, 64, 4), player.OpenChest);
         Assert.Equal(1, fx.World.Chests.OpenerCount(4, 64, 4));
 
         Assert.True(player.SubmitWindowIntent(
             InventoryWindowIntent.Close(
-                (byte)InventoryContentPacket.WindowChest,
+                (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
         fx.CreateInventorySystem().Tick(fx.Clock);
         Assert.Null(player.OpenChest);
@@ -75,16 +77,16 @@ public class ChestLidTests
 
         Assert.True(a.SubmitWindowIntent(
             InventoryWindowIntent.Close(
-                (byte)InventoryContentPacket.WindowChest,
+                (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
         fx.CreateInventorySystem().Tick(fx.Clock);
         Assert.Null(a.OpenChest);
-        Assert.Equal((2, 70, 2), b.OpenChest);
+        Assert.Equal(OpenChestView.Single(2, 70, 2), b.OpenChest);
         Assert.Equal(1, fx.World.Chests.OpenerCount(2, 70, 2));
 
         Assert.True(b.SubmitWindowIntent(
             InventoryWindowIntent.Close(
-                (byte)InventoryContentPacket.WindowChest,
+                (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
         fx.CreateInventorySystem().Tick(fx.Clock);
         Assert.Null(b.OpenChest);

@@ -110,6 +110,19 @@ static class Blocks
         return _chestIds is not null && _chestIds.Contains(runtimeId);
     }
 
+    /// <summary>Cardinal facing for a chest rid; false if not a chest.</summary>
+    public static bool TryGetChestCardinal(int runtimeId, out string cardinal)
+    {
+        EnsureLoaded();
+        if (runtimeId == _chestNorth) { cardinal = CardinalNorth; return true; }
+        if (runtimeId == _chestSouth) { cardinal = CardinalSouth; return true; }
+        if (runtimeId == _chestEast) { cardinal = CardinalEast; return true; }
+        if (runtimeId == _chestWest) { cardinal = CardinalWest; return true; }
+        if (runtimeId == _chest) { cardinal = CardinalSouth; return true; }
+        cardinal = CardinalSouth;
+        return false;
+    }
+
     /// <summary>
     /// Curated placeables only (starter set + chest facings) — not “any palette rid” (§12).
     /// Air is never placeable.
