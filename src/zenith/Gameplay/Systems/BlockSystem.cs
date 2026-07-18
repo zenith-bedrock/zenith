@@ -100,6 +100,13 @@ sealed class BlockSystem : IGameSystem
                 return false;
             }
 
+            // Body / peer obstruction before consume — avoid self-trap and hotbar steal (§15).
+            if (IsPlaceObstructedByPlayers(player, edit.X, edit.Y, edit.Z, online))
+            {
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                return false;
+            }
+
             if (!creative)
             {
                 var slot = edit.HotbarSlot;
@@ -310,8 +317,8 @@ sealed class BlockSystem : IGameSystem
     }
 
     /// <summary>
-    /// Item pickup — player standing AABB expanded by <see cref="EntityHitboxes.PickupExpand"/>
-    /// vs item entity AABB at cell (PM / wiki). Domain <see cref="Player.Player.PositionY"/> is feet.
+    /// Pickup — standing AABB expanded by <see cref="EntityHitboxes.PickupExpand"/>
+    /// vs item entity AABB at cell. Domain <see cref="Player.Player.PositionY"/> is feet.
     /// </summary>
     internal static bool IsWithinFloorPickupReach(global::Zenith.Player.Player player, int x, int y, int z)
     {
@@ -319,6 +326,38 @@ sealed class BlockSystem : IGameSystem
             .Expand(EntityHitboxes.PickupExpand);
         var itemBb = EntityHitboxes.ItemAtCell(x, y, z);
         return playerBb.Intersects(itemBb);
+    }
+
+    /// <summary>
+    /// True when the place cell intersects the placer or another InGame player's standing BB
+    /// (inset by <see cref="EntityHitboxes.PlaceCollisionEpsilon"/>). Floor drops are not scanned.
+    /// </summary>
+    internal static bool IsPlaceObstructedByPlayers(
+        global::Zenith.Player.Player placer,
+        int x,
+        int y,
+        int z,
+        IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        var cell = EntityHitboxes.BlockCell(x, y, z);
+        var placerBb = EntityHitboxes.StandingForPlaceCheck(
+            placer.PositionX, placer.PositionY, placer.PositionZ);
+        if (cell.Intersects(placerBb))
+            return true;
+
+        for (var i = 0; i < online.Count; i++)
+        {
+            var peer = online[i];
+            if (!peer.IsInGame || ReferenceEquals(peer, placer))
+                continue;
+
+            var peerBb = EntityHitboxes.StandingForPlaceCheck(
+                peer.PositionX, peer.PositionY, peer.PositionZ);
+            if (cell.Intersects(peerBb))
+                return true;
+        }
+
+        return false;
     }
 
     internal static bool IsWithinReach(global::Zenith.Player.Player player, int x, int y, int z)

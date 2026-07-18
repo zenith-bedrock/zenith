@@ -137,6 +137,10 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Deferred:** AuthInput block path, sound/animate peer fan-out, food/effects. (Inventory storage closed in §16.)
 
+**Adendo (jul 2026 — place vs player AABB):** After air + placeable checks, before `TryConsumeOne`, reject place when the full-cell block AABB intersects the placer or any other InGame player's standing AABB (inset `1e-4` to avoid flush-face false positives). Reuses `Geometry/Aabb` + `EntityHitboxes` (no Entity/ECS). Reject → `ResyncCellToBreaker` only (no neighbor fan-out — avoids self-place sync glitches). Floor drops are not colliders. Creative uses the same rule. **Known debt:** fixed standing BB (no sneak/swim); full-cube cells only until slab models; jump-place while BB still overlaps stays reject (no separate physics). **Smoke:** place into body → reject / no item loss / no stuck; flush adjacent → OK; A in cell + B places → B rejected.
+
+
+
 **Adendo (jul 2026 — break path):** Survival destroy arrives via `PlayerAuthInputPacket.BlockActions` when `ServerAuthoritativeBlockBreaking=true` in StartGame. Decode past the position prefix (bitset + flags → `PlayerBlockAction`); map `predict_destroy` (26) → `TrySubmitBreak` / `BlockEditIntent` air. Keep `PlayerAction` (13/26) and `InventoryTransaction` UseDestroy as fallbacks. Progress actions (`start_break` / `crack_break` / `continue_destroy`) ignored until §27.
 
 ### 16. Main inventory 36 slots; place stays hotbar-only
