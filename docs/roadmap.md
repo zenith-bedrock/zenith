@@ -36,7 +36,9 @@ If two contributors pick from this list, prefer **different rows**, not both bui
 
 **Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows.
 
-**Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — **Shipped** on `develop` (`e17ee23`, Jul 2026). Structural honesty so later leaves do not rewrite inventory identity. **`v0.0.2-alpha` GitHub tag deferred** until double-chest (at least) is smoke-ready.
+**Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — **Shipped** on `develop` (`3649391`, Jul 2026). Structural honesty so later leaves do not rewrite inventory identity.
+
+**Release tag:** do **not** cut `v0.0.2-alpha` until Bedrock smoke checkboxes in [`release-notes-template.md`](release-notes-template.md) (double-chest + tool dig) are green. Code on develop is ahead of the tag.
 
 ---
 

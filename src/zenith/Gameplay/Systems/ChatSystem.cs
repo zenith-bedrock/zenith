@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 
@@ -9,10 +10,16 @@ namespace Zenith.Gameplay.Systems;
 sealed class ChatSystem : IGameSystem
 {
     private readonly PlayerManager _players;
+    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
 
     public ChatSystem(PlayerManager players) => _players = players;
 
-    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+    public void Tick(GameClock clock)
+    {
+        _players.FillOnline(_onlineScratch);
+        Tick(clock, _onlineScratch);
+    }
+
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {

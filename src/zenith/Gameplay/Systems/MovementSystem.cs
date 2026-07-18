@@ -1,5 +1,5 @@
+using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
@@ -16,6 +16,7 @@ sealed class MovementSystem : IGameSystem
     public const float VoidRescueMargin = 8f;
 
     private readonly PlayerManager _players;
+    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
     private readonly List<global::Zenith.Player.Player> _dirtyPose = new();
     private readonly List<global::Zenith.Player.Player> _dirtyFlags = new();
     private readonly List<global::Zenith.Player.Player> _swing = new();
@@ -25,7 +26,11 @@ sealed class MovementSystem : IGameSystem
 
     public static float VoidRescueY => Blocks.FlatMinY - VoidRescueMargin;
 
-    public void Tick(GameClock clock) => Tick(clock, _players.Online);
+    public void Tick(GameClock clock)
+    {
+        _players.FillOnline(_onlineScratch);
+        Tick(clock, _onlineScratch);
+    }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -67,7 +72,7 @@ sealed class MovementSystem : IGameSystem
                 _swing.Add(player);
 
             if (player.PositionY < VoidRescueY)
-                BeginVoidDeath(player);
+                BeginVoidDeath(player, online);
 
             if (IsPoseDirty(player))
                 _dirtyPose.Add(player);
@@ -174,10 +179,11 @@ sealed class MovementSystem : IGameSystem
     }
 
     /// <summary>Void fall → death screen (inventory kept). Respawn restores world spawn.</summary>
-    private void BeginVoidDeath(global::Zenith.Player.Player player)
+    private void BeginVoidDeath(
+        global::Zenith.Player.Player player,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         // Capture before BeginDeath clears OpenChest — release lid opener (§28).
-        var online = _players.Online;
         var world = player.Session.Context.World;
         if (player.OpenChest.HasValue)
             ChestLidFanout.ReleaseOpener(online, world, player);
@@ -192,7 +198,7 @@ sealed class MovementSystem : IGameSystem
 
         entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
         entity.SendDeathInfo(player.DeathCause);
-        entity.SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateSearchingForSpawn, rid);
+        entity.SendRespawnSearching(eyeX, eyeY, eyeZ, rid);
     }
 
     private static void ApplyRespawn(global::Zenith.Player.Player player)
@@ -218,7 +224,7 @@ sealed class MovementSystem : IGameSystem
             pitch: player.Pitch,
             yaw: player.Yaw,
             headYaw: player.HeadYaw);
-        entity.SendRespawn(eyeX, eyeY, eyeZ, RespawnPacket.StateReadyToSpawn, rid);
+        entity.SendRespawnReady(eyeX, eyeY, eyeZ, rid);
 
         // Client clears bag UI on death — resync like join (SpawnResponse).
         player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);

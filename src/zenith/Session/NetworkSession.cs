@@ -122,7 +122,7 @@ class NetworkSession
 
         if (Player is not null)
         {
-            var online = Context.PlayerManager.Online;
+            var online = Context.PlayerManager.SnapshotOnline();
             if (Player.IsInGame)
                 PlayerVisibility.AnnounceLeave(Player, online);
 

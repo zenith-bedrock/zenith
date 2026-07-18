@@ -241,7 +241,7 @@ partial class InGameSessionHandler : ISessionHandler
             packet.SkinName,
             packet.OldSkinName,
             packet.IsVerified,
-            session.Context.PlayerManager.Online);
+            session.Context.PlayerManager.SnapshotOnline());
     }
 
     private static void HandleEmote(NetworkSession session, ref BinaryStream stream)
@@ -281,7 +281,7 @@ partial class InGameSessionHandler : ISessionHandler
             packet.TickLength,
             packet.Xuid,
             packet.PlatformChatId,
-            session.Context.PlayerManager.Online);
+            session.Context.PlayerManager.SnapshotOnline());
     }
 
 }

@@ -7,12 +7,18 @@
 - Creative catalog includes those tools; grant in Creative then `/gamemode Survival` to dig faster
 - Mid-dig hotbar tool swap preserves progress; crack rate updates via LevelEvent 3602 when needed
 - Chest lid BlockEvent + PlaceFacing (prior leaf on develop)
+- **Double-chest** (ADR §56): sneak-place → 54-slot UI; persist 2× `ct:` of 27
+- StackId + DigProfiles foundation (ADR §55)
 
-### Smoke (tool dig)
-- Creative → diamond pick → Survival → dig stone faster than empty hand; peer sees crack; swap wood→iron mid-dig updates rate without pop-finish
+### Smoke (required before GitHub `v0.0.2-alpha` tag — human Bedrock client)
+
+- [ ] Tool dig: Creative → diamond pick → Survival → stone faster than empty hand; peer crack; mid-dig swap updates rate
+- [ ] Double-chest: sneak-place partner → open either half → **54** slots; ISR across halves; restart keeps both `ct:`
+- [ ] Break one half → dump that half; partner remains single 27; lids close for viewers
+- [ ] Non-sneak click chest opens (even with held item); sneak + held places on face
 
 ### Still not in this build
-- Enchants / durability / tool recipes / gold-netherite / wrong-tool no-drop / gravity / double-chest
+- Enchants / durability / tool recipes / gold-netherite / wrong-tool no-drop / gravity / Mojang worlds / `players/` volume
 
 ---
 

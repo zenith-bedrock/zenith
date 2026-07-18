@@ -211,7 +211,7 @@ partial class InGameSessionHandler
             {
                 PlayerVisibility.RelaySwingArm(
                     player,
-                    player.Session.Context.PlayerManager.Online,
+                    player.Session.Context.PlayerManager.SnapshotOnline(),
                     swingSource: "mine");
             }
 

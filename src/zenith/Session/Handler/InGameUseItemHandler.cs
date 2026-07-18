@@ -60,7 +60,7 @@ partial class InGameSessionHandler
             // Air punch / attack-style use — peer arm swing (§53). MissedSwing AuthInput also covers this.
             PlayerVisibility.RelaySwingArm(
                 player,
-                session.Context.PlayerManager.Online,
+                session.Context.PlayerManager.SnapshotOnline(),
                 swingSource: "attack");
             return;
         }
@@ -125,7 +125,7 @@ partial class InGameSessionHandler
         {
             PlayerVisibility.RelaySwingArm(
                 player,
-                session.Context.PlayerManager.Online,
+                session.Context.PlayerManager.SnapshotOnline(),
                 swingSource: "build");
             session.Context.Logger.Debug(
                 $"Place queued from {player.Username} @ {tx},{ty},{tz} rid={runtimeId}");

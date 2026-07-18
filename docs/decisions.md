@@ -352,9 +352,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Rule 7 — LAN floor grief is the only bound that is cheap and honest without persistence redesign. Overlays/chests stay document+observe until LevelDB/eviction design exists. No `BoundedStore` framework; no Blocks→Context migrate in this leva (§25 remains).
 
-**Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay eviction with I/O on tick.
+**Deferred:** Blocks→Context; BoundedStore / VisibilitySystem; overlay SoftCap/eviction with I/O on tick.
 
 **Adendo (jul 2026 — column index):** Secondary `_overlaysByChunk` map updated only via `StoreOverlay` (same path as LevelDB hydrate). `GetOverlaysInColumn` is O(bucket) instead of scanning all overlays. Flat `_blockOverrides` remains SSOT for `GetBlock` / `OverrideCount` / warn@10k. Break→air still overwrites (no TryRemove). Not zero-alloc — result list is still O(column size). No eviction.
+
+**Adendo (jul 2026 — overlay SoftCap deferred):** Audit pushed SoftCap-on-overlays like FloorDrop. **Not shipped:** Survival break of base terrain inserts a new air overlay key — SoftCap refuse would silently block dig after ~10k edits. Overlays stay **warn-only** until an eviction/compaction ADR (possibly drop air-overlays that match base). Floor SoftCap `2048` unchanged.
 
 ### 37. UpdateAbilities + AdventureSettings (spawn seed + fly echo)
 
@@ -559,6 +561,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Adendo — InventoryProtocol split (Phase 5):** `InventoryContainerMap` (wire map SSOT), `CreativeContentBuilder`, `CraftingDataBuilder`, `InventoryNetIds` are Protocol-adjacent files; `InventoryProtocol` remains the transmit façade. No new layer names / Mapper framework. `World/` → `Item/` folder cut stays deferred (debt doc).
 
 **Adendo — stack net id wire contract:** Callers use `DescribeForWire(flat, slot)` (refresh + DTO) — never ad-hoc Refresh+Get. `MatchesAdvertisedStackNetId(flat, clientId)` soft-checks ISR: `clientId ≤ 0` accept; positive must equal last advertisement; mismatch → Error + full inventory/UI/(chest) resync before mutate. Domain `InventorySlot` still has no id (DF-style deferred). Negative prediction ids deferred (§35).
+
+**Adendo (jul 2026 — Online-once closed):** GameLoop `FillOnline` once/tick; systems take `online` and must not call `PlayerManager.Online` on the tick path (`ApplyWindow`, void-death, etc.). Test overloads use a per-system `_onlineScratch` + `FillOnline`. Session helpers use `SnapshotOnline()`. `GamePacket.EncodeOwned` already avoids Encode+ToArray double copy. Gameplay must not `using Zenith.Packets` — Respawn states via `EntityProtocol.SendRespawnSearching` / `SendRespawnReady`.
 
 **Deferred:** `World/` → `Item/` folder cut until H1 registry/dimension forces it (see debt doc). Domain-owned stack net ids / NBT identity.
 
