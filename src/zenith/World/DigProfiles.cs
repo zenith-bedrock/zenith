@@ -85,6 +85,7 @@ static class DigProfiles
         // Soft — always harvestable; shovel effective.
         RegisterUnlocked(Blocks.Dirt, 0.5, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.Sand, 0.5, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
+        RegisterUnlocked(Blocks.Gravel, 0.6, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.GrassBlock, 0.6, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
 
         // Wood / chest — axe effective; always harvestable for timing.

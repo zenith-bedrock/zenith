@@ -22,6 +22,7 @@ class ZenithServer
     private readonly IChunkStorage _chunkStorage;
     private readonly ILogger _logger;
     private readonly ZenithSessionListener _sessionListener;
+    private readonly GravitySystem _gravity;
 
     public RakNetServer RakNetServer { get; }
     public ServerContext Context { get; }
@@ -73,6 +74,7 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:oak_planks");
         _ = itemPalette.Require("minecraft:oak_log");
         _ = itemPalette.Require("minecraft:sand");
+        _ = itemPalette.Require("minecraft:gravel");
         _ = itemPalette.Require("minecraft:chest");
         Tools.Load(itemPalette);
         serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
@@ -81,12 +83,15 @@ class ZenithServer
         var world = new World.World(_chunkStorage, serverLogger);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
+        var gravity = new GravitySystem(world);
         gameLoop.Register(new BlockSystem(players, world));
+        gameLoop.Register(gravity);
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
         Context = new ServerContext(serverLogger, players, new EventBus(serverLogger), clock, world, config, blockPalette, itemPalette, recipes, creative);
         GameLoop = gameLoop;
+        _gravity = gravity;
 
         _sessionListener = new ZenithSessionListener(Context);
         var serverGuid = LoadOrCreateServerGuid(AppContext.BaseDirectory, serverLogger);
@@ -241,6 +246,16 @@ class ZenithServer
         // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose enqueues inv Puts.
         _logger.Info("Disconnecting sessions...");
         _sessionListener.DisconnectAll("Server closed");
+
+        // Settle in-flight sand/gravel into overlays before LevelDB flush (ADR §57).
+        try
+        {
+            _gravity.SettleAllPending();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Gravity settle failed during shutdown: {ex.Message}");
+        }
 
         try
         {

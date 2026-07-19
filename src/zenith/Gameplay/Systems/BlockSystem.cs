@@ -413,7 +413,24 @@ sealed class BlockSystem : IGameSystem
             _world.PersistInventory(player.Uuid, player.Inventory);
         }
 
+        NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         return true;
+    }
+
+    /// <summary>Enqueue gravity evaluation after a successful world mutation (ADR §57).</summary>
+    private void NotifyGravityAfterEdit(int x, int y, int z, int placedOrAirRid)
+    {
+        var pending = _world.GravityPending;
+        if (Blocks.IsGravity(placedOrAirRid))
+            pending.TryEnqueue(x, y, z);
+
+        // Break / replace to air (or any non-gravity): cell above may lose support.
+        if (placedOrAirRid == World.World.AirRuntimeId || !Blocks.IsGravity(placedOrAirRid))
+        {
+            var aboveY = y + 1;
+            if (Blocks.IsGravity(_world.GetBlock(x, aboveY, z)))
+                pending.TryEnqueue(x, aboveY, z);
+        }
     }
 
     /// <summary>Self UpdateBlock with server truth — kills client ghost after reject (§27).</summary>
