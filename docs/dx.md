@@ -72,7 +72,12 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 13. Block gravity (ADR §57): sand/gravel only; `GravitySystem` after `BlockSystem`; sparse pending cells + UpdateBlock cascade — no Tile, no `AddActor` falling_block in MVP.
 14. **Delivery hygiene:** closing an audit/ADR gap in the working tree without commit+push the same day is a process failure (dirty &gt; remote). See [`robustness-dx-debt.md`](robustness-dx-debt.md) “Critical delivery risks”.
 15. Leaf CI (`dotnet test`) runs on push/PR; Bedrock E2E is still human / beta-hard — do not treat green unit CI as join/place/chest proof.
+16. Protocol smoke bot (ADR §58): `tools/smoke-bot/` (Node + `bedrock-protocol`) — in-monorepo, offline join first; does not replace Gate A human client.
 ```
+
+### Protocol smoke bot
+
+See [`tools/smoke-bot/README.md`](../tools/smoke-bot/README.md). Requires Node ≥ 20 and a running Zenith with `offline` in `auth.accept`.
 
 ### Adding block/item capabilities (ADR §55)
 
