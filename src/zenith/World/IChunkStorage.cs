@@ -24,7 +24,7 @@ sealed class ChunkColumnData
 
 /// <summary>
 /// Seam de storage. <see cref="ValueTask"/> desde o dia 1.
-/// Overlay esparso (<c>ov:</c>) + chests (<c>ct:</c>) + inventário (<c>inv:</c>) — ADR §39.
+/// Overlay esparso (<c>ov:</c>) + chests (<c>ct:</c>) + inventário (<c>inv:</c>) + playerdata (<c>pd:</c>) — ADR §39 / §60.
 /// </summary>
 interface IChunkStorage
 {
@@ -42,19 +42,23 @@ interface IChunkStorage
     ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default);
 
-    /// <summary>Await in-flight persistence (chest/inv/overlay). Shutdown only — never GameLoop (ADR §41).</summary>
+    ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
+    ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default);
+
+    /// <summary>Await in-flight persistence (chest/inv/pd/overlay). Shutdown only — never GameLoop (ADR §41).</summary>
     ValueTask FlushAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
 /// Cache thread-safe; chunks tratados como imutáveis após Put.
-/// Overlay/chest/inv em RAM para testes (ADR §39).
+/// Overlay/chest/inv/pd em RAM para testes (ADR §39 / §60).
 /// </summary>
 sealed class InMemoryChunkStorage : IChunkStorage
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, ChunkColumnData> _chunks = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), byte[]> _chests = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
 
     /// <summary>Column Put count — tests for ADR §45 sparse flat.</summary>
     public int PutCount { get; private set; }
@@ -109,6 +113,18 @@ sealed class InMemoryChunkStorage : IChunkStorage
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         _inventories.TryGetValue(uuid, out var blob);
+        return ValueTask.FromResult<byte[]?>(blob);
+    }
+
+    public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _playerData[uuid] = blob;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        _playerData.TryGetValue(uuid, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
     }
 

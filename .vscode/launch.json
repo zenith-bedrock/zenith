@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Zenith",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/zenith/bin/Debug/net10.0/zenith.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/zenith/bin/Debug/net10.0",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Zenith (no build)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/zenith/bin/Debug/net10.0/zenith.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/zenith/bin/Debug/net10.0",
+      "console": "integratedTerminal",
+      "stopAtEntry": false
+    },
+    {
+      "name": "Attach to process",
+      "type": "coreclr",
+      "request": "attach"
+    }
+  ]
+}

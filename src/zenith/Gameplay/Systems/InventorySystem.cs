@@ -262,7 +262,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendUiInventoryContent(player);
         if (chestView is { } openAfter)
             protocol.SendChestContent(_world.Chests, openAfter);
-        _world.PersistInventory(player.Uuid, inventory);
+        _world.PersistInventory(player);
         if (chestView is { } openChest)
         {
             _world.PersistChest(openChest.PrimaryX, openChest.PrimaryY, openChest.PrimaryZ);

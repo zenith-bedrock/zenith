@@ -410,7 +410,7 @@ sealed class BlockSystem : IGameSystem
         if (inventoryChanged)
         {
             player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-            _world.PersistInventory(player.Uuid, player.Inventory);
+            _world.PersistInventory(player);
         }
 
         NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
@@ -529,7 +529,7 @@ sealed class BlockSystem : IGameSystem
                     PublishFloorDrop(online, rem);
 
                 player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-                _world.PersistInventory(player.Uuid, player.Inventory);
+                _world.PersistInventory(player);
                 break;
             }
         }
