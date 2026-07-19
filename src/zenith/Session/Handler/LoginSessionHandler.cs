@@ -85,7 +85,6 @@ class LoginSessionHandler : ISessionHandler
 
             identity = LoginIdentity.ParseIdentityToken(
                 packet.AuthInfo.Token, packet.AuthInfo.Certificate, packet.ClientDataJwt, auth);
-            identity = LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
         }
         catch (Exception ex)
         {
@@ -100,6 +99,27 @@ class LoginSessionHandler : ISessionHandler
                 $"Login '{identity.DisplayName}': no stable identity (identity/xid/chain) — " +
                 $"using ephemeral uuid {identity.Uuid:D}; inventory will not persist across rejoins.");
         }
+
+        // Join skin = ClientData full SerializedSkin (DF parseSkin / PM ClientDataToSkinDataHelper).
+        // Mid-game PlayerSkin is secondary; nobody needs to change skin for peers to see it.
+        if (ClientSkinParser.TryParse(packet.ClientDataJwt, out var joinSkin))
+        {
+            session.Skin = joinSkin;
+            session.SkinTrusted = ClientSkinParser.IsTrusted(packet.ClientDataJwt);
+            if (joinSkin.TryGetClassicRgba(out var rgba, out var sw, out var sh))
+            {
+                identity = identity with { SkinRgba = rgba, SkinWidth = sw, SkinHeight = sh };
+            }
+        }
+        else
+        {
+            identity = LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
+        }
+
+        session.Profile = ClientProfileParser.Parse(
+            packet.AuthInfo.Token,
+            packet.AuthInfo.Certificate,
+            packet.ClientDataJwt);
 
         var gameMode = Zenith.Player.GameModeConfig.FromConfig(session.Context.Config.Server.Gamemode);
         var player = new Zenith.Player.Player(

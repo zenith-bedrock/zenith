@@ -257,4 +257,26 @@ sealed class WorldProtocol
             StopAllSounds = stopAll,
             StopMusic = stopMusic
         });
+
+    /// <summary>LevelSoundEvent (0x7b) — block place/break/hit (ADR §59).</summary>
+    public void SendLevelSoundEvent(
+        string sound,
+        float x,
+        float y,
+        float z,
+        int extraData = -1,
+        bool isGlobal = false) =>
+        _session.SendDataPacket(new LevelSoundEventPacket
+        {
+            Sound = sound,
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            ExtraData = extraData,
+            EntityType = ":",
+            IsBabyMob = false,
+            IsGlobal = isGlobal,
+            ActorUniqueId = -1,
+            HasFirePosition = false
+        });
 }

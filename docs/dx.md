@@ -41,6 +41,8 @@ LGPL-3.0: share improvements to the library; build applications on top with a cl
 
 [`ARCHITECTURE.md`](../ARCHITECTURE.md), this `docs/` tree, and [`libs/leveldb/README.md`](../libs/leveldb/README.md) document **non-goals** (unbounded overlays, single-table flush rewrite, no plugins yet). Surprises are worse DX than incomplete features.
 
+Method naming (verb prefixes, no `Maybe*`): [`docs/naming.md`](naming.md).
+
 ## What we deliberately do **not** ship as DX yet
 
 | Temptation | Why wait |
@@ -78,6 +80,10 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 ### Protocol smoke bot
 
 See [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (sibling checkout). Requires Bun and a running Zenith with `offline` in `auth.accept`. Keep JS/TS out of the Zenith server repo.
+
+First-wave scripts: `bun run smoke:first10` (join → place → break → inv-hotbar → respawn → chest-open → double-chest → dig-timing → two-client). Persist (`smoke:persist`) needs LevelDB `world.path` and optional `ZENITH_PROJECT` for auto-restart.
+
+Wave-2 extremes: `bun run smoke:wave2` (peer-ground → dig-idle → gamemode-peer → floor-pickup → join-skin → sound). Opt-in persist with `ZENITH_SMOKE_INCLUDE_PERSIST=1` + `ZENITH_PROJECT`.
 
 ### Adding block/item capabilities (ADR §55)
 

@@ -65,6 +65,7 @@ sealed class MovementSystem : IGameSystem
             player.Pitch = input.Pitch;
             player.Yaw = input.Yaw;
             player.HeadYaw = input.Yaw;
+            player.IsOnGround = input.OnGround;
 
             ApplyPoseModes(player, in input);
 
@@ -101,7 +102,8 @@ sealed class MovementSystem : IGameSystem
                         Z = mover.PositionZ,
                         Pitch = mover.Pitch,
                         Yaw = mover.Yaw,
-                        HeadYaw = mover.HeadYaw
+                        HeadYaw = mover.HeadYaw,
+                        OnGround = mover.IsOnGround
                     });
                 }
 
@@ -156,7 +158,8 @@ sealed class MovementSystem : IGameSystem
         player.PositionZ != player.LastReplicatedZ ||
         player.Pitch != player.LastReplicatedPitch ||
         player.Yaw != player.LastReplicatedYaw ||
-        player.HeadYaw != player.LastReplicatedHeadYaw;
+        player.HeadYaw != player.LastReplicatedHeadYaw ||
+        player.IsOnGround != player.LastReplicatedOnGround;
 
     private static bool IsFlagsDirty(global::Zenith.Player.Player player) =>
         player.IsSneaking != player.LastReplicatedSneaking ||
@@ -170,6 +173,7 @@ sealed class MovementSystem : IGameSystem
         player.LastReplicatedPitch = player.Pitch;
         player.LastReplicatedYaw = player.Yaw;
         player.LastReplicatedHeadYaw = player.HeadYaw;
+        player.LastReplicatedOnGround = player.IsOnGround;
     }
 
     private static void RememberReplicatedFlags(global::Zenith.Player.Player player)

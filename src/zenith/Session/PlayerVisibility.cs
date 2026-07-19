@@ -43,8 +43,8 @@ static class PlayerVisibility
     }
 
     /// <summary>
-    /// Mid-game skin change: relay <see cref="PlayerSkinPacket"/> to other InGame peers only.
-    /// Join/late-join still uses SkinRgba + SkinWire on PlayerList (persona Deferred).
+    /// Mid-game skin change: update subject's Session skin + relay PlayerSkin to peers.
+    /// Join/late-join uses the same Session.Skin on PlayerList (full SerializedSkin).
     /// </summary>
     public static void RelaySkin(
         Player.Player subject,
@@ -54,11 +54,27 @@ static class PlayerVisibility
         bool isVerified,
         IReadOnlyCollection<Player.Player> online)
     {
+        subject.Session.Skin = skin;
+        subject.Session.SkinTrusted = isVerified;
         var uuid = subject.Uuid.ToString("D");
         foreach (var peer in online)
         {
             if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
             peer.Session.Protocol.Skin.SendSkin(uuid, skin, skinName, oldSkinName, isVerified);
+        }
+    }
+
+    /// <summary>
+    /// Mid-game GameMode change: peers must re-see subject with new GameMode on AddPlayer (§59).
+    /// PlayerList is left alone (UUID already known).
+    /// </summary>
+    public static void RefreshPeerView(Player.Player subject, IReadOnlyCollection<Player.Player> online)
+    {
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendRemoveActor(subject.RuntimeId);
+            SendAddPlayer(peer, subject);
         }
     }
 
@@ -101,17 +117,24 @@ static class PlayerVisibility
 
     private static void SendPlayerListAdd(Player.Player recipient, Player.Player subject)
     {
+        var profile = subject.Session.Profile;
         recipient.Session.Protocol.Entity.SendPlayerListAdd(
             subject.Uuid,
             subject.RuntimeId,
             subject.Username,
+            subject.Session.Skin,
             subject.SkinRgba,
             subject.SkinWidth,
-            subject.SkinHeight);
+            subject.SkinHeight,
+            subject.Session.SkinTrusted,
+            profile.Xuid,
+            profile.PlatformChatId,
+            profile.BuildPlatform);
     }
 
     private static void SendAddPlayer(Player.Player recipient, Player.Player subject)
     {
+        var profile = subject.Session.Profile;
         var held = subject.Session.Protocol.Inventory.DescribeSlot(
             subject.Inventory,
             subject.SelectedHotbarSlot);
@@ -128,7 +151,10 @@ static class PlayerVisibility
             held,
             gameMode: (int)subject.GameMode,
             sneaking: subject.IsSneaking,
-            sprinting: subject.IsSprinting);
+            sprinting: subject.IsSprinting,
+            platformChatId: profile.PlatformChatId,
+            deviceId: profile.DeviceId,
+            buildPlatform: profile.BuildPlatform);
         // ADR §44: dirty-check suppresses Absolute while pose is unchanged. New viewers only
         // get AddPlayer (feet) until the subject moves. Follow with Absolute (feet→wire +1.621)
         // so peers settle on the ground — bare feet Absolute sinks the model (~eye height).

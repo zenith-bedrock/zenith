@@ -827,6 +827,72 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_idle_dig_aborts_and_stops_crack()
+    {
+        var fx = new IntentTestFixture();
+        var miner = fx.AddInGamePlayer("miner");
+        var viewer = fx.AddInGamePlayer("viewer");
+        StandNear(miner, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        var need = Blocks.BreakTicks(Blocks.Stone);
+        Assert.True(need > (int)Player.Player.DigIdleAbortTicks);
+
+        Assert.True(miner.SubmitDigStart(0, 90, 0, fx.Clock.CurrentTick, need));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.True(miner.HasBreakTarget);
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        fx.Clock.AdvanceBy((int)Player.Player.DigIdleAbortTicks);
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.False(miner.HasBreakTarget);
+        Assert.True(fx.Transport.Captured.Count >= 1, "idle dig should StopCrack to peers");
+        _ = viewer;
+    }
+
+    [Fact]
+    public void MovementSystem_on_ground_change_dirties_Absolute_with_flag()
+    {
+        var fx = new IntentTestFixture();
+        var a = fx.AddInGamePlayer("alice");
+        var b = fx.AddInGamePlayer("bob");
+        a.PositionX = 1f;
+        a.PositionY = Blocks.FlatSpawnY;
+        a.PositionZ = 2f;
+        a.IsOnGround = false;
+        a.LastReplicatedX = a.PositionX;
+        a.LastReplicatedY = a.PositionY;
+        a.LastReplicatedZ = a.PositionZ;
+        a.LastReplicatedPitch = a.Pitch;
+        a.LastReplicatedYaw = a.Yaw;
+        a.LastReplicatedHeadYaw = a.HeadYaw;
+        a.LastReplicatedOnGround = false;
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        // Same XYZ/look — only on-ground flips.
+        a.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+            a.PositionX,
+            a.PositionY + Blocks.PlayerEyeHeight,
+            a.PositionZ,
+            a.Pitch,
+            a.Yaw,
+            onGround: true));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.True(a.IsOnGround);
+        Assert.True(a.LastReplicatedOnGround);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "on-ground-only change must fan Absolute so peers get FLAG_ON_GROUND");
+        _ = b;
+    }
+
+    [Fact]
     public void BlockSystem_fans_UpdateBlock_to_joiner_who_Knows_column()
     {
         var fx = new IntentTestFixture();
@@ -1026,6 +1092,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var alice = fx.AddInGamePlayer("alice");
         var bob = fx.AddInGamePlayer("bob");
+        alice.Session.Profile = new ClientProfile("25332747913222912", "dev", 7, "plat");
 
         alice.SubmitChat("ping");
         var datagramsBefore = fx.Transport.Captured.Count;
@@ -1037,6 +1104,9 @@ public class IntentContractTests
         Assert.False(alice.TryConsumeChat(out _));
         Assert.True(fx.Transport.Captured.Count > datagramsBefore,
             "ChatSystem should SendChat to in-game peers via RakNet.");
+
+        var joined = ConcatCaptured(fx);
+        Assert.Contains("25332747913222912"u8.ToArray(), joined);
 
         bob.SubmitChat("pong");
         new ChatSystem(fx.Players).Tick(fx.Clock);
@@ -1120,6 +1190,47 @@ public class IntentContractTests
         Assert.False(alice.TryConsumeChat(out _));
         new ChatSystem(fx.Players).Tick(fx.Clock);
         Assert.False(bob.TryConsumeChat(out _));
+    }
+
+    [Fact]
+    public void GameModeSystem_refresh_peer_view_sends_to_other_InGame_peers()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice", GameMode.Survival);
+        var bob = fx.AddInGamePlayer("bob", GameMode.Survival);
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        alice.SubmitGameMode(GameMode.Creative);
+        new GameModeSystem(fx.Players).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
+        Assert.Equal(GameMode.Creative, alice.GameMode);
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "GameModeSystem RefreshPeerView should send RemoveActor+AddPlayer toward peers.");
+        _ = bob;
+    }
+
+    [Fact]
+    public void PlayerVisibility_RefreshPeerView_sends_without_PlayerList_churn()
+    {
+        var fx = new IntentTestFixture();
+        var alice = fx.AddInGamePlayer("alice", GameMode.Survival);
+        var bob = fx.AddInGamePlayer("bob", GameMode.Survival);
+        alice.Session.Profile = new ClientProfile("xuid-a", "dev-a", 7, "plat-a");
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        alice.SetGameMode(GameMode.Creative);
+        PlayerVisibility.RefreshPeerView(alice, fx.Players.Online);
+        FlushRaknet(fx.Players);
+
+        Assert.True(fx.Transport.Captured.Count >= 1);
+        var joined = ConcatCaptured(fx);
+        Assert.Contains("dev-a"u8.ToArray(), joined);
+        _ = bob;
     }
 
     [Fact]
@@ -1276,6 +1387,22 @@ public class IntentContractTests
     {
         foreach (var p in players.Online)
             p.Session.RakSession.Tick();
+    }
+
+    private static byte[] ConcatCaptured(IntentTestFixture fx)
+    {
+        var total = 0;
+        foreach (var chunk in fx.Transport.Captured)
+            total += chunk.Length;
+        var buf = new byte[total];
+        var o = 0;
+        foreach (var chunk in fx.Transport.Captured)
+        {
+            chunk.CopyTo(buf, o);
+            o += chunk.Length;
+        }
+
+        return buf;
     }
 
     [Fact]

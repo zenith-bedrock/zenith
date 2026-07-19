@@ -263,6 +263,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Adendo (jul 2026 — tool dig speed):** Dig duration uses Dragonfly/wiki `BreakDuration` (no haste/water/Efficiency): `speed` from curated tool tier when Effective∧Harvestable else 1; `ticks = ceil(1/(speed/hardness/(30|100)))`. Curated tools: wood→diamond pick/axe/shovel (`World/Tools` + item network ids in inventory stack type). `World/BreakDuration` is SSOT; `Blocks.BreakTicks` delegates. AuthInput start snapshots held stack type + need. Mid-dig held change **preserves progress fraction** then retargets `DigStartedTick`/`DigRequiredTicks`; LevelEvent **3600** on dig start, **3602** only when `CrackEventData` changes (Mojang UpdateBlockCracking / DF ContinueCrack). Creative InstantBuild unchanged. Inventory wire: `Blocks.TryGetName` then `Tools.TryGetName` (tool `blockRuntimeId=0`). CreativeCatalog lists the 12 tools. Endstone digger components / ECS dig cache / BlockActor — **not** copied. Refs: DF `break_info.go`, Mojang `BlockBreakingOverview.md`.
 
+**Adendo (jul 2026 — dig idle StopCrack):** `StartCrack` encodes full dig duration; if the client stops looking/digging without `AbortBreak`, peers kept seeing crack until the animation finished. Same-cell `crack_break`/`continue_destroy` now `MarkDigActive`; `BlockSystem.AbortIdleDigIfStale` stops crack after `DigIdleAbortTicks` (10) without activity.
+
 ### 28. Chests — RAM store + ISR container 7 (MVP)
 
 **Choice:** Ship the §19 sketch minimally:
@@ -434,13 +436,15 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 44. Tick peer egress (dirty pose + Online snapshot + GamePacket batch)
 
-**Choice:** `MovementSystem` applies AuthInput then fans Absolute only when pose floats (XYZ+Pitch+Yaw+HeadYaw) differ from `LastReplicated*` (exact equality; look-only must still fan — same AuthInput channel). `PlayerManager.Online` is a single allocating snapshot (`IReadOnlyList`); Tick / nested fan-out capture once (`var online = _players.Online`) and reuse. Dirty movers aggregated per peer via `EntityProtocol.SendMoveAbsolutes`; tick `UpdateBlock`s via `WorldProtocol.PublishUpdateBlocks` — both reuse `SendDataPacket(params)` (one envelope / peer). No VisibilitySystem.
+**Choice:** `MovementSystem` applies AuthInput then fans Absolute only when pose floats (XYZ+Pitch+Yaw+HeadYaw) **or on-ground** differ from `LastReplicated*` (exact equality; look-only must still fan — same AuthInput channel). `PlayerManager.Online` is a single allocating snapshot (`IReadOnlyList`); Tick / nested fan-out capture once (`var online = _players.Online`) and reuse. Dirty movers aggregated per peer via `EntityProtocol.SendMoveAbsolutes`; tick `UpdateBlock`s via `WorldProtocol.PublishUpdateBlocks` — both reuse `SendDataPacket(params)` (one envelope / peer). No VisibilitySystem.
 
 **Why:** Idle AuthInput was O(n²) Absolute spam; repeated Online snapshots nested in loops allocated per mover; one Absolute/UpdateBlock per call wasted RakNet frames. Batch is frame reduction, not a §24 zero-alloc claim.
 
 **Smoke:** Idle LAN — peers idle without Absolute flood; look-turn still updates peer yaw; multi-place same tick → one envelope per peer.
 
 **Adendo (jul 2026 — join settle):** Dirty-check left late joiners with AddPlayer only until the subject moved — peer entities often floated until Absolute. `PlayerVisibility.SendAddPlayer` now follows with `MoveActorAbsolute` (`FLAG_ON_GROUND`, feet + network offset) for that recipient so new viewers settle without forcing idle Absolute spam.
+
+**Adendo (jul 2026 — Absolute ON_GROUND):** Continuous Absolute used `flags=0`. Bedrock then applies local gravity to remote players; after they stop moving, peers look “frozen”/sunk while the stationary client still sees others fine. AuthInput **VerticalCollision** (bit 50) → `Player.IsOnGround` → `MoveActorAbsolute.FLAG_ON_GROUND`. On-ground changes dirty Absolute even when XYZ/look unchanged.
 
 ### 45. Sparse flat columns (miss without Put)
 
@@ -489,13 +493,17 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 49. PlayerSkinPacket wire + Session relay (no Player→Packets)
 
-**Choice:** Fix/complete mid-game skin sync: `SerializedSkin` DTOs stay in Packets (`ref BinaryStream` Write/Read, `PieceType` string, list/image caps). `Player` keeps only `SkinRgba`/`SkinWidth`/`SkinHeight` for PlayerList/`SkinWire`. Inbound `PlayerSkinPacket` validates UUID == player, updates RGBA when classic image is well-formed (never null-out on bad image), relays via `PlayerVisibility.RelaySkin` to other InGame peers (Session helper — same join-like orchestration as `AnnounceJoin`; not a SkinSystem/ECS). `IsVerified` relayed as decoded. Login/join persona-complete PlayerList remains Deferred (dual path SkinWire vs full PlayerSkin).
+**Choice:** `SerializedSkin` DTOs stay in Packets (`ref BinaryStream` Write/Read, `PieceType` string, list/image caps). Wire skin state lives on `NetworkSession.Skin` (not `Player` — no Player→Packets). `Player` keeps only `SkinRgba`/`SkinWidth`/`SkinHeight` as classic mirror / PlayerList fallback. Inbound `PlayerSkinPacket` validates UUID == player, updates Session skin + RGBA when classic image is well-formed, relays via `PlayerVisibility.RelaySkin` to other InGame peers (Session helper — same join-like orchestration as `AnnounceJoin`; not a SkinSystem/ECS). `IsVerified` relayed as decoded.
 
 **Why:** Collaborator merge landed broken encode (`BinaryStream` by value), `Player`→Packets leak, self-only echo, and `PieceType` as uint. Chat already forbids handler fan-out loops; skin is rare one-shot so Session helper is enough.
 
-**Smoke:** A changes skin in-game → B sees update; join still SkinWire+RGBA. Spoofed UUID ignored.
+**Smoke:** A changes skin in-game → B sees update. Spoofed UUID ignored.
 
 **Adendo (jul 2026 — Encode Id):** Outbound `PlayerSkinPacket.Encode` must prefix packet Id (`0x5d`) like every other clientbound DataPacket. Missing Id made peer relay silently ignored by Bedrock (inbound Decode unchanged — header already stripped).
+
+**Adendo (jul 2026 — Join skin = product path):** Mid-game change is optional; peers must see the join skin without anyone re-equipping. Parse ClientData JWT via `ClientSkinParser` (Dragonfly `parseSkin` / PocketMine `ClientDataToSkinDataHelper`: SkinData + geometry + cape + animations + persona pieces/tints + flags). `PlayerList` ADD writes full `SerializedSkin.Write`; SkinWire RGBA/placeholder only if parse fails. Endstone/BDS builds `SerializedSkinRef` from `ConnectionRequest` the same way. `TrustedSkin` → PlayerList verified flag.
+
+**Adendo (jul 2026 — ClientProfile):** XUID / device / platform chat id on join → §59 (same Session-owned pattern as Skin).
 
 ### 50. Split log levels (server vs RakNet)
 
@@ -526,11 +534,13 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** H1-3 LAN need — Survival↔Creative in-session without restart/`zenith.yml`. Modes/abilities already exist (§31/§37). Rule 7: one string parse beats a command framework (`dx.md` freeze). Exception to explicit non-goal “`/` commands” — **one** path only, documented here like void-death in MovementSystem.
 
-**Deferred:** Adventure/Spectator; permissions; Bedrock `AvailableCommands` / autocomplete; `/` registry; peer re-AddPlayer on mode change (late viewers already get current `GameMode` on AddPlayer).
+**Deferred:** Adventure/Spectator; permissions; Bedrock `AvailableCommands` / autocomplete; `/` registry.
 
 **Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode. No `Unhandled Data Packet: 77`.
 
 **Adendo (jul 2026 — CommandRequest canal):** Bedrock 1.26 envia slash como `CommandRequest` (0x4D), não `Text`. Handler parseia `CommandLine` com o mesmo `GameModeConfig.TryParseCommand` (Text `/gamemode` fica fallback). Origin wire (protocol 1001): origin **string** (`player`, …) + UUID + requestId + **Int64** player unique id (sempre). Sem `AvailableCommands` / `CommandOutput` / palette — quiet ignore outros comandos. Não mergear `dev/commands` framework.
+
+**Adendo (jul 2026 — peer re-AddPlayer):** Closed by §59 — `GameModeSystem` calls `PlayerVisibility.RefreshPeerView` (RemoveActor + AddPlayer + Absolute settle) so peers see the new mode without rejoining. PlayerList is not removed/re-added.
 
 ### 53. Pose flags + emote relay + arm swing (peer interaction feel)
 
@@ -542,11 +552,13 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Peers only saw XYZ+look; crouch/sprint/emote/swing are the minimum LAN “other player is alive” signals. Same decide≠transmit≠serialize path as Absolute (§44) and equipment (§18).
 
-**Deferred:** Swim/glide/crawl flags; sneak BB height (~1.5) + WIDTH/HEIGHT metadata; sneak-place-on-chest (§28); LevelSound peer fan-out; ActorEvent arm-swing; client Animate relay.
+**Deferred:** Swim/glide/crawl flags; sneak BB height (~1.5) + WIDTH/HEIGHT metadata; ActorEvent arm-swing; client Animate relay. (sneak-place-on-chest → §56; LevelSound peer → §59.)
 
 **Smoke:** A holds sneak → B sees crouch; A sprints → B sees sprint; late join while A sneaks → AddPlayer metadata crouch; A emotes → B plays emote; A swings at air → B sees arm swing (Animate 1001: u8 action + runtime + f32 data + optional swingSource string).
 
 **Adendo (jul 2026 — Mojang protocol docs):** Official docs clone at `~/Development/references/bedrock/bedrock-protocol-docs` branch `r/26_u4`. That tip stamps protocol **2169** / game **1.26.50**; Zenith speaks **1001** / **1.26.33**. Use docs for packet field trees; use PM BedrockProtocol 1001 + Endstone headers for AuthInput bit indices and 1001-era Animate swingSource (optional string). Quiet-ACK `SetPlayerInventoryOptions` (`0x133` / 307) — UI prefs only, no product leaf.
+
+**Adendo (jul 2026 — LevelSound peer):** Closed by §59 — server-authored `LevelSoundEvent` (`place` / `break` / `hit`) from `BlockSystem` via `BlockSoundFanout`. Inbound client LevelSound stays quiet ACK (no echo).
 
 ### OpenInventory / chest UI (note under §28)
 
@@ -669,9 +681,24 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Supersedes:** brief in-monorepo spike on `develop` (`9fa6f29`) — removed; use the dedicated repo.
 
-**MVP:** `bun run smoke:join` — connect offline → spawn → exit 0/1.
+**MVP:** `bun run smoke:join` — connect offline → spawn → exit 0/1. First-wave #2–#10 (`place` … `two-client` + `graceful-persist`) live in the same repo (`bun run smoke:first10`).
 
 **Non-goals:** full Mineflayer API; Xbox auth in CI; launcher injection; replacing human Gate A for `v0.0.2-alpha`; embedding Node in the Zenith solution.
+
+### 59. Join wire fidelity (ClientProfile + gamemode peers + LevelSound)
+
+**Choice:** Close the remaining skin-class gaps where login discarded ClientData/identity and join packets lied:
+
+1. **`ClientProfile` on `NetworkSession`** (not `Player`): XUID string, DeviceId, BuildPlatform (`DeviceOS`), PlatformChatId (`PlatformOnlineId`). Parsed at login from identity JWT/chain `xid`/`XUID` + ClientData. Feeds `PlayerList` ADD (XboxUserId / BuildPlatform), `AddPlayer` (DeviceId / BuildPlatform / PlatformChatId), `ChatSystem` TextPacket XUID, and emote relay XUID preference. Same Session-owned wire-state pattern as §49 skin.
+2. **`/gamemode` peer honesty:** `GameModeSystem` after self wire → `PlayerVisibility.RefreshPeerView` (RemoveActor + AddPlayer with current GameMode/pose/held + Absolute settle). No PlayerList churn.
+3. **LevelSound peer fan-out:** `LevelSoundEventPacket` (0x7b, PM 1001 string sound names) + `WorldProtocol.SendLevelSoundEvent` + `BlockSoundFanout` (all InGame peers, like crack — not Knows-column). `BlockSystem` emits `place` / `break` / `hit` with ExtraData = block runtime id. Inbound LevelSound remains quiet ACK — Dragonfly `ViewSound` model, not client echo.
+4. Hygiene: `ResourcePacksInfo` world-template UUID = `Guid.Empty` via `WriteUuid` (no pack product).
+
+**Why:** Peers must see join identity and hear/see block FX without mid-game workarounds. Rule 7: Session profile + existing visibility/fan-out helpers beat VisibilitySystem / sound frameworks.
+
+**Smoke:** Xbox/LAN XUID on PlayerList + chat when present; A `/gamemode creative` → B sees mode without rejoin; A place/break → B hears sound; client LevelSound spam ignored.
+
+**Non-goals:** armor/offhand, EmoteList product, Adventure/Spectator, AvailableCommands, client Animate rebroadcast, sneak BB height, resource-pack product, gravity/`players/`/biomes.
 
 ## Explicit non-goals (so far)
 

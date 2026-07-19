@@ -24,8 +24,7 @@ class ResourcePacksInfoPacket : DataPacket
         writer.WriteBool(HasAddons);
         writer.WriteBool(HasScripts);
         writer.WriteBool(ForceDisableVibrantVisuals);
-        writer.WriteULong(0); // TODO: hack to work but this is a uuid
-        writer.WriteULong(0); // TODO: hack to work but this is a uuid
+        writer.WriteUuid(Guid.Empty); // world template UUID — empty until packs product
         writer.WriteVarString(WorldTemplateVersion);
         writer.WriteShort(0, BinaryStream.Endianess.Little);
         return writer.GetBufferDisposing();

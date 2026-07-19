@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Session;
 
 namespace Zenith.Gameplay.Systems;
 
@@ -43,6 +44,8 @@ sealed class GameModeSystem : IGameSystem
 
             if (mode == GameMode.Creative && previous != GameMode.Creative)
                 player.Session.Protocol.Inventory.SendCreativeContent();
+
+            PlayerVisibility.RefreshPeerView(player, online);
 
             player.Session.Protocol.Ui.SendToast(
                 "Game mode",
