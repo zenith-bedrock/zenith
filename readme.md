@@ -54,7 +54,7 @@ mkdir -p deploy/worlds
 docker compose up --build
 ```
 
-Mounts: `./deploy/zenith.yml:/app/zenith.yml` and `./deploy/worlds:/app/worlds` (ops sample only — not used by `dotnet run`). Sample config uses `world.path: /app` → LevelDB at `/app/worlds/world`. Empty `world.path` = InMemory (volatile). Product version: `0.0.1-alpha` (`ServerIdentity.ProductVersion`). Gate: [`docs/alpha-gate.md`](docs/alpha-gate.md).
+Mounts: `./deploy/zenith.yml:/app/zenith.yml` and `./deploy/worlds:/app/worlds` (ops sample only — not used by `dotnet run`). Sample config uses `world.path: /app` → LevelDB at `/app/worlds/world`. Empty `world.path` = InMemory (volatile). Product version: `0.0.2-alpha` (`ServerIdentity.ProductVersion`). Notes: [`docs/release-notes-template.md`](docs/release-notes-template.md). Gate (0.0.1): [`docs/alpha-gate.md`](docs/alpha-gate.md).
 
 ### Benchmarks (optional)
 
