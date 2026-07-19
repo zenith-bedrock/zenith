@@ -213,13 +213,33 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetInventoryAwaitedAsync(uuid, cancellationToken));
+        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(InventoryKey(uuid), cancellationToken));
+    }
+
+    public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        return Track(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                _db.Put(PlayerDataKey(uuid), blob);
+            }
+        }, cancellationToken));
+    }
+
+    public ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(PlayerDataKey(uuid), cancellationToken));
     }
 
     /// <summary>
-    /// Await in-flight Puts before read — fast quit→rejoin otherwise races Put and loads miss → starter seed (S39b).
+    /// Await in-flight Puts before read — fast quit→rejoin otherwise races Put and loads miss (S39b / §60).
     /// </summary>
-    private async Task<byte[]?> GetInventoryAwaitedAsync(Guid uuid, CancellationToken cancellationToken)
+    private async Task<byte[]?> GetUuidBlobAwaitedAsync(byte[] key, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var pending = _pendingDiskTasks.Keys.ToArray();
@@ -240,7 +260,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                return _db.Get(InventoryKey(uuid));
+                return _db.Get(key);
             }
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -306,6 +326,9 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 
     private static byte[] InventoryKey(Guid uuid) =>
         Encoding.UTF8.GetBytes($"inv:{uuid.ToString("D").ToLowerInvariant()}");
+
+    private static byte[] PlayerDataKey(Guid uuid) =>
+        Encoding.UTF8.GetBytes($"pd:{uuid.ToString("D").ToLowerInvariant()}");
 
     private static bool TryParseOverlayKey(string key, out int x, out int y, out int z)
     {

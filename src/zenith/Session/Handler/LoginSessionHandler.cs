@@ -97,7 +97,7 @@ class LoginSessionHandler : ISessionHandler
         {
             session.Context.Logger.Warning(
                 $"Login '{identity.DisplayName}': no stable identity (identity/xid/chain) — " +
-                $"using ephemeral uuid {identity.Uuid:D}; inventory will not persist across rejoins.");
+                $"using ephemeral uuid {identity.Uuid:D}; inventory/playerdata will not persist across rejoins.");
         }
 
         // Join skin = ClientData full SerializedSkin (DF parseSkin / PM ClientDataToSkinDataHelper).
@@ -127,7 +127,8 @@ class LoginSessionHandler : ISessionHandler
             session,
             session.Context.PlayerManager.AllocateRuntimeId(),
             identity.Uuid,
-            gameMode)
+            gameMode,
+            identity.IdentityStable)
         {
             SkinRgba = identity.SkinRgba,
             SkinWidth = identity.SkinWidth,
@@ -159,6 +160,26 @@ class LoginSessionHandler : ISessionHandler
             loaded
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
                 : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
+
+        if (session.Context.World.TryLoadPlayerData(
+                player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode))
+        {
+            player.PositionX = px;
+            player.PositionY = py;
+            player.PositionZ = pz;
+            player.Yaw = yaw;
+            player.Pitch = pitch;
+            player.HeadYaw = yaw;
+            player.SetGameMode(savedMode);
+            session.Context.Logger.Info(
+                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode}");
+        }
+        else
+        {
+            session.Context.Logger.Info(
+                $"Playerdata load miss for '{player.Username}' uuid={player.Uuid:D} (flat spawn / config mode)");
+        }
+
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 
         session.Protocol.Login.SendLoginSuccess();

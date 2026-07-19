@@ -75,6 +75,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 14. **Delivery hygiene:** closing an audit/ADR gap in the working tree without commit+push the same day is a process failure (dirty &gt; remote). See [`robustness-dx-debt.md`](robustness-dx-debt.md) “Critical delivery risks”.
 15. Leaf CI (`dotnet test`) runs on push/PR; Bedrock E2E is still human / beta-hard — do not treat green unit CI as join/place/chest proof.
 16. Protocol smoke bot (ADR §58): separate repo [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + `bedrock-protocol`) — not mixed into the C# tree; offline join first; does not replace Gate A human client.
+17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 ```
 
 ### Protocol smoke bot
@@ -83,7 +84,7 @@ See [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith
 
 First-wave scripts: `bun run smoke:first10` (join → place → break → inv-hotbar → respawn → chest-open → double-chest → dig-timing → two-client). Persist (`smoke:persist`) needs LevelDB `world.path` and optional `ZENITH_PROJECT` for auto-restart.
 
-Wave-2 extremes: `bun run smoke:wave2` (peer-ground → dig-idle → gamemode-peer → floor-pickup → join-skin → sound). Opt-in persist with `ZENITH_SMOKE_INCLUDE_PERSIST=1` + `ZENITH_PROJECT`.
+Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reconnect-pose). Opt-in persist with `ZENITH_SMOKE_INCLUDE_PERSIST=1` + `ZENITH_PROJECT`.
 
 ### Adding block/item capabilities (ADR §55)
 
@@ -128,6 +129,10 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → dig-idle → gamemode-pe
 
 **Add a new capability axis (e.g. food):** short ADR → `World/*Profiles.cs` sparse map → intent + system → Protocol transmits only. Do **not** invent `IBlockBehavior` or a plugin registry.
 
+### Bedrock references (local clones)
+
+Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `endstone`, `powernukkitx`. Use for wire/world layout study; do not vendor into the C# tree.
+
 ### Bedrock protocol docs (official)
 
 Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/bedrock-protocol-docs) branch **`r/26_u4`** → typically `~/Development/references/bedrock/bedrock-protocol-docs/`.
@@ -148,6 +153,7 @@ Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live 
 - **.NET 10** solution (`zenith.sln`) with focused test projects
 - Nullable + modern C# patterns (`ref struct` streams, `ValueTask` storage)
 - YAML for ops config; future player-facing strings planned as TOML (`lang/*.toml`) — not mixed into `zenith.yml`
+- VS Code: `.vscode/launch.json` — **Zenith** / **Zenith (no build)** with `cwd` = `src/zenith/bin/Debug/net10.0` (config beside DLL, ADR §20)
 
 ## Extending later (shape, not API yet)
 

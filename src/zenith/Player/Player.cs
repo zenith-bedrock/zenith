@@ -45,6 +45,11 @@ class Player
     /// <summary>UUID de lista/AddPlayer.</summary>
     public Guid Uuid { get; }
 
+    /// <summary>
+    /// False when login minted an ephemeral Guid — skip <c>pd:</c> / prefer no reconnect honesty (ADR §60).
+    /// </summary>
+    public bool IdentityStable { get; }
+
     /// <summary>True após SetLocalPlayerAsInitialized → InGame.</summary>
     public bool IsInGame { get; set; }
 
@@ -332,12 +337,14 @@ class Player
         NetworkSession session,
         long runtimeId,
         Guid uuid,
-        GameMode gameMode = GameMode.Survival)
+        GameMode gameMode = GameMode.Survival,
+        bool identityStable = true)
     {
         Username = username;
         Session = session;
         RuntimeId = runtimeId;
         Uuid = uuid;
+        IdentityStable = identityStable;
         GameMode = gameMode;
         Inventory = new PlayerInventory(seedStarterHotbar: gameMode == GameMode.Survival);
     }

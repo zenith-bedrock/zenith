@@ -47,6 +47,8 @@ sealed class GameModeSystem : IGameSystem
 
             PlayerVisibility.RefreshPeerView(player, online);
 
+            player.Session.Context.World.PersistPlayerData(player);
+
             player.Session.Protocol.Ui.SendToast(
                 "Game mode",
                 mode == GameMode.Creative ? "Creative" : "Survival");

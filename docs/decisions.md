@@ -181,7 +181,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Ship a product version separate from Bedrock wire: `ServerIdentity.ProductVersion` (e.g. `"0.0.1-alpha"`). Docker: `WORKDIR /app`; host sample under `deploy/` — mount `./deploy/zenith.yml:/app/zenith.yml` and `./deploy/worlds:/app/worlds` (not used by `dotnet run`). On-disk world = `{world.path}/worlds/{world.name}/` LevelDB (path empty ⇒ InMemory). Sample compose uses `world.path: /app`, `world.name: world`. Multi-world load stays a non-goal; folder convention only.
 
-**Why:** No published channel existed for external feedback (Vedrock already had Docker + tag). `zenith.yml` resolves via `AppContext.BaseDirectory` next to the DLL — config cannot live solely under a PMMP-style `/data` that replaces `/app`. Separating `players/` is wrong until playerdata persists (session RAM only today).
+**Why:** No published channel existed for external feedback (Vedrock already had Docker + tag). `zenith.yml` resolves via `AppContext.BaseDirectory` next to the DLL — config cannot live solely under a PMMP-style `/data` that replaces `/app`. A separate `players/` volume was deferred until playerdata existed.
+
+**Adendo (jul 2026 — playerdata without `players/` volume):** Pose + GameMode now persist in the world LevelDB as `pd:{uuid}` (§60), same family as `inv:` / `ct:`. A separate `players/` mount remains Deferred — Mojang co-locates player NBT in the world DB; softcore `players/` trees diverge from that path.
 
 **Known debt / principle:** Reinterpreting a former flat LevelDB directory as a data root creates `{path}/worlds/{name}/` empty while orphaning old `CURRENT`/`.ldb` at the root — silent empty world. Detect and **Warning** at boot if root looks like ZLDB and the new world dir is empty/new. Future path-semantics changes must warn loudly, never reinterpret silently (ops visibility vs silent fallback). Relative `world.path` resolves against `AppContext.BaseDirectory` (DLL dir), never process cwd — same as `zenith.yml`.
 
@@ -394,7 +396,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Process restart was wiping bags/chests — ops honesty without Mojang playerdata.
 
-**Deferred:** Ender chest, armor, posição DB; `players/` volume. **Double-chest → §56** (persist still 2×`ct:`).
+**Deferred:** Ender chest, armor. **Position + GameMode → §60**. **Double-chest → §56** (persist still 2×`ct:`). **`players/` volume** still Deferred (§20 / §60).
 
 ### 40. Vitals fields + void soft-rescue
 
@@ -666,7 +668,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Status (jul 2026):** Shipped on develop after `v0.0.2-alpha` — `GravityPendingStore` + `GravitySystem`; gravel in placeables / DigProfiles / CreativeCatalog (net id 20); graceful shutdown settles pending before flush.
 
-**Roadmap:** H1#6. Does **not** unlock `players/` (H1#7) or world-gen (H1#8).
+**Roadmap:** H1#6. Playerdata reconnect → §60 (H1#7). Does **not** unlock world-gen (H1#8).
 
 ### 58. Protocol smoke bot — separate Bun repo (not inside Zenith C#)
 
@@ -700,7 +702,19 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Smoke:** Xbox/LAN XUID on PlayerList + chat when present; A `/gamemode creative` → B sees mode without rejoin; A place/break → B hears sound; client LevelSound spam ignored.
 
-**Non-goals:** armor/offhand, EmoteList product, Adventure/Spectator, AvailableCommands, client Animate rebroadcast, sneak BB height, resource-pack product, gravity/`players/`/biomes.
+**Non-goals:** armor/offhand, EmoteList product, Adventure/Spectator, AvailableCommands, client Animate rebroadcast, sneak BB height, resource-pack product, gravity/biomes (playerdata → §60).
+
+### 60. Reconnect playerdata (`pd:{uuid}` pose + GameMode)
+
+**Choice:** Persist feet XYZ + yaw/pitch + GameMode in the **same world LevelDB** as `inv:` / `ct:`, key `pd:{uuid:D}` lowercase. Blob v1: `u8 version` + 5×`f32` + `u8` mode (Survival=0 / Creative=1). Load on login after inventory, **before** StartGame; Put on quit and after `/gamemode` apply. Unstable identity skips Put. OOB / NaN / bad mode → load miss (flat spawn + config mode) — no silent clamp. Death/void Respawn still world spawn (§40) — only reconnect restores.
+
+**Why:** Softcores (PMMP `players/*.dat`, Dragonfly/PNX `players/` LevelDB) diverge from Mojang BDS, which co-locates `player_` / `player_server_` NBT in the world DB. Zenith keys are already custom; another prefix does not worsen future Mojang import. A new `players/` volume would add ADR §20 path surface and lock into the softcore split. **Reserve** Mojang namespaces (`player_`, `player_server_`, `~local_player`) — never write them in this leaf.
+
+**Flush:** same fire-and-forget + pending-task + shutdown `FlushAsync` as inventory (§41). No mid-tick pose Puts. Unstable identity skips **all** `inv:` / `pd:` Puts (quit + systems).
+
+**Smoke:** quit → rejoin same UUID near last feet; Creative mode survives reconnect. Human Gate A for tags.
+
+**Non-goals:** Mojang `player_*` NBT; `players/` Docker volume; Health/Hunger persist; mid-tick Saves; death-position restore; multi-world playerdata.
 
 ## Explicit non-goals (so far)
 

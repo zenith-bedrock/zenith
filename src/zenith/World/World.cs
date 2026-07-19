@@ -64,6 +64,13 @@ sealed class World
     public void DeletePersistedChest(int x, int y, int z) =>
         _ = _storage.DeleteChestAsync(x, y, z);
 
+    public void PersistInventory(Player.Player player)
+    {
+        if (!player.IdentityStable) return;
+        PersistInventory(player.Uuid, player.Inventory);
+    }
+
+    /// <summary>Raw Put for tests / loaders — prefer <see cref="PersistInventory(Player.Player)"/> on live sessions.</summary>
     public void PersistInventory(Guid uuid, Player.PlayerInventory inventory) =>
         _ = _storage.PutInventoryAsync(uuid, inventory.PackMainBlob());
 
@@ -73,7 +80,32 @@ sealed class World
         return blob is not null && inventory.TryLoadMainFromBlob(blob);
     }
 
-    /// <summary>Await in-flight chest/inv/overlay writes — shutdown only (ADR §41).</summary>
+    /// <summary>Quit / gamemode Persist — skips unstable identity (ADR §60).</summary>
+    public void PersistPlayerData(Player.Player player)
+    {
+        if (!player.IdentityStable) return;
+        var blob = PlayerDataBlob.Pack(
+            player.PositionX,
+            player.PositionY,
+            player.PositionZ,
+            player.Yaw,
+            player.Pitch,
+            player.GameMode);
+        _ = _storage.PutPlayerDataAsync(player.Uuid, blob);
+    }
+
+    /// <summary>
+    /// Login hydrate. False = miss / corrupt / OOB → caller keeps flat spawn + config GameMode.
+    /// </summary>
+    public bool TryLoadPlayerData(Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode)
+    {
+        x = y = z = yaw = pitch = 0;
+        mode = Player.GameMode.Survival;
+        var blob = _storage.GetPlayerDataAsync(uuid).AsTask().GetAwaiter().GetResult();
+        return blob is not null && PlayerDataBlob.TryUnpack(blob, out x, out y, out z, out yaw, out pitch, out mode);
+    }
+
+    /// <summary>Await in-flight chest/inv/pd/overlay writes — shutdown only (ADR §41).</summary>
     public ValueTask FlushPersistenceAsync(CancellationToken cancellationToken = default) =>
         _storage.FlushAsync(cancellationToken);
 

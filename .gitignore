@@ -11,6 +11,8 @@ obj/
 *.vs
 .vscode/*
 !.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 ## Logs and Debugging
 *.log
