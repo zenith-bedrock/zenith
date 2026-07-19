@@ -32,6 +32,7 @@ sealed class World
 
     public FloorDropStore FloorDrops { get; }
     public ChestStore Chests { get; }
+    public GravityPendingStore GravityPending { get; }
 
     public int OverrideCount => _blockOverrides.Count;
 
@@ -41,6 +42,7 @@ sealed class World
         _logger = logger;
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
+        GravityPending = new GravityPendingStore(logger);
         (_flatSubChunkCount, _flatOverworldPayload) = ChunkPayloads.BuildFlatOverworld();
         storage.ForEachOverlayAsync(StoreOverlay)
             .AsTask()

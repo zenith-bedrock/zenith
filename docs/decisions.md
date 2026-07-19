@@ -662,7 +662,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Non-goals:** falling_block AddActor animation; anvil/concrete powder; fluid interaction; redstone dust pop; player crushing; mid-air break into FloorDrop; Mojang random-tick; gravity under chests opening; soft-block “partial support” shapes.
 
-**Spike order:** (1) `Blocks.IsGravity` + gravel placeable/dig/creative, (2) pending set + `GravitySystem` drain after BlockSystem, (3) place/break enqueue hooks, (4) leaf tests (tower, dig under, place over air, SoftCap), (5) human smoke — **after** `v0.0.2-alpha` Bedrock smoke for §56, or admit code ahead of tag remains.
+**Spike order:** (1) `Blocks.IsGravity` + gravel placeable/dig/creative, (2) pending set + `GravitySystem` drain after BlockSystem, (3) place/break enqueue hooks, (4) leaf tests (tower, dig under, place over air, SoftCap), (5) human smoke.
+
+**Status (jul 2026):** Shipped on develop after `v0.0.2-alpha` — `GravityPendingStore` + `GravitySystem`; gravel in placeables / DigProfiles / CreativeCatalog (net id 20); graceful shutdown settles pending before flush.
 
 **Roadmap:** H1#6. Does **not** unlock `players/` (H1#7) or world-gen (H1#8).
 

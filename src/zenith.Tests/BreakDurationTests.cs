@@ -89,7 +89,7 @@ public class BreakDurationTests
         var blockIds = new HashSet<int>
         {
             Blocks.Air, Blocks.Stone, Blocks.Dirt, Blocks.GrassBlock,
-            Blocks.OakPlanks, Blocks.OakLog, Blocks.Sand, Blocks.Chest,
+            Blocks.OakPlanks, Blocks.OakLog, Blocks.Sand, Blocks.Gravel, Blocks.Chest,
             Blocks.ChestForFacing(Blocks.CardinalNorth),
             Blocks.ChestForFacing(Blocks.CardinalEast),
             Blocks.ChestForFacing(Blocks.CardinalWest)
@@ -114,7 +114,7 @@ public class ToolWireTests
         Assert.True(catalog.TryGet(CreativeCatalog.DiamondPickaxe, out var id, out var count));
         Assert.Equal(StackId.FromItem(Tools.Require("minecraft:diamond_pickaxe")), id);
         Assert.Equal(1, count);
-        Assert.Equal(7 + 12, catalog.SnapshotEntries().Count);
+        Assert.Equal(8 + 12, catalog.SnapshotEntries().Count);
     }
 
     [Fact]

@@ -24,6 +24,7 @@ static class Blocks
     private static int _oakPlanks;
     private static int _oakLog;
     private static int _sand;
+    private static int _gravel;
     private static int _chest;
     private static int _chestNorth;
     private static int _chestSouth;
@@ -31,6 +32,7 @@ static class Blocks
     private static int _chestWest;
     private static HashSet<int>? _chestIds;
     private static HashSet<int>? _placeableIds;
+    private static HashSet<int>? _gravityIds;
     private static Dictionary<int, string>? _nameByRuntime;
     private static BlockPalette? _palette;
     private static bool _loaded;
@@ -42,6 +44,7 @@ static class Blocks
     public static int OakPlanks { get { EnsureLoaded(); return _oakPlanks; } }
     public static int OakLog { get { EnsureLoaded(); return _oakLog; } }
     public static int Sand { get { EnsureLoaded(); return _sand; } }
+    public static int Gravel { get { EnsureLoaded(); return _gravel; } }
 
     /// <summary>Item / recipe / default place form — south palette entry.</summary>
     public static int Chest { get { EnsureLoaded(); return _chest; } }
@@ -63,6 +66,7 @@ static class Blocks
         _oakPlanks = palette.Require("minecraft:oak_planks");
         _oakLog = palette.Require("minecraft:oak_log");
         _sand = palette.Require("minecraft:sand");
+        _gravel = palette.Require("minecraft:gravel");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -79,12 +83,14 @@ static class Blocks
             _oakPlanks,
             _oakLog,
             _sand,
+            _gravel,
             _chest,
             _chestSouth,
             _chestWest,
             _chestNorth,
             _chestEast
         ];
+        _gravityIds = [_sand, _gravel];
         _nameByRuntime = new Dictionary<int, string>
         {
             [_air] = "minecraft:air",
@@ -94,6 +100,7 @@ static class Blocks
             [_oakPlanks] = "minecraft:oak_planks",
             [_oakLog] = "minecraft:oak_log",
             [_sand] = "minecraft:sand",
+            [_gravel] = "minecraft:gravel",
             [_chestSouth] = "minecraft:chest",
             [_chestWest] = "minecraft:chest",
             [_chestNorth] = "minecraft:chest",
@@ -131,6 +138,13 @@ static class Blocks
     {
         EnsureLoaded();
         return _placeableIds is not null && _placeableIds.Contains(runtimeId);
+    }
+
+    /// <summary>Sand / gravel — cell-tick gravity set (ADR §57). Not on DigProfiles.</summary>
+    public static bool IsGravity(int runtimeId)
+    {
+        EnsureLoaded();
+        return _gravityIds is not null && _gravityIds.Contains(runtimeId);
     }
 
     /// <summary>World block rid for a cardinal facing; unknown → south item form.</summary>
@@ -206,10 +220,11 @@ static class Blocks
     internal static void ResetForTests()
     {
         _loaded = false;
-        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _chest = 0;
+        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _gravel = _chest = 0;
         _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
         _chestIds = null;
         _placeableIds = null;
+        _gravityIds = null;
         _nameByRuntime = null;
         _palette = null;
     }

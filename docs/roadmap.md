@@ -28,7 +28,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 3 | **`/gamemode` minimal** | **Shipped** (Jul 2026): chat parse → intent → `GameModeSystem` + SetPlayerGameType/abilities/CreativeContent remint (§52). Not a command framework. |
 | 4 | **Tool dig speed / efficiency** | **Shipped** (Jul 2026): DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | **Shipped** in `v0.0.2-alpha` (ADR §56) — pair + 54 UI + 2×`ct:`. |
-| 6 | **Block gravity** (sand/gravel) | **ADR §57 written** — cell-tick pending set + UpdateBlock (no Tile/FallingBlock). **Next product spike** after `v0.0.2-alpha`. |
+| 6 | **Block gravity** (sand/gravel) | **Shipped** (Jul 2026): `GravitySystem` + `GravityPendingStore`; discrete UpdateBlock falls (ADR §57). No falling_block actor. |
 | 7 | **`players/` or position persist** | After identity/reconnect story is clear; no silent path reinterpret (§20). |
 | 8 | **World beyond flat** | Noise/biomes or import strategy — only when flat+overlay no longer answers LAN product questions. |
 
@@ -40,7 +40,7 @@ If two contributors pick from this list, prefer **different rows**, not both bui
 
 **Join wire fidelity (ADR §59):** Session-owned `ClientProfile` + full join skin; `/gamemode` peer RefreshPeerView; server-authored LevelSound on place/break/hit — **shipped** in `v0.0.2-alpha`.
 
-**Release tag `v0.0.2-alpha`:** closes H1 rows 1–5 + §55/§56/§59 on `main`/`develop`. Notes: [`release-notes-template.md`](release-notes-template.md). Next leaf: implement §57 gravity.
+**Release tag `v0.0.2-alpha`:** closes H1 rows 1–5 + §55/§56/§59 on `main`/`develop`. Notes: [`release-notes-template.md`](release-notes-template.md). **Next leaf:** `players/` (H1#7) when reconnect story is clear — gravity (§57) shipped on develop after the tag.
 
 **Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo** (no JS in the C# tree). Human Gate A remains the product smoke authority for tags.
 
