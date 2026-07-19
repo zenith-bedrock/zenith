@@ -59,7 +59,7 @@ Spine (decide → transmit → serialize) is healthy. Limits are cross-thread mu
 | Dead `ChunkUtils`, unused usings | 4 | Open |
 | `InventoryProtocol` builders + façade | 5 | **Closed** (§54 Phase 5) |
 | Leaf CI on push/PR | — | **Closed (jul 2026):** `.github/workflows/ci.yml` |
-| Bedrock E2E CI | — | **Open — beta-hard** (human smoke remains release gate). Spike: in-monorepo `tools/smoke-bot/` (ADR §58) — join script opt-in; not PR-blocking yet |
+| Bedrock E2E CI | — | **Open — beta-hard**. Spike repo: [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + bedrock-protocol, ADR §58) — join opt-in; not Zenith PR-blocking |
 
 ## Suggested order
 

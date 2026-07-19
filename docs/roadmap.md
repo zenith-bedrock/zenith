@@ -40,7 +40,7 @@ If two contributors pick from this list, prefer **different rows**, not both bui
 
 **Release tag:** do **not** cut `v0.0.2-alpha` until Bedrock smoke checkboxes in [`release-notes-template.md`](release-notes-template.md) (double-chest + tool dig) are green. Code on develop is ahead of the tag.
 
-**Protocol smoke bot (ADR §58):** `tools/smoke-bot/` — automate repetitive wire checks later; human Gate A still required for tag. Not a separate repo.
+**Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo** (no JS in the C# tree). Human Gate A still required for tag.
 
 ---
 
