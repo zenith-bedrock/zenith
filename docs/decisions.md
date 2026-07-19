@@ -654,22 +654,24 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Roadmap:** H1#6. Does **not** unlock `players/` (H1#7) or world-gen (H1#8).
 
-### 58. Protocol smoke bot — in-monorepo Node tool (not a second server)
+### 58. Protocol smoke bot — separate Bun repo (not inside Zenith C#)
 
 **Choice:**
 
-1. **Location:** `tools/smoke-bot/` inside the Zenith git repo — **not** a separate GitHub repo and **not** only on one laptop. Pins travel with `ServerIdentity.ProtocolVersion` / `VersionName` (1001 / 1.26.33).
-2. **Stack:** Node + Prismarine [`bedrock-protocol`](https://github.com/PrismarineJS/bedrock-protocol). Offline/`self-signed` LAN auth only for local + future CI. **Not** Mineflayer (Java). **Not** Bedrock Launcher mods as the CI path.
+1. **Location:** dedicated repo [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (sibling checkout). **Not** under `zenith/tools/` or `src/zenith/` — keeps the server tree C#-only (no Node/TS mixed into product PRs).
+2. **Stack:** [Bun](https://bun.sh) + Prismarine [`bedrock-protocol`](https://github.com/PrismarineJS/bedrock-protocol). Offline/`self-signed` LAN auth for local + future CI. **Not** Mineflayer (Java). **Not** Bedrock Launcher mods as the CI path.
 3. **Role:** automate **repetitive wire smokes** (join → InGame, later place/break/chest open). Complements human Gate A; does **not** replace official-client UI/mesh/crash checks.
-4. **Boundary:** bot is **out of** `src/zenith/` and the C# dependency graph. It speaks RakNet/Bedrock as a client. No `using` into Gameplay/World; no revival of `Network/`.
-5. **CI:** leaf `dotnet test` stays the PR gate. Bot is **opt-in** until a job boots Zenith + runs join (separate workflow / `workflow_dispatch`). Do not block merge on bot while harness is immature.
-6. **Version pin:** `createClient({ version })` must track Zenith `VersionName` (document in `tools/smoke-bot/README.md`). Protocol skew = expected failure, not silent skip.
+4. **Boundary:** bot is a normal Bedrock client. No references into Zenith Gameplay/World; Zenith does not depend on the bot.
+5. **CI:** Zenith leaf `dotnet test` stays the PR gate. Bot is **opt-in** until a job boots Zenith + runs join. Do not block Zenith merges on bot harness immaturity.
+6. **Version pin:** `createClient({ version: "1.26.30" })` — minecraft-data protocol **1001**, matches Zenith `ServerIdentity.ProtocolVersion`. Zenith `VersionName` is `1.26.33` (same protocol id; document skew in bot README).
 
-**Why:** Dirty-local-only bots die with bus factor; a second repo drifts from protocol pins. Monorepo tool matches raknet/nbt “leaf next to product” without polluting `src/zenith`.
+**Why:** In-monorepo `tools/smoke-bot/` mixed JS into a C# product and was rejected for DX/review clarity. A second repo is acceptable when the tool is a different language and must not pollute server PRs; pin docs + README keep protocol skew honest.
 
-**MVP spike:** `npm run smoke:join` — connect offline → observe start_game / spawn → exit 0/1. Place/chest scripts come after Gate A / tag honesty.
+**Supersedes:** brief in-monorepo spike on `develop` (`9fa6f29`) — removed; use the dedicated repo.
 
-**Non-goals:** full Mineflayer API; Xbox auth in CI; launcher injection; replacing human Gate A for `v0.0.2-alpha`.
+**MVP:** `bun run smoke:join` — connect offline → spawn → exit 0/1.
+
+**Non-goals:** full Mineflayer API; Xbox auth in CI; launcher injection; replacing human Gate A for `v0.0.2-alpha`; embedding Node in the Zenith solution.
 
 ## Explicit non-goals (so far)
 
