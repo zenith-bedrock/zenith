@@ -15,6 +15,8 @@ sealed class BlockSystem : IGameSystem
 {
     private readonly PlayerManager _players;
     private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
+    private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
+    private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
     private readonly World.World _world;
 
     public BlockSystem(PlayerManager players, World.World world)
@@ -29,7 +31,6 @@ sealed class BlockSystem : IGameSystem
         Tick(clock, _onlineScratch);
     }
 
-
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (online.Count == 0) return;
@@ -42,7 +43,8 @@ sealed class BlockSystem : IGameSystem
             AbortIdleDigIfStale(player, clock, online);
         }
 
-        var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
+        var updates = _updatesScratch;
+        updates.Clear();
         foreach (var player in online)
         {
             while (player.TryConsumeBlockEdit(out var edit))
@@ -55,7 +57,7 @@ sealed class BlockSystem : IGameSystem
 
         if (updates.Count > 0)
         {
-            List<(int X, int Y, int Z, int BlockRuntimeId)>? joinerSubset = null;
+            var joinerSubset = _joinerSubsetScratch;
             foreach (var peer in online)
             {
                 // InGame peers always; joiners who already Know the column get live
@@ -66,7 +68,6 @@ sealed class BlockSystem : IGameSystem
                     continue;
                 }
 
-                joinerSubset ??= new List<(int X, int Y, int Z, int BlockRuntimeId)>(updates.Count);
                 joinerSubset.Clear();
                 for (var i = 0; i < updates.Count; i++)
                 {

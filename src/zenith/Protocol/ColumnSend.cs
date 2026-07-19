@@ -12,6 +12,9 @@ static class ColumnSend
     [ThreadStatic]
     private static List<BlockOverride>? t_overlayScratch;
 
+    [ThreadStatic]
+    private static List<(int X, int Y, int Z, int BlockRuntimeId)>? t_updatesScratch;
+
     public static void EmitToSession(NetworkSession session, in ColumnReadResult column)
     {
         ColumnTerrainEmitter.Emit(
@@ -37,7 +40,8 @@ static class ColumnSend
         if (columns.Count == 0) return;
 
         var overlayScratch = t_overlayScratch ??= new List<BlockOverride>(64);
-        var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
+        var updates = t_updatesScratch ??= new List<(int X, int Y, int Z, int BlockRuntimeId)>(64);
+        updates.Clear();
         for (var i = 0; i < columns.Count; i++)
         {
             var (cx, cz) = columns[i];
