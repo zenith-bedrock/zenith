@@ -38,7 +38,8 @@ sealed class BlockSystem : IGameSystem
         {
             while (player.TryConsumeDig(out var dig))
                 ApplyDig(player, dig, clock, online);
-            MaybeUpdateDigTool(player, clock, online);
+            UpdateDigToolIfHeldChanged(player, clock, online);
+            AbortIdleDigIfStale(player, clock, online);
         }
 
         var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)>();
@@ -84,7 +85,7 @@ sealed class BlockSystem : IGameSystem
         PickupFloorDrops(clock, online);
     }
 
-    private static void ApplyDig(
+    private void ApplyDig(
         global::Zenith.Player.Player player,
         in DigIntent dig,
         GameClock clock,
@@ -114,14 +115,19 @@ sealed class BlockSystem : IGameSystem
 
         player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
         if (dig.RequiredTicks > 0)
+        {
             BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
+            var hitBlock = _world.GetBlock(dig.X, dig.Y, dig.Z);
+            if (hitBlock != World.World.AirRuntimeId)
+                BlockSoundFanout.Hit(online, player.Session, dig.X, dig.Y, dig.Z, hitBlock);
+        }
         PlayerVisibility.RelaySwingArm(player, online, swingSource: "mine");
     }
 
     /// <summary>
     /// Mid-dig held tool change → progress-preserving retarget + 3602 when crack rate changes (§27).
     /// </summary>
-    private void MaybeUpdateDigTool(
+    private void UpdateDigToolIfHeldChanged(
         global::Zenith.Player.Player player,
         GameClock clock,
         IReadOnlyList<global::Zenith.Player.Player> online)
@@ -154,6 +160,7 @@ sealed class BlockSystem : IGameSystem
             : now - (ulong)Math.Round(progress * newNeed);
 
         player.RetargetBreakTiming(newStarted, newNeed, heldId);
+        player.MarkDigActive(now);
 
         if (Blocks.CrackEventData(oldNeed) != Blocks.CrackEventData(newNeed) && newNeed > 0)
         {
@@ -165,6 +172,29 @@ sealed class BlockSystem : IGameSystem
                 player.BreakTargetZ,
                 newNeed);
         }
+    }
+
+    /// <summary>
+    /// Client StartCrack plays the full dig duration; without Abort the animation keeps going.
+    /// If no crack/continue AuthInput for DigIdleAbortTicks, StopCrack + AbortBreak.
+    /// </summary>
+    private void AbortIdleDigIfStale(
+        global::Zenith.Player.Player player,
+        GameClock clock,
+        IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (!player.HasBreakTarget || player.IsDead) return;
+        if (clock.CurrentTick < player.LastDigActivityTick) return;
+        if (clock.CurrentTick - player.LastDigActivityTick < Player.Player.DigIdleAbortTicks)
+            return;
+
+        BlockCrackFanout.Stop(
+            online,
+            player.Session,
+            player.BreakTargetX,
+            player.BreakTargetY,
+            player.BreakTargetZ);
+        player.AbortBreak();
     }
 
     /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
@@ -255,6 +285,9 @@ sealed class BlockSystem : IGameSystem
 
                 _world.PersistChest(edit.X, edit.Y, edit.Z);
             }
+
+            BlockSoundFanout.Place(
+                online, player.Session, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         }
         else
         {
@@ -313,6 +346,7 @@ sealed class BlockSystem : IGameSystem
 
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
             BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);
+            BlockSoundFanout.Break(online, player.Session, edit.X, edit.Y, edit.Z, previous);
             if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
                 player.AbortBreak();
 

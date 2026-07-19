@@ -2,7 +2,7 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
-/// <summary>Encode de skin no wire. Placeholder até parse real do login.</summary>
+/// <summary>Classic RGBA / white placeholder when ClientData full parse is unavailable.</summary>
 static class SkinWire
 {
     private const uint Width = 64;

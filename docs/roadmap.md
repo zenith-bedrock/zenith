@@ -38,7 +38,9 @@ If two contributors pick from this list, prefer **different rows**, not both bui
 
 **Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — **Shipped** on `develop` (`3649391`, Jul 2026). Structural honesty so later leaves do not rewrite inventory identity.
 
-**Release tag:** do **not** cut `v0.0.2-alpha` until Bedrock smoke checkboxes in [`release-notes-template.md`](release-notes-template.md) (double-chest + tool dig) are green. Code on develop is ahead of the tag.
+**Join wire fidelity (ADR §59):** Session-owned `ClientProfile` + full join skin; `/gamemode` peer RefreshPeerView; server-authored LevelSound on place/break/hit. Closes skin-class “login discarded → join lied” gaps — not a Horizon-2 laundry list.
+
+**Release tag:** do **not** cut `v0.0.2-alpha` until Bedrock smoke checkboxes in [`release-notes-template.md`](release-notes-template.md) (double-chest + tool dig + join fidelity) are green. Code on develop is ahead of the tag.
 
 **Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo** (no JS in the C# tree). Human Gate A still required for tag.
 

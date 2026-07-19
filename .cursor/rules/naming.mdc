@@ -1,0 +1,54 @@
+---
+description: Zenith method/type naming — verb prefixes, no Maybe*, layer-linked Send/Apply/Handle
+alwaysApply: true
+---
+
+# Naming conventions
+
+Method and type names should encode **layer role** (decide / transmit / serialize) and **outcome**, not “we might do something.” Prefer Dragonfly-style `try*` / Zenith `Try*` for fallible ops; never invent a parallel `Maybe*` dialect.
+
+Full table + examples: [`docs/naming.md`](../../docs/naming.md).
+
+## Verb prefixes (required)
+
+| Prefix | Returns | Meaning | Typical home |
+|--------|---------|---------|----------------|
+| `Handle*` | void | Inbound packet → validate → `Submit*` | `Session/Handler` |
+| `Submit*` / `TryConsume*` | void / bool | Intent queue write / drain | `Player/` |
+| `Apply*` | void / bool | System applies an intent (mutates if gates pass) | `Gameplay/Systems` |
+| `Try*` | bool | Expected failure without throw | any |
+| `Is*` / `Can*` | bool | Predicate only (no mutation) | any |
+| `Send*` | void | Build + transmit packet | `Protocol/` |
+| `Relay*` / `Announce*` | void | Peer orchestration | `Session/` helpers |
+| `*Fanout` | void | Multi-peer FX (crack, lid, sound) | `Gameplay/` |
+| `Begin*` / `Abort*` / `Complete*` / `Mark*` | void | Lifecycle state | `Player/` + systems |
+
+## Conditional tick work (no `Maybe*`)
+
+Name **outcome + condition**:
+
+```csharp
+// ❌ MaybeAbortIdleDig / MaybeUpdateDigTool
+// ✅
+AbortIdleDigIfStale(...)
+UpdateDigToolIfHeldChanged(...)
+```
+
+Early-return inside is fine; the name must still say what happens when the condition holds.
+
+## Banned / discouraged
+
+| Avoid | Why |
+|-------|-----|
+| `Maybe*` | Ambiguous; use `If*` / `Try*` / outcome+condition |
+| `Do*` / `Process*` / `Check*` that mutates | Vague; say Apply / Abort / Mark |
+| `Send*` outside `Protocol/` | Handlers/Systems call Protocol; they do not encode |
+| Gameplay referencing `DataPacket` / `BinaryStream` | Layering, not naming — still a blocker |
+
+## Quick examples
+
+- Handler: `HandleAuthInput` → `player.SubmitDigStart`
+- System: `ApplyDig`, `ApplyEdit`, `AbortIdleDigIfStale`
+- Protocol: `SendMoveAbsolute`, `SendLevelSoundEvent`
+- Fan-out: `BlockCrackFanout.Start`, `BlockSoundFanout.Place`
+- Visibility: `AnnounceJoin`, `RelaySkin`, `RefreshPeerView`

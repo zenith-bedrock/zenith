@@ -161,8 +161,10 @@ Levas §35–§42 (confiança operacional — void MovePlayer + shutdown flush +
 | **H1-1** | A bag cheia → break → **B** vê item entity; A anda em cima → TakeItem + bag (partial stack space OK). | AABB expand + delay 10 (§26) — **re-smoke humano** |
 | **H1-1-1** | Stack parcial (ex. grama 62) → break → item **vai ao inventário** (sem cair no chão). | **OK** (Jul 2026) |
 | **H1-3** | `/gamemode creative` → fly + UI; `/gamemode survival`; sem WARNING 77; peer **não** vê `/` no chat. | **OK** (Jul 2026) |
+| **H1-3b** | A `/gamemode creative` → B vê Creative (re-AddPlayer) **sem** B reentrar (§59). | Pendente (smoke humano) |
 | **Logs §50** | Boot default: join Info, sem flood `Connected PID`. | **OK** (Jul 2026) |
-| **Skin §49** | A muda skin → B vê update; join tardio de B: skin de A coerente. | Pendente (smoke humano) |
+| **Skin §49/§59** | Join: peers veem skin completa sem mid-game change; mid-game PlayerSkin ainda relay. | Pendente (smoke humano) |
+| **Sound §59** | A place/break → B ouve LevelSoundEvent; dig hit audível. | Pendente (smoke humano) |
 | Crash soft | Hard kill (`taskkill /F` / `kill -9`) → restart: overlays/WAL may survive; recent `inv:`/`ct:` not guaranteed. | **OK** (Jul 2026) |
 | Regressão | Held peer, rearrange, break/crack still OK. | **OK** |
 

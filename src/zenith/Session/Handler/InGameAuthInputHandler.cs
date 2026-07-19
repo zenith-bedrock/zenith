@@ -40,7 +40,8 @@ partial class InGameSessionHandler
             sneaking: packet.InputSneaking,
             sprintStart: packet.InputStartSprinting,
             sprintStop: packet.InputStopSprinting,
-            missedSwing: packet.InputMissedSwing);
+            missedSwing: packet.InputMissedSwing,
+            onGround: packet.InputOnGround);
 
         if (!input.IsSecure())
         {
@@ -151,7 +152,16 @@ partial class InGameSessionHandler
         if (player.GameMode == GameMode.Creative)
             return;
 
-        if (player.IsBreakTarget(x, y, z) || player.TryGetDigAuth(x, y, z, out _, out _))
+        var tick = session.Context.Clock.CurrentTick;
+
+        // Same-cell crack/continue: refresh activity only — do not re-Start crack.
+        if (player.IsBreakTarget(x, y, z))
+        {
+            player.MarkDigActive(tick);
+            return;
+        }
+
+        if (player.TryGetDigAuth(x, y, z, out _, out _))
             return;
 
         var block = session.Context.World.GetBlock(x, y, z);
@@ -166,7 +176,6 @@ partial class InGameSessionHandler
             return;
         }
 
-        var tick = session.Context.Clock.CurrentTick;
         if (!player.SubmitDigStart(x, y, z, tick, need, heldId))
             session.Context.Logger.Debug($"Dropped dig start from {player.Username}: dig queue full.");
         else

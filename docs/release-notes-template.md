@@ -9,6 +9,7 @@
 - Chest lid BlockEvent + PlaceFacing (prior leaf on develop)
 - **Double-chest** (ADR §56): sneak-place → 54-slot UI; persist 2× `ct:` of 27
 - StackId + DigProfiles foundation (ADR §55)
+- **Join wire fidelity** (ADR §59): full login skin on PlayerList; ClientProfile (XUID/device) on PlayerList/AddPlayer/chat; `/gamemode` peer re-AddPlayer; server-authored place/break/hit LevelSoundEvent
 
 ### Smoke (required before GitHub `v0.0.2-alpha` tag — human Bedrock client)
 
@@ -16,6 +17,9 @@
 - [ ] Double-chest: sneak-place partner → open either half → **54** slots; ISR across halves; restart keeps both `ct:`
 - [ ] Break one half → dump that half; partner remains single 27; lids close for viewers
 - [ ] Non-sneak click chest opens (even with held item); sneak + held places on face
+- [ ] Join skins: A and B join with distinct skins → each sees the other **without** mid-game skin change
+- [ ] `/gamemode creative` on A → B sees Creative (flight/abilities) **without** B rejoining
+- [ ] Place/break: B hears block sound; dig hit ticks audible to peers
 
 ### Still not in this build
 - Enchants / durability / tool recipes / gold-netherite / wrong-tool no-drop / gravity / Mojang worlds / `players/` volume
@@ -38,7 +42,7 @@ Gate closed Jul 2026 (`docs/alpha-gate.md`): baseline MP 1–12, S35–S41, Dokp
 - Login → resource packs stub → PreSpawn → InGame on a flat world
 - Two+ players: see each other (`PlayerList` / `AddPlayer` / `RemoveActor`), move (`MoveActorAbsolute`), chat (`TextPacket` with rate limit)
 - Held item visible to peers (`MobEquipment`)
-- Skins from login JWT when present (placeholder fallback)
+- Skins from login ClientData on PlayerList (full SerializedSkin; SkinWire only if parse fails)
 - Chunk streaming as you walk (`ChunkStreamSystem` + overlays)
 - MOTD online count; stable LAN identity via persisted `server.guid`
 
@@ -50,7 +54,7 @@ Gate closed Jul 2026 (`docs/alpha-gate.md`): baseline MP 1–12, S35–S41, Dokp
 - Place / break with server-authoritative timing; dig crack visible to self **and** peers
 - Join while others are building: overlay catch-up so late joiners see edits
 - Chests (single, facing-aware) with container UI; contents persist as `ct:`
-- Floor drops as **server cells** when inventory is full (no dropped-item entity on the wire yet — peers may not *see* the item entity)
+- Floor drops as **server cells** + `AddItemActor` / `TakeItemActor` wire when inventory is full (§26)
 
 #### Inventory, craft, modes
 - 36-slot bag + hotbar; ItemStackRequest rearrange / SHIFT moves
@@ -59,7 +63,7 @@ Gate closed Jul 2026 (`docs/alpha-gate.md`): baseline MP 1–12, S35–S41, Dokp
 - Inventory persists as `inv:{uuid}` across graceful restart and client quit
 
 #### Survival / safety nets
-- Void soft-rescue: teleport camera to world spawn `(0, FlatSpawnY, 0)`; health stays 20 (not full death/respawn)
+- Void → death screen (`DeathInfo` + Respawn); respawn at world spawn; inventory kept (§40)
 - Graceful stop (Ctrl+C / SIGTERM): Bedrock `DisconnectPacket` + LevelDB `FlushAsync` before UDP close
 - Wrong client protocol: PlayStatus incompatible flushed so the client can show outdated UI
 

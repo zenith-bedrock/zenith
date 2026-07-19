@@ -275,12 +275,18 @@ partial class InGameSessionHandler : ISessionHandler
             return;
 
         player.LastEmoteTick = tick;
+        var xuid = !string.IsNullOrEmpty(player.Session.Profile.Xuid)
+            ? player.Session.Profile.Xuid
+            : packet.Xuid;
+        var platformChatId = !string.IsNullOrEmpty(player.Session.Profile.PlatformChatId)
+            ? player.Session.Profile.PlatformChatId
+            : packet.PlatformChatId;
         PlayerVisibility.RelayEmote(
             player,
             packet.EmoteId,
             packet.TickLength,
-            packet.Xuid,
-            packet.PlatformChatId,
+            xuid,
+            platformChatId,
             session.Context.PlayerManager.SnapshotOnline());
     }
 

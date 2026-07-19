@@ -14,6 +14,7 @@ readonly struct AbsoluteActorPose
     public float Pitch { get; init; }
     public float Yaw { get; init; }
     public float HeadYaw { get; init; }
+    public bool OnGround { get; init; }
 }
 
 /// <summary>Transmite intenções de entidade. Sem lógica de gameplay.</summary>
@@ -44,7 +45,9 @@ sealed class EntityProtocol
         if (poses.Count == 1)
         {
             var p = poses[0];
-            SendMoveAbsolute(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw);
+            SendMoveAbsolute(
+                p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw,
+                p.OnGround ? MoveActorAbsolutePacket.FLAG_ON_GROUND : (byte)0);
             return;
         }
 
@@ -52,7 +55,9 @@ sealed class EntityProtocol
         for (var i = 0; i < poses.Count; i++)
         {
             var p = poses[i];
-            packets[i] = CreateMoveAbsolute(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw);
+            packets[i] = CreateMoveAbsolute(
+                p.ActorRuntimeId, p.X, p.Y, p.Z, p.Pitch, p.Yaw, p.HeadYaw,
+                p.OnGround ? MoveActorAbsolutePacket.FLAG_ON_GROUND : (byte)0);
         }
 
         _session.SendDataPacket(packets);
@@ -100,12 +105,37 @@ sealed class EntityProtocol
             entityRuntimeId, x, EntityHitboxes.AbsoluteWireY(y), z, pitch, yaw, headYaw, tick));
     }
 
-    public void SendPlayerListAdd(Guid uuid, long actorUniqueId, string username, byte[]? skinRgba = null, uint skinWidth = 0, uint skinHeight = 0)
+    public void SendPlayerListAdd(
+        Guid uuid,
+        long actorUniqueId,
+        string username,
+        SerializedSkin? skin = null,
+        byte[]? skinRgba = null,
+        uint skinWidth = 0,
+        uint skinHeight = 0,
+        bool verified = false,
+        string xboxUserId = "",
+        string platformChatId = "",
+        int buildPlatform = -1)
     {
         _session.SendDataPacket(new PlayerListPacket
         {
             Type = PlayerListPacket.TypeAdd,
-            Entries = [PlayerListEntry.ForAdd(uuid, actorUniqueId, username, skinRgba, skinWidth, skinHeight)]
+            Entries =
+            [
+                PlayerListEntry.ForAdd(
+                    uuid,
+                    actorUniqueId,
+                    username,
+                    skin,
+                    skinRgba,
+                    skinWidth,
+                    skinHeight,
+                    verified,
+                    xboxUserId,
+                    platformChatId,
+                    buildPlatform)
+            ]
         });
     }
 
@@ -131,13 +161,17 @@ sealed class EntityProtocol
         NetworkItemStack heldItem,
         int gameMode = AbilityBits.WireGameModeSurvival,
         bool sneaking = false,
-        bool sprinting = false)
+        bool sprinting = false,
+        string platformChatId = "",
+        string deviceId = "",
+        int buildPlatform = -1)
     {
         _session.SendDataPacket(new AddPlayerPacket
         {
             Uuid = uuid,
             Username = username,
             ActorRuntimeId = actorRuntimeId,
+            PlatformChatId = platformChatId,
             PositionX = x,
             PositionY = y,
             PositionZ = z,
@@ -147,7 +181,9 @@ sealed class EntityProtocol
             HeldItem = heldItem,
             GameMode = gameMode,
             Sneaking = sneaking,
-            Sprinting = sprinting
+            Sprinting = sprinting,
+            DeviceId = deviceId,
+            BuildPlatform = buildPlatform
         });
     }
 

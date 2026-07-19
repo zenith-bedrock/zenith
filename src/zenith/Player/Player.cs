@@ -62,7 +62,10 @@ class Player
     /// <summary>Held hotbar stack identity (ADR §55).</summary>
     public StackId HeldStackId => Inventory.GetStackId(SelectedHotbarSlot);
 
-    /// <summary>Skin RGBA opcional parseada do login (senão PlayerList usa placeholder).</summary>
+    /// <summary>
+    /// Classic RGBA mirror of Session.Skin when dimensions match (PlayerList fallback /
+    /// mid-game classic update). Full wire skin lives on <c>NetworkSession.Skin</c> (ADR §49).
+    /// </summary>
     public byte[]? SkinRgba { get; set; }
     public uint SkinWidth { get; set; }
     public uint SkinHeight { get; set; }
@@ -100,8 +103,13 @@ class Player
     /// <summary>AuthInput pose modes applied on tick (§53).</summary>
     public bool IsSneaking { get; set; }
     public bool IsSprinting { get; set; }
+
+    /// <summary>AuthInput VerticalCollision — peer Absolute ON_GROUND (default true until first input).</summary>
+    public bool IsOnGround { get; set; } = true;
+
     public bool LastReplicatedSneaking { get; set; }
     public bool LastReplicatedSprinting { get; set; }
+    public bool LastReplicatedOnGround { get; set; } = true;
 
     /// <summary>GameClock tick of last relayed emote (rate-limit §53).</summary>
     public ulong LastEmoteTick { get; set; }
@@ -116,6 +124,15 @@ class Player
     /// <summary>Held <see cref="StackId"/> at dig start / last retarget (ADR §55).</summary>
     public StackId DigHeldStackId { get; private set; }
     public bool HasBreakTarget { get; private set; }
+
+    /// <summary>
+    /// Last GameClock tick that saw start/crack/continue for the dig target.
+    /// Idle past <see cref="DigIdleAbortTicks"/> → StopCrack (client otherwise plays full duration).
+    /// </summary>
+    public ulong LastDigActivityTick { get; private set; }
+
+    /// <summary>Ticks without dig AuthInput before aborting crack (0.5s @ 20 TPS).</summary>
+    public const ulong DigIdleAbortTicks = 10;
 
     /// <summary>Open chest UI (ADR §56) — primary + optional partner; SlotCount 27|54.</summary>
     public OpenChestView? OpenChest { get; set; }
@@ -135,6 +152,14 @@ class Player
         BreakRequiredTicks = requiredTicks;
         DigHeldStackId = heldStackId;
         HasBreakTarget = true;
+        LastDigActivityTick = tick;
+    }
+
+    /// <summary>Refresh dig activity (same-cell crack/continue) so idle abort does not fire.</summary>
+    public void MarkDigActive(ulong tick)
+    {
+        if (!HasBreakTarget) return;
+        LastDigActivityTick = tick;
     }
 
     /// <summary>Progress-preserving dig retarget when held tool changes mid-break (ADR §27).</summary>
@@ -151,6 +176,7 @@ class Player
         HasBreakTarget = false;
         BreakRequiredTicks = 0;
         DigHeldStackId = default;
+        LastDigActivityTick = 0;
     }
 
     /// <summary>

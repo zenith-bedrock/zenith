@@ -38,6 +38,8 @@ class PlayerAuthInputPacket : DataPacket
     public const int InputFlagPerformItemStackRequest = 36;
     public const int InputFlagMissedSwing = 39;
     public const int InputFlagClientPredictedVehicle = 45;
+    /// <summary>Client vertical collision — strongly correlates with on-ground (protocol ≥729).</summary>
+    public const int InputFlagVerticalCollision = 50;
 
     public const int ActionStartBreak = 0;
     public const int ActionAbortBreak = 1;
@@ -61,6 +63,8 @@ class PlayerAuthInputPacket : DataPacket
     public bool InputStartSprinting { get; set; }
     public bool InputStopSprinting { get; set; }
     public bool InputMissedSwing { get; set; }
+    /// <summary>AuthInput VerticalCollision (bit 50) — peer Absolute ON_GROUND.</summary>
+    public bool InputOnGround { get; set; }
 
     public override Span<byte> Encode() => Array.Empty<byte>();
 
@@ -100,6 +104,7 @@ class PlayerAuthInputPacket : DataPacket
         InputStartSprinting = InputBitsetTest(inputFlags, InputFlagStartSprinting);
         InputStopSprinting = InputBitsetTest(inputFlags, InputFlagStopSprinting);
         InputMissedSwing = InputBitsetTest(inputFlags, InputFlagMissedSwing);
+        InputOnGround = InputBitsetTest(inputFlags, InputFlagVerticalCollision);
 
         _ = stream.ReadUnsignedVarInt(); // input_mode
         _ = stream.ReadUnsignedVarInt(); // play_mode

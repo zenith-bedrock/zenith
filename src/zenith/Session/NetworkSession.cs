@@ -28,6 +28,21 @@ class NetworkSession
 
     /// <summary>Só deixa de ser null depois que o LoginSessionHandler valida a identidade.</summary>
     public Player.Player? Player { get; set; }
+
+    /// <summary>
+    /// Join/mid-game skin wire DTO (Packets). Null until ClientData parse or mid-game
+    /// PlayerSkin. Lives on Session — not Player — so domain never references Packets (ADR §49).
+    /// </summary>
+    public SerializedSkin? Skin { get; set; }
+
+    /// <summary>TrustedSkin from ClientData (PlayerList verified flag).</summary>
+    public bool SkinTrusted { get; set; }
+
+    /// <summary>
+    /// Join identity / device fields for PlayerList, AddPlayer, chat (ADR §59).
+    /// </summary>
+    public ClientProfile Profile { get; set; } = ClientProfile.Empty;
+
     public byte CompressionAlgorithm { get; set; } = PacketCompression.NONE;
 
     /// <summary>Evita dois CompleteSpawnAsync se o cliente reenviar RequestChunkRadius.</summary>

@@ -24,6 +24,9 @@ struct MovementInputState
     /// <summary>One-shot: fan SwingArm to peers this tick (§53).</summary>
     public bool MissedSwing;
 
+    /// <summary>AuthInput VerticalCollision — peer Absolute FLAG_ON_GROUND.</summary>
+    public bool OnGround;
+
     /// <summary>Domain pose — <paramref name="y"/> is feet.</summary>
     public static MovementInputState From(float x, float y, float z, float pitch, float yaw) => new()
     {
@@ -32,7 +35,8 @@ struct MovementInputState
         Y = y,
         Z = z,
         Pitch = pitch,
-        Yaw = yaw
+        Yaw = yaw,
+        OnGround = true
     };
 
     /// <summary>
@@ -47,13 +51,15 @@ struct MovementInputState
         bool sneaking = false,
         bool sprintStart = false,
         bool sprintStop = false,
-        bool missedSwing = false)
+        bool missedSwing = false,
+        bool onGround = true)
     {
         var state = From(x, eyeY - Blocks.PlayerEyeHeight, z, pitch, yaw);
         state.Sneaking = sneaking;
         state.SprintStart = sprintStart;
         state.SprintStop = sprintStop;
         state.MissedSwing = missedSwing;
+        state.OnGround = onGround;
         return state;
     }
 
