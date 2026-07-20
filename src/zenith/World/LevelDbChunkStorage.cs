@@ -5,14 +5,14 @@ using Zenith.LevelDB;
 namespace Zenith.World;
 
 /// <summary>
-/// Backend LevelDB (chaves Zenith, não formato vanilla Mojang).
+/// Backend LevelDB — Zenith keys via <see cref="WorldStorageKeys"/> (not Mojang BDS format).
 /// Colunas: <c>c:x:z</c>. Overlay permanente: <c>ov:x:y:z</c> → int32 LE runtime id.
 /// Overlay Puts enfileiram e retornam sem esperar disco (worker único sob <c>_gate</c>).
 /// </summary>
 sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 {
-    private static readonly byte[] OverlayPrefix = Encoding.UTF8.GetBytes("ov:");
-    private static readonly byte[] ChestPrefix = Encoding.UTF8.GetBytes("ct:");
+    private static readonly byte[] OverlayPrefix = WorldStorageKeys.OverlayPrefixBytes;
+    private static readonly byte[] ChestPrefix = WorldStorageKeys.ChestPrefixBytes;
 
     private readonly DB _db;
     private readonly object _gate = new();
@@ -116,7 +116,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                         break;
 
                     var key = Encoding.UTF8.GetString(keyBytes);
-                    if (!TryParseOverlayKey(key, out var x, out var y, out var z))
+                    if (!WorldStorageKeys.TryParseOverlay(key, out var x, out var y, out var z))
                     {
                         it.Next();
                         continue;
@@ -180,7 +180,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                         break;
 
                     var key = Encoding.UTF8.GetString(keyBytes);
-                    if (!TryParseChestKey(key, out var x, out var y, out var z))
+                    if (!WorldStorageKeys.TryParseChest(key, out var x, out var y, out var z))
                     {
                         it.Next();
                         continue;
@@ -205,7 +205,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                _db.Put(InventoryKey(uuid), blob);
+                _db.Put(WorldStorageKeys.Inventory(uuid), blob);
             }
         }, cancellationToken));
     }
@@ -213,7 +213,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(InventoryKey(uuid), cancellationToken));
+        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(WorldStorageKeys.Inventory(uuid), cancellationToken));
     }
 
     public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
@@ -225,7 +225,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                _db.Put(PlayerDataKey(uuid), blob);
+                _db.Put(WorldStorageKeys.PlayerData(uuid), blob);
             }
         }, cancellationToken));
     }
@@ -233,7 +233,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(PlayerDataKey(uuid), cancellationToken));
+        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(WorldStorageKeys.PlayerData(uuid), cancellationToken));
     }
 
     /// <summary>
@@ -304,7 +304,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     {
         while (_overlayWrites.TryDequeue(out var write))
         {
-            var key = OverlayKey(write.X, write.Y, write.Z);
+            var key = WorldStorageKeys.Overlay(write.X, write.Y, write.Z);
             lock (_gate)
             {
                 if (write.Delete)
@@ -315,46 +315,9 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         }
     }
 
-    private static byte[] ColumnKey(ChunkCoord coord) =>
-        Encoding.UTF8.GetBytes($"c:{coord.X}:{coord.Z}");
+    private static byte[] ColumnKey(ChunkCoord coord) => WorldStorageKeys.Column(coord);
 
-    private static byte[] OverlayKey(int x, int y, int z) =>
-        Encoding.UTF8.GetBytes($"ov:{x}:{y}:{z}");
-
-    private static byte[] ChestKey(int x, int y, int z) =>
-        Encoding.UTF8.GetBytes($"ct:{x}:{y}:{z}");
-
-    private static byte[] InventoryKey(Guid uuid) =>
-        Encoding.UTF8.GetBytes($"inv:{uuid.ToString("D").ToLowerInvariant()}");
-
-    private static byte[] PlayerDataKey(Guid uuid) =>
-        Encoding.UTF8.GetBytes($"pd:{uuid.ToString("D").ToLowerInvariant()}");
-
-    private static bool TryParseOverlayKey(string key, out int x, out int y, out int z)
-    {
-        x = y = z = 0;
-        if (!key.StartsWith("ov:", StringComparison.Ordinal)) return false;
-        var s = key.AsSpan(3);
-        var sep1 = s.IndexOf(':');
-        if (sep1 < 0 || !int.TryParse(s[..sep1], out x)) return false;
-        s = s[(sep1 + 1)..];
-        var sep2 = s.IndexOf(':');
-        if (sep2 < 0 || !int.TryParse(s[..sep2], out y)) return false;
-        return int.TryParse(s[(sep2 + 1)..], out z);
-    }
-
-    private static bool TryParseChestKey(string key, out int x, out int y, out int z)
-    {
-        x = y = z = 0;
-        if (!key.StartsWith("ct:", StringComparison.Ordinal)) return false;
-        var s = key.AsSpan(3);
-        var sep1 = s.IndexOf(':');
-        if (sep1 < 0 || !int.TryParse(s[..sep1], out x)) return false;
-        s = s[(sep1 + 1)..];
-        var sep2 = s.IndexOf(':');
-        if (sep2 < 0 || !int.TryParse(s[..sep2], out y)) return false;
-        return int.TryParse(s[(sep2 + 1)..], out z);
-    }
+    private static byte[] ChestKey(int x, int y, int z) => WorldStorageKeys.Chest(x, y, z);
 
     private static bool StartsWith(byte[] data, byte[] prefix)
     {
