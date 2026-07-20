@@ -76,6 +76,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 15. Leaf CI (`dotnet test`) runs on push/PR; Bedrock E2E is still human / beta-hard — do not treat green unit CI as join/place/chest proof.
 16. Protocol smoke bot (ADR §58): separate repo [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + `bedrock-protocol`) — not mixed into the C# tree; offline join first; does not replace Gate A human client.
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
+18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 ```
 
 ### Protocol smoke bot
@@ -131,7 +132,7 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reco
 
 ### Bedrock references (local clones)
 
-Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `endstone`, `powernukkitx`. Use for wire/world layout study; do not vendor into the C# tree.
+Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`). Use for wire/world/storage study; do not vendor into the C# tree.
 
 ### Bedrock protocol docs (official)
 

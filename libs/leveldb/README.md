@@ -2,6 +2,8 @@
 
 Managed key/value store for Zenith chunk overlay storage (`c:` / `ov:` keys). Own on-disk format (ZLDB) — **not** binary-compatible with `LevelDB.Standard`, Mojang Bedrock worlds, or RocksDB.
 
+**Product stance (ADR §61):** ZLDB stays the **default** Zenith world engine. Opening Mojang/BDS folders or converting them into Zenith keys is a separate `IChunkStorage` backend + offline converter — not a rewrite of this library into a full zlib LSM.
+
 ## Constraint (read this first)
 
 **The entire dataset must fit in RAM while the database is open.**  

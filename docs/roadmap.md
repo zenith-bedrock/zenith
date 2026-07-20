@@ -30,7 +30,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
 | 5 | **Double-chest** (sneak-place + 54 UI) | **Shipped** in `v0.0.2-alpha` (ADR §56) — pair + 54 UI + 2×`ct:`. |
 | 6 | **Block gravity** (sand/gravel) | **Shipped** (Jul 2026): `GravitySystem` + `GravityPendingStore`; discrete UpdateBlock falls (ADR §57). No falling_block actor. |
 | 7 | **Playerdata reconnect** (`pd:`) | **Shipped** (Jul 2026): pose + GameMode in world LevelDB (ADR §60). No `players/` volume. |
-| 8 | **World beyond flat** | Noise/biomes or import strategy — only when flat+overlay no longer answers LAN product questions. |
+| 8 | **World beyond flat** | **ADR §61 recorded:** ZLDB stays default; Mojang open via seam + offline BDS→Zenith converter. Noise/biomes still optional product choice — implement backends only with demonstrated need. |
 
 If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
 
@@ -40,7 +40,7 @@ If two contributors pick from this list, prefer **different rows**, not both bui
 
 **Join wire fidelity (ADR §59):** Session-owned `ClientProfile` + full join skin; `/gamemode` peer RefreshPeerView; server-authored LevelSound on place/break/hit — **shipped** in `v0.0.2-alpha`.
 
-**Release tag `v0.0.2-alpha`:** closes H1 rows 1–5 + §55/§56/§59 on `main`/`develop`. Notes: [`release-notes-template.md`](release-notes-template.md). Gravity (§57) + playerdata (§60) shipped on develop after the tag. **Next leaf:** world beyond flat (H1#8) when product needs it.
+**Release tag `v0.0.2-alpha`:** closes H1 rows 1–5 + §55/§56/§59 on `main`/`develop`. Notes: [`release-notes-template.md`](release-notes-template.md). Gravity (§57) + playerdata (§60) shipped on develop after the tag. **Next:** H1#8 per ADR §61 (storage seam / converter spike) when product needs Mojang worlds or gen — not “replace ZLDB.”
 
 **Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo** (no JS in the C# tree). Human Gate A remains the product smoke authority for tags.
 
@@ -55,7 +55,7 @@ Pull only with ADR + demonstrated need:
 - Hunger / food / damage pipeline (beyond spawn attributes)
 - Armor / ender chest / hoppers
 - Stairs/beds/doors generic block-state facing stack
-- Multi-world load / Mojang world format
+- Multi-world load / Mojang world format (**direction:** §61 seam + converter — not ZLDB replacement)
 - Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21)
 - `/` command **framework** + Bedrock autocomplete
 - Automating protocol schema CI / full load harness
