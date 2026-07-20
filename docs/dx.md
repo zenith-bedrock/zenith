@@ -77,6 +77,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 16. Protocol smoke bot (ADR §58): separate repo [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + `bedrock-protocol`) — not mixed into the C# tree; offline join first; does not replace Gate A human client.
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
+19. World domain (ADR §62): `World` façade; `ITerrainProvider` for base columns; `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays.
 ```
 
 ### Protocol smoke bot

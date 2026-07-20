@@ -80,7 +80,7 @@ class ZenithServer
         serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
 
         _chunkStorage = CreateChunkStorage(config, serverLogger);
-        var world = new World.World(_chunkStorage, serverLogger);
+        var world = new World.World(_chunkStorage, serverLogger, FlatTerrainProvider.Instance);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world);

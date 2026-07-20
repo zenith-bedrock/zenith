@@ -5,10 +5,11 @@ using Zenith.Raknet.Log;
 namespace Zenith.World;
 
 /// <summary>
-/// Mundo: colunas base via <see cref="IChunkStorage"/> + overlay esparso permanente.
+/// Mundo: colunas base via <see cref="ITerrainProvider"/> + <see cref="IChunkStorage"/> + overlay esparso.
 /// Overlay SoftCap (§36): refuse new keys at <see cref="OverrideSoftCap"/>; compact when rid == base;
 /// overwrite / hydrate always allowed. Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
 /// Column index (§36 adendo): <see cref="GetOverlaysInColumn"/> O(bucket), not O(all overlays).
+/// Terrain / storage seams: ADR §62.
 /// </summary>
 sealed class World
 {
@@ -19,8 +20,7 @@ sealed class World
     internal const int OverrideSoftCap = 10_000;
 
     private readonly IChunkStorage _storage;
-    private readonly byte[] _flatOverworldPayload;
-    private readonly int _flatSubChunkCount;
+    private readonly ITerrainProvider _terrain;
     private readonly ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
     /// <summary>
     /// Secondary index by chunk for column stream. SSOT for GetBlock remains <see cref="_blockOverrides"/>;
@@ -36,14 +36,14 @@ sealed class World
 
     public int OverrideCount => _blockOverrides.Count;
 
-    public World(IChunkStorage storage, ILogger? logger = null)
+    public World(IChunkStorage storage, ILogger? logger = null, ITerrainProvider? terrain = null)
     {
         _storage = storage;
+        _terrain = terrain ?? FlatTerrainProvider.Instance;
         _logger = logger;
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
         GravityPending = new GravityPendingStore(logger);
-        (_flatSubChunkCount, _flatOverworldPayload) = ChunkPayloads.BuildFlatOverworld();
         storage.ForEachOverlayAsync(StoreOverlay)
             .AsTask()
             .GetAwaiter()
@@ -125,13 +125,15 @@ sealed class World
         }
         else if (existing is null)
         {
-            // ADR §45: miss → in-memory flat only (do not materialize identical c:x:z blobs).
-            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, _flatSubChunkCount, _flatOverworldPayload);
+            // ADR §45: miss → in-memory base only (do not materialize identical c:x:z blobs).
+            var terrain = _terrain.GetBaseColumn(chunkX, chunkZ);
+            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, terrain.SubChunkCount, terrain.Payload);
         }
         else
         {
-            // Legacy empty/corrupt c: — regenerate flat and Put so disk self-heals.
-            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, _flatSubChunkCount, _flatOverworldPayload);
+            // Legacy empty/corrupt c: — regenerate base and Put so disk self-heals.
+            var terrain = _terrain.GetBaseColumn(chunkX, chunkZ);
+            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, terrain.SubChunkCount, terrain.Payload);
             await _storage.PutAsync(bas, ct).ConfigureAwait(false);
             bas = (await _storage.GetAsync(coord, ct).ConfigureAwait(false)) ?? bas;
         }
@@ -160,7 +162,7 @@ sealed class World
     /// </summary>
     public bool CanAcceptBlockWrite(int x, int y, int z, int blockRuntimeId)
     {
-        if (blockRuntimeId == SampleBaseBlock(x, y, z))
+        if (blockRuntimeId == _terrain.SampleBaseBlock(x, y, z))
             return true;
         if (_blockOverrides.ContainsKey((x, y, z)))
             return true;
@@ -176,7 +178,7 @@ sealed class World
     public bool TrySetBlock(int x, int y, int z, int blockRuntimeId)
     {
         var cell = (x, y, z);
-        var baseRid = SampleBaseBlock(x, y, z);
+        var baseRid = _terrain.SampleBaseBlock(x, y, z);
         var had = _blockOverrides.ContainsKey(cell);
 
         if (blockRuntimeId == baseRid)
@@ -237,12 +239,12 @@ sealed class World
         }
     }
 
-    /// <summary>Overlay se existir; senão amostra do terreno base flat.</summary>
+    /// <summary>Overlay se existir; senão amostra do terreno base (<see cref="ITerrainProvider"/>).</summary>
     public int GetBlock(int x, int y, int z)
     {
         if (_blockOverrides.TryGetValue((x, y, z), out var id))
             return id;
-        return SampleBaseBlock(x, y, z);
+        return _terrain.SampleBaseBlock(x, y, z);
     }
 
     public IReadOnlyList<BlockOverride> GetOverlaysInColumn(int chunkX, int chunkZ)
@@ -282,18 +284,9 @@ sealed class World
         }
     }
 
-    private static int SampleBaseBlock(int x, int y, int z)
-    {
-        _ = x;
-        _ = z;
-        if (y >= Blocks.FlatMinY && y <= Blocks.FlatStoneTopY) return Blocks.Stone;
-        if (y == Blocks.FlatGrassY) return Blocks.GrassBlock;
-        return Blocks.Air;
-    }
-
     /// <summary>
     /// SubChunkCount&gt;0 with a tiny payload is almost always corrupt legacy / empty biomes-only
-    /// leftovers — regenerate flat so clients never get all-air columns that stick in LevelDB.
+    /// leftovers — regenerate base so clients never get all-air columns that stick in LevelDB.
     /// </summary>
     private static bool LooksLikeTerrainPayload(ChunkColumnData column)
     {
