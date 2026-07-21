@@ -30,6 +30,20 @@ static class Blocks
     private static int _water;
     private static int _cobblestone;
     private static int _deepslate;
+    private static int _coalOre;
+    private static int _ironOre;
+    private static int _copperOre;
+    private static int _goldOre;
+    private static int _diamondOre;
+    private static int _lapisOre;
+    private static int _redstoneOre;
+    private static int _deepslateCoalOre;
+    private static int _deepslateIronOre;
+    private static int _deepslateCopperOre;
+    private static int _deepslateGoldOre;
+    private static int _deepslateDiamondOre;
+    private static int _deepslateLapisOre;
+    private static int _deepslateRedstoneOre;
     private static int _chest;
     private static int _chestNorth;
     private static int _chestSouth;
@@ -55,6 +69,20 @@ static class Blocks
     public static int Water { get { EnsureLoaded(); return _water; } }
     public static int Cobblestone { get { EnsureLoaded(); return _cobblestone; } }
     public static int Deepslate { get { EnsureLoaded(); return _deepslate; } }
+    public static int CoalOre { get { EnsureLoaded(); return _coalOre; } }
+    public static int IronOre { get { EnsureLoaded(); return _ironOre; } }
+    public static int CopperOre { get { EnsureLoaded(); return _copperOre; } }
+    public static int GoldOre { get { EnsureLoaded(); return _goldOre; } }
+    public static int DiamondOre { get { EnsureLoaded(); return _diamondOre; } }
+    public static int LapisOre { get { EnsureLoaded(); return _lapisOre; } }
+    public static int RedstoneOre { get { EnsureLoaded(); return _redstoneOre; } }
+    public static int DeepslateCoalOre { get { EnsureLoaded(); return _deepslateCoalOre; } }
+    public static int DeepslateIronOre { get { EnsureLoaded(); return _deepslateIronOre; } }
+    public static int DeepslateCopperOre { get { EnsureLoaded(); return _deepslateCopperOre; } }
+    public static int DeepslateGoldOre { get { EnsureLoaded(); return _deepslateGoldOre; } }
+    public static int DeepslateDiamondOre { get { EnsureLoaded(); return _deepslateDiamondOre; } }
+    public static int DeepslateLapisOre { get { EnsureLoaded(); return _deepslateLapisOre; } }
+    public static int DeepslateRedstoneOre { get { EnsureLoaded(); return _deepslateRedstoneOre; } }
 
     /// <summary>Item / recipe / default place form — south palette entry.</summary>
     public static int Chest { get { EnsureLoaded(); return _chest; } }
@@ -83,6 +111,20 @@ static class Blocks
         _water = palette.Require("minecraft:water");
         _cobblestone = palette.Require("minecraft:cobblestone");
         _deepslate = palette.Require("minecraft:deepslate");
+        _coalOre = palette.Require("minecraft:coal_ore");
+        _ironOre = palette.Require("minecraft:iron_ore");
+        _copperOre = palette.Require("minecraft:copper_ore");
+        _goldOre = palette.Require("minecraft:gold_ore");
+        _diamondOre = palette.Require("minecraft:diamond_ore");
+        _lapisOre = palette.Require("minecraft:lapis_ore");
+        _redstoneOre = palette.Require("minecraft:redstone_ore");
+        _deepslateCoalOre = palette.Require("minecraft:deepslate_coal_ore");
+        _deepslateIronOre = palette.Require("minecraft:deepslate_iron_ore");
+        _deepslateCopperOre = palette.Require("minecraft:deepslate_copper_ore");
+        _deepslateGoldOre = palette.Require("minecraft:deepslate_gold_ore");
+        _deepslateDiamondOre = palette.Require("minecraft:deepslate_diamond_ore");
+        _deepslateLapisOre = palette.Require("minecraft:deepslate_lapis_ore");
+        _deepslateRedstoneOre = palette.Require("minecraft:deepslate_redstone_ore");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -125,6 +167,20 @@ static class Blocks
             [_water] = "minecraft:water",
             [_cobblestone] = "minecraft:cobblestone",
             [_deepslate] = "minecraft:deepslate",
+            [_coalOre] = "minecraft:coal_ore",
+            [_ironOre] = "minecraft:iron_ore",
+            [_copperOre] = "minecraft:copper_ore",
+            [_goldOre] = "minecraft:gold_ore",
+            [_diamondOre] = "minecraft:diamond_ore",
+            [_lapisOre] = "minecraft:lapis_ore",
+            [_redstoneOre] = "minecraft:redstone_ore",
+            [_deepslateCoalOre] = "minecraft:deepslate_coal_ore",
+            [_deepslateIronOre] = "minecraft:deepslate_iron_ore",
+            [_deepslateCopperOre] = "minecraft:deepslate_copper_ore",
+            [_deepslateGoldOre] = "minecraft:deepslate_gold_ore",
+            [_deepslateDiamondOre] = "minecraft:deepslate_diamond_ore",
+            [_deepslateLapisOre] = "minecraft:deepslate_lapis_ore",
+            [_deepslateRedstoneOre] = "minecraft:deepslate_redstone_ore",
             [_chestSouth] = "minecraft:chest",
             [_chestWest] = "minecraft:chest",
             [_chestNorth] = "minecraft:chest",
@@ -246,6 +302,9 @@ static class Blocks
         _loaded = false;
         _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _oakLeaves = _sand = _gravel = 0;
         _bedrock = _water = _cobblestone = _deepslate = _chest = 0;
+        _coalOre = _ironOre = _copperOre = _goldOre = _diamondOre = _lapisOre = _redstoneOre = 0;
+        _deepslateCoalOre = _deepslateIronOre = _deepslateCopperOre = _deepslateGoldOre = 0;
+        _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
         _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
         _chestIds = null;
         _placeableIds = null;
