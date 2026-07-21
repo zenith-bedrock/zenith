@@ -191,8 +191,8 @@ public class TerrainProviderTests
         var columns = await world.GetRadiusAsync(0, 0, radius: 4);
         sw.Stop();
         Assert.Equal(81, columns.Count);
-        // PreSpawn must finish before typical client/RakNet timeout. Parallel gen; allow suite contention.
-        Assert.True(sw.ElapsedMilliseconds < 90_000, $"81 noise columns took {sw.ElapsedMilliseconds}ms");
+        // PreSpawn must finish before typical client/RakNet timeout (ADR §69).
+        Assert.True(sw.ElapsedMilliseconds < 15_000, $"81 noise columns took {sw.ElapsedMilliseconds}ms");
     }
 
     [Fact]

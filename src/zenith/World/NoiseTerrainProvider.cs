@@ -1,6 +1,6 @@
 namespace Zenith.World;
 
-/// <summary>Deterministic overworld — biomes, hills, water, caves, trees, ruins, ore (ADR §63–§67).</summary>
+/// <summary>Deterministic overworld — biomes, hills, water, caves, trees, ruins, ore (ADR §63–§69).</summary>
 sealed class NoiseTerrainProvider : ITerrainProvider
 {
     private readonly int _seed;
@@ -10,12 +10,7 @@ sealed class NoiseTerrainProvider : ITerrainProvider
     public TerrainColumn GetBaseColumn(int chunkX, int chunkZ)
     {
         var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, _seed);
-        var biomeId = OverworldBiomeSampler.NetworkIdAt(chunkX * 16 + 8, chunkZ * 16 + 8, _seed);
-        var (subChunkCount, payload) = ChunkPayloads.BuildOverworldColumn(
-            chunkX,
-            chunkZ,
-            (x, y, z) => OverworldTerrainSampler.SampleNoiseBlock(x, y, z, _seed, caves),
-            biomeId);
+        var (subChunkCount, payload) = ChunkPayloads.BuildNoiseOverworldColumn(chunkX, chunkZ, _seed, caves);
         return new TerrainColumn(subChunkCount, payload);
     }
 

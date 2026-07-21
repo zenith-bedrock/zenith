@@ -42,8 +42,9 @@ public class CaveCarverTests
                 for (var y = 8; y < 48; y++)
                 {
                     var surface = OverworldTerrainSampler.SurfaceY(x, z, seed);
-                    var expected = OverworldCaveCarver.IsCarved(x, y, z, seed, surface);
-                    Assert.Equal(expected, ctx.IsCarved(x, y, z, surface));
+                    Assert.Equal(
+                        ctx.IsCarvedBruteForce(x, y, z, surface),
+                        ctx.IsCarved(x, y, z, surface));
                 }
             }
         }
