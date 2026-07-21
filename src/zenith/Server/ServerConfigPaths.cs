@@ -24,4 +24,8 @@ static class ServerConfigPaths
             return null;
         return Path.GetFullPath(raw.Trim());
     }
+
+    /// <summary>Persistent data root — <see cref="ResolveDataDirectory"/> or DLL dir.</summary>
+    public static string ResolvePersistentRoot()
+        => ResolveDataDirectory() ?? AppContext.BaseDirectory;
 }

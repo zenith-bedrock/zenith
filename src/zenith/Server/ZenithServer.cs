@@ -107,7 +107,7 @@ class ZenithServer
         _gravity = gravity;
 
         _sessionListener = new ZenithSessionListener(Context);
-        var serverGuid = LoadOrCreateServerGuid(AppContext.BaseDirectory, serverLogger);
+        var serverGuid = LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger);
         RakNetServer = new RakNetServer(config.Server.Port, serverGuid)
         {
             Logger = raknetLogger,
@@ -119,7 +119,8 @@ class ZenithServer
             ListGameMode = config.Server.Gamemode,
             ProtocolVersion = ServerIdentity.ProtocolVersion,
             VersionName = ServerIdentity.VersionName,
-            OnlinePlayerCount = () => Context.PlayerManager.Count
+            OnlinePlayerCount = () => Context.PlayerManager.Count,
+            OnListening = _ => serverLogger.Info("Server ready.")
         };
     }
 
@@ -159,23 +160,24 @@ class ZenithServer
 
     private static IChunkStorage CreateChunkStorage(ServerConfig config, Zenith.Raknet.Log.ILogger logger)
     {
-        var path = config.World.Path?.Trim() ?? "";
-        if (string.IsNullOrEmpty(path))
+        var configuredPath = config.World.Path?.Trim() ?? "";
+        var dataRoot = ResolveWorldDataRoot(configuredPath);
+        if (dataRoot is null)
         {
-            logger.Info("World storage: InMemoryChunkStorage (world.path empty)");
+            logger.Info("World storage: InMemoryChunkStorage (world.path empty, no ZENITH_DATA)");
             return new InMemoryChunkStorage();
         }
 
-        var dataRoot = ResolveDataRoot(path);
         var name = string.IsNullOrWhiteSpace(config.World.Name) ? "world" : config.World.Name.Trim();
         var storageDir = Path.Combine(dataRoot, "worlds", name);
+        var pathForMisconfigCheck = string.IsNullOrEmpty(configuredPath) ? dataRoot : configuredPath;
 
-        if (LooksLikeWorldsFolderMisconfig(path, dataRoot))
+        if (LooksLikeWorldsFolderMisconfig(pathForMisconfigCheck, dataRoot))
         {
             logger.Warning(
-                $"*** WORLD PATH: '{path}' looks like a worlds/ folder, not the server data root. " +
+                $"*** WORLD PATH: '{pathForMisconfigCheck}' looks like a worlds/ folder, not the server data root. " +
                 $"LevelDB will live at '{storageDir}' (…/worlds/<name>/ under the root). " +
-                "Use world.path: . (next to the binary) or an absolute data root such as /app — not './worlds'.");
+                "Use world.path: . (next to the binary), leave path empty with ZENITH_DATA set, or an absolute data root — not './worlds'.");
         }
 
         WarnIfOrphanedFlatLevelDb(dataRoot, storageDir, logger);
@@ -184,7 +186,8 @@ class ZenithServer
         {
             Directory.CreateDirectory(storageDir);
             var storage = new LevelDbChunkStorage(storageDir);
-            logger.Info($"World storage: LevelDbChunkStorage ({storageDir}) [root={dataRoot}, name={name}]");
+            var via = string.IsNullOrEmpty(configuredPath) ? "ZENITH_DATA" : "world.path";
+            logger.Info($"World storage: LevelDbChunkStorage ({storageDir}) [root={dataRoot}, name={name}, via={via}]");
             return storage;
         }
         catch (Exception ex)
@@ -193,6 +196,19 @@ class ZenithServer
                 $"Failed to open LevelDB world at '{storageDir}'. Zenith will not fall back to in-memory storage.",
                 ex);
         }
+    }
+
+    /// <summary>
+    /// LevelDB data root, or null for InMemory.
+    /// Empty <paramref name="worldPath"/> + <c>ZENITH_DATA</c> → that dir; empty without → null;
+    /// non-empty → <see cref="ResolveDataRoot"/> (ADR §20).
+    /// </summary>
+    internal static string? ResolveWorldDataRoot(string? worldPath)
+    {
+        var path = worldPath?.Trim() ?? "";
+        if (string.IsNullOrEmpty(path))
+            return ServerConfigPaths.ResolveDataDirectory();
+        return ResolveDataRoot(path);
     }
 
     /// <summary>

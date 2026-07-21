@@ -369,4 +369,123 @@ public class ServerConfigLoaderTests
             Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
         }
     }
+
+    [Fact]
+    public void ResolvePersistentRoot_uses_base_directory_without_env()
+    {
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, null);
+            Assert.Equal(AppContext.BaseDirectory, ServerConfigPaths.ResolvePersistentRoot());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ResolvePersistentRoot_uses_zenith_data_when_set()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"zenith-root-{Guid.NewGuid():N}");
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, dataDir);
+            Assert.Equal(Path.GetFullPath(dataDir), ServerConfigPaths.ResolvePersistentRoot());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ResolveWorldDataRoot_empty_without_zenith_data_is_null()
+    {
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, null);
+            Assert.Null(ZenithServer.ResolveWorldDataRoot(""));
+            Assert.Null(ZenithServer.ResolveWorldDataRoot(null));
+            Assert.Null(ZenithServer.ResolveWorldDataRoot("   "));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ResolveWorldDataRoot_empty_with_zenith_data_uses_data_dir()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"zenith-world-root-{Guid.NewGuid():N}");
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, dataDir);
+            Assert.Equal(Path.GetFullPath(dataDir), ZenithServer.ResolveWorldDataRoot(""));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ResolveWorldDataRoot_explicit_path_wins_over_zenith_data()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"zenith-env-{Guid.NewGuid():N}");
+        var absolutePath = Path.GetFullPath(Path.Combine(Path.GetTempPath(), $"zenith-explicit-{Guid.NewGuid():N}"));
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, dataDir);
+            Assert.Equal(absolutePath, ZenithServer.ResolveWorldDataRoot(absolutePath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ApplyFromEnvironment_overrides_server_port_when_set()
+    {
+        var previous = Environment.GetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable, "25565");
+            var config = new ServerConfig { Server = { Port = 19132 } };
+            ServerConfigOverrides.ApplyFromEnvironment(config);
+            Assert.Equal(25565, config.Server.Port);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ApplyFromEnvironment_leaves_port_when_unset_or_invalid()
+    {
+        var previous = Environment.GetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable, null);
+            var config = new ServerConfig { Server = { Port = 19132 } };
+            ServerConfigOverrides.ApplyFromEnvironment(config);
+            Assert.Equal(19132, config.Server.Port);
+
+            Environment.SetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable, "not-a-port");
+            ServerConfigOverrides.ApplyFromEnvironment(config);
+            Assert.Equal(19132, config.Server.Port);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigOverrides.ServerPortVariable, previous);
+        }
+    }
 }

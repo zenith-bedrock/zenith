@@ -127,6 +127,8 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Adendo (jul 2026 — join overlay catch-up):** PreSpawn `RememberMany` right after LevelChunks (before T0 overlay loop). Live `UpdateBlock` fan-out reaches peers with `Chunks.Knows(cx,cz)` even when `!IsInGame`. On InGame enable set `NeedsOverlayResync`; first `ChunkStreamSystem` tick re-emits current overlays for known columns (`ColumnSend.EmitOverlaysToSession`) so places during the LevelChunk batch window are not lost.
 
+**Adendo (jul 2026 — noise join timeout):** `world.terrain=noise` PreSpawn at default `spawn-chunk-radius: 4` generates **81** full columns on first join. Sequential gen was ~54s → client/RakNet timeout while stuck on “waiting for chunk radius”. Fix: **`World.GetRadiusAsync` parallel** (`Parallel.ForEachAsync`, core count) + swallow **`CLIENT_CACHE_STATUS`** in PreSpawn + INFO logs for load/publish. Smoke bot (`smoke:join`) confirms spawn &lt; ~15s on noise after fix.
+
 **Why:** Closes the “world dies outside spawn radius” gap without Actor/EventHandlers or vanilla LevelDB. Matches early Zenith spine: continuous flat multiplayer before effects/gen.
 
 **Deferred (conscious):** food/effects, creative inventory, biomes/noise, Actor/EventHandler frameworks (not mirroring early “everything is an Actor” stacks).
@@ -189,7 +191,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Known debt / principle:** Reinterpreting a former flat LevelDB directory as a data root creates `{path}/worlds/{name}/` empty while orphaning old `CURRENT`/`.ldb` at the root — silent empty world. Detect and **Warning** at boot if root looks like ZLDB and the new world dir is empty/new. Future path-semantics changes must warn loudly, never reinterpret silently (ops visibility vs silent fallback). Relative `world.path` resolves against `AppContext.BaseDirectory` (DLL dir), never process cwd — same as `zenith.yml`.
 
-**Adendo (jul 2026 — Docker `/data` UX):** PocketMine/Endstone-style **one volume on `/data`**. Image sets `ZENITH_DATA=/data`; config = `/data/zenith.yml`, sample `world.path: /data`. Entrypoint seeds default config on first boot. **`ZENITH_DATA` is the only supported env override** (data root — not a config matrix). Do not bind-mount `/app/zenith.yml` (fragile on Dokploy when host file missing → directory). Config changes require container **restart** (read at boot only).
+**Adendo (jul 2026 — Docker `/data` UX):** PocketMine/Endstone-style **one volume on `/data`**. Image sets `ZENITH_DATA=/data`; config = `/data/zenith.yml`. Entrypoint seeds default config on first boot. **`ZENITH_DATA` is the only supported env override** (data root — not a config matrix). Do not bind-mount over the binary dir (fragile on Dokploy when host file missing → directory). Config changes require container **restart** (read at boot only).
+
+**Adendo (jul 2026 — unified image + ZENITH_DATA owns world):** One product image ([`deploy/image/`](../deploy/image/)) — binary at `/opt/zenith`, default `ZENITH_DATA=/data`. Platforms (Compose/Dokploy, Pterodactyl egg) are **adapters only** — they set `ZENITH_DATA`, mounts, and panel metadata; no second Dockerfile. When `world.path` is empty/omitted **and** `ZENITH_DATA` is set → LevelDB root = `ZENITH_DATA` (`…/worlds/<name>/`). Empty path without `ZENITH_DATA` stays InMemory (`dotnet run`). Explicit absolute `world.path` still wins. Single [`deploy/zenith.yml`](../deploy/zenith.yml) template for all hosts.
 
 **Deferred:** Multi-world load, migrator flat→`worlds/<name>`, `players/` volume, Docker Hub automation.
 
@@ -862,6 +866,25 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 **Non-goals:** biome JSON, 3D biome blending, taiga/swamp/jungle, mob spawn rules, custom BiomeDefinitionList, persisting `c:` on miss.
 
 **Status (jul 2026):** Shipped — sampler + column wire + spawn biome + leaf tests.
+
+### 68. Pterodactyl / Wings hosting (egg + panel hooks)
+
+**Choice:** Pterodactyl is a **platform adapter** on the **same product image** as Compose/Dokploy (ADR §20 unified-image adendo) — egg JSON + env, not a second Dockerfile.
+
+1. **Data root:** Wings server files live in **`/home/container`** → egg/startup sets `ZENITH_DATA=/home/container` (Compose uses `/data`).
+2. **Image:** [`deploy/image/Dockerfile`](../deploy/image/Dockerfile) — binary `/opt/zenith`; entrypoint seeds config and optionally evals Wings `${STARTUP}`.
+3. **Egg:** [`deploy/pterodactyl/egg-zenith.json`](../deploy/pterodactyl/egg-zenith.json) — yaml parser on `zenith.yml` for allocation port; `startup.done` = **`Server ready.`**; install seeds shared [`deploy/zenith.yml`](../deploy/zenith.yml).
+4. **Code hooks (panel conventions only):**
+   - **`SERVER_PORT`** env overrides `server.port` after yaml load (`ServerConfigOverrides`).
+   - **`Server ready.`** log after UDP bind (`RakNetServer.OnListening`).
+   - **`server.guid`** under `ResolvePersistentRoot()` (not image dir).
+5. **No extra `ZENITH_*` vars** beyond `ZENITH_DATA` + Wings `SERVER_PORT`.
+
+**Why:** Hosting panels are a distribution channel; one image + one yaml SSOT keeps Dokploy and Wings from drifting.
+
+**Non-goals:** official GHCR publish in this ADR (operators build/push locally until tagged); Pterodactyl-specific gameplay; auto-reload config without restart; a second product Dockerfile under `deploy/pterodactyl/`.
+
+**Status (jul 2026):** Shipped — unified image + egg adapter + hooks + docs.
 
 ## Explicit non-goals (so far)
 

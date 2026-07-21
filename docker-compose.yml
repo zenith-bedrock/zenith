@@ -1,15 +1,17 @@
-# Docker ops sample — not used by `dotnet run`.
-# Persistent data lives under /data (single volume). Do not mount over /app (wipes the DLL).
+# Root compose — thin wrapper so `docker compose up` from repo root still works.
+# Canonical: deploy/compose/docker-compose.yml (ADR §20).
+# Dokploy File Mount: see deploy/compose/dokploy.md (do not bake ../files into default compose).
 services:
   zenith:
-    build: .
+    build:
+      context: .
+      dockerfile: deploy/image/Dockerfile
     ports:
       - "19132:19132/udp"
     environment:
       ZENITH_DATA: /data
     volumes:
       - zenith-data:/data
-      - ../files/zenith.yml:/data/zenith.yml:ro
     restart: unless-stopped
 
 volumes:

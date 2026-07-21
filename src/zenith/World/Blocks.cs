@@ -97,6 +97,14 @@ static class Blocks
     public static void Load(BlockPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
+        lock (TestLoadGate)
+        {
+            LoadCore(palette);
+        }
+    }
+
+    private static void LoadCore(BlockPalette palette)
+    {
         _palette = palette;
         _air = palette.Require("minecraft:air");
         _stone = palette.Require("minecraft:stone");
@@ -297,19 +305,24 @@ static class Blocks
         Load(BlockPaletteLoader.FromEmbeddedResource());
     }
 
+    private static readonly object TestLoadGate = new();
+
     internal static void ResetForTests()
     {
-        _loaded = false;
-        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _oakLeaves = _sand = _gravel = 0;
-        _bedrock = _water = _cobblestone = _deepslate = _chest = 0;
-        _coalOre = _ironOre = _copperOre = _goldOre = _diamondOre = _lapisOre = _redstoneOre = 0;
-        _deepslateCoalOre = _deepslateIronOre = _deepslateCopperOre = _deepslateGoldOre = 0;
-        _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
-        _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
-        _chestIds = null;
-        _placeableIds = null;
-        _gravityIds = null;
-        _nameByRuntime = null;
-        _palette = null;
+        lock (TestLoadGate)
+        {
+            _loaded = false;
+            _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _oakLeaves = _sand = _gravel = 0;
+            _bedrock = _water = _cobblestone = _deepslate = _chest = 0;
+            _coalOre = _ironOre = _copperOre = _goldOre = _diamondOre = _lapisOre = _redstoneOre = 0;
+            _deepslateCoalOre = _deepslateIronOre = _deepslateCopperOre = _deepslateGoldOre = 0;
+            _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
+            _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
+            _chestIds = null;
+            _placeableIds = null;
+            _gravityIds = null;
+            _nameByRuntime = null;
+            _palette = null;
+        }
     }
 }

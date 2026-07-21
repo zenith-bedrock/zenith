@@ -59,6 +59,9 @@ public class RakNetServer
     public ILogger? Logger { get; init; }
     public IRakNetSessionListener? SessionListener { get; set; } = null;
 
+    /// <summary>Fired once UDP bind succeeds — used for panel startup detection (ADR §68).</summary>
+    public Action<IPEndPoint>? OnListening { get; set; }
+
     private static ulong GenerateGuid()
     {
         Span<byte> bytes = stackalloc byte[8];
@@ -167,6 +170,7 @@ public class RakNetServer
     {
         Logger?.Debug("Starting RakNet connection...");
         _listener.Client.Bind(RemoteEndPoint);
+        OnListening?.Invoke(RemoteEndPoint);
         Logger?.Debug($"RakNet running at {RemoteEndPoint}");
 
         var datagramTask = ReceiveDatagramAsync(_cancellationTokenSource.Token);

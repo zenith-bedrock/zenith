@@ -29,7 +29,7 @@ Inbound code validates and **queues**; systems apply on tick. That means:
 
 ### 4. Config that matches how you run binaries
 
-`zenith.yml` next to the executable — same story in Visual Studio, `dotnet run`, or a Windows service. **Docker/Dokploy:** one persistent volume on `/data`, env `ZENITH_DATA=/data`, config at `/data/zenith.yml` (see [`deploy/README.md`](../deploy/README.md)). No other `ZENITH_*` env matrix. Log levels are split: `log.server` (default `info`) vs `log.raknet` (default `warn`) so enabling Bedrock Debug does not flood ACK/`Connected PID`.
+`zenith.yml` next to the executable — same story in Visual Studio, `dotnet run`, or a Windows service. **Containers:** one product image ([`deploy/image/`](../deploy/image/)), env `ZENITH_DATA` (Compose/Dokploy `/data`, Wings `/home/container`), config at `$ZENITH_DATA/zenith.yml`. Empty `world.path` + `ZENITH_DATA` → LevelDB under that root (ADR §20). Platform adapters: [`deploy/compose/`](../deploy/compose/), [`deploy/pterodactyl/`](../deploy/pterodactyl/) (ADR §68). Wings may set **`SERVER_PORT`**. No other `ZENITH_*` env matrix. Log levels are split: `log.server` (default `info`) vs `log.raknet` (default `warn`) so enabling Bedrock Debug does not flood ACK/`Connected PID`.
 
 IDE autocomplete/validation (optional): [`schemas/zenith.schema.json`](../schemas/zenith.schema.json) + workspace [`.vscode/settings.json`](../.vscode/settings.json) (Red Hat YAML / Cursor). **Not** used at boot — `ServerConfig.Validate()` remains the runtime SSOT.
 

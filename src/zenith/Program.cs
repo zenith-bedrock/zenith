@@ -6,6 +6,8 @@ ServerConfig config;
 try
 {
     config = ServerConfigLoader.LoadOrCreate(configPath);
+    ServerConfigOverrides.ApplyFromEnvironment(config);
+    config.Validate();
 }
 catch (Exception ex)
 {

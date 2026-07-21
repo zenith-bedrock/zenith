@@ -1,5 +1,12 @@
-# Thin root alias for Dokploy / `docker build .` — keep identical to deploy/image/Dockerfile (ADR §20).
-# Prefer: docker build -f deploy/image/Dockerfile -t ghcr.io/zenith-bedrock/zenith:latest .
+# Zenith product image (ADR §20 / §68) — one image for Compose, Dokploy, Pterodactyl.
+#
+# Layout:
+#   /opt/zenith/          — published DLL + zenith.yml.default (read-only)
+#   $ZENITH_DATA          — config, worlds, server.guid (default /data)
+#
+# No fixed USER — Compose/Dokploy typically root; Wings may run as uid 1000 (container).
+# Build from repo root:
+#   docker build -f deploy/image/Dockerfile -t ghcr.io/zenith-bedrock/zenith:latest .
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
