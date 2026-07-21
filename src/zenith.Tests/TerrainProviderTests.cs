@@ -241,4 +241,79 @@ public class TerrainProviderTests
             (int)MathF.Floor(player.PositionZ)));
         Assert.False(world.TryHealSpawnFeet(player)); // already clear
     }
+
+    [Fact]
+    public void Noise_surface_adjacent_steps_are_bounded()
+    {
+        const int seed = 99;
+        var maxStep = 0;
+        for (var x = -64; x < 64; x++)
+        {
+            for (var z = -64; z < 64; z++)
+            {
+                var y = OverworldTerrainSampler.SurfaceY(x, z, seed);
+                maxStep = Math.Max(maxStep, Math.Abs(y - OverworldTerrainSampler.SurfaceY(x + 1, z, seed)));
+                maxStep = Math.Max(maxStep, Math.Abs(y - OverworldTerrainSampler.SurfaceY(x, z + 1, seed)));
+            }
+        }
+
+        Assert.True(
+            maxStep <= OverworldTerrainSampler.MaxAdjacentSurfaceStep,
+            $"adjacent surface step {maxStep} exceeds {OverworldTerrainSampler.MaxAdjacentSurfaceStep} (bilinear lattice)");
+    }
+
+    [Fact]
+    public void Noise_column_includes_cross_chunk_tree_canopy_y()
+    {
+        const int seed = 21;
+        // Find a trunk near a chunk edge whose canopy Y exceeds the neighbor's local surface+headroom.
+        for (var x = -128; x < 128; x++)
+        {
+            for (var z = -128; z < 128; z++)
+            {
+                var surface = OverworldTerrainSampler.SurfaceY(x, z, seed);
+                if (surface < OverworldTerrainSampler.SeaLevel) continue;
+                if (new NoiseTerrainProvider(seed).SampleBaseBlock(x, surface + 1, z) != Blocks.OakLog)
+                    continue;
+
+                // Prefer trunks on the +X edge of their chunk so canopy spills into +chunk.
+                if ((x & 15) < 13) continue;
+
+                var canopyTop = -1;
+                for (var y = surface + 1; y <= surface + 8; y++)
+                {
+                    if (OverworldTerrainSampler.SampleNoiseBlock(x, y, z, seed) == Blocks.OakLog
+                        || OverworldTerrainSampler.SampleNoiseBlock(x, y, z, seed) == Blocks.OakLeaves)
+                        canopyTop = y;
+                }
+
+                if (canopyTop < 0) continue;
+
+                var neighborChunkX = (x >> 4) + 1;
+                var neighborChunkZ = z >> 4;
+                var leafX = x + 1;
+                if ((leafX >> 4) != neighborChunkX) continue;
+
+                var leafBlock = OverworldTerrainSampler.SampleNoiseBlock(leafX, canopyTop, z, seed);
+                if (leafBlock != Blocks.OakLeaves && leafBlock != Blocks.OakLog)
+                    continue;
+
+                var featureMax = OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(
+                    neighborChunkX, neighborChunkZ, seed);
+                Assert.True(featureMax >= canopyTop,
+                    $"neighbor featureMaxY {featureMax} < canopy {canopyTop} at trunk ({x},{z})");
+
+                var caves = OverworldCaveContext.ForColumn(neighborChunkX, neighborChunkZ, seed);
+                var col = ChunkPayloads.BuildNoiseOverworldColumn(neighborChunkX, neighborChunkZ, seed, caves);
+                // Section index must reach canopyTop (OverworldMinSubChunkIndex = -4).
+                var sectionForCanopy = (canopyTop >> 4) - (-4);
+                Assert.True(
+                    col.SubChunkCount > sectionForCanopy,
+                    $"neighbor SubChunkCount {col.SubChunkCount} must cover canopy section {sectionForCanopy}");
+                return;
+            }
+        }
+
+        Assert.Fail("no edge trunk with cross-chunk canopy found for seed 21");
+    }
 }

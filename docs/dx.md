@@ -78,7 +78,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62): `World` façade; `ITerrainProvider` for base columns; `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays.
-20. Terrain gen (ADR §63–§67): `world.terrain: flat | noise`. Noise = **coarse biomes**, overworld band, worm caves, ore veins, trees, ruins. Join/respawn = clear air via `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config.
+20. Terrain gen (ADR §63–§67): `world.terrain: flat | noise`. Noise = **coarse biomes**, overworld band, worm caves, ore veins, trees, ruins. Height = **8×8 bilinear** + biome bias blend (not per-block hash). Join/respawn = clear air via `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy.
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 ```
 

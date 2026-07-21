@@ -2,7 +2,8 @@ namespace Zenith.World;
 
 /// <summary>
 /// Shared overworld height + block rules for terrain providers (ADR §63 / §64).
-/// <see cref="SampleNoiseBlock"/> must stay consistent with <see cref="ChunkPayloads.BuildOverworldColumn"/>.
+/// Height: 8×8 bilinear lattice + blended biome bias (continuity polish).
+/// <see cref="SampleNoiseBlock"/> must stay consistent with <see cref="ChunkPayloads.BuildNoiseOverworldColumn"/>.
 /// Flat mode keeps classic Y≈-61 via <see cref="SampleBlock"/> with constant surface.
 /// </summary>
 static class OverworldTerrainSampler
@@ -21,12 +22,22 @@ static class OverworldTerrainSampler
     /// <summary>Coarse height swing around <see cref="NoiseBaseSurfaceY"/>.</summary>
     public const int NoiseHillAmplitude = 24;
 
+    /// <summary>Bilinear height lattice cell size (world blocks).</summary>
+    public const int HeightCellSize = 8;
+
+    /// <summary>Max |ΔY| between adjacent surface samples (lattice + bias); leaf continuity gate.</summary>
+    public const int MaxAdjacentSurfaceStep = 8;
+
     public const int TreeCellSize = 10;
     public const int RuinCellSize = 40;
 
+    /// <summary>Canopy extends ±2 from trunk — used for cross-chunk maxWorldY.</summary>
+    public const int TreeCanopyRadius = 2;
+
     private const int TreeSalt = unchecked((int)0x7EE7E77Eu);
     private const int RuinSalt = unchecked((int)0x5015015u);
-    private const int FineSalt = unchecked((int)0xA5A55A5Au);
+    private const int HeightSalt = unchecked((int)0xA5A55A5Au);
+    private const int BiasSalt = unchecked((int)0xB1A5B1A5u);
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
@@ -62,18 +73,97 @@ static class OverworldTerrainSampler
         }
     }
 
+    /// <summary>
+    /// Highest canopy Y from trees whose trunk can place leaves inside this chunk
+    /// (canopy radius <see cref="TreeCanopyRadius"/>). <see cref="int.MinValue"/> if none.
+    /// </summary>
+    internal static int MaxTreeCanopyYAffectingChunk(int chunkX, int chunkZ, int seed)
+    {
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        var minX = baseX - TreeCanopyRadius;
+        var maxX = baseX + 15 + TreeCanopyRadius;
+        var minZ = baseZ - TreeCanopyRadius;
+        var maxZ = baseZ + 15 + TreeCanopyRadius;
+        var minCellX = FloorDiv(minX, TreeCellSize);
+        var maxCellX = FloorDiv(maxX, TreeCellSize);
+        var minCellZ = FloorDiv(minZ, TreeCellSize);
+        var maxCellZ = FloorDiv(maxZ, TreeCellSize);
+
+        var maxY = int.MinValue;
+        for (var cellX = minCellX; cellX <= maxCellX; cellX++)
+        {
+            for (var cellZ = minCellZ; cellZ <= maxCellZ; cellZ++)
+            {
+                if (!TryTreeAnchor(cellX, cellZ, seed, out var tx, out var tz, out var trunkH))
+                    continue;
+                if (tx < minX || tx > maxX || tz < minZ || tz > maxZ)
+                    continue;
+
+                var surface = SurfaceY(tx, tz, seed);
+                if (surface < SeaLevel) continue;
+                maxY = Math.Max(maxY, surface + trunkH + 1);
+            }
+        }
+
+        return maxY;
+    }
+
     private static void FillSurfaceAt(int worldX, int worldZ, int seed, out int y, out OverworldBiomeKind biome)
     {
         biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
-        var coarse = (int)(Hash(worldX >> 2, worldZ >> 2, seed) % (uint)(NoiseHillAmplitude * 2 + 1))
-                     - NoiseHillAmplitude;
-        var fine = (int)(Hash(worldX, worldZ, seed ^ FineSalt) % 5);
-        var local = Hash(worldX, worldZ, seed ^ FineSalt);
-        y = NoiseBaseSurfaceY + coarse + fine
-            + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
+        y = BilinearLatticeHeight(worldX, worldZ, seed)
+            + BlendedBiomeHeightBias(worldX, worldZ, seed);
         if (biome == OverworldBiomeKind.Ocean)
             y = Math.Min(y, SeaLevel - 1);
         y = Math.Clamp(y, Blocks.FlatMinY + 12, 120);
+    }
+
+    private static int BilinearLatticeHeight(int worldX, int worldZ, int seed)
+    {
+        var cellX = FloorDiv(worldX, HeightCellSize);
+        var cellZ = FloorDiv(worldZ, HeightCellSize);
+        var tx = worldX - cellX * HeightCellSize;
+        var tz = worldZ - cellZ * HeightCellSize;
+        var s = HeightCellSize;
+        var h00 = LatticeCornerHeight(cellX, cellZ, seed);
+        var h10 = LatticeCornerHeight(cellX + 1, cellZ, seed);
+        var h01 = LatticeCornerHeight(cellX, cellZ + 1, seed);
+        var h11 = LatticeCornerHeight(cellX + 1, cellZ + 1, seed);
+        var top = h00 * (s - tx) + h10 * tx;
+        var bot = h01 * (s - tx) + h11 * tx;
+        return (top * (s - tz) + bot * tz) / (s * s);
+    }
+
+    private static int LatticeCornerHeight(int cellX, int cellZ, int seed)
+    {
+        var h = Hash(cellX, cellZ, seed ^ HeightSalt);
+        return NoiseBaseSurfaceY + (int)(h % (uint)(NoiseHillAmplitude * 2 + 1)) - NoiseHillAmplitude;
+    }
+
+    /// <summary>Bilinear blend of biome height bias across 48×48 cell corners (surface block stays hard).</summary>
+    private static int BlendedBiomeHeightBias(int worldX, int worldZ, int seed)
+    {
+        var s = OverworldBiomeSampler.BiomeCellSize;
+        var cellX = FloorDiv(worldX, s);
+        var cellZ = FloorDiv(worldZ, s);
+        var tx = worldX - cellX * s;
+        var tz = worldZ - cellZ * s;
+        var b00 = BiasAtBiomeCell(cellX, cellZ, seed);
+        var b10 = BiasAtBiomeCell(cellX + 1, cellZ, seed);
+        var b01 = BiasAtBiomeCell(cellX, cellZ + 1, seed);
+        var b11 = BiasAtBiomeCell(cellX + 1, cellZ + 1, seed);
+        var top = b00 * (s - tx) + b10 * tx;
+        var bot = b01 * (s - tx) + b11 * tx;
+        return (top * (s - tz) + bot * tz) / (s * s);
+    }
+
+    private static int BiasAtBiomeCell(int cellX, int cellZ, int seed)
+    {
+        var cx = cellX * OverworldBiomeSampler.BiomeCellSize + OverworldBiomeSampler.BiomeCellSize / 2;
+        var cz = cellZ * OverworldBiomeSampler.BiomeCellSize + OverworldBiomeSampler.BiomeCellSize / 2;
+        var kind = OverworldBiomeSampler.SampleKind(cx, cz, seed);
+        return OverworldBiomeSampler.SurfaceHeightBias(kind, Hash(cellX, cellZ, seed ^ BiasSalt));
     }
 
     /// <summary>Domain feet Y standing on dry surface or water top.</summary>
@@ -275,19 +365,6 @@ static class OverworldTerrainSampler
             var h = (uint)seed;
             h ^= (uint)x * 374761393u;
             h ^= (uint)z * 668265263u;
-            h = (h ^ (h >> 13)) * 1274126177u;
-            return h;
-        }
-    }
-
-    private static uint Hash3(int x, int y, int z, int seed)
-    {
-        unchecked
-        {
-            var h = (uint)seed;
-            h ^= (uint)x * 374761393u;
-            h ^= (uint)y * 668265263u;
-            h ^= (uint)z * 2147483647u;
             h = (h ^ (h >> 13)) * 1274126177u;
             return h;
         }

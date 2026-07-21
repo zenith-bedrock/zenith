@@ -48,7 +48,10 @@ static class ChunkPayloads
         Span<int> surfaces = stackalloc int[256];
         Span<OverworldBiomeKind> biomes = stackalloc OverworldBiomeKind[256];
         OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out var maxSurface);
+        var featureMaxY = OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(chunkX, chunkZ, seed);
         var maxWorldY = Math.Max(maxSurface + NoiseFeatureHeadroom, OverworldTerrainSampler.SeaLevel);
+        if (featureMaxY > maxWorldY)
+            maxWorldY = featureMaxY;
         var biomeId = OverworldBiomeSampler.NetworkId(biomes[(8 << 4) | 8]);
         var maxSubChunk = Math.Clamp(
             SectionIndex(maxWorldY),
