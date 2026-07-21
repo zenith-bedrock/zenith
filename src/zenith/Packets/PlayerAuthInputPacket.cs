@@ -65,6 +65,8 @@ class PlayerAuthInputPacket : DataPacket
     public bool InputMissedSwing { get; set; }
     /// <summary>AuthInput VerticalCollision (bit 50) — peer Absolute ON_GROUND.</summary>
     public bool InputOnGround { get; set; }
+    /// <summary>Block action list present — client is performing block interactions this tick.</summary>
+    public bool InputPerformBlockActions { get; set; }
 
     public override Span<byte> Encode() => Array.Empty<byte>();
 
@@ -105,6 +107,7 @@ class PlayerAuthInputPacket : DataPacket
         InputStopSprinting = InputBitsetTest(inputFlags, InputFlagStopSprinting);
         InputMissedSwing = InputBitsetTest(inputFlags, InputFlagMissedSwing);
         InputOnGround = InputBitsetTest(inputFlags, InputFlagVerticalCollision);
+        InputPerformBlockActions = InputBitsetTest(inputFlags, InputFlagPerformBlockActions);
 
         _ = stream.ReadUnsignedVarInt(); // input_mode
         _ = stream.ReadUnsignedVarInt(); // play_mode

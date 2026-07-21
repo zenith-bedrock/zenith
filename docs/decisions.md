@@ -267,7 +267,9 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Adendo (jul 2026 — tool dig speed):** Dig duration uses Dragonfly/wiki `BreakDuration` (no haste/water/Efficiency): `speed` from curated tool tier when Effective∧Harvestable else 1; `ticks = ceil(1/(speed/hardness/(30|100)))`. Curated tools: wood→diamond pick/axe/shovel (`World/Tools` + item network ids in inventory stack type). `World/BreakDuration` is SSOT; `Blocks.BreakTicks` delegates. AuthInput start snapshots held stack type + need. Mid-dig held change **preserves progress fraction** then retargets `DigStartedTick`/`DigRequiredTicks`; LevelEvent **3600** on dig start, **3602** only when `CrackEventData` changes (Mojang UpdateBlockCracking / DF ContinueCrack). Creative InstantBuild unchanged. Inventory wire: `Blocks.TryGetName` then `Tools.TryGetName` (tool `blockRuntimeId=0`). CreativeCatalog lists the 12 tools. Endstone digger components / ECS dig cache / BlockActor — **not** copied. Refs: DF `break_info.go`, Mojang `BlockBreakingOverview.md`.
 
-**Adendo (jul 2026 — dig idle StopCrack):** `StartCrack` encodes full dig duration; if the client stops looking/digging without `AbortBreak`, peers kept seeing crack until the animation finished. Same-cell `crack_break`/`continue_destroy` now `MarkDigActive`; `BlockSystem.AbortIdleDigIfStale` stops crack after `DigIdleAbortTicks` (10) without activity.
+**Adendo (jul 2026 — dig idle StopCrack):** `StartCrack` encodes full dig duration; if the client stops looking/digging without `AbortBreak`, peers kept seeing crack until the animation finished. Same-cell `crack_break`/`continue_destroy` now `MarkDigActive`; `BlockSystem.AbortIdleDigIfStale` stops crack after `DigIdleAbortTicks` without activity.
+
+**Adendo (jul 2026 — crack flicker fix):** `DigIdleAbortTicks` was 10 (0.5s) — too short when clients send sparse `crack_break` while holding mine. Now **40** (~2s) + refresh `LastDigActivityTick` when AuthInput **`PerformBlockActions`** flag is set or any block action targets the current break cell. Stops crack only when the client stops reporting block interaction, not between progress packets.
 
 ### 28. Chests — RAM store + ISR container 7 (MVP)
 
@@ -670,6 +672,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Status (jul 2026):** Shipped on develop after `v0.0.2-alpha` — `GravityPendingStore` + `GravitySystem`; gravel in placeables / DigProfiles / CreativeCatalog (net id 20); graceful shutdown settles pending before flush.
 
+**Adendo (jul 2026 — fall rate):** Playtest: `MaxStepsPerTick = 64` collapsed whole towers in one tick (~instant). Dragonfly uses `falling_block` entities (gravity 0.04/tick). Zenith now **`MaxStepsPerTick = 2`** + **deferred enqueue** for cascade cells (processed next tick, not same-tick chain). Shutdown `SettleAllPending` drains immediately without defer.
+
 **Roadmap:** H1#6. Playerdata reconnect → §60 (H1#7). Does **not** unlock world-gen (H1#8).
 
 ### 58. Protocol smoke bot — separate Bun repo (not inside Zenith C#)
@@ -770,7 +774,48 @@ Gameplay / `World` talk only to **`IChunkStorage`**. Backends:
 
 **Non-goals:** BDS backend/converter (§61); noise product; `World/Terrain/` subfolders; `Item/` cut; Dimension type; rewriting overlays into subchunks.
 
-**Status (jul 2026):** Shipped — ADR + `WorldStorageKeys` + `ITerrainProvider` / `FlatTerrainProvider`.
+**Status (jul 2026):** Shipped — ADR + `WorldStorageKeys` + `ITerrainProvider` / `FlatTerrainProvider`. Product terrain gen → §63.
+
+### 63. Noise heightmap terrain (H1#8 product)
+
+**Choice:** First native gen after §62 seams — **seeded hash heightmap**, not biomes/caves/BDS.
+
+1. **`OverworldTerrainSampler`** — shared surface Y + stone/grass/air rules; `SampleBlock` must match column build.
+2. **`ChunkPayloads.BuildOverworldColumn`** — paletted subchunks from a world-space sampler (flat reuses it).
+3. **`NoiseTerrainProvider`** — implements `ITerrainProvider`; per-chunk columns on miss (§45 no Put).
+4. **Config:** `world.terrain: flat | noise`, `world.seed` (default `1`). Boot log prints mode.
+
+| Mode | Provider | Surface |
+|------|----------|---------|
+| `flat` (default) | `FlatTerrainProvider` | constant Y -61 |
+| `noise` | `NoiseTerrainProvider` | §63 hills → **§64** full overworld band + features |
+
+**Storage interaction:** Existing `c:` blobs with valid subchunk v8 header still win (§45). Switching terrain on a populated world does not rewrite disk — operator creates fresh world folder or clears `c:` keys.
+
+**Why:** H1#8 product step with smallest leaf surface; proves §62 seam before biomes or §61 import.
+
+**Non-goals:** biomes, caves, ore, structures, multi-subchunk product beyond what hills need; persisting generated `c:` on miss; Mojang folder layout.
+
+**Status (jul 2026):** Shipped — noise provider + config + leaf tests. Expanded band/features → §64.
+
+### 64. Overworld band + surface features (trees, water, caves, ruins)
+
+**Choice:** Grow `noise` mode toward a Bedrock-shaped overworld **without** a biome engine or BDS gen.
+
+1. **Height band:** surface ≈ Y 40–88 (base 64 ± hills), floor Y -64 bedrock, deepslate below Y 0, stone above.
+2. **Sea:** `SeaLevel = 62` — air between surface and sea fills with water (lakes/coast).
+3. **Caves:** deterministic 3D hash carve under surface (not noise libraries).
+4. **Trees:** oak log + leaves on a cell grid (~22% of 10×10 cells), dry land only.
+5. **Ruins:** rare 5×5 cobble pads + plank ring (structure placeholder — not villages).
+6. **Spawn:** climb clear air above `max(surface, sea)` so trees/water never bury join/respawn.
+
+Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock` / `NoiseTerrainProvider`.
+
+**Why:** H1#8 “world beyond flat” needs playable vertical space and visible variety before biomes.
+
+**Non-goals:** biomes, ore veins, villages/strongholds, mob spawning, structure NBT, liquid flow simulation, rewriting stored `c:` columns.
+
+**Status (jul 2026):** Shipped — sampler expansion + Blocks (leaves/bedrock/water/cobble/deepslate) + tests.
 
 ## Explicit non-goals (so far)
 

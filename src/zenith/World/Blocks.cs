@@ -23,8 +23,13 @@ static class Blocks
     private static int _dirt;
     private static int _oakPlanks;
     private static int _oakLog;
+    private static int _oakLeaves;
     private static int _sand;
     private static int _gravel;
+    private static int _bedrock;
+    private static int _water;
+    private static int _cobblestone;
+    private static int _deepslate;
     private static int _chest;
     private static int _chestNorth;
     private static int _chestSouth;
@@ -43,12 +48,18 @@ static class Blocks
     public static int Dirt { get { EnsureLoaded(); return _dirt; } }
     public static int OakPlanks { get { EnsureLoaded(); return _oakPlanks; } }
     public static int OakLog { get { EnsureLoaded(); return _oakLog; } }
+    public static int OakLeaves { get { EnsureLoaded(); return _oakLeaves; } }
     public static int Sand { get { EnsureLoaded(); return _sand; } }
     public static int Gravel { get { EnsureLoaded(); return _gravel; } }
+    public static int Bedrock { get { EnsureLoaded(); return _bedrock; } }
+    public static int Water { get { EnsureLoaded(); return _water; } }
+    public static int Cobblestone { get { EnsureLoaded(); return _cobblestone; } }
+    public static int Deepslate { get { EnsureLoaded(); return _deepslate; } }
 
     /// <summary>Item / recipe / default place form — south palette entry.</summary>
     public static int Chest { get { EnsureLoaded(); return _chest; } }
 
+    /// <summary>Overworld min Y (Bedrock). Flat + noise share this floor.</summary>
     public const int FlatMinY = -64;
     public const int FlatStoneTopY = -62;
     public const int FlatGrassY = -61;
@@ -65,8 +76,13 @@ static class Blocks
         _dirt = palette.Require("minecraft:dirt");
         _oakPlanks = palette.Require("minecraft:oak_planks");
         _oakLog = palette.Require("minecraft:oak_log");
+        _oakLeaves = palette.Require("minecraft:oak_leaves");
         _sand = palette.Require("minecraft:sand");
         _gravel = palette.Require("minecraft:gravel");
+        _bedrock = palette.Require("minecraft:bedrock");
+        _water = palette.Require("minecraft:water");
+        _cobblestone = palette.Require("minecraft:cobblestone");
+        _deepslate = palette.Require("minecraft:deepslate");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -82,8 +98,11 @@ static class Blocks
             _dirt,
             _oakPlanks,
             _oakLog,
+            _oakLeaves,
             _sand,
             _gravel,
+            _cobblestone,
+            _deepslate,
             _chest,
             _chestSouth,
             _chestWest,
@@ -99,8 +118,13 @@ static class Blocks
             [_dirt] = "minecraft:dirt",
             [_oakPlanks] = "minecraft:oak_planks",
             [_oakLog] = "minecraft:oak_log",
+            [_oakLeaves] = "minecraft:oak_leaves",
             [_sand] = "minecraft:sand",
             [_gravel] = "minecraft:gravel",
+            [_bedrock] = "minecraft:bedrock",
+            [_water] = "minecraft:water",
+            [_cobblestone] = "minecraft:cobblestone",
+            [_deepslate] = "minecraft:deepslate",
             [_chestSouth] = "minecraft:chest",
             [_chestWest] = "minecraft:chest",
             [_chestNorth] = "minecraft:chest",
@@ -220,7 +244,8 @@ static class Blocks
     internal static void ResetForTests()
     {
         _loaded = false;
-        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _sand = _gravel = _chest = 0;
+        _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _oakLeaves = _sand = _gravel = 0;
+        _bedrock = _water = _cobblestone = _deepslate = _chest = 0;
         _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
         _chestIds = null;
         _placeableIds = null;

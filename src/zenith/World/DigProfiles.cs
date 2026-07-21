@@ -91,6 +91,7 @@ static class DigProfiles
         // Wood / chest — axe effective; always harvestable for timing.
         RegisterUnlocked(Blocks.OakPlanks, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.OakLog, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
+        RegisterUnlocked(Blocks.OakLeaves, 0.2, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.Chest, 2.5, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.ChestForFacing(Blocks.CardinalNorth), 2.5, ToolKind.None, ToolKind.Axe, false);
         RegisterUnlocked(Blocks.ChestForFacing(Blocks.CardinalSouth), 2.5, ToolKind.None, ToolKind.Axe, false);
@@ -99,6 +100,8 @@ static class DigProfiles
 
         // Stone — pickaxe harvest + effective.
         RegisterUnlocked(Blocks.Stone, 1.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.Cobblestone, 2.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.Deepslate, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
 
         _loaded = true;
     }

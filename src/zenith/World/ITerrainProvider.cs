@@ -5,7 +5,7 @@ readonly record struct TerrainColumn(int SubChunkCount, byte[] Payload);
 
 /// <summary>
 /// Supplies base terrain for column miss / heal and SoftCap base-rid sampling.
-/// Default: <see cref="FlatTerrainProvider"/>. Future gen plugs here; BDS stays on <see cref="IChunkStorage"/> (§61).
+/// Default: <see cref="FlatTerrainProvider"/>. Gen plugs here; BDS stays on <see cref="IChunkStorage"/> (§61).
 /// </summary>
 interface ITerrainProvider
 {
@@ -13,6 +13,9 @@ interface ITerrainProvider
 
     /// <summary>Block at cell if no overlay — must match <see cref="GetBaseColumn"/> semantics.</summary>
     int SampleBaseBlock(int x, int y, int z);
+
+    /// <summary>Domain feet Y for first join / respawn above base surface at (x,z).</summary>
+    int SampleSpawnFeetY(int x, int z);
 }
 
 /// <summary>Classic Zenith flat overworld (stone / grass / air).</summary>
@@ -36,11 +39,12 @@ sealed class FlatTerrainProvider : ITerrainProvider
     }
 
     public int SampleBaseBlock(int x, int y, int z)
+        => OverworldTerrainSampler.SampleBlock(x, y, z, Blocks.FlatGrassY);
+
+    public int SampleSpawnFeetY(int x, int z)
     {
         _ = x;
         _ = z;
-        if (y >= Blocks.FlatMinY && y <= Blocks.FlatStoneTopY) return Blocks.Stone;
-        if (y == Blocks.FlatGrassY) return Blocks.GrassBlock;
-        return Blocks.Air;
+        return Blocks.FlatSpawnY;
     }
 }

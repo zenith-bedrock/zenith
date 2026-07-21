@@ -72,7 +72,7 @@ Phase 3  zero-alloc hot pack         done (jul 2026; see docs/dx.md)
 Phase 3b tick/join UpdateBlock lists done (BlockSystem + ColumnSend scratches)
 Phase 4  DX + chat FIFO              done (chat FIFO); ARCHITECTURE stay-honest ongoing
 Phase 5  InventoryProtocol split     done
-Next     H1#8 world beyond flat — product, not this program (gravity §57 + playerdata §60 shipped)
+Next     H1#8 — §64 overworld features shipped; biomes/ore or §61 Mojang spike when needed
          SoftCap eviction redesign; Bedrock E2E CI (beta-hard)
 ```
 

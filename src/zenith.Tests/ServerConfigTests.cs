@@ -214,6 +214,52 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
+    public void Validate_normalizes_terrain_case()
+    {
+        var config = new ServerConfig();
+        config.World.Terrain = " Noise ";
+        config.Validate();
+        Assert.Equal("noise", config.World.Terrain);
+    }
+
+    [Fact]
+    public void Validate_rejects_unsupported_terrain()
+    {
+        var config = new ServerConfig();
+        config.World.Terrain = "caves";
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("flat or noise", ex.Message);
+    }
+
+    [Fact]
+    public void LoadOrCreate_parses_world_terrain_and_seed()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"zenith-test-{Guid.NewGuid():N}.yml");
+        try
+        {
+            File.WriteAllText(path, """
+                server:
+                  port: 19132
+                  motd: test
+                  gamemode: Survival
+                world:
+                  name: world
+                  terrain: noise
+                  seed: 4242
+                auth:
+                  accept: [offline]
+                """);
+            var config = ServerConfigLoader.LoadOrCreate(path);
+            Assert.Equal("noise", config.World.Terrain);
+            Assert.Equal(4242, config.World.Seed);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Validate_rejects_unsupported_gamemode()
     {
         var config = new ServerConfig();

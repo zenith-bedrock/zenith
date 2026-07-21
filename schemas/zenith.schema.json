@@ -68,6 +68,17 @@
           "maximum": 32,
           "default": 4,
           "description": "Chunk radius streamed around spawn on join."
+        },
+        "terrain": {
+          "type": "string",
+          "enum": ["flat", "noise"],
+          "default": "flat",
+          "description": "Base terrain generator (ADR §63/§64). flat = classic Y -61; noise = overworld band + features. Existing c: blobs win over config on load."
+        },
+        "seed": {
+          "type": "integer",
+          "default": 1,
+          "description": "Seed for noise terrain (heights, caves, trees, ruins); ignored for flat."
         }
       }
     },

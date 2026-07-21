@@ -97,6 +97,31 @@ partial class InGameSessionHandler
                     session, player, action.Action, action.BlockX, action.BlockY, action.BlockZ);
             }
         }
+
+        RefreshDigActivityFromAuthInput(player, session.Context.Clock.CurrentTick, packet);
+    }
+
+    private static void RefreshDigActivityFromAuthInput(
+        Player.Player player,
+        ulong tick,
+        PlayerAuthInputPacket packet)
+    {
+        if (!player.HasBreakTarget) return;
+
+        // Client sets PerformBlockActions while holding mine; avoids StopCrack between sparse crack_break packets.
+        if (packet.InputPerformBlockActions)
+            player.MarkDigActive(tick);
+
+        foreach (var action in packet.BlockActions)
+        {
+            if (action.BlockX == player.BreakTargetX
+                && action.BlockY == player.BreakTargetY
+                && action.BlockZ == player.BreakTargetZ)
+            {
+                player.MarkDigActive(tick);
+                return;
+            }
+        }
     }
 
     private static void HandlePlayerAction(NetworkSession session, ref BinaryStream stream)

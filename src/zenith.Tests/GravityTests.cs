@@ -55,24 +55,47 @@ public class GravityTests
     }
 
     [Fact]
-    public void Dig_under_tower_cascades_within_budget()
+    public void Dig_under_tower_cascades_over_ticks()
     {
         var world = NewWorld();
         var baseY = Blocks.FlatGrassY + 1;
-        // Tower of 3 sand on grass+1..+3; remove middle support by clearing grass+1 after placing.
         Assert.True(world.TrySetBlock(1, baseY, 0, Blocks.Sand));
         Assert.True(world.TrySetBlock(1, baseY + 1, 0, Blocks.Sand));
         Assert.True(world.TrySetBlock(1, baseY + 2, 0, Blocks.Sand));
-        // Dig out bottom sand → air; enqueue cell above (middle).
         Assert.True(world.TrySetBlock(1, baseY, 0, Blocks.Air));
         Assert.True(world.GravityPending.TryEnqueue(1, baseY + 1, 0));
 
         var gravity = new GravitySystem(world);
-        gravity.Tick(new GameClock(), Array.Empty<Zenith.Player.Player>());
+        var clock = new GameClock();
+        gravity.Tick(clock, Array.Empty<Zenith.Player.Player>());
+        Assert.Equal(Blocks.Sand, world.GetBlock(1, baseY, 0));
+        Assert.Equal(Blocks.Air, world.GetBlock(1, baseY + 1, 0));
+        Assert.Equal(Blocks.Sand, world.GetBlock(1, baseY + 2, 0));
 
+        gravity.Tick(clock, Array.Empty<Zenith.Player.Player>());
         Assert.Equal(Blocks.Sand, world.GetBlock(1, baseY, 0));
         Assert.Equal(Blocks.Sand, world.GetBlock(1, baseY + 1, 0));
         Assert.Equal(Blocks.Air, world.GetBlock(1, baseY + 2, 0));
+        Assert.Equal(0, world.GravityPending.Count);
+    }
+
+    [Fact]
+    public void Max_steps_per_tick_caps_falls_per_game_tick()
+    {
+        var world = NewWorld();
+        var baseY = Blocks.FlatGrassY;
+        // Six floating sand with a single air gap above grass — enqueue bottom floater only.
+        for (var i = 0; i < 6; i++)
+            Assert.True(world.TrySetBlock(2, baseY + 2 + i, 0, Blocks.Sand));
+        Assert.True(world.GravityPending.TryEnqueue(2, baseY + 2, 0));
+
+        var gravity = new GravitySystem(world);
+        gravity.Tick(new GameClock(), Array.Empty<Zenith.Player.Player>());
+
+        Assert.Equal(Blocks.Sand, world.GetBlock(2, baseY + 1, 0));
+        Assert.Equal(Blocks.Air, world.GetBlock(2, baseY + 2, 0));
+        Assert.Equal(Blocks.Sand, world.GetBlock(2, baseY + 3, 0));
+        Assert.True(world.GravityPending.Count > 0, "cascade continues on later ticks");
     }
 
     [Fact]
