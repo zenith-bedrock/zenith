@@ -1,12 +1,15 @@
-# Docker/compose ops sample only — not used by `dotnet run`.
-# Local runtime lives next to the DLL (AppContext.BaseDirectory).
-# Embedded game palettes stay in src/zenith/data/.
+# Docker ops sample — not used by `dotnet run`.
+# Persistent data lives under /data (single volume). Do not mount over /app (wipes the DLL).
 services:
   zenith:
     build: .
     ports:
       - "19132:19132/udp"
+    environment:
+      ZENITH_DATA: /data
     volumes:
-      - ./deploy/zenith.yml:/app/zenith.yml
-      - ./deploy/worlds:/app/worlds
+      - zenith-data:/data
     restart: unless-stopped
+
+volumes:
+  zenith-data:

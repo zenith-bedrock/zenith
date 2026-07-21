@@ -24,6 +24,7 @@
 - Intent/tick, raknet, testing: other files under `.cursor/rules/`
 - **Agent skills (invoke explicitly):** `zenith-post-impl-audit` — audit git status/diff vs architecture/DX after implementation; `zenith-unit-tests` — add leaf unit tests when the diff warrants them. Same content under [`.cursor/skills/`](.cursor/skills/), [`.claude/skills/`](.claude/skills/), [`.opencode/skills/`](.opencode/skills/)
 - Decisions: [`docs/decisions.md`](docs/decisions.md) — ADR **before** a new layer/abstraction
+- **Technical references:** [`readme.md`](readme.md#technical-references-transparency) — protocol SSOT, ADR § index, external study repos (PM/DF/Endstone/Mojang), what is owned vs borrowed
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — horizon order (alpha first; no PM parity chase)
 - DX: [`docs/dx.md`](docs/dx.md) — includes how to use Mojang `bedrock-protocol-docs` (`r/26_u4`) vs Zenith protocol **1001**
 - Naming: [`docs/naming.md`](docs/naming.md) — verb prefixes (`Handle`/`Apply`/`Try`/`Send`/`Relay`…); **no `Maybe*`**

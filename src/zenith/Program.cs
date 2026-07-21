@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Zenith.Server;
 
-var configPath = Path.Combine(AppContext.BaseDirectory, ServerConfigLoader.DefaultFileName);
+var configPath = ServerConfigPaths.ResolveConfigPath();
 ServerConfig config;
 try
 {
@@ -16,7 +16,7 @@ catch (Exception ex)
     return;
 }
 
-var server = new ZenithServer(config);
+var server = new ZenithServer(config, configPath);
 
 var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 void RequestShutdown() => shutdownTcs.TrySetResult();

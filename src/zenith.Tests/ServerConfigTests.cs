@@ -333,4 +333,40 @@ public class ServerConfigLoaderTests
         var abs = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "zenith-data-root"));
         Assert.Equal(abs, ZenithServer.ResolveDataRoot(abs));
     }
+
+    [Fact]
+    public void ResolveConfigPath_uses_base_directory_without_env()
+    {
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, null);
+            var expected = Path.Combine(AppContext.BaseDirectory, ServerConfigLoader.DefaultFileName);
+            Assert.Equal(expected, ServerConfigPaths.ResolveConfigPath());
+            Assert.Null(ServerConfigPaths.ResolveDataDirectory());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ResolveConfigPath_uses_zenith_data_when_set()
+    {
+        var dataDir = Path.Combine(Path.GetTempPath(), $"zenith-data-{Guid.NewGuid():N}");
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, dataDir);
+            Assert.Equal(Path.GetFullPath(dataDir), ServerConfigPaths.ResolveDataDirectory());
+            Assert.Equal(
+                Path.Combine(Path.GetFullPath(dataDir), ServerConfigLoader.DefaultFileName),
+                ServerConfigPaths.ResolveConfigPath());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+        }
+    }
 }

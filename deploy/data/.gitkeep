@@ -1,0 +1,2 @@
+# Bind-mount this folder to /data for local docker compose overrides.
+# Contents (zenith.yml, worlds/) are gitignored — see deploy/README.md.

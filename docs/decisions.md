@@ -189,6 +189,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Known debt / principle:** Reinterpreting a former flat LevelDB directory as a data root creates `{path}/worlds/{name}/` empty while orphaning old `CURRENT`/`.ldb` at the root — silent empty world. Detect and **Warning** at boot if root looks like ZLDB and the new world dir is empty/new. Future path-semantics changes must warn loudly, never reinterpret silently (ops visibility vs silent fallback). Relative `world.path` resolves against `AppContext.BaseDirectory` (DLL dir), never process cwd — same as `zenith.yml`.
 
+**Adendo (jul 2026 — Docker `/data` UX):** PocketMine/Endstone-style **one volume on `/data`**. Image sets `ZENITH_DATA=/data`; config = `/data/zenith.yml`, sample `world.path: /data`. Entrypoint seeds default config on first boot. **`ZENITH_DATA` is the only supported env override** (data root — not a config matrix). Do not bind-mount `/app/zenith.yml` (fragile on Dokploy when host file missing → directory). Config changes require container **restart** (read at boot only).
+
 **Deferred:** Multi-world load, migrator flat→`worlds/<name>`, `players/` volume, Docker Hub automation.
 
 ### 21. Future extension surface form (not a schedule)

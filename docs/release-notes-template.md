@@ -58,7 +58,7 @@ Not production-ready — LAN / private feedback only.
 | `world.path` empty | **InMemory** — wiped on restart, **no warning** |
 | Relative `world.path` | Under DLL dir (`AppContext.BaseDirectory`), **not** shell cwd. Prefer `.` or absolute (`/app`). |
 | `world.path: ./worlds` | Wrong — you get `…/worlds/worlds/<name>` |
-| Docker volumes | Mount `zenith.yml` **and** `./deploy/worlds → /app/worlds`. Do not mount over `/app` (wipes the DLL). Redeploy without the worlds volume = wipe. |
+| Docker volumes | One persistent volume on **`/data`** (`ZENITH_DATA`). Config + worlds live there. Do **not** mount over `/app`. Restart after editing `/data/zenith.yml`. See [`deploy/README.md`](../deploy/README.md). |
 | Stop / redeploy | Prefer SIGTERM so `FlushAsync` runs. Hard kill may keep overlays already in WAL; recent bag/chest Puts can be lost. |
 | Auth | Sample often allows self-signed/offline for LAN; use `[xbox]` before any public exposure. |
 | Floor drops after restart | Drop entities are RAM-only — gone after process restart (§26). |
