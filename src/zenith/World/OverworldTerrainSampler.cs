@@ -26,8 +26,6 @@ static class OverworldTerrainSampler
 
     private const int TreeSalt = unchecked((int)0x7EE7E77Eu);
     private const int RuinSalt = unchecked((int)0x5015015u);
-    private const int CaveSalt = unchecked((int)0xCAFEBABEu);
-    private const int TunnelSalt = unchecked((int)0x71177117u);
     private const int FineSalt = unchecked((int)0xA5A55A5Au);
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
@@ -76,27 +74,39 @@ static class OverworldTerrainSampler
         return Blocks.Air;
     }
 
-    /// <summary>§64 noise column sample: water, caves, trees, ruins, deepslate, bedrock.</summary>
+    /// <summary>§64/§65 noise column sample: water, caves, trees, ruins, deepslate, bedrock.</summary>
     public static int SampleNoiseBlock(int worldX, int worldY, int worldZ, int seed)
+        => SampleNoiseBlock(worldX, worldY, worldZ, seed, caves: null);
+
+    internal static int SampleNoiseBlock(
+        int worldX,
+        int worldY,
+        int worldZ,
+        int seed,
+        OverworldCaveContext? caves)
     {
         if (worldY < Blocks.FlatMinY || worldY > 320) return Blocks.Air;
 
-        var feature = SampleFeature(worldX, worldY, worldZ, seed);
-        if (feature != Blocks.Air) return feature;
-
         var surface = SurfaceY(worldX, worldZ, seed);
-        if (worldY > surface && worldY <= SeaLevel) return Blocks.Water;
-        if (worldY > surface) return Blocks.Air;
+        if (worldY > surface)
+        {
+            if (worldY <= SeaLevel) return Blocks.Water;
+            var above = SampleFeature(worldX, worldY, worldZ, seed);
+            return above != Blocks.Air ? above : Blocks.Air;
+        }
         if (worldY == Blocks.FlatMinY) return Blocks.Bedrock;
 
-        if (IsCave(worldX, worldY, worldZ, seed, surface))
-            return Blocks.Air;
+        var carved = caves?.IsCarved(worldX, worldY, worldZ, surface)
+                     ?? OverworldCaveCarver.IsCarved(worldX, worldY, worldZ, seed, surface);
+        if (carved) return Blocks.Air;
 
         if (worldY == surface) return Blocks.GrassBlock;
         if (worldY >= surface - NoiseDirtDepth && worldY < surface)
             return Blocks.Dirt;
         if (worldY < 0) return Blocks.Deepslate;
-        return Blocks.Stone;
+
+        var feature = SampleFeature(worldX, worldY, worldZ, seed);
+        return feature != Blocks.Air ? feature : Blocks.Stone;
     }
 
     private static int SampleFeature(int x, int y, int z, int seed)
@@ -188,15 +198,6 @@ static class OverworldTerrainSampler
             return Blocks.OakPlanks;
 
         return Blocks.Air;
-    }
-
-    private static bool IsCave(int x, int y, int z, int seed, int surface)
-    {
-        if (y <= Blocks.FlatMinY + 1 || y >= surface - 4) return false;
-        var chamber = Hash3(x >> 2, y >> 2, z >> 2, seed ^ CaveSalt);
-        if ((chamber & 0xFF) > 22) return false;
-        var tunnel = Hash3(x, y, z, seed ^ TunnelSalt);
-        return (tunnel & 0xFF) < 48;
     }
 
     private static int FloorDiv(int value, int divisor)
