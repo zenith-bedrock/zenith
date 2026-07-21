@@ -30,17 +30,50 @@ static class OverworldTerrainSampler
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
-        var biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
-        // Coarse hills + fine jitter — deterministic, no floats.
+        FillSurfaceAt(worldX, worldZ, seed, out var y, out _);
+        return y;
+    }
+
+    /// <summary>Column grid: 16×16 surface Y + biome (index = lx * 16 + lz).</summary>
+    public static void FillColumnSurfaces(
+        int chunkX,
+        int chunkZ,
+        int seed,
+        Span<int> surfaces256,
+        Span<OverworldBiomeKind> biomes256,
+        out int maxSurfaceY)
+    {
+        if (surfaces256.Length < 256 || biomes256.Length < 256)
+            throw new ArgumentException("Need 256 slots for column surface grids.");
+
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        maxSurfaceY = int.MinValue;
+        for (var lx = 0; lx < 16; lx++)
+        {
+            for (var lz = 0; lz < 16; lz++)
+            {
+                var i = (lx << 4) | lz;
+                FillSurfaceAt(baseX + lx, baseZ + lz, seed, out var y, out var biome);
+                surfaces256[i] = y;
+                biomes256[i] = biome;
+                if (y > maxSurfaceY) maxSurfaceY = y;
+            }
+        }
+    }
+
+    private static void FillSurfaceAt(int worldX, int worldZ, int seed, out int y, out OverworldBiomeKind biome)
+    {
+        biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
         var coarse = (int)(Hash(worldX >> 2, worldZ >> 2, seed) % (uint)(NoiseHillAmplitude * 2 + 1))
                      - NoiseHillAmplitude;
         var fine = (int)(Hash(worldX, worldZ, seed ^ FineSalt) % 5);
         var local = Hash(worldX, worldZ, seed ^ FineSalt);
-        var y = NoiseBaseSurfaceY + coarse + fine
-                + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
+        y = NoiseBaseSurfaceY + coarse + fine
+            + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
         if (biome == OverworldBiomeKind.Ocean)
             y = Math.Min(y, SeaLevel - 1);
-        return Math.Clamp(y, Blocks.FlatMinY + 12, 120);
+        y = Math.Clamp(y, Blocks.FlatMinY + 12, 120);
     }
 
     /// <summary>Domain feet Y standing on dry surface or water top.</summary>
@@ -93,6 +126,21 @@ static class OverworldTerrainSampler
         if (worldY < Blocks.FlatMinY || worldY > 320) return Blocks.Air;
 
         var surface = SurfaceY(worldX, worldZ, seed);
+        return SampleNoiseBlockAtSurface(worldX, worldY, worldZ, seed, surface, caves);
+    }
+
+    /// <summary>Column fill path — surface/biome already cached (ADR §69).</summary>
+    internal static int SampleNoiseBlockAtSurface(
+        int worldX,
+        int worldY,
+        int worldZ,
+        int seed,
+        int surface,
+        OverworldCaveContext? caves,
+        OverworldBiomeKind? biome = null)
+    {
+        if (worldY < Blocks.FlatMinY || worldY > 320) return Blocks.Air;
+
         if (worldY > surface)
         {
             if (worldY <= SeaLevel) return Blocks.Water;
@@ -105,10 +153,10 @@ static class OverworldTerrainSampler
                      ?? OverworldCaveCarver.IsCarved(worldX, worldY, worldZ, seed, surface);
         if (carved) return Blocks.Air;
 
-        var biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
-        if (worldY == surface) return OverworldBiomeSampler.SurfaceBlock(biome);
+        var kind = biome ?? OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
+        if (worldY == surface) return OverworldBiomeSampler.SurfaceBlock(kind);
         if (worldY >= surface - NoiseDirtDepth && worldY < surface)
-            return OverworldBiomeSampler.SubsurfaceBlock(biome);
+            return OverworldBiomeSampler.SubsurfaceBlock(kind);
         if (worldY < 0)
         {
             var ore = OverworldOrePlacer.TryReplaceHost(Blocks.Deepslate, worldX, worldY, worldZ, seed);

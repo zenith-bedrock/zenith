@@ -1,8 +1,9 @@
+using System.Buffers;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.World;
 
-/// <summary>Gera payload de coluna overworld (biomes + subchunks de rede).</summary>
+/// <summary>Gera payload de coluna overworld (biomes + subchunks de rede). ADR §69: single-pass + pooled scratch.</summary>
 static class ChunkPayloads
 {
     private const int OverworldMinSubChunkIndex = -4;
@@ -14,6 +15,9 @@ static class ChunkPayloads
     private const byte BiomeNetworkPaletteHeader = 1;
     private const byte BorderBlocksEmpty = 0;
     private const int NetworkBit = 1;
+    private const int SectionVolume = 4096;
+    /// <summary>Trunk ≤6 + canopy + margin above max surface.</summary>
+    private const int NoiseFeatureHeadroom = 8;
 
     /// <summary>Coluna vazia (só biomes) — legado; novos miss usam <see cref="BuildFlatOverworld"/>.</summary>
     public static byte[] BuildEmptyOverworld()
@@ -27,8 +31,67 @@ static class ChunkPayloads
     /// Flat: classic stone/grass column — delegates to <see cref="BuildOverworldColumn"/>.
     /// </summary>
     public static (int SubChunkCount, byte[] Payload) BuildFlatOverworld()
-        => BuildOverworldColumn(0, 0, (x, y, z) =>
-            OverworldTerrainSampler.SampleBlock(x, y, z, Blocks.FlatGrassY));
+        => BuildOverworldColumn(
+            0,
+            0,
+            (x, y, z) => OverworldTerrainSampler.SampleBlock(x, y, z, Blocks.FlatGrassY),
+            PlainsBiomeId,
+            maxWorldY: Blocks.FlatGrassY);
+
+    /// <summary>Noise overworld — surface cache + cave context + single-pass sections (ADR §69).</summary>
+    public static (int SubChunkCount, byte[] Payload) BuildNoiseOverworldColumn(
+        int chunkX,
+        int chunkZ,
+        int seed,
+        OverworldCaveContext caves)
+    {
+        Span<int> surfaces = stackalloc int[256];
+        Span<OverworldBiomeKind> biomes = stackalloc OverworldBiomeKind[256];
+        OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out var maxSurface);
+        var maxWorldY = Math.Max(maxSurface + NoiseFeatureHeadroom, OverworldTerrainSampler.SeaLevel);
+        var biomeId = OverworldBiomeSampler.NetworkId(biomes[(8 << 4) | 8]);
+        var maxSubChunk = Math.Clamp(
+            SectionIndex(maxWorldY),
+            0,
+            OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex);
+
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        var ids = ArrayPool<int>.Shared.Rent(SectionVolume);
+        try
+        {
+            var writer = new BinaryStream();
+            for (var section = 0; section <= maxSubChunk; section++)
+            {
+                var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
+                for (var lx = 0; lx < 16; lx++)
+                {
+                    for (var lz = 0; lz < 16; lz++)
+                    {
+                        var meta = (lx << 4) | lz;
+                        var wx = baseX + lx;
+                        var wz = baseZ + lz;
+                        var surface = surfaces[meta];
+                        var biome = biomes[meta];
+                        for (var localY = 0; localY < 16; localY++)
+                        {
+                            ids[BlockIndex(lx, localY, lz)] = OverworldTerrainSampler.SampleNoiseBlockAtSurface(
+                                wx, worldYBase + localY, wz, seed, surface, caves, biome);
+                        }
+                    }
+                }
+
+                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume));
+            }
+
+            WriteBiomesAndBorder(ref writer, biomeId);
+            return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(ids, clearArray: false);
+        }
+    }
 
     /// <summary>
     /// Builds paletted subchunks for one column from a world-space block sampler.
@@ -38,61 +101,47 @@ static class ChunkPayloads
         int chunkX,
         int chunkZ,
         Func<int, int, int, int> blockAtWorld,
-        int biomeNetworkId = PlainsBiomeId)
+        int biomeNetworkId = PlainsBiomeId,
+        int? maxWorldY = null)
     {
         var baseX = chunkX << 4;
         var baseZ = chunkZ << 4;
-        var maxSubChunk = 0;
-        for (var section = 0; section <= OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex; section++)
-        {
-            var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
-            if (!SectionHasSolid(baseX, baseZ, worldYBase, blockAtWorld)) continue;
-            maxSubChunk = section;
-        }
+        var boundY = maxWorldY ?? (OverworldMaxSubChunkIndex * 16 + 15);
+        var maxSubChunk = Math.Clamp(
+            SectionIndex(boundY),
+            0,
+            OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex);
 
-        var writer = new BinaryStream();
-        for (var section = 0; section <= maxSubChunk; section++)
+        var ids = ArrayPool<int>.Shared.Rent(SectionVolume);
+        try
         {
-            var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
-            var ids = FillSection(baseX, baseZ, worldYBase, blockAtWorld);
-            WriteSubChunk(ref writer, ids);
-        }
-
-        WriteBiomesAndBorder(ref writer, biomeNetworkId);
-        return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
-    }
-
-    private static bool SectionHasSolid(int baseX, int baseZ, int worldYBase, Func<int, int, int, int> blockAtWorld)
-    {
-        for (var x = 0; x < 16; x++)
-        {
-            for (var z = 0; z < 16; z++)
+            var writer = new BinaryStream();
+            for (var section = 0; section <= maxSubChunk; section++)
             {
-                for (var localY = 0; localY < 16; localY++)
+                var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
+                for (var x = 0; x < 16; x++)
                 {
-                    if (blockAtWorld(baseX + x, worldYBase + localY, baseZ + z) != Blocks.Air)
-                        return true;
+                    for (var z = 0; z < 16; z++)
+                    {
+                        for (var localY = 0; localY < 16; localY++)
+                            ids[BlockIndex(x, localY, z)] = blockAtWorld(baseX + x, worldYBase + localY, baseZ + z);
+                    }
                 }
+
+                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume));
             }
+
+            WriteBiomesAndBorder(ref writer, biomeNetworkId);
+            return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
         }
-
-        return false;
-    }
-
-    private static int[] FillSection(int baseX, int baseZ, int worldYBase, Func<int, int, int, int> blockAtWorld)
-    {
-        var ids = new int[4096];
-        for (var x = 0; x < 16; x++)
+        finally
         {
-            for (var z = 0; z < 16; z++)
-            {
-                for (var localY = 0; localY < 16; localY++)
-                    ids[BlockIndex(x, localY, z)] = blockAtWorld(baseX + x, worldYBase + localY, baseZ + z);
-            }
+            ArrayPool<int>.Shared.Return(ids, clearArray: false);
         }
-
-        return ids;
     }
+
+    private static int SectionIndex(int worldY)
+        => (worldY - OverworldMinSubChunkIndex * 16) >> 4;
 
     private static void WriteBiomesAndBorder(ref BinaryStream writer, int biomeNetworkId)
     {
@@ -105,44 +154,57 @@ static class ChunkPayloads
         writer.WriteByte(BorderBlocksEmpty);
     }
 
-    private static void WriteSubChunk(ref BinaryStream writer, int[] ids)
+    private static void WriteSubChunk(ref BinaryStream writer, ReadOnlySpan<int> ids)
     {
         writer.WriteByte(SubChunkVersion);
         writer.WriteByte(BlockStorageLayers);
         WritePalettedStorage(ref writer, ids);
     }
 
-    private static void WritePalettedStorage(ref BinaryStream writer, int[] ids)
+    private static void WritePalettedStorage(ref BinaryStream writer, ReadOnlySpan<int> ids)
     {
-        var palette = new List<int>();
-        var lookup = new Dictionary<int, ushort>();
-        var indices = new ushort[4096];
-        for (var i = 0; i < 4096; i++)
+        // Noise columns typically use &lt; 32 unique block types — linear palette, no Dictionary.
+        Span<int> palette = stackalloc int[64];
+        Span<ushort> indices = stackalloc ushort[SectionVolume];
+        var paletteCount = 0;
+
+        for (var i = 0; i < SectionVolume; i++)
         {
             var id = ids[i];
-            if (!lookup.TryGetValue(id, out var index))
+            var found = -1;
+            for (var p = 0; p < paletteCount; p++)
             {
-                index = (ushort)palette.Count;
-                palette.Add(id);
-                lookup[id] = index;
+                if (palette[p] == id)
+                {
+                    found = p;
+                    break;
+                }
             }
 
-            indices[i] = index;
+            if (found < 0)
+            {
+                if (paletteCount >= palette.Length)
+                    throw new InvalidOperationException($"Subchunk palette exceeds {palette.Length} entries.");
+                found = paletteCount;
+                palette[paletteCount++] = id;
+            }
+
+            indices[i] = (ushort)found;
         }
 
-        var bitsPerBlock = BitsPerBlockFor(palette.Count);
+        var bitsPerBlock = BitsPerBlockFor(paletteCount);
         writer.WriteByte((byte)((bitsPerBlock << 1) | NetworkBit));
         if (bitsPerBlock > 0)
         {
             var blocksPerWord = 32 / bitsPerBlock;
-            var wordCount = (indices.Length + blocksPerWord - 1) / blocksPerWord;
+            var wordCount = (SectionVolume + blocksPerWord - 1) / blocksPerWord;
             for (var w = 0; w < wordCount; w++)
             {
                 uint word = 0;
                 for (var slot = 0; slot < blocksPerWord; slot++)
                 {
                     var position = w * blocksPerWord + slot;
-                    if (position >= indices.Length) break;
+                    if (position >= SectionVolume) break;
                     word |= (uint)indices[position] << (slot * bitsPerBlock);
                 }
 
@@ -151,10 +213,10 @@ static class ChunkPayloads
         }
 
         if (bitsPerBlock != 0)
-            writer.WriteVarInt(palette.Count);
+            writer.WriteVarInt(paletteCount);
 
-        foreach (var entry in palette)
-            writer.WriteVarInt(entry);
+        for (var p = 0; p < paletteCount; p++)
+            writer.WriteVarInt(palette[p]);
     }
 
     private static int BitsPerBlockFor(int paletteSize)

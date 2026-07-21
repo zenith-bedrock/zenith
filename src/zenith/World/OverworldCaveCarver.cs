@@ -1,53 +1,6 @@
 namespace Zenith.World;
 
 /// <summary>
-/// Precomputed worm segments for a column neighborhood (ADR §65).
-/// Built once per <see cref="ChunkPayloads.BuildOverworldColumn"/> call.
-/// </summary>
-readonly struct OverworldCaveContext
-{
-    private readonly CaveSegment[] _segments;
-
-    private OverworldCaveContext(CaveSegment[] segments) => _segments = segments;
-
-    public static OverworldCaveContext ForColumn(int chunkX, int chunkZ, int seed)
-    {
-        var list = new List<CaveSegment>(512);
-        for (var dcx = -1; dcx <= 1; dcx++)
-        {
-            for (var dcz = -1; dcz <= 1; dcz++)
-                OverworldCaveCarver.CollectSegments(chunkX + dcx, chunkZ + dcz, seed, list);
-        }
-
-        return new OverworldCaveContext(list.ToArray());
-    }
-
-    public bool IsCarved(int worldX, int worldY, int worldZ, int surfaceY)
-    {
-        if (worldY <= Blocks.FlatMinY + 1 || worldY >= surfaceY - OverworldCaveCarver.SurfaceGuardDepth)
-            return false;
-
-        for (var i = 0; i < _segments.Length; i++)
-        {
-            if (_segments[i].Contains(worldX, worldY, worldZ))
-                return true;
-        }
-
-        return false;
-    }
-}
-
-/// <summary>One worm step or cheese sphere bounds check.</summary>
-readonly struct CaveSegment(
-    int x0, int y0, int z0,
-    int x1, int y1, int z1,
-    int radius)
-{
-    public bool Contains(int px, int py, int pz)
-        => OverworldCaveCarver.IsWithinSegment(px, py, pz, x0, y0, z0, x1, y1, z1, radius);
-}
-
-/// <summary>
 /// Deterministic worm + cheese cave carving for noise overworld (ADR §65).
 /// </summary>
 static class OverworldCaveCarver
