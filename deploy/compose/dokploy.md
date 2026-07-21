@@ -8,13 +8,15 @@ Same **product image** as Compose ([`../image/`](../image/)). Set `ZENITH_DATA=/
 |-------|-------|
 | Source | Git → this repo |
 | Branch | `develop` (or your pin) |
-| **Compose Path** | **`./docker-compose.dokploy.yml`** |
+| **Compose Path** | **`./deploy/compose/docker-compose.dokploy.yml`** |
 
-Do **not** use `./docker-compose.yml` if you want File Mount for `zenith.yml` — the generic compose stays free of `../files/` so local/CI deploys are not broken.
+Do **not** use `./docker-compose.yml` for File Mount — that file is the generic include (no `../files/`) so local/CI stay safe.
+
+SSOT lives under [`deploy/compose/`](.) — root `docker-compose.yml` is only a thin `include` for `docker compose up`.
 
 ## Steps
 
-1. **Build** from this repo (`deploy/image/Dockerfile` via the Dokploy compose).
+1. **Build** via the Dokploy compose (`deploy/image/Dockerfile`).
 2. **Expose** UDP `19132`.
 3. **Environment:** `ZENITH_DATA=/data` (image default; set in UI if the stack strips env).
 4. **Volume:** named volume `zenith-data` → `/data` (already in compose).
@@ -30,10 +32,10 @@ The Dokploy compose already contains:
 ```yaml
 volumes:
   - zenith-data:/data
-  - ../files/zenith.yml:/data/zenith.yml:ro
+  - ../../../files/zenith.yml:/data/zenith.yml:ro
 ```
 
-(`../files/` is relative to the Git `code/` checkout — Dokploy layout.)
+(Path is relative to `deploy/compose/` → Dokploy `files/` sibling of `code/`.)
 
 ## Sample File Mount content
 
@@ -81,19 +83,21 @@ Server ready.
 
 | Symptom | Cause | Fix |
 |---------|--------|-----|
-| Still `terrain=flat` / old config | Compose Path still `./docker-compose.yml` or File Mount not wired | Set Compose Path to `./docker-compose.dokploy.yml`; create File Mount `zenith.yml`; redeploy |
-| Boot: `zenith.yml is a directory` | Host path for a file mount did not exist; Docker created a directory | Fix File Path name; ensure File Mount content exists before redeploy |
-| Config edits ignored | Edited `/opt/zenith/...` or wrong compose | File Mount + Dokploy compose bind to `/data/zenith.yml:ro` |
-| “Persist broken” after redeploy | New container without the same volume | Reattach named volume on `/data` |
-| Empty world after path change | Old LevelDB at wrong path (ADR §20) | Boot log: `via=ZENITH_DATA` |
-| Build: `GID '1000' already exists` | Stale image | Pull/rebuild `0abdea6+` |
+| Still `terrain=flat` / old config | Wrong Compose Path or File Mount not wired | Compose Path `./deploy/compose/docker-compose.dokploy.yml`; File Mount `zenith.yml`; redeploy |
+| Boot: `zenith.yml is a directory` | Host path missing; Docker created a directory | Ensure File Mount content exists before redeploy |
+| Config edits ignored | Edited `/opt/zenith/...` or generic compose | Use Dokploy compose + File Mount → `/data/zenith.yml:ro` |
+| “Persist broken” after redeploy | Volume not reattached | Named volume on `/data` |
+| Empty world after path change | Old LevelDB path (ADR §20) | Boot log: `via=ZENITH_DATA` |
+| Build: `GID '1000' already exists` | Stale image | Rebuild `0abdea6+` |
 
 **Do not mount over `/opt/zenith`** — that replaces the published DLL.
 
 ## Local compose (not Dokploy)
 
 ```bash
-docker compose -f docker-compose.yml up --build
+docker compose up --build
+# or explicitly:
+docker compose -f deploy/compose/docker-compose.yml up --build
 ```
 
-No `../files/` — edit via bind override ([`override.example.yml`](override.example.yml)) or `docker compose exec`.
+No `files/` bind — edit via [`override.example.yml`](override.example.yml) or `docker compose exec`.

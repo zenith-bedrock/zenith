@@ -47,7 +47,7 @@ New encode/decode work must match **1001**, not the newest Mojang docs tip (ofte
 | [`docs/roadmap.md`](docs/roadmap.md) | What is shipped vs deferred (not PM parity) |
 | [`schemas/zenith.schema.json`](schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
 | [`deploy/README.md`](deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
-| [`deploy/compose/dokploy.md`](deploy/compose/dokploy.md) | Dokploy — Compose Path `./docker-compose.dokploy.yml` + File Mount |
+| [`deploy/compose/dokploy.md`](deploy/compose/dokploy.md) | Dokploy — Compose Path `./deploy/compose/docker-compose.dokploy.yml` + File Mount |
 | [`deploy/pterodactyl/README.md`](deploy/pterodactyl/README.md) | Pterodactyl egg adapter (ADR §68) |
 
 ### Shipped assets (embedded, not fetched at runtime)

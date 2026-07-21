@@ -1,4 +1,6 @@
-# Canonical Compose sample (ADR §20). Build product image; data on ZENITH_DATA=/data.
+# Canonical Compose (ADR §20) — local / generic hosts.
+# From repo root: docker compose -f deploy/compose/docker-compose.yml up --build
+# Or: docker compose up --build  (root docker-compose.yml includes this file)
 services:
   zenith:
     build:
