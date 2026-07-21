@@ -1,0 +1,24 @@
+# Dokploy Compose adapter (ADR §20) — not for local `docker compose up`.
+#
+# Dokploy Provider → Compose Path: ./deploy/compose/docker-compose.dokploy.yml
+# Advanced → Mounts → File Mount → File Path: zenith.yml (Mount Path may show / — ignore)
+#
+# ../files is Dokploy's …/files next to …/code. From this file's directory that is ../../../files.
+# Generic compose has no ../files bind (avoids Docker creating a directory on missing host path).
+
+services:
+  zenith:
+    build:
+      context: ../..
+      dockerfile: deploy/image/Dockerfile
+    ports:
+      - "19132:19132/udp"
+    environment:
+      ZENITH_DATA: /data
+    volumes:
+      - zenith-data:/data
+      - ../../../files/zenith.yml:/data/zenith.yml:ro
+    restart: unless-stopped
+
+volumes:
+  zenith-data:

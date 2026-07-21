@@ -1,18 +1,4 @@
-# Root compose — thin wrapper so `docker compose up` from repo root still works.
-# Canonical: deploy/compose/docker-compose.yml (ADR §20).
-# Dokploy File Mount: see deploy/compose/dokploy.md (do not bake ../files into default compose).
-services:
-  zenith:
-    build:
-      context: .
-      dockerfile: deploy/image/Dockerfile
-    ports:
-      - "19132:19132/udp"
-    environment:
-      ZENITH_DATA: /data
-    volumes:
-      - zenith-data:/data
-    restart: unless-stopped
-
-volumes:
-  zenith-data:
+# Root entrypoint for `docker compose up` (ADR §20).
+# SSOT: deploy/compose/docker-compose.yml — do not add Dokploy ../files here.
+include:
+  - path: deploy/compose/docker-compose.yml

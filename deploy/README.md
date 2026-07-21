@@ -11,8 +11,10 @@ Host-side packaging — **not** used by `dotnet run`.
 | [`image/`](image/) | **Product image** — one Dockerfile, binary `/opt/zenith`, entrypoint |
 | `$ZENITH_DATA` | Config + worlds + `server.guid` (default `/data`) |
 | [`zenith.yml`](zenith.yml) | Single default template (`world.path` empty → use `ZENITH_DATA`) |
-| [`compose/`](compose/) | Compose + Dokploy adapter |
+| [`compose/`](compose/) | **Compose SSOT** — generic + Dokploy adapter |
 | [`pterodactyl/`](pterodactyl/) | Egg adapter only (same image) |
+
+Root `Dockerfile` / `docker-compose.yml` are thin entrypoints (include / mirror) so `docker build .` and `docker compose up` keep working — edit under `deploy/`, not copies at root.
 
 ```text
 /opt/zenith/zenith.dll     ← image (read-only)
@@ -34,11 +36,11 @@ docker build -f deploy/image/Dockerfile -t ghcr.io/zenith-bedrock/zenith:latest 
 
 | Host | Adapter | `ZENITH_DATA` |
 |------|---------|---------------|
-| Compose / local | [`../docker-compose.yml`](../docker-compose.yml) | `/data` |
-| Dokploy | [`../docker-compose.dokploy.yml`](../docker-compose.dokploy.yml) — [`compose/dokploy.md`](compose/dokploy.md) | `/data` |
+| Compose / local | [`compose/docker-compose.yml`](compose/docker-compose.yml) (root includes it) | `/data` |
+| Dokploy | [`compose/docker-compose.dokploy.yml`](compose/docker-compose.dokploy.yml) — [`compose/dokploy.md`](compose/dokploy.md) | `/data` |
 | Pterodactyl / Wings | [`pterodactyl/`](pterodactyl/) | `/home/container` |
 
-Adding another host = new adapter folder + docs — **zero** new product Dockerfile.
+Adding another host = new adapter under `deploy/` — **zero** new product Dockerfile.
 
 ## Quick start (Compose)
 
