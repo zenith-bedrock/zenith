@@ -3,6 +3,12 @@ namespace Zenith.World;
 /// <summary>Base column from terrain (ADR §62) — not overlays, not storage.</summary>
 readonly record struct TerrainColumn(int SubChunkCount, byte[] Payload);
 
+/// <summary>StartGame / F3 biome wire pair for spawn column.</summary>
+readonly record struct SpawnBiome(short NetworkId, string WireName)
+{
+    public static SpawnBiome Plains { get; } = new(1, "plains");
+}
+
 /// <summary>
 /// Supplies base terrain for column miss / heal and SoftCap base-rid sampling.
 /// Default: <see cref="FlatTerrainProvider"/>. Gen plugs here; BDS stays on <see cref="IChunkStorage"/> (§61).
@@ -16,6 +22,9 @@ interface ITerrainProvider
 
     /// <summary>Domain feet Y for first join / respawn above base surface at (x,z).</summary>
     int SampleSpawnFeetY(int x, int z);
+
+    /// <summary>Biome at spawn for StartGame wire (flat → plains).</summary>
+    SpawnBiome SampleSpawnBiome(int x, int z) => SpawnBiome.Plains;
 }
 
 /// <summary>Classic Zenith flat overworld (stone / grass / air).</summary>
@@ -47,4 +56,6 @@ sealed class FlatTerrainProvider : ITerrainProvider
         _ = z;
         return Blocks.FlatSpawnY;
     }
+
+    public SpawnBiome SampleSpawnBiome(int x, int z) => SpawnBiome.Plains;
 }

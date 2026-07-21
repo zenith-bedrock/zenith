@@ -30,11 +30,16 @@ static class OverworldTerrainSampler
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
+        var biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
         // Coarse hills + fine jitter — deterministic, no floats.
         var coarse = (int)(Hash(worldX >> 2, worldZ >> 2, seed) % (uint)(NoiseHillAmplitude * 2 + 1))
                      - NoiseHillAmplitude;
         var fine = (int)(Hash(worldX, worldZ, seed ^ FineSalt) % 5);
-        var y = NoiseBaseSurfaceY + coarse + fine;
+        var local = Hash(worldX, worldZ, seed ^ FineSalt);
+        var y = NoiseBaseSurfaceY + coarse + fine
+                + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
+        if (biome == OverworldBiomeKind.Ocean)
+            y = Math.Min(y, SeaLevel - 1);
         return Math.Clamp(y, Blocks.FlatMinY + 12, 120);
     }
 
@@ -74,7 +79,7 @@ static class OverworldTerrainSampler
         return Blocks.Air;
     }
 
-    /// <summary>§64/§65/§66 noise column sample: water, caves, ores, trees, ruins, deepslate, bedrock.</summary>
+    /// <summary>§64/§65/§66/§67 noise column sample: biomes, water, caves, ores, trees, ruins.</summary>
     public static int SampleNoiseBlock(int worldX, int worldY, int worldZ, int seed)
         => SampleNoiseBlock(worldX, worldY, worldZ, seed, caves: null);
 
@@ -100,9 +105,10 @@ static class OverworldTerrainSampler
                      ?? OverworldCaveCarver.IsCarved(worldX, worldY, worldZ, seed, surface);
         if (carved) return Blocks.Air;
 
-        if (worldY == surface) return Blocks.GrassBlock;
+        var biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
+        if (worldY == surface) return OverworldBiomeSampler.SurfaceBlock(biome);
         if (worldY >= surface - NoiseDirtDepth && worldY < surface)
-            return Blocks.Dirt;
+            return OverworldBiomeSampler.SubsurfaceBlock(biome);
         if (worldY < 0)
         {
             var ore = OverworldOrePlacer.TryReplaceHost(Blocks.Deepslate, worldX, worldY, worldZ, seed);
@@ -165,15 +171,16 @@ static class OverworldTerrainSampler
     private static bool TryTreeAnchor(int cellX, int cellZ, int seed, out int tx, out int tz, out int trunkH)
     {
         var h = Hash(cellX, cellZ, seed ^ TreeSalt);
-        // ~22% of cells get a tree.
-        if ((h % 9) > 1)
+        tx = cellX * TreeCellSize + (int)(h % (uint)TreeCellSize);
+        tz = cellZ * TreeCellSize + (int)((h >> 8) % (uint)TreeCellSize);
+        var biome = OverworldBiomeSampler.SampleKind(tx, tz, seed);
+        if (!OverworldBiomeSampler.AllowsTrees(biome)
+            || !OverworldBiomeSampler.TryTreeRoll(h, biome))
         {
-            tx = tz = trunkH = 0;
+            trunkH = 0;
             return false;
         }
 
-        tx = cellX * TreeCellSize + (int)(h % (uint)TreeCellSize);
-        tz = cellZ * TreeCellSize + (int)((h >> 8) % (uint)TreeCellSize);
         trunkH = 4 + (int)((h >> 16) % 3);
         return true;
     }
