@@ -29,7 +29,9 @@ sealed class WorldProtocol
         int spawnBlockY = 0,
         int spawnBlockZ = 0,
         bool useBlockNetworkIdHashes = true,
-        int gameMode = AbilityBits.WireGameModeSurvival)
+        int gameMode = AbilityBits.WireGameModeSurvival,
+        short biomeType = 0,
+        string biomeName = "plains")
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -46,6 +48,8 @@ sealed class WorldProtocol
             UseBlockNetworkIdHashes = useBlockNetworkIdHashes,
             GameMode = gameMode,
             GameType = gameMode,
+            BiomeType = biomeType,
+            BiomeName = biomeName,
             BaseGameVersion = ServerIdentity.VersionName,
             GameVersion = ServerIdentity.VersionName
         });

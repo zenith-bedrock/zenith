@@ -19,7 +19,7 @@ static class ChunkPayloads
     public static byte[] BuildEmptyOverworld()
     {
         var writer = new BinaryStream();
-        WriteBiomesAndBorder(ref writer);
+        WriteBiomesAndBorder(ref writer, PlainsBiomeId);
         return writer.GetBufferDisposing().ToArray();
     }
 
@@ -37,7 +37,8 @@ static class ChunkPayloads
     public static (int SubChunkCount, byte[] Payload) BuildOverworldColumn(
         int chunkX,
         int chunkZ,
-        Func<int, int, int, int> blockAtWorld)
+        Func<int, int, int, int> blockAtWorld,
+        int biomeNetworkId = PlainsBiomeId)
     {
         var baseX = chunkX << 4;
         var baseZ = chunkZ << 4;
@@ -57,7 +58,7 @@ static class ChunkPayloads
             WriteSubChunk(ref writer, ids);
         }
 
-        WriteBiomesAndBorder(ref writer);
+        WriteBiomesAndBorder(ref writer, biomeNetworkId);
         return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
     }
 
@@ -93,12 +94,12 @@ static class ChunkPayloads
         return ids;
     }
 
-    private static void WriteBiomesAndBorder(ref BinaryStream writer)
+    private static void WriteBiomesAndBorder(ref BinaryStream writer, int biomeNetworkId)
     {
         for (var i = 0; i < OverworldSubChunkCount; i++)
         {
             writer.WriteByte(BiomeNetworkPaletteHeader);
-            writer.WriteVarInt(PlainsBiomeId);
+            writer.WriteVarInt(biomeNetworkId);
         }
 
         writer.WriteByte(BorderBlocksEmpty);

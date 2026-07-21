@@ -846,6 +846,21 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 
 **Status (jul 2026):** Shipped — ore placer + blocks + leaf tests.
 
+### 67. Coarse overworld biomes (H1#8 — biome v1)
+
+**Choice:** **48×48** deterministic biome regions — no noise libs, no BiomeDefinitionList payload.
+
+1. **`OverworldBiomeSampler`** — ocean / plains / desert / hills / forest; Bedrock network ids (0–4); height bias + surface block (sand vs grass) + tree density.
+2. **Column wire** — `ChunkPayloads` writes sampled biome id per subchunk section (center of chunk).
+3. **StartGame** — `ITerrainProvider.SampleSpawnBiome` → `BiomeType` / `BiomeName` at join (flat stays plains).
+4. **Flat** unchanged (plains biome + grass column).
+
+**Why:** Visible variety + correct client biome tint/F3 without a definition dump or BDS tables.
+
+**Non-goals:** biome JSON, 3D biome blending, taiga/swamp/jungle, mob spawn rules, custom BiomeDefinitionList, persisting `c:` on miss.
+
+**Status (jul 2026):** Shipped — sampler + column wire + spawn biome + leaf tests.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

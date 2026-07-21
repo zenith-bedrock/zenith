@@ -33,6 +33,9 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
+                var spawnBiome = session.Context.World.SampleSpawnBiome(
+                    (int)MathF.Floor(player.PositionX),
+                    (int)MathF.Floor(player.PositionZ));
                 // StartGame position is eye-space (feet + PlayerEyeHeight), not domain feet.
                 session.Protocol.World.SendStartGame(
                     levelName: session.Context.Config.World.Name,
@@ -46,7 +49,9 @@ class ResourcePacksSessionHandler : ISessionHandler
                     spawnBlockY: (int)MathF.Floor(player.PositionY),
                     spawnBlockZ: 0,
                     useBlockNetworkIdHashes: true,
-                    gameMode: (int)player.GameMode);
+                    gameMode: (int)player.GameMode,
+                    biomeType: spawnBiome.NetworkId,
+                    biomeName: spawnBiome.WireName);
                 session.Protocol.Inventory.SendItemRegistry();
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.Inventory.SendCraftingData();

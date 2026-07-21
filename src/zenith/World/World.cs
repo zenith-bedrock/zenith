@@ -39,6 +39,9 @@ sealed class World
     /// <summary>Feet Y for join/respawn above base terrain at (x,z) — ignores overlays.</summary>
     public int SampleSpawnFeetY(int x, int z) => _terrain.SampleSpawnFeetY(x, z);
 
+    /// <summary>Spawn biome wire pair from terrain provider (flat → plains).</summary>
+    public SpawnBiome SampleSpawnBiome(int x, int z) => _terrain.SampleSpawnBiome(x, z);
+
     public World(IChunkStorage storage, ILogger? logger = null, ITerrainProvider? terrain = null)
     {
         _storage = storage;
