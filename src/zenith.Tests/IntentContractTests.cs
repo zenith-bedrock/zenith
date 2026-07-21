@@ -959,6 +959,42 @@ public class IntentContractTests
             "NeedsOverlayResync must emit AddItemActor for floor drops in known columns");
     }
 
+    [Fact]
+    public void ChunkStreamSystem_streams_while_IsSpawning_without_IsInGame()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("spawning");
+        player.IsInGame = false;
+        player.IsSpawning = true;
+        player.Chunks.Radius = 0;
+        player.PositionX = 0.5f;
+        player.PositionY = 64f;
+        player.PositionZ = 0.5f;
+        _ = player.Chunks.PublisherCenterChanged(0, 0);
+
+        new ChunkStreamSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.True(player.Chunks.Knows(0, 0),
+            "IsSpawning must allow ChunkStream to begin columns before IsInGame (ADR §70)");
+    }
+
+    [Fact]
+    public void ChunkStreamSystem_skips_when_neither_in_game_nor_spawning()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("waiting");
+        player.IsInGame = false;
+        player.IsSpawning = false;
+        player.Chunks.Radius = 0;
+        player.PositionX = 0.5f;
+        player.PositionZ = 0.5f;
+        _ = player.Chunks.PublisherCenterChanged(0, 0);
+
+        new ChunkStreamSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.False(player.Chunks.Knows(0, 0));
+    }
+
     private static int CountRuntime(PlayerInventory inv, int runtimeId)
     {
         var n = 0;

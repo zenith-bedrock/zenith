@@ -3,8 +3,8 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>
-/// BiomeDefinitionList (0x7a) — empty list after ItemRegistry.
-/// Clients that expect this packet once can otherwise mis-handle biome/terrain rendering.
+/// BiomeDefinitionList (0x7a) — vanilla definitions after ItemRegistry / CraftingData (ADR §70).
+/// Payload is the embedded wire body (biome_definitions + string_list); not custom biome JSON.
 /// </summary>
 sealed class BiomeDefinitionListPacket : DataPacket
 {
@@ -14,8 +14,7 @@ sealed class BiomeDefinitionListPacket : DataPacket
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
-        writer.WriteUnsignedVarInt(0); // biome_definitions
-        writer.WriteUnsignedVarInt(0); // string_list
+        writer.Write(BiomeDefinitionListBlob.WireBody);
         return writer.GetBufferDisposing();
     }
 

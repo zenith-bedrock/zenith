@@ -41,6 +41,12 @@ sealed class ServerConfig
 
         public int SpawnChunkRadius { get; set; } = 4;
 
+        /// <summary>
+        /// Columns published before <c>PLAYER_SPAWN</c> (ADR §70 ready-disk).
+        /// Must be <c>0..SpawnChunkRadius</c>; default 2. View radius stays on the tracker for ChunkStream.
+        /// </summary>
+        public int SpawnReadyRadius { get; set; } = 2;
+
         /// <summary>Base terrain generator: <c>flat</c> (default) or <c>noise</c> (ADR §63).</summary>
         public string Terrain { get; set; } = "flat";
 
@@ -179,6 +185,12 @@ sealed class ServerConfig
 
         if (World.SpawnChunkRadius is < 0 or > 32)
             throw new InvalidOperationException($"world.spawn-chunk-radius must be 0..32 (got {World.SpawnChunkRadius}).");
+        if (World.SpawnReadyRadius is < 0 or > 32)
+            throw new InvalidOperationException($"world.spawn-ready-radius must be 0..32 (got {World.SpawnReadyRadius}).");
+        if (World.SpawnReadyRadius > World.SpawnChunkRadius)
+            throw new InvalidOperationException(
+                $"world.spawn-ready-radius must be 0..spawn-chunk-radius " +
+                $"(got ready={World.SpawnReadyRadius}, view={World.SpawnChunkRadius}).");
         if (string.IsNullOrWhiteSpace(World.Name))
             throw new InvalidOperationException("world.name must not be empty.");
         World.Terrain = TerrainProviders.NormalizeMode(World.Terrain);

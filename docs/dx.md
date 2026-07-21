@@ -79,6 +79,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62): `World` façade; `ITerrainProvider` for base columns; `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays.
 20. Terrain gen (ADR §63–§67): `world.terrain: flat | noise`. Noise = **coarse biomes**, overworld band, worm caves, ore veins, trees, ruins. Join/respawn = clear air via `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config.
+21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 ```
 
 ### Protocol smoke bot
@@ -177,10 +178,16 @@ That antipattern is how Bedrock stacks become un-upgradable across protocol bump
 
 ## Measured (optional)
 
-Baseline dated **2026-07-15**, host Windows 11 / .NET 10.0.10 / Ryzen 5 3600 — ShortRun (`-j short -m --join`). Refresh with:
+Wire/hot-path baseline dated **2026-07-15** (Windows 11 / Ryzen 5 3600). **Worldgen** rows dated **2026-07-21** (Linux Fedora / i7-8650U / .NET 10.0.9) — ShortRun (`-j short -m --join`). Refresh with:
 
 ```bash
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
+```
+
+**Worldgen / PreSpawn join budget** (ADR §63–§69) — run alone (radius 4 is multi-second):
+
+```bash
+dotnet run -c Release --project src/zenith.Benchmarks -- -f *Worldgen* -j short -m --join
 ```
 
 Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as order-of-magnitude / alloc signal, **not** a CI gate (ADR §24).
@@ -195,6 +202,12 @@ Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as ord
 | UpdateBlock batch | EncodeNone | 1 / 8 / 32 | ~80 / ~367 / ~1.3 µs | 264 / 1032 / 3712 B |
 | UpdateBlock batch | EncodeZlibPref | 1 / 8 / 32 | ~82 / ~361 / ~5.9 µs | 264 / 1032 / 4136 B |
 | LevelChunk | EncodeFlatColumn | — | ~144 ns | 1216 B |
+| LevelChunk | EncodeNoiseColumn | — | ~591 ns | ~8.7 KB |
+| Worldgen | Flat_BuildOverworldColumn | — | ~30 µs | ~5.2 KB |
+| Worldgen | Noise_GetBaseColumn | — | ~30 ms | ~225 KB |
+| Worldgen | Noise_CaveContextOnly | — | ~132 µs | ~190 KB |
+| Worldgen | Encode_FlatLevelChunk / Encode_NoiseLevelChunk | — | ~135 ns / ~591 ns | ~1.2 KB / ~8.7 KB |
+| Worldgen | Noise_GetRadiusAsync | radius 2 / 4 | ~305 ms / ~1.14 s | ~5.4 MB / ~18 MB |
 | Inventory wire | EncodeInventoryContent36 | — | ~1.1 µs | 1056 B |
 | Inventory wire | EncodeItemStackResponseOk | — | ~161 ns | 88 B |
 | Inventory wire | EncodeItemStackResponseError | — | ~34 ns | 88 B |
@@ -203,6 +216,10 @@ Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as ord
 | World overlay | GetOverlaysInColumn | overlays 0 / 1k / 10k | ~44 ns / ~6.2 µs / ~255 µs | 0 / ~33 KB / ~525 KB |
 
 **Phase 3 note (2026-07-18):** hot pack leaves landed — `FillOverlaysInColumn` / `ForEachOverlayInColumn` (ColumnSend reuses scratch), `WriteVarString` stackalloc/ArrayPool, AuthInput bitset into `stackalloc`, FloorDrop delay keys via reused list. Refresh ShortRun numbers when convenient; prior `GetOverlaysInColumn` alloc row is the pre-Phase‑3 signal.
+
+**Worldgen note (2026-07-21):** `WorldgenColumnBenchmarks` + `WorldgenPreSpawnBenchmarks` lock the §69 join budget. ShortRun on this laptop: **noise column ≈ 30 ms / ~225 KB**; **PreSpawn radius 4 ≈ 1.1 s / ~18 MB** (81 columns, parallel). Encode ≪ gen (~0.6 µs noise LevelChunk). Cave CSR alone ≈ 132 µs — payload fill dominates. Do not baseline against `FlatTerrainProvider.Instance` (cached singleton → ~0 ns); use `ChunkPayloads.BuildFlatOverworld`.
+
+**Join contract note (ADR §70):** blocking PreSpawn uses `spawn-ready-radius` (default **2** → ~25 columns / Measured radius-2 row above). Full view ring streams after `PLAYER_SPAWN` while `IsSpawning`.
 
 **Improvement signals from this run:** ZLIB Deflate on 32-block batches (~6 µs) dwarfs uncompressed encode; `GetOverlaysInColumn` allocated and scaled poorly at 10k overlays (~525 KB / ~255 µs) — addressed for stream path via fill/callback (§54). Palette `Blocks.*` is already a field hit; item name lookup stays cheap.
 

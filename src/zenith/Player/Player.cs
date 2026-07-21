@@ -53,6 +53,12 @@ class Player
     /// <summary>True após SetLocalPlayerAsInitialized → InGame.</summary>
     public bool IsInGame { get; set; }
 
+    /// <summary>
+    /// True while SpawnResponse (after PLAYER_SPAWN, before InGame). Allows ChunkStream
+    /// to fill the view ring during loading (ADR §70).
+    /// </summary>
+    public bool IsSpawning { get; set; }
+
     /// <summary>Hotbar 0–8; selected slot bounds-checked no handler.</summary>
     public int SelectedHotbarSlot { get; set; }
 

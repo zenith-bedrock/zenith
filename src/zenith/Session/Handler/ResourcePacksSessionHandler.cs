@@ -45,9 +45,9 @@ class ResourcePacksSessionHandler : ISessionHandler
                     z: player.PositionZ,
                     pitch: player.Pitch,
                     yaw: player.Yaw,
-                    spawnBlockX: 0,
+                    spawnBlockX: (int)MathF.Floor(player.PositionX),
                     spawnBlockY: (int)MathF.Floor(player.PositionY),
-                    spawnBlockZ: 0,
+                    spawnBlockZ: (int)MathF.Floor(player.PositionZ),
                     useBlockNetworkIdHashes: true,
                     gameMode: (int)player.GameMode,
                     biomeType: spawnBiome.NetworkId,
@@ -55,8 +55,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                 session.Protocol.Inventory.SendItemRegistry();
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.Inventory.SendCraftingData();
-                // Empty BiomeDefinitionList — required once by modern clients after ItemRegistry.
-                session.Protocol.World.SendEmptyBiomeDefinitionList();
+                // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).
+                session.Protocol.World.SendBiomeDefinitionList();
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).
                 session.Protocol.Entity.SendLocalActorData((ulong)player.RuntimeId, player.Username);
                 session.Protocol.Entity.SendDefaultAttributes(

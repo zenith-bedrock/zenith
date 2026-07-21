@@ -173,6 +173,14 @@ class LoginSessionHandler : ISessionHandler
             player.SetGameMode(savedMode);
             session.Context.Logger.Info(
                 $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode}");
+
+            // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
+            if (session.Context.World.TryHealSpawnFeet(player))
+            {
+                session.Context.Logger.Info(
+                    $"Spawn heal for '{player.Username}': Y {py:F1} → {player.PositionY:F0} (clear feet at XZ)");
+                session.Context.World.PersistPlayerData(player);
+            }
         }
         else
         {

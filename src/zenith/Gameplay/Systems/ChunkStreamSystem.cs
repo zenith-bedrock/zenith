@@ -42,7 +42,7 @@ sealed class ChunkStreamSystem : IGameSystem
 
         foreach (var player in online)
         {
-            if (!player.IsInGame) continue;
+            if (!player.IsInGame && !player.IsSpawning) continue;
             var radius = player.Chunks.Radius;
             if (radius < 0) continue;
 
@@ -64,6 +64,8 @@ sealed class ChunkStreamSystem : IGameSystem
                     blockY: (int)Math.Floor(player.PositionY),
                     blockZ: (int)Math.Floor(player.PositionZ),
                     radiusBlocks: Math.Max(radius, 0) * 16);
+                player.Session.Context.Logger.Info(
+                    $"ChunkStream publisher → chunk {cx},{cz} radius={radius} for {player.Username}");
             }
 
             var started = 0;
@@ -74,11 +76,19 @@ sealed class ChunkStreamSystem : IGameSystem
                 started++;
                 StartStream(player, x, z, epoch);
             });
+
+            if (started > 0)
+            {
+                player.Session.Context.Logger.Info(
+                    $"ChunkStream starting {started} columns near {cx},{cz} for {player.Username}");
+            }
         }
     }
 
     private void StartStream(global::Zenith.Player.Player player, int chunkX, int chunkZ, int epoch)
     {
+        player.Session.Context.Logger.Debug(
+            $"ChunkStream start @ {chunkX},{chunkZ} for {player.Username}");
         _ = StreamAsync(player, chunkX, chunkZ, epoch);
     }
 
@@ -87,7 +97,7 @@ sealed class ChunkStreamSystem : IGameSystem
         try
         {
             var column = await _world.GetOrCreateColumnAsync(chunkX, chunkZ).ConfigureAwait(false);
-            if (!player.IsInGame) return;
+            if (!player.IsInGame && !player.IsSpawning) return;
             if (!player.Chunks.IsStreamCurrent(chunkX, chunkZ, epoch)) return;
             ColumnSend.EmitToSession(player.Session, column);
         }

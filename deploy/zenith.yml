@@ -1,5 +1,6 @@
-# yaml-language-server: $schema=../schemas/zenith.schema.json
 # Default container template (ADR §20). Seeded to $ZENITH_DATA/zenith.yml on first boot.
+# IDE schema: schemas/zenith.schema.json via .vscode/settings.json (not a relative $schema —
+# copies next to the DLL would break ../schemas/).
 # world.path empty + ZENITH_DATA set → LevelDB under $ZENITH_DATA/worlds/<name>/.
 # Local `dotnet run` without ZENITH_DATA: empty path = InMemory.
 server:
@@ -13,6 +14,8 @@ world:
   name: world
   path: ""
   spawn-chunk-radius: 4
+  # Columns before PLAYER_SPAWN (0..spawn-chunk-radius). Default 2 = ready-disk; view ring streams after.
+  spawn-ready-radius: 2
   # terrain: flat   # default — classic stone/grass at Y -61
   # terrain: noise  # overworld band + biomes/caves/ore; fresh world folder recommended
   # seed: 1

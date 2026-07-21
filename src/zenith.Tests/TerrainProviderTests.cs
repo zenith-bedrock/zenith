@@ -202,4 +202,43 @@ public class TerrainProviderTests
         Assert.IsType<NoiseTerrainProvider>(TerrainProviders.Create(TerrainProviders.ModeNoise, 1));
         Assert.Throws<InvalidOperationException>(() => TerrainProviders.Create("caves", 1));
     }
+
+    [Fact]
+    public void Noise_classic_flat_Y_is_solid_spawn_feet_is_surface()
+    {
+        Blocks.ResetForTests();
+        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        var n = new NoiseTerrainProvider(1);
+        var t = n.GetBaseColumn(0, 0);
+        Assert.True(t.Payload.Length > 0);
+        Assert.NotEqual(Blocks.Air, n.SampleBaseBlock(0, Blocks.FlatSpawnY, 0));
+        var spawnY = n.SampleSpawnFeetY(0, 0);
+        Assert.True(spawnY >= OverworldTerrainSampler.SeaLevel,
+            $"noise spawn Y={spawnY} payloadBytes={t.Payload.Length} sub={t.SubChunkCount}");
+        Assert.Equal(Blocks.Air, n.SampleBaseBlock(0, spawnY, 0));
+        Assert.Equal(Blocks.Air, n.SampleBaseBlock(0, spawnY + 1, 0));
+    }
+
+    [Fact]
+    public void World_TryHealSpawnFeet_lifts_buried_flat_pose_on_noise()
+    {
+        Blocks.ResetForTests();
+        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        var world = new World.World(new InMemoryChunkStorage(), terrain: new NoiseTerrainProvider(1));
+        var player = new Player.Player("healee", null!, runtimeId: 1, Guid.NewGuid())
+        {
+            PositionX = 0f,
+            PositionY = Blocks.FlatSpawnY,
+            PositionZ = 0f
+        };
+
+        Assert.False(world.IsSpawnFeetClear(0, Blocks.FlatSpawnY, 0));
+        Assert.True(world.TryHealSpawnFeet(player));
+        Assert.True(player.PositionY >= OverworldTerrainSampler.SeaLevel);
+        Assert.True(world.IsSpawnFeetClear(
+            (int)MathF.Floor(player.PositionX),
+            (int)MathF.Floor(player.PositionY),
+            (int)MathF.Floor(player.PositionZ)));
+        Assert.False(world.TryHealSpawnFeet(player)); // already clear
+    }
 }

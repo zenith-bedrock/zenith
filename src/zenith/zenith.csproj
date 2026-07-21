@@ -20,6 +20,9 @@
     <EmbeddedResource Include="data\item_palette.json">
       <LogicalName>item_palette.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\biome_definitions.bin">
+      <LogicalName>biome_definitions.bin</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>

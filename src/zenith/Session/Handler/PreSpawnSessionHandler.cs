@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Zenith.Protocol;
 using Zenith.Packets;
 using Zenith.Player;
@@ -8,8 +9,9 @@ namespace Zenith.Session.Handler;
 
 /// <summary>
 /// Estado entre StartGame e loading completo.
-/// Ordem no wire: ChunkRadiusUpdated → NetworkChunkPublisherUpdate → LevelChunks (batched) → PlayStatus.
-/// Sem NetworkChunkPublisherUpdate o cliente ignora terrain mesmo com LevelChunks válidos.
+/// Ordem (ADR §70): ChunkRadiusUpdated → NetworkChunkPublisherUpdate →
+/// LevelChunks (ready-disk) → inventory seed → PlayStatus(PLAYER_SPAWN).
+/// Ready-disk is <c>world.spawn-ready-radius</c>; ChunkStream fills the view ring while spawning.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {
@@ -66,16 +68,27 @@ class PreSpawnSessionHandler : ISessionHandler
         _ = CompleteSpawnAsync(session, radius);
     }
 
-    private static async Task CompleteSpawnAsync(NetworkSession session, int radius)
+    private static async Task CompleteSpawnAsync(NetworkSession session, int viewRadius)
     {
-        var columnCount = (radius * 2 + 1) * (radius * 2 + 1);
+        var readyRadius = Math.Min(viewRadius, session.Context.Config.World.SpawnReadyRadius);
+        var columnCount = (readyRadius * 2 + 1) * (readyRadius * 2 + 1);
         try
         {
+            if (session.Player is null)
+                return;
+
+            var centerX = PlayerChunkTracker.BlockToChunk(session.Player.PositionX);
+            var centerZ = PlayerChunkTracker.BlockToChunk(session.Player.PositionZ);
+            var blockX = (int)MathF.Floor(session.Player.PositionX);
+            var blockY = (int)MathF.Floor(session.Player.PositionY);
+            var blockZ = (int)MathF.Floor(session.Player.PositionZ);
+
             session.Context.Logger.Info(
-                $"PreSpawn loading chunk radius {radius} ({columnCount} columns) for {session.Player?.Username}…");
+                $"PreSpawn loading ready-disk radius {readyRadius} ({columnCount} columns, view={viewRadius}) " +
+                $"for {session.Player.Username} @ chunk {centerX},{centerZ}…");
 
             var worldColumns = await session.Context.World
-                .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
+                .GetRadiusAsync(centerX, centerZ, readyRadius)
                 .ConfigureAwait(false);
 
             if (session.Player is null)
@@ -84,23 +97,28 @@ class PreSpawnSessionHandler : ISessionHandler
             session.Context.Logger.Info(
                 $"PreSpawn loaded {worldColumns.Count} columns for {session.Player.Username}, publishing…");
 
-            var spawnBlockY = (int)MathF.Floor(session.Player.PositionY);
-
-            // Publisher before LevelChunks — radius is in blocks, not chunks.
+            // Publisher before LevelChunks — advertise view radius; ChunkStream fills the ring.
             session.Protocol.World.SendChunkPublisher(
-                blockX: 0,
-                blockY: spawnBlockY,
-                blockZ: 0,
-                radiusBlocks: radius * 16);
+                blockX,
+                blockY,
+                blockZ,
+                radiusBlocks: Math.Max(viewRadius, 0) * 16);
 
             var remembered = new List<(int X, int Z)>(worldColumns.Count);
             var batch = new List<ChunkColumn>(WorldProtocol.LevelChunkBatchSize);
+            var publishWatch = Stopwatch.StartNew();
+            long payloadBytes = 0;
+            var envelopes = 0;
 
-            void FlushBatch()
+            async Task FlushBatchAsync()
             {
                 if (batch.Count == 0) return;
+                for (var i = 0; i < batch.Count; i++)
+                    payloadBytes += batch[i].ExtraPayload.LongLength;
                 session.Protocol.World.PublishChunks(batch);
+                envelopes++;
                 batch.Clear();
+                await Task.Yield();
             }
 
             foreach (var column in worldColumns)
@@ -115,17 +133,15 @@ class PreSpawnSessionHandler : ISessionHandler
                 remembered.Add((bas.Coord.X, bas.Coord.Z));
 
                 if (batch.Count >= WorldProtocol.LevelChunkBatchSize)
-                    FlushBatch();
+                    await FlushBatchAsync().ConfigureAwait(false);
             }
 
-            FlushBatch();
+            await FlushBatchAsync().ConfigureAwait(false);
+            publishWatch.Stop();
 
-            // Remember as soon as LevelChunks are out so live UpdateBlock fan-out
-            // can reach this joiner during overlay send / SpawnResponse (§14).
             session.Player.Chunks.RememberMany(remembered);
-            session.Player.Chunks.PublisherCenterChanged(0, 0);
+            session.Player.Chunks.PublisherCenterChanged(centerX, centerZ);
 
-            // Overlays after base terrain (same order as ColumnTerrainEmitter).
             foreach (var column in worldColumns)
             {
                 var overlays = column.Overlays;
@@ -136,8 +152,26 @@ class PreSpawnSessionHandler : ISessionHandler
                 }
             }
 
-            session.Protocol.World.SendWorldSpawnPosition(x: 0, y: spawnBlockY, z: 0);
-            session.Context.Logger.Debug("Chunks published (publisher → batched LevelChunks → overlays), waiting for spawn response");
+            session.Protocol.World.SendWorldSpawnPosition(x: blockX, y: blockY, z: blockZ);
+
+            // PocketMine PreSpawn: inventory before PLAYER_SPAWN (not only after initialized).
+            session.Protocol.Inventory.SendInventoryContent(session.Player.Inventory);
+            session.Protocol.Inventory.SendUiInventoryContent(session.Player);
+
+            // Snap camera to healed/authoritative feet (API takes domain feet).
+            session.Protocol.Entity.SendMovePlayerTeleport(
+                (ulong)session.Player.RuntimeId,
+                session.Player.PositionX,
+                session.Player.PositionY,
+                session.Player.PositionZ,
+                session.Player.Pitch,
+                session.Player.Yaw,
+                session.Player.HeadYaw);
+
+            session.Context.Logger.Info(
+                $"PreSpawn publish done for {session.Player.Username}: " +
+                $"{worldColumns.Count} columns, {envelopes} envelopes, ~{payloadBytes} payload bytes, " +
+                $"{publishWatch.ElapsedMilliseconds} ms — waiting SetLocalPlayerAsInitialized");
             session.Protocol.World.SendSpawnComplete();
 
             session.SetHandler(new SpawnResponseSessionHandler());

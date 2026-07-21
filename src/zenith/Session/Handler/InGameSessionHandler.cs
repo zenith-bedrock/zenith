@@ -18,6 +18,7 @@ partial class InGameSessionHandler : ISessionHandler
     {
         if (session.Player is not null)
         {
+            session.Player.IsSpawning = false;
             session.Player.IsInGame = true;
             // Catch-up overlays placed while we were PreSpawn/SpawnResponse (§14).
             session.Player.Chunks.NeedsOverlayResync = true;
@@ -28,7 +29,10 @@ partial class InGameSessionHandler : ISessionHandler
     public void OnDisable(NetworkSession session)
     {
         if (session.Player is not null)
+        {
             session.Player.IsInGame = false;
+            session.Player.IsSpawning = false;
+        }
     }
 
     public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
@@ -152,9 +156,21 @@ partial class InGameSessionHandler : ISessionHandler
 
     private static void HandleCommandRequest(NetworkSession session, ref BinaryStream stream)
     {
-        var packet = DataPacket.From<CommandRequestPacket>(ref stream);
+        CommandRequestPacket packet;
+        try
+        {
+            packet = DataPacket.From<CommandRequestPacket>(ref stream);
+        }
+        catch (Exception ex)
+        {
+            session.Context.Logger.Warning($"CommandRequest decode failed: {ex.Message}");
+            return;
+        }
+
         var player = session.Player;
         if (player is null) return;
+
+        session.Context.Logger.Info($"{player.Username} CommandRequest: {packet.CommandLine}");
 
         // Bedrock slash channel (§52 adendo). Unknown commands: quiet ignore.
         TryHandleGamemodeLine(session, player, packet.CommandLine);
@@ -164,6 +180,8 @@ partial class InGameSessionHandler : ISessionHandler
     {
         if (GameModeConfig.TryParseCommand(line, out var mode, out var badArgs))
         {
+            session.Context.Logger.Info(
+                $"{player.Username} /gamemode → {mode} (queued for GameModeSystem)");
             player.SubmitGameMode(mode);
             return;
         }

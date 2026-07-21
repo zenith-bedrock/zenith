@@ -49,6 +49,9 @@ readonly struct OverworldCaveContext
         return new OverworldCaveContext(segments, originX, originZ, offsets, indices);
     }
 
+    /// <summary>Worm segment count in the 3×3 neighborhood (bench / diagnostics).</summary>
+    public int SegmentCount => _segments.Length;
+
     public bool IsCarved(int worldX, int worldY, int worldZ, int surfaceY)
     {
         if (worldY <= Blocks.FlatMinY + 1 || worldY >= surfaceY - OverworldCaveCarver.SurfaceGuardDepth)

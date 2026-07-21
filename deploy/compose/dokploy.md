@@ -51,6 +51,7 @@ world:
   name: world
   path: ""
   spawn-chunk-radius: 4
+  spawn-ready-radius: 2
   terrain: noise
   seed: 42
 auth:
