@@ -30,5 +30,6 @@ Same **product image** as Compose ([`../image/`](../image/)). Set `ZENITH_DATA=/
 | “Persist broken” after redeploy | New container without the same volume | Reattach named volume on `/data` |
 | Empty world after path change | Old LevelDB at wrong path (ADR §20) | Boot log: `World storage: LevelDbChunkStorage (... via=ZENITH_DATA)` |
 | GUID under `/opt` or `/app` | Stale image without `ResolvePersistentRoot` | Rebuild/redeploy current image |
+| Build: `GID '1000' already exists` | Old Dockerfile forced uid/gid 1000 | Pull latest — image no longer hardcodes 1000 |
 
 **Do not mount over `/opt/zenith`** — that replaces the published DLL.
