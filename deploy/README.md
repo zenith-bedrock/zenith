@@ -34,7 +34,8 @@ docker build -f deploy/image/Dockerfile -t ghcr.io/zenith-bedrock/zenith:latest 
 
 | Host | Adapter | `ZENITH_DATA` |
 |------|---------|---------------|
-| Compose / Dokploy / k8s | [`compose/`](compose/) | `/data` |
+| Compose / local | [`../docker-compose.yml`](../docker-compose.yml) | `/data` |
+| Dokploy | [`../docker-compose.dokploy.yml`](../docker-compose.dokploy.yml) — [`compose/dokploy.md`](compose/dokploy.md) | `/data` |
 | Pterodactyl / Wings | [`pterodactyl/`](pterodactyl/) | `/home/container` |
 
 Adding another host = new adapter folder + docs — **zero** new product Dockerfile.
