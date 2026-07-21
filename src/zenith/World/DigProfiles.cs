@@ -103,6 +103,21 @@ static class DigProfiles
         RegisterUnlocked(Blocks.Cobblestone, 2.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
         RegisterUnlocked(Blocks.Deepslate, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
 
+        RegisterUnlocked(Blocks.CoalOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.IronOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.CopperOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.GoldOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DiamondOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.LapisOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.RedstoneOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateCoalOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateIronOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateCopperOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateGoldOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateDiamondOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateLapisOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.DeepslateRedstoneOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+
         _loaded = true;
     }
 

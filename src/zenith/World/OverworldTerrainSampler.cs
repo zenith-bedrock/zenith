@@ -74,7 +74,7 @@ static class OverworldTerrainSampler
         return Blocks.Air;
     }
 
-    /// <summary>§64/§65 noise column sample: water, caves, trees, ruins, deepslate, bedrock.</summary>
+    /// <summary>§64/§65/§66 noise column sample: water, caves, ores, trees, ruins, deepslate, bedrock.</summary>
     public static int SampleNoiseBlock(int worldX, int worldY, int worldZ, int seed)
         => SampleNoiseBlock(worldX, worldY, worldZ, seed, caves: null);
 
@@ -103,10 +103,17 @@ static class OverworldTerrainSampler
         if (worldY == surface) return Blocks.GrassBlock;
         if (worldY >= surface - NoiseDirtDepth && worldY < surface)
             return Blocks.Dirt;
-        if (worldY < 0) return Blocks.Deepslate;
+        if (worldY < 0)
+        {
+            var ore = OverworldOrePlacer.TryReplaceHost(Blocks.Deepslate, worldX, worldY, worldZ, seed);
+            return ore != 0 ? ore : Blocks.Deepslate;
+        }
 
         var feature = SampleFeature(worldX, worldY, worldZ, seed);
-        return feature != Blocks.Air ? feature : Blocks.Stone;
+        if (feature != Blocks.Air) return feature;
+
+        var stoneOre = OverworldOrePlacer.TryReplaceHost(Blocks.Stone, worldX, worldY, worldZ, seed);
+        return stoneOre != 0 ? stoneOre : Blocks.Stone;
     }
 
     private static int SampleFeature(int x, int y, int z, int seed)
