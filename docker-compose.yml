@@ -9,6 +9,7 @@ services:
       ZENITH_DATA: /data
     volumes:
       - zenith-data:/data
+      - ../files/zenith.yml:/data/zenith.yml:ro
     restart: unless-stopped
 
 volumes:

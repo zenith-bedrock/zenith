@@ -39,8 +39,9 @@ docker compose up --build
 3. **Environment:** `ZENITH_DATA=/data` (already set in the image; repeat in UI if your stack strips env).
 4. **Volume:** mount a persistent volume at **`/data`** (not `/app`, not `/app/zenith.yml`).
 5. **First deploy:** entrypoint copies `deploy/zenith.yml` → `/data/zenith.yml`.
-6. **Change config:** open `/data/zenith.yml` inside the volume (Dokploy file manager, `docker exec`, or SFTP sidecar) → **restart** the app.
-7. **Worlds** persist automatically under `/data/worlds/` on the same volume.
+6. **Change config (UI):** Advanced → Mounts → File Mount — **File Path:** `zenith.yml`, content = your YAML; compose mounts `../files/zenith.yml:/data/zenith.yml:ro` (tracked in repo). Redeploy + restart.
+7. **Change config (volume):** edit `/data/zenith.yml` inside the volume (`docker cp`, heredoc) → **restart**.
+8. **Worlds** persist automatically under `/data/worlds/` on the same volume.
 
 #### Common Dokploy failures
 
