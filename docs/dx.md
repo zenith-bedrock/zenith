@@ -78,7 +78,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62): `World` façade; `ITerrainProvider` for base columns; `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays.
-20. Terrain gen (ADR §63/§64): `world.terrain: flat | noise`. Noise = overworld band (~Y 40–88), sea 62, caves, oak trees, cobble ruins, bedrock floor. Join/respawn = clear air via `SampleSpawnFeetY`. Existing `c:` blobs override config.
+20. Terrain gen (ADR §63–§65): `world.terrain: flat | noise`. Noise = overworld band, **worm caves**, trees, ruins. Join/respawn = clear air via `SampleSpawnFeetY`. Existing `c:` blobs override config.
 ```
 
 ### Protocol smoke bot
