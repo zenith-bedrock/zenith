@@ -26,6 +26,7 @@ class PreSpawnSessionHandler : ISessionHandler
                 HandleRequestChunkRadius(session, ref stream);
                 return true;
 
+            case (int)ProtocolInfo.CLIENT_CACHE_STATUS_PACKET:
             case (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
                 return true;
@@ -67,14 +68,21 @@ class PreSpawnSessionHandler : ISessionHandler
 
     private static async Task CompleteSpawnAsync(NetworkSession session, int radius)
     {
+        var columnCount = (radius * 2 + 1) * (radius * 2 + 1);
         try
         {
+            session.Context.Logger.Info(
+                $"PreSpawn loading chunk radius {radius} ({columnCount} columns) for {session.Player?.Username}…");
+
             var worldColumns = await session.Context.World
                 .GetRadiusAsync(centerX: 0, centerZ: 0, radius)
                 .ConfigureAwait(false);
 
             if (session.Player is null)
                 return;
+
+            session.Context.Logger.Info(
+                $"PreSpawn loaded {worldColumns.Count} columns for {session.Player.Username}, publishing…");
 
             var spawnBlockY = (int)MathF.Floor(session.Player.PositionY);
 

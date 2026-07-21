@@ -1,0 +1,31 @@
+{
+  "_comment": "Import: Admin → Nests → Import Egg. Build product image: deploy/image/Dockerfile (ADR §68).",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-07-21T00:00:00+00:00",
+  "name": "Zenith Bedrock",
+  "author": "diegosantosaraujo@outlook.com",
+  "description": "Zenith — layered C# Bedrock server (protocol 1001). Same product image as Compose. Config: zenith.yml under /home/container (ZENITH_DATA).",
+  "features": [],
+  "docker_images": {
+    "Zenith": "ghcr.io/zenith-bedrock/zenith:latest"
+  },
+  "file_denylist": [],
+  "startup": "ZENITH_DATA=/home/container dotnet /opt/zenith/zenith.dll",
+  "config": {
+    "files": "{\n  \"zenith.yml\": {\n    \"parser\": \"yaml\",\n    \"find\": {\n      \"server.port\": \"{{server.build.default.port}}\"\n    }\n  }\n}",
+    "startup": "{\n  \"done\": \"Server ready.\"\n}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Zenith install — seeds shared deploy/zenith.yml; binary is in the product image.\nset -e\ncd /mnt/server\nmkdir -p worlds\nif [ ! -f zenith.yml ]; then\n  curl -fsSL -o zenith.yml https://raw.githubusercontent.com/zenith-bedrock/zenith/develop/deploy/zenith.yml\nfi\necho \"Installation complete\"\n",
+      "container": "ghcr.io/pterodactyl/installers:debian",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": []
+}

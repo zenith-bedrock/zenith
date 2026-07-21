@@ -1,0 +1,16 @@
+# Canonical Compose sample (ADR §20). Build product image; data on ZENITH_DATA=/data.
+services:
+  zenith:
+    build:
+      context: ../..
+      dockerfile: deploy/image/Dockerfile
+    ports:
+      - "19132:19132/udp"
+    environment:
+      ZENITH_DATA: /data
+    volumes:
+      - zenith-data:/data
+    restart: unless-stopped
+
+volumes:
+  zenith-data:

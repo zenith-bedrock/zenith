@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
 using Zenith.Raknet.Log;
 
 namespace Zenith.World;
@@ -150,14 +151,31 @@ sealed class World
 
     public async ValueTask<IReadOnlyList<ColumnReadResult>> GetRadiusAsync(int centerX, int centerZ, int radius, CancellationToken ct = default)
     {
-        var list = new List<ColumnReadResult>((radius * 2 + 1) * (radius * 2 + 1));
+        var span = radius * 2 + 1;
+        var count = span * span;
+        var coords = new (int X, int Z)[count];
+        var index = 0;
         for (var x = centerX - radius; x <= centerX + radius; x++)
         {
             for (var z = centerZ - radius; z <= centerZ + radius; z++)
-                list.Add(await GetOrCreateColumnAsync(x, z, ct).ConfigureAwait(false));
+                coords[index++] = (x, z);
         }
 
-        return list;
+        var results = new ColumnReadResult[count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, count),
+            new ParallelOptions
+            {
+                CancellationToken = ct,
+                MaxDegreeOfParallelism = Environment.ProcessorCount
+            },
+            async (i, token) =>
+            {
+                var (x, z) = coords[i];
+                results[i] = await GetOrCreateColumnAsync(x, z, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+        return results;
     }
 
     public static int AirRuntimeId => Blocks.Air;

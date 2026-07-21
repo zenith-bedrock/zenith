@@ -1,6 +1,6 @@
 # Local dev: bind-mount ./deploy/data so you can edit zenith.yml on the host.
-# Copy to docker-compose.override.yml (gitignored) or merge volumes manually.
+# From repo root with root compose, or copy next to deploy/compose/docker-compose.yml.
 services:
   zenith:
     volumes:
-      - ./deploy/data:/data
+      - ../data:/data

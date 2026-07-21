@@ -40,13 +40,15 @@ New encode/decode work must match **1001**, not the newest Mojang docs tip (ofte
 
 | Document | Use for |
 |----------|---------|
-| [`docs/decisions.md`](docs/decisions.md) | **ADR §1–§67** — every `ADR §N` / `§N` in code should resolve here |
+| [`docs/decisions.md`](docs/decisions.md) | **ADR §1–§68** — every `ADR §N` / `§N` in code should resolve here |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Layer rules, smoke expectations, freeze list |
 | [`AGENTS.md`](AGENTS.md) | Folder roles (`Gameplay/` decides, `Protocol/` transmits, …) |
 | [`docs/dx.md`](docs/dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
 | [`docs/roadmap.md`](docs/roadmap.md) | What is shipped vs deferred (not PM parity) |
 | [`schemas/zenith.schema.json`](schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
-| [`deploy/README.md`](deploy/README.md) | Docker `/data` volume, Dokploy pitfalls |
+| [`deploy/README.md`](deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
+| [`deploy/compose/dokploy.md`](deploy/compose/dokploy.md) | Dokploy volume / File Mount pitfalls |
+| [`deploy/pterodactyl/README.md`](deploy/pterodactyl/README.md) | Pterodactyl egg adapter (ADR §68) |
 
 ### Shipped assets (embedded, not fetched at runtime)
 
@@ -107,7 +109,7 @@ src/
     data/        Embedded palettes (block_palette.nbt, item_palette.json, …)
   raknet/        Reliable UDP transport
   *.Tests/
-deploy/          Docker /data volume sample + Dokploy guide — not used by dotnet run
+deploy/          Product image + Compose/Dokploy + Pterodactyl adapters — not used by dotnet run
 docs/            Narrative documentation
 workspace/       Local agent/dev scratch (not product)
 ```
@@ -126,7 +128,7 @@ dotnet run --project src/zenith
 docker compose up --build
 ```
 
-Persistent **`/data`** volume (config + worlds) — same idea as PocketMine/Endstone. See [`deploy/README.md`](deploy/README.md) for Dokploy. Local dev bind mount: `deploy/docker-compose.override.example.yml`. Product version: `ServerIdentity.ProductVersion`. Empty `world.path` in non-Docker runs = InMemory (volatile).
+Persistent **`$ZENITH_DATA`** volume (config + worlds) — same idea as PocketMine/Endstone. Contract: [`deploy/README.md`](deploy/README.md). Local bind mount: `deploy/compose/override.example.yml`. Product version: `ServerIdentity.ProductVersion`. Empty `world.path` without `ZENITH_DATA` = InMemory; with `ZENITH_DATA` = LevelDB under that root.
 
 ### Benchmarks (optional)
 

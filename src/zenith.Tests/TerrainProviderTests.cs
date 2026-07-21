@@ -182,6 +182,20 @@ public class TerrainProviderTests
     }
 
     [Fact]
+    public async Task Noise_spawn_radius_4_loads_within_join_budget()
+    {
+        Blocks.ResetForTests();
+        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        var world = new World.World(new InMemoryChunkStorage(), terrain: new NoiseTerrainProvider(42));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var columns = await world.GetRadiusAsync(0, 0, radius: 4);
+        sw.Stop();
+        Assert.Equal(81, columns.Count);
+        // PreSpawn must finish before typical client/RakNet timeout. Parallel gen; allow suite contention.
+        Assert.True(sw.ElapsedMilliseconds < 90_000, $"81 noise columns took {sw.ElapsedMilliseconds}ms");
+    }
+
+    [Fact]
     public void TerrainProviders_Create_selects_mode()
     {
         Assert.IsType<FlatTerrainProvider>(TerrainProviders.Create(TerrainProviders.ModeFlat, 1));
