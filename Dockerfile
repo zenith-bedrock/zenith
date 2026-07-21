@@ -7,9 +7,10 @@ COPY . .
 RUN dotnet publish src/zenith/zenith.csproj -c Release -o /out --no-self-contained
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
-RUN groupadd --system --gid 1000 container \
-    && useradd --system --uid 1000 --gid container --home-dir /home/container --create-home container \
-    && mkdir -p /data/worlds /opt/zenith /home/container
+RUN mkdir -p /data/worlds /opt/zenith /home/container \
+    && (getent group container >/dev/null || groupadd --system container) \
+    && (id -u container >/dev/null 2>&1 \
+        || useradd --system --gid container --home-dir /home/container --create-home container)
 
 COPY --from=build /out /opt/zenith
 COPY deploy/zenith.yml /opt/zenith/zenith.yml.default
