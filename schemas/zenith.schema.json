@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://zenith-bedrock.local/schemas/zenith.schema.json",
   "title": "Zenith server config (zenith.yml)",
-  "description": "Operational config loaded next to the executable (AppContext.BaseDirectory). Boot validation in ServerConfig.Validate() remains the runtime SSOT — this schema is IDE DX only.",
+  "description": "Operational config loaded next to the executable (AppContext.BaseDirectory), or under ZENITH_DATA in Docker (/data/zenith.yml). Boot validation in ServerConfig.Validate() remains the runtime SSOT — this schema is IDE DX only.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

@@ -234,7 +234,9 @@ static class ServerConfigLoader
         {
             throw new InvalidOperationException(
                 $"Config path '{path}' is a directory. " +
-                "If you mounted deploy/zenith.yml, ensure that file exists on the host (it is tracked under deploy/). " +
+                "If you mounted a config file, ensure the host file exists before deploy. " +
+                "Docker creates a directory when the source file is missing. " +
+                "Prefer a single volume on /data with ZENITH_DATA (see deploy/README.md). " +
                 "Remove any bogus directory at that mount path and redeploy.");
         }
 

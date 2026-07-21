@@ -28,10 +28,12 @@ class ZenithServer
     public ServerContext Context { get; }
     public GameLoop GameLoop { get; }
     public ServerConfig Config { get; }
+    public string ConfigPath { get; }
 
-    public ZenithServer(ServerConfig config)
+    public ZenithServer(ServerConfig config, string configPath)
     {
         Config = config;
+        ConfigPath = configPath;
         var serverLogger = new Logger
         {
             LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
@@ -42,6 +44,10 @@ class ZenithServer
         };
         _logger = serverLogger;
         serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
+        serverLogger.Info($"config: {configPath}");
+        var dataDir = ServerConfigPaths.ResolveDataDirectory();
+        if (dataDir is not null)
+            serverLogger.Info($"data root ({ServerConfigPaths.DataDirEnvironmentVariable}): {dataDir}");
         serverLogger.Info($"log.server={config.Log.Server} log.raknet={config.Log.Raknet}");
         serverLogger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
         if (!config.Auth.RequireStrictXbox)

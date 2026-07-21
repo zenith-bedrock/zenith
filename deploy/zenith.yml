@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../schemas/zenith.schema.json
-# Docker/compose sample only — mounted at /app/zenith.yml.
-# Local `dotnet run` uses the config next to the DLL (AppContext.BaseDirectory).
+# Container sample — copied to /data/zenith.yml on first boot when using Docker.
+# Local `dotnet run` uses config next to the DLL (AppContext.BaseDirectory).
 server:
   port: 19132
   motd: Zenith Bedrock
@@ -9,12 +9,12 @@ server:
   max-players-per-ip: 3
   gamemode: Survival
 world:
-  # LevelDB at /app/worlds/world (compose mounts ./deploy/worlds → /app/worlds)
+  # LevelDB at /data/worlds/world — mount one volume on /data (Dokploy, compose, k8s).
   name: world
-  path: /app
+  path: /data
   spawn-chunk-radius: 4
   # terrain: flat   # default — classic stone/grass at Y -61
-  # terrain: noise  # overworld band + water/caves/trees/ruins (world.seed); fresh world folder recommended
+  # terrain: noise  # overworld band + biomes/caves/ore; fresh world folder recommended
   # seed: 1
 auth:
   # Who may join (one or more). Case-insensitive.
