@@ -8,9 +8,22 @@ namespace Zenith.Session.Handler;
 /// que terminou de entrar no jogo" (<see cref="SetLocalPlayerAsInitializedPacket"/>). Nesse
 /// meio tempo o cliente já solta bastante spam de pacotes de controle/movimento mesmo sem
 /// estar oficialmente in-game ainda; só ignora esses aqui até a confirmação chegar.
+/// ChunkStream continua enquanto <see cref="Player.Player.IsSpawning"/> (ADR §70).
 /// </summary>
 class SpawnResponseSessionHandler : ISessionHandler
 {
+    public void OnEnable(NetworkSession session)
+    {
+        if (session.Player is not null)
+            session.Player.IsSpawning = true;
+    }
+
+    public void OnDisable(NetworkSession session)
+    {
+        if (session.Player is not null)
+            session.Player.IsSpawning = false;
+    }
+
     public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
     {
         switch (header.Id)

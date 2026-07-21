@@ -9,14 +9,17 @@ namespace Zenith.Tests;
 public class SpawnPathWireTests
 {
     [Fact]
-    public void Empty_biome_definition_list_is_two_zero_counts()
+    public void Biome_definition_list_embeds_non_empty_vanilla_body()
     {
+        Assert.True(BiomeDefinitionListBlob.ByteLength > 2,
+            "embedded biome_definitions.bin must be non-empty (ADR §70)");
+
         var bytes = new BiomeDefinitionListPacket().Encode().ToArray();
-        // packet id (0x7a varuint) + defs=0 + strings=0
-        Assert.Equal(0x7a, bytes[0]);
-        Assert.Equal(0, bytes[1]);
-        Assert.Equal(0, bytes[2]);
-        Assert.Equal(3, bytes.Length);
+        Assert.Equal(0x7a, bytes[0]); // packet id varuint
+        // Body length = encode length - 1 (id fits in one byte for 0x7a).
+        Assert.Equal(1 + BiomeDefinitionListBlob.ByteLength, bytes.Length);
+        // First body byte is biome_definitions count varint — 87 biomes → 0x57.
+        Assert.Equal(0x57, bytes[1]);
     }
 
     [Fact]
@@ -66,9 +69,20 @@ public class SpawnPathWireTests
     }
 
     [Fact]
-    public void Level_chunk_batch_size_matches_vedrock_flush()
+    public void Level_chunk_batch_size_is_one_per_envelope()
     {
-        Assert.Equal(4, WorldProtocol.LevelChunkBatchSize);
+        // Noise columns are large — one LevelChunk per GamePacket (ADR §14 adendo).
+        Assert.Equal(1, WorldProtocol.LevelChunkBatchSize);
+    }
+
+    [Fact]
+    public void Default_spawn_ready_radius_is_smaller_than_default_view()
+    {
+        // ADR §70: leave loading with a small ready-disk; ChunkStream fills the rest.
+        var config = new Zenith.Server.ServerConfig();
+        Assert.Equal(2, config.World.SpawnReadyRadius);
+        Assert.Equal(4, config.World.SpawnChunkRadius);
+        Assert.True(config.World.SpawnReadyRadius <= config.World.SpawnChunkRadius);
     }
 
     [Fact]

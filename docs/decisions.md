@@ -129,6 +129,10 @@ Trade-off: existing NuGet LevelDB dirs are not migrated — recreate world paths
 
 **Adendo (jul 2026 — noise join timeout):** `world.terrain=noise` PreSpawn at default `spawn-chunk-radius: 4` generates **81** full columns on first join. Sequential gen was ~54s → client/RakNet timeout while stuck on “waiting for chunk radius”. Fix: **`World.GetRadiusAsync` parallel** (`Parallel.ForEachAsync`, core count) + swallow **`CLIENT_CACHE_STATUS`** in PreSpawn + INFO logs for load/publish. Smoke bot (`smoke:join`) confirms spawn &lt; ~15s on noise after fix.
 
+**Adendo (jul 2026 — PreSpawn center + publish throttle):** PreSpawn loads / publisher / `PublisherCenterChanged` use the **player’s chunk** (from feet XYZ), not hardcoded `(0,0)`. `StartGame` spawn block matches feet. Publish uses **`LevelChunkBatchSize = 1`** (one LevelChunk per GamePacket) + `Task.Yield` between envelopes so noise payloads do not stall the reliable-ordered queue; INFO log reports column count, envelope count, approx payload bytes, and publish ms before `PlayStatus(PLAYER_SPAWN)`.
+
+**Adendo (jul 2026 — join stuck / PM-shaped spawn):** PocketMine sends a **spawn threshold** of chunks then `PLAYER_SPAWN`, streaming the rest; inventory is seeded in PreSpawn. Zenith: (1) **spawn heal** — if saved feet are not clear air (classic flat `pd:` Y=-60 into `terrain=noise`), snap to `SampleSpawnFeetY` + Persist; (2) **ready-disk** before `PLAYER_SPAWN` (superseded by ADR §70 `world.spawn-ready-radius`); (3) inventory + MovePlayer teleport before `PlayStatus`. Fixes client stuck on loading when buried in solid noise.
+
 **Why:** Closes the “world dies outside spawn radius” gap without Actor/EventHandlers or vanilla LevelDB. Matches early Zenith spine: continuous flat multiplayer before effects/gen.
 
 **Deferred (conscious):** food/effects, creative inventory, biomes/noise, Actor/EventHandler frameworks (not mirroring early “everything is an Actor” stacks).
@@ -224,6 +228,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 ### 24. Measured zero-alloc (BenchmarkDotNet)
 
 **Choice:** Project `src/zenith.Benchmarks` measuring `BinaryStream`, a small `GamePacket` encode path, and `EventBus.Publish`. Package version in `Directory.Packages.props`. Numbers live only in `docs/dx.md` (“Measured”). Optional manual alloc probe — not a CI gate for alpha.
+
+**Adendo (jul 2026 — worldgen suite):** `WorldgenColumnBenchmarks` (flat vs noise column, cave context, LevelChunk encode) + `WorldgenPreSpawnBenchmarks` (`GetRadiusAsync` radius 2 / 4). Filter: `-f *Worldgen*`. Join budget signal for ADR §69 — still optional ShortRun, not CI.
 
 **Why:** Wire zero-alloc work lacked numbers; avoids claiming DX without evidence.
 
@@ -863,7 +869,7 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 
 **Why:** Visible variety + correct client biome tint/F3 without a definition dump or BDS tables.
 
-**Non-goals:** biome JSON, 3D biome blending, taiga/swamp/jungle, mob spawn rules, custom BiomeDefinitionList, persisting `c:` on miss.
+**Non-goals:** biome JSON, 3D biome blending, taiga/swamp/jungle, mob spawn rules, **custom** BiomeDefinitionList authoring, persisting `c:` on miss. (Embedded vanilla list for join is §70 — not this product.)
 
 **Status (jul 2026):** Shipped — sampler + column wire + spawn biome + leaf tests.
 
@@ -900,6 +906,24 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 **Non-goals:** Changing worm counts/lengths, noise libs, biome blending, persisting `c:` on miss, SIMD mandatory.
 
 **Status (jul 2026):** Shipped — cave grid + noise column builder + budget test.
+
+### 70. Join terrain contract (client-ready)
+
+**Choice:** Hybrid **ready-disk** join — not DF spawn-first with zero LevelChunks, not a full view-radius dump before `PLAYER_SPAWN`.
+
+Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
+
+1. **Pose gate** — `World.TryHealSpawnFeet` before StartGame (buried flat `pd:` into noise must not trap the camera).
+2. **Non-empty `BiomeDefinitionList`** — embedded vanilla wire body (`data/biome_definitions.bin`); not a custom biome-JSON product (§66 non-goal stays for *authoring*).
+3. **`PLAYER_SPAWN` only after a ready disk** centered on feet: `world.spawn-ready-radius` (default **2**, validate `0..spawn-chunk-radius`). PreSpawn loads/publishes `min(view, spawn-ready-radius)`; tracker view radius stays the client request (capped by `spawn-chunk-radius`).
+4. **One column pipeline** — `ColumnSend` + `PlayerChunkTracker` + backpressure for ready-disk and the remaining ring. `ChunkStreamSystem` runs while `Player.IsSpawning` **or** `IsInGame` (stream during SpawnResponse, DF-style terrain-after-spawn-protocol).
+5. Inventory seed + MovePlayer teleport before `PlayStatus(PLAYER_SPAWN)` (PM-shaped).
+
+**Clarifies:** §14 PreSpawn/stream adendos; §66 “no BiomeDefinitionList payload” applied to *custom* biome dumps — embedded vanilla list is join contract, not biome product.
+
+**Non-goals (next ADR):** `SubChunkRequestModeLimited` + SubChunk handler; `PLAYER_SPAWN` with zero LevelChunks; AvailableCommands / mid-session gamemode UI; client-side gen / full biome JSON authoring.
+
+**Status (jul 2026):** Shipped — config + embedded biomes + `IsSpawning` stream gate.
 
 ## Explicit non-goals (so far)
 

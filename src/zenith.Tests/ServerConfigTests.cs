@@ -260,6 +260,35 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
+    public void Validate_rejects_spawn_ready_above_view_radius()
+    {
+        var config = new ServerConfig();
+        config.World.SpawnChunkRadius = 4;
+        config.World.SpawnReadyRadius = 5;
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("spawn-ready-radius", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_accepts_spawn_ready_equal_to_view()
+    {
+        var config = new ServerConfig();
+        config.World.SpawnChunkRadius = 4;
+        config.World.SpawnReadyRadius = 4;
+        config.Validate();
+        Assert.Equal(4, config.World.SpawnReadyRadius);
+    }
+
+    [Fact]
+    public void Validate_rejects_negative_spawn_ready_radius()
+    {
+        var config = new ServerConfig();
+        config.World.SpawnReadyRadius = -1;
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("spawn-ready-radius", ex.Message);
+    }
+
+    [Fact]
     public void Validate_rejects_unsupported_gamemode()
     {
         var config = new ServerConfig();

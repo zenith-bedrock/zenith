@@ -134,6 +134,8 @@ Persistent **`$ZENITH_DATA`** volume (config + worlds) — same idea as PocketMi
 
 ```bash
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
+# Join / worldgen suite only (ADR §69):
+dotnet run -c Release --project src/zenith.Benchmarks -- -f *Worldgen* -j short -m --join
 ```
 
 Numbers live in [`docs/dx.md`](docs/dx.md).

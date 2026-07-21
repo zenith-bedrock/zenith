@@ -102,7 +102,7 @@ sealed class World
     }
 
     /// <summary>
-    /// Login hydrate. False = miss / corrupt / OOB → caller keeps flat spawn + config GameMode.
+    /// Login hydrate. False = miss / corrupt / OOB → caller keeps terrain spawn + config GameMode.
     /// </summary>
     public bool TryLoadPlayerData(Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode)
     {
@@ -110,6 +110,33 @@ sealed class World
         mode = Player.GameMode.Survival;
         var blob = _storage.GetPlayerDataAsync(uuid).AsTask().GetAwaiter().GetResult();
         return blob is not null && PlayerDataBlob.TryUnpack(blob, out x, out y, out z, out yaw, out pitch, out mode);
+    }
+
+    /// <summary>
+    /// True when feet + eye cell are air (standing room). Used to heal flat-era pd: into noise hills.
+    /// </summary>
+    public bool IsSpawnFeetClear(int blockX, int feetY, int blockZ) =>
+        GetBlock(blockX, feetY, blockZ) == AirRuntimeId &&
+        GetBlock(blockX, feetY + 1, blockZ) == AirRuntimeId;
+
+    /// <summary>
+    /// If saved pose is buried / flooded, snap feet to <see cref="SampleSpawnFeetY"/> at the same XZ.
+    /// Returns true when pose changed (caller should Persist).
+    /// </summary>
+    public bool TryHealSpawnFeet(Player.Player player)
+    {
+        var bx = (int)MathF.Floor(player.PositionX);
+        var by = (int)MathF.Floor(player.PositionY);
+        var bz = (int)MathF.Floor(player.PositionZ);
+        if (IsSpawnFeetClear(bx, by, bz))
+            return false;
+
+        var healedY = SampleSpawnFeetY(bx, bz);
+        if (healedY == by && IsSpawnFeetClear(bx, healedY, bz))
+            return false;
+
+        player.PositionY = healedY;
+        return true;
     }
 
     /// <summary>Await in-flight chest/inv/pd/overlay writes — shutdown only (ADR §41).</summary>

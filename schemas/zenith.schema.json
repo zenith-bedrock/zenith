@@ -67,7 +67,14 @@
           "minimum": 0,
           "maximum": 32,
           "default": 4,
-          "description": "Chunk radius streamed around spawn on join."
+          "description": "Max view chunk radius advertised to the client on join (ChunkRadiusUpdated / ChunkStream)."
+        },
+        "spawn-ready-radius": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 2,
+          "description": "Columns loaded/published before PLAYER_SPAWN (0..spawn-chunk-radius). ADR §70 ready-disk."
         },
         "terrain": {
           "type": "string",

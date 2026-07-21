@@ -60,14 +60,17 @@ sealed class WorldProtocol
         _session.SendDataPacket(new ChunkRadiusUpdatedPacket { Radius = radius });
     }
 
-    /// <summary>Empty BiomeDefinitionList (0x7a) — clients expect this once after ItemRegistry.</summary>
-    public void SendEmptyBiomeDefinitionList()
+    /// <summary>Vanilla BiomeDefinitionList (0x7a) — required once after CraftingData (ADR §70).</summary>
+    public void SendBiomeDefinitionList()
     {
         _session.SendDataPacket(new BiomeDefinitionListPacket());
     }
 
-    /// <summary>How many LevelChunks to pack into one GamePacket envelope on spawn stream.</summary>
-    public const int LevelChunkBatchSize = 4;
+    /// <summary>
+    /// LevelChunks per GamePacket on PreSpawn. 1 = one column per envelope so noise payloads
+    /// do not inflate a single compressed batch past client comfort (ADR §14 adendo).
+    /// </summary>
+    public const int LevelChunkBatchSize = 1;
 
     public void PublishChunks(IReadOnlyList<ChunkColumn> columns)
     {
