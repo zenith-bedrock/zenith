@@ -11,11 +11,16 @@ sealed class GravityPendingStore
 {
     internal const int SoftCap = 2048;
 
-    /// <summary>Max fall steps processed per GameLoop tick (tower cascade bound).</summary>
-    public const int MaxStepsPerTick = 64;
+    /// <summary>
+    /// Max fall steps per GameLoop tick. Dragonfly uses falling_block entities (~1 cell per
+    /// entity per tick); Zenith cell-tick keeps this low so towers do not collapse instantly.
+    /// </summary>
+    public const int MaxStepsPerTick = 2;
 
     private readonly HashSet<(int X, int Y, int Z)> _pending = new();
     private readonly Queue<(int X, int Y, int Z)> _queue = new();
+    /// <summary>Cascade cells enqueued during a tick — promoted next tick (no same-tick chain).</summary>
+    private readonly Queue<(int X, int Y, int Z)> _deferred = new();
     private readonly ILogger? _logger;
     private int _capWarned;
 
@@ -23,8 +28,20 @@ sealed class GravityPendingStore
 
     public int Count => _pending.Count;
 
+    /// <summary>Move deferred cascade cells into the active queue (call once per tick).</summary>
+    public void PromoteDeferred()
+    {
+        while (_deferred.Count > 0)
+            _queue.Enqueue(_deferred.Dequeue());
+    }
+
     /// <summary>Enqueue a cell for gravity evaluation. Existing keys OK at SoftCap.</summary>
-    public bool TryEnqueue(int x, int y, int z)
+    public bool TryEnqueue(int x, int y, int z) => TryEnqueueCore(x, y, z, immediate: true);
+
+    /// <summary>Enqueue after a fall step — processed next tick so columns cascade gradually.</summary>
+    public bool TryEnqueueDeferred(int x, int y, int z) => TryEnqueueCore(x, y, z, immediate: false);
+
+    private bool TryEnqueueCore(int x, int y, int z, bool immediate)
     {
         var key = (x, y, z);
         if (_pending.Contains(key))
@@ -42,7 +59,10 @@ sealed class GravityPendingStore
         }
 
         _pending.Add(key);
-        _queue.Enqueue(key);
+        if (immediate)
+            _queue.Enqueue(key);
+        else
+            _deferred.Enqueue(key);
         return true;
     }
 
@@ -68,5 +88,6 @@ sealed class GravityPendingStore
     {
         _pending.Clear();
         _queue.Clear();
+        _deferred.Clear();
     }
 }

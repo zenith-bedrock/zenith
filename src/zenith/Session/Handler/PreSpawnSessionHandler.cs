@@ -76,10 +76,12 @@ class PreSpawnSessionHandler : ISessionHandler
             if (session.Player is null)
                 return;
 
+            var spawnBlockY = (int)MathF.Floor(session.Player.PositionY);
+
             // Publisher before LevelChunks — radius is in blocks, not chunks.
             session.Protocol.World.SendChunkPublisher(
                 blockX: 0,
-                blockY: Blocks.FlatSpawnY,
+                blockY: spawnBlockY,
                 blockZ: 0,
                 radiusBlocks: radius * 16);
 
@@ -126,7 +128,7 @@ class PreSpawnSessionHandler : ISessionHandler
                 }
             }
 
-            session.Protocol.World.SendWorldSpawnPosition(x: 0, y: Blocks.FlatSpawnY, z: 0);
+            session.Protocol.World.SendWorldSpawnPosition(x: 0, y: spawnBlockY, z: 0);
             session.Context.Logger.Debug("Chunks published (publisher → batched LevelChunks → overlays), waiting for spawn response");
             session.Protocol.World.SendSpawnComplete();
 

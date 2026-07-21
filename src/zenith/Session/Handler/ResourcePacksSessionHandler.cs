@@ -43,7 +43,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                     pitch: player.Pitch,
                     yaw: player.Yaw,
                     spawnBlockX: 0,
-                    spawnBlockY: Blocks.FlatSpawnY,
+                    spawnBlockY: (int)MathF.Floor(player.PositionY),
                     spawnBlockZ: 0,
                     useBlockNetworkIdHashes: true,
                     gameMode: (int)player.GameMode);

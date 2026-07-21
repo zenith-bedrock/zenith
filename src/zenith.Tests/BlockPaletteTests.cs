@@ -92,11 +92,14 @@ public class BlockPaletteTests
         Blocks.Load(palette);
 
         Assert.True(Blocks.IsPlaceable(Blocks.Stone));
+        Assert.True(Blocks.IsPlaceable(Blocks.Cobblestone));
+        Assert.True(Blocks.IsPlaceable(Blocks.OakLeaves));
         Assert.True(Blocks.IsPlaceable(Blocks.Chest));
         Assert.True(Blocks.IsPlaceable(Blocks.ChestForFacing(Blocks.CardinalNorth)));
         Assert.False(Blocks.IsPlaceable(Blocks.Air));
-        Assert.True(palette.TryGet("minecraft:cobblestone", out var cobbleRid));
-        Assert.False(Blocks.IsPlaceable(cobbleRid));
+        Assert.False(Blocks.IsPlaceable(Blocks.Water));
+        Assert.True(palette.TryGet("minecraft:gold_block", out var goldRid));
+        Assert.False(Blocks.IsPlaceable(goldRid));
         Assert.False(Blocks.IsPlaceable(int.MaxValue));
     }
 

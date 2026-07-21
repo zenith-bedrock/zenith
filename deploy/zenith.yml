@@ -13,6 +13,9 @@ world:
   name: world
   path: /app
   spawn-chunk-radius: 4
+  # terrain: flat   # default — classic stone/grass at Y -61
+  # terrain: noise  # overworld band + water/caves/trees/ruins (world.seed); fresh world folder recommended
+  # seed: 1
 auth:
   # Who may join (one or more). Case-insensitive.
   #   xbox         — Microsoft / FULL token

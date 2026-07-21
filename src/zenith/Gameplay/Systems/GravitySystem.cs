@@ -21,6 +21,8 @@ sealed class GravitySystem : IGameSystem
         var pending = _world.GravityPending;
         if (pending.Count == 0) return;
 
+        pending.PromoteDeferred();
+
         var updates = _updatesScratch;
         updates.Clear();
         var steps = 0;
@@ -28,7 +30,7 @@ sealed class GravitySystem : IGameSystem
                pending.TryDequeue(out var x, out var y, out var z))
         {
             steps++;
-            TryFallCell(x, y, z, updates, pending);
+            TryFallCell(x, y, z, updates, pending, deferCascade: true);
         }
 
         if (updates.Count == 0 || online.Count == 0) return;
@@ -49,8 +51,13 @@ sealed class GravitySystem : IGameSystem
         updates.Clear();
         var pending = _world.GravityPending;
         var guard = GravityPendingStore.SoftCap * 2;
-        while (guard-- > 0 && pending.TryDequeue(out var x, out var y, out var z))
-            TryFallCell(x, y, z, updates, pending);
+        while (guard-- > 0)
+        {
+            pending.PromoteDeferred();
+            if (!pending.TryDequeue(out var x, out var y, out var z))
+                break;
+            TryFallCell(x, y, z, updates, pending, deferCascade: false);
+        }
         // No peer fan-out on shutdown — clients disconnect; overlays persist.
     }
 
@@ -59,7 +66,8 @@ sealed class GravitySystem : IGameSystem
         int y,
         int z,
         List<(int X, int Y, int Z, int BlockRuntimeId)> updates,
-        GravityPendingStore pending)
+        GravityPendingStore pending,
+        bool deferCascade)
     {
         var rid = _world.GetBlock(x, y, z);
         if (!Blocks.IsGravity(rid))
@@ -77,7 +85,7 @@ sealed class GravitySystem : IGameSystem
             if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
                 return;
             updates.Add((x, y, z, World.World.AirRuntimeId));
-            EnqueueAbove(x, y, z, pending);
+            EnqueueAbove(x, y, z, pending, deferCascade);
             return;
         }
 
@@ -100,9 +108,9 @@ sealed class GravitySystem : IGameSystem
 
         updates.Add((x, y, z, World.World.AirRuntimeId));
         updates.Add((x, destY, z, rid));
-        EnqueueAbove(x, y, z, pending);
-        // Newly landed cell may still be unsupported (mid-air stack) — re-check next step.
-        pending.TryEnqueue(x, destY, z);
+        EnqueueAbove(x, y, z, pending, deferCascade);
+        if (IsUnsupported(x, destY, z))
+            EnqueueFallCell(x, destY, z, pending, deferCascade);
     }
 
     private bool IsUnsupported(int x, int y, int z)
@@ -113,11 +121,19 @@ sealed class GravitySystem : IGameSystem
         return _world.GetBlock(x, belowY, z) == World.World.AirRuntimeId;
     }
 
-    private void EnqueueAbove(int x, int y, int z, GravityPendingStore pending)
+    private void EnqueueAbove(int x, int y, int z, GravityPendingStore pending, bool defer)
     {
         var aboveY = y + 1;
-        if (aboveY > 320) return; // Bedrock build height ceiling; flat world stays far below.
+        if (aboveY > 320) return;
         if (Blocks.IsGravity(_world.GetBlock(x, aboveY, z)))
-            pending.TryEnqueue(x, aboveY, z);
+            EnqueueFallCell(x, aboveY, z, pending, defer);
+    }
+
+    private static void EnqueueFallCell(int x, int y, int z, GravityPendingStore pending, bool defer)
+    {
+        if (defer)
+            pending.TryEnqueueDeferred(x, y, z);
+        else
+            pending.TryEnqueue(x, y, z);
     }
 }

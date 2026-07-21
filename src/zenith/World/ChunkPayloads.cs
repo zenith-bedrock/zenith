@@ -24,29 +24,73 @@ static class ChunkPayloads
     }
 
     /// <summary>
-    /// Flat: 1 subchunk (Y -64..-49) com stone/grass; restante implícito air via SubChunkCount=1.
+    /// Flat: classic stone/grass column — delegates to <see cref="BuildOverworldColumn"/>.
     /// </summary>
     public static (int SubChunkCount, byte[] Payload) BuildFlatOverworld()
-    {
-        var ids = new int[4096];
-        for (var i = 0; i < 4096; i++)
-            ids[i] = Blocks.Air;
+        => BuildOverworldColumn(0, 0, (x, y, z) =>
+            OverworldTerrainSampler.SampleBlock(x, y, z, Blocks.FlatGrassY));
 
-        // Y local 0..15 maps world Y = -64 + localY for section index 0.
+    /// <summary>
+    /// Builds paletted subchunks for one column from a world-space block sampler.
+    /// SubChunkCount = highest non-air section index + 1 (Bedrock implicit air above).
+    /// </summary>
+    public static (int SubChunkCount, byte[] Payload) BuildOverworldColumn(
+        int chunkX,
+        int chunkZ,
+        Func<int, int, int, int> blockAtWorld)
+    {
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        var maxSubChunk = 0;
+        for (var section = 0; section <= OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex; section++)
+        {
+            var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
+            if (!SectionHasSolid(baseX, baseZ, worldYBase, blockAtWorld)) continue;
+            maxSubChunk = section;
+        }
+
+        var writer = new BinaryStream();
+        for (var section = 0; section <= maxSubChunk; section++)
+        {
+            var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
+            var ids = FillSection(baseX, baseZ, worldYBase, blockAtWorld);
+            WriteSubChunk(ref writer, ids);
+        }
+
+        WriteBiomesAndBorder(ref writer);
+        return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
+    }
+
+    private static bool SectionHasSolid(int baseX, int baseZ, int worldYBase, Func<int, int, int, int> blockAtWorld)
+    {
         for (var x = 0; x < 16; x++)
         {
             for (var z = 0; z < 16; z++)
             {
-                for (var localY = 0; localY <= 2; localY++) // -64..-62 stone
-                    ids[BlockIndex(x, localY, z)] = Blocks.Stone;
-                ids[BlockIndex(x, 3, z)] = Blocks.GrassBlock; // -61
+                for (var localY = 0; localY < 16; localY++)
+                {
+                    if (blockAtWorld(baseX + x, worldYBase + localY, baseZ + z) != Blocks.Air)
+                        return true;
+                }
             }
         }
 
-        var writer = new BinaryStream();
-        WriteSubChunk(ref writer, ids);
-        WriteBiomesAndBorder(ref writer);
-        return (SubChunkCount: 1, Payload: writer.GetBufferDisposing().ToArray());
+        return false;
+    }
+
+    private static int[] FillSection(int baseX, int baseZ, int worldYBase, Func<int, int, int, int> blockAtWorld)
+    {
+        var ids = new int[4096];
+        for (var x = 0; x < 16; x++)
+        {
+            for (var z = 0; z < 16; z++)
+            {
+                for (var localY = 0; localY < 16; localY++)
+                    ids[BlockIndex(x, localY, z)] = blockAtWorld(baseX + x, worldYBase + localY, baseZ + z);
+            }
+        }
+
+        return ids;
     }
 
     private static void WriteBiomesAndBorder(ref BinaryStream writer)

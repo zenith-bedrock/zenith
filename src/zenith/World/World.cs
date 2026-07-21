@@ -36,6 +36,9 @@ sealed class World
 
     public int OverrideCount => _blockOverrides.Count;
 
+    /// <summary>Feet Y for join/respawn above base terrain at (x,z) — ignores overlays.</summary>
+    public int SampleSpawnFeetY(int x, int z) => _terrain.SampleSpawnFeetY(x, z);
+
     public World(IChunkStorage storage, ILogger? logger = null, ITerrainProvider? terrain = null)
     {
         _storage = storage;
@@ -290,7 +293,7 @@ sealed class World
     /// </summary>
     private static bool LooksLikeTerrainPayload(ChunkColumnData column)
     {
-        // Flat: at least version + layers + one palette header byte.
+        // Subchunk network version 8 header (flat and noise columns).
         return column.ExtraPayload.Length >= 3 && column.ExtraPayload[0] == 8;
     }
 

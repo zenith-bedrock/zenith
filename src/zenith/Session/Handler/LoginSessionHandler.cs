@@ -176,8 +176,13 @@ class LoginSessionHandler : ISessionHandler
         }
         else
         {
+            // First join: stand on base terrain at world origin (noise-aware; ADR §63).
+            player.PositionX = 0f;
+            player.PositionY = session.Context.World.SampleSpawnFeetY(0, 0);
+            player.PositionZ = 0f;
             session.Context.Logger.Info(
-                $"Playerdata load miss for '{player.Username}' uuid={player.Uuid:D} (flat spawn / config mode)");
+                $"Playerdata load miss for '{player.Username}' uuid={player.Uuid:D} " +
+                $"(terrain spawn Y={player.PositionY:F0} / config mode)");
         }
 
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));

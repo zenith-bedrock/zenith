@@ -1,6 +1,7 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using Zenith.Raknet.Enumerator;
+using Zenith.World;
 
 namespace Zenith.Server;
 
@@ -39,6 +40,12 @@ sealed class ServerConfig
         public string Path { get; set; } = "";
 
         public int SpawnChunkRadius { get; set; } = 4;
+
+        /// <summary>Base terrain generator: <c>flat</c> (default) or <c>noise</c> (ADR §63).</summary>
+        public string Terrain { get; set; } = "flat";
+
+        /// <summary>Seed for <c>noise</c> terrain; ignored for flat.</summary>
+        public int Seed { get; set; } = 1;
     }
 
     /// <summary>
@@ -174,6 +181,10 @@ sealed class ServerConfig
             throw new InvalidOperationException($"world.spawn-chunk-radius must be 0..32 (got {World.SpawnChunkRadius}).");
         if (string.IsNullOrWhiteSpace(World.Name))
             throw new InvalidOperationException("world.name must not be empty.");
+        World.Terrain = TerrainProviders.NormalizeMode(World.Terrain);
+        if (World.Terrain is not ("flat" or "noise"))
+            throw new InvalidOperationException(
+                $"world.terrain must be flat or noise (got '{World.Terrain}').");
 
         Auth.NormalizeAndValidate();
 

@@ -473,17 +473,17 @@ public class IntentContractTests
     public void BlockSystem_rejects_non_placeable_runtime_on_tick()
     {
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("cobbler");
+        var player = fx.AddInGamePlayer("goldie");
         StandNear(player, 4, 64, 4);
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Assert.True(palette.TryGet("minecraft:cobblestone", out var cobbleRid));
-        Assert.False(Blocks.IsPlaceable(cobbleRid));
-        Assert.True(player.Inventory.TrySetBlock(0, cobbleRid, 3));
+        Assert.True(palette.TryGet("minecraft:gold_block", out var goldRid));
+        Assert.False(Blocks.IsPlaceable(goldRid));
+        Assert.True(player.Inventory.TrySetBlock(0, goldRid, 3));
 
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, cobbleRid, hotbarSlot: 0)));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, goldRid, hotbarSlot: 0)));
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
 
-        Assert.NotEqual(cobbleRid, fx.World.GetBlock(4, 64, 4));
+        Assert.NotEqual(goldRid, fx.World.GetBlock(4, 64, 4));
         Assert.Equal(3, player.Inventory.Get(0).Count); // not consumed
     }
 

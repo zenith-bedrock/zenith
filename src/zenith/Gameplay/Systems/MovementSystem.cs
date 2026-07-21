@@ -208,7 +208,7 @@ sealed class MovementSystem : IGameSystem
     private static void ApplyRespawn(global::Zenith.Player.Player player)
     {
         player.PositionX = 0f;
-        player.PositionY = Blocks.FlatSpawnY;
+        player.PositionY = player.Session.Context.World.SampleSpawnFeetY(0, 0);
         player.PositionZ = 0f;
         player.Pitch = 0f;
         player.CompleteRespawn();

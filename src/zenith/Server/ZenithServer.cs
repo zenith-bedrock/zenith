@@ -73,14 +73,21 @@ class ZenithServer
         _ = itemPalette.Require("minecraft:dirt");
         _ = itemPalette.Require("minecraft:oak_planks");
         _ = itemPalette.Require("minecraft:oak_log");
+        _ = itemPalette.Require("minecraft:oak_leaves");
         _ = itemPalette.Require("minecraft:sand");
         _ = itemPalette.Require("minecraft:gravel");
+        _ = itemPalette.Require("minecraft:bedrock");
+        _ = itemPalette.Require("minecraft:water");
+        _ = itemPalette.Require("minecraft:cobblestone");
+        _ = itemPalette.Require("minecraft:deepslate");
         _ = itemPalette.Require("minecraft:chest");
         Tools.Load(itemPalette);
         serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
 
         _chunkStorage = CreateChunkStorage(config, serverLogger);
-        var world = new World.World(_chunkStorage, serverLogger, FlatTerrainProvider.Instance);
+        var terrain = TerrainProviders.Create(config.World.Terrain, config.World.Seed);
+        serverLogger.Info($"world.terrain={config.World.Terrain} seed={config.World.Seed}");
+        var world = new World.World(_chunkStorage, serverLogger, terrain);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world);
