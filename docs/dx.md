@@ -78,7 +78,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62/§71): `World` façade owns default **Overworld `Dimension`** (`ITerrainProvider` + wire id); `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays. Nether/End Dimensions deferred.
-20. Terrain gen (ADR §63–§67/§71): `world.terrain: flat | noise` applies to overworld Dimension. Noise = **Simplex** height + climate biomes (temp/rain), worm caves, ore, trees, ruins. Join/respawn = `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy.
+20. Terrain gen (ADR §63–§67/§71/§72): `world.terrain: flat | noise` applies to overworld Dimension. Noise = **FastNoiseLite** (vendored Auburn MIT) OpenSimplex2 FBm height + **continuous** climate bias (no per-block hash), worm caves, ore, trees, ruins. Join/respawn = `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy. Continuity: adjacent surface |ΔY| ≤ `MaxAdjacentSurfaceStep` (6).
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 ```
 
@@ -135,7 +135,7 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reco
 
 ### Bedrock references (local clones)
 
-Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise algorithms: PocketMine `Normal`.
+Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
 
 ### Bedrock protocol docs (official)
 

@@ -1,6 +1,6 @@
 namespace Zenith.World;
 
-/// <summary>Coarse overworld biomes for noise terrain (ADR §67 / §71). IDs match Bedrock network biome ids.</summary>
+/// <summary>Coarse overworld biomes for noise terrain (ADR §67 / §71 / §72). IDs match Bedrock network biome ids.</summary>
 enum OverworldBiomeKind
 {
     Ocean = 0,
@@ -11,8 +11,8 @@ enum OverworldBiomeKind
 }
 
 /// <summary>
-/// Climate Simplex → biome kind (PocketMine BiomeSelector-shaped lookup, mapped to Zenith's five kinds).
-/// Surface block / trees / height bias stay here; height amplitude lives in <see cref="OverworldTerrainSampler"/>.
+/// Climate FastNoiseLite → biome kind (PocketMine BiomeSelector-shaped lookup, mapped to Zenith's five kinds).
+/// Surface block / trees stay discrete; <see cref="ContinuousHeightBias"/> stays smooth to avoid pillar cliffs.
 /// </summary>
 static class OverworldBiomeSampler
 {
@@ -21,13 +21,15 @@ static class OverworldBiomeSampler
 
     public static OverworldBiomeKind SampleKind(int worldX, int worldZ, int seed)
     {
-        var fields = OverworldNoiseFields.For(seed);
-        // PM: (noise2D normalized + 1) / 2 → [0,1]
-        var temperature = (fields.Temperature.Noise2D(worldX, worldZ, normalized: true) + 1.0) * 0.5;
-        var rainfall = (fields.Rainfall.Noise2D(worldX, worldZ, normalized: true) + 1.0) * 0.5;
-        temperature = Math.Clamp(temperature, 0.0, 1.0);
-        rainfall = Math.Clamp(rainfall, 0.0, 1.0);
+        SampleClimate(worldX, worldZ, seed, out var temperature, out var rainfall);
         return Lookup(temperature, rainfall);
+    }
+
+    public static void SampleClimate(int worldX, int worldZ, int seed, out double temperature, out double rainfall)
+    {
+        var fields = OverworldNoiseFields.For(seed);
+        temperature = OverworldNoiseFields.Climate01(fields.Temperature.GetNoise(worldX, worldZ));
+        rainfall = OverworldNoiseFields.Climate01(fields.Rainfall.GetNoise(worldX, worldZ));
     }
 
     /// <summary>PM Normal lookup condensed onto Ocean/Plains/Desert/Hills/Forest.</summary>
@@ -46,6 +48,29 @@ static class OverworldBiomeSampler
             return temperature < 0.25 ? OverworldBiomeKind.Hills : OverworldBiomeKind.Forest;
 
         return temperature < 0.40 ? OverworldBiomeKind.Hills : OverworldBiomeKind.Ocean;
+    }
+
+    /// <summary>
+    /// Smooth height offset from climate (no per-block hash). Weights overlap so biome flips do not cliff.
+    /// Ocean weight is strong enough that full-ocean columns sit under sea without a hard Min clamp.
+    /// </summary>
+    public static double ContinuousHeightBias(double temperature, double rainfall)
+    {
+        // Soft region weights — wider edges than Lookup thresholds so surface leads the biome flip.
+        var oceanW = 1.0 - Smoothstep(0.12, 0.40, rainfall);
+        var hillsW = 1.0 - Smoothstep(0.12, 0.42, temperature);
+        var desertW = Smoothstep(0.65, 0.85, temperature)
+            * Smoothstep(0.25, 0.42, rainfall)
+            * (1.0 - Smoothstep(0.52, 0.70, rainfall));
+
+        // Ocean pull ≈ amplitude + margin so peak hills noise still goes under sea when oceanW≈1.
+        return hillsW * 8.0 + desertW * (-2.0) + oceanW * (-(OverworldTerrainSampler.NoiseHillAmplitude + 6));
+    }
+
+    private static double Smoothstep(double edge0, double edge1, double x)
+    {
+        var t = Math.Clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+        return t * t * (3.0 - 2.0 * t);
     }
 
     public static int NetworkId(OverworldBiomeKind kind) => (int)kind;
@@ -67,15 +92,6 @@ static class OverworldBiomeSampler
             OverworldBiomeKind.Hills => "extreme_hills",
             OverworldBiomeKind.Forest => "forest",
             _ => "plains",
-        };
-
-    public static int SurfaceHeightBias(OverworldBiomeKind kind, uint localHash)
-        => kind switch
-        {
-            OverworldBiomeKind.Hills => 10 + (int)(localHash % 6),
-            OverworldBiomeKind.Desert => -2,
-            OverworldBiomeKind.Ocean => -(8 + (int)(localHash % 6)),
-            _ => 0,
         };
 
     public static int SurfaceBlock(OverworldBiomeKind kind)

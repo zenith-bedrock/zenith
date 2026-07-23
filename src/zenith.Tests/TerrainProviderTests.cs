@@ -259,7 +259,7 @@ public class TerrainProviderTests
 
         Assert.True(
             maxStep <= OverworldTerrainSampler.MaxAdjacentSurfaceStep,
-            $"adjacent surface step {maxStep} exceeds {OverworldTerrainSampler.MaxAdjacentSurfaceStep} (Simplex height)");
+            $"adjacent surface step {maxStep} exceeds {OverworldTerrainSampler.MaxAdjacentSurfaceStep} (FastNoiseLite height)");
     }
 
     [Fact]
