@@ -1,8 +1,8 @@
 namespace Zenith.World;
 
 /// <summary>
-/// Shared overworld height + block rules for terrain providers (ADR §63 / §64 / §71).
-/// Height: Simplex octaves + biome bias (PM-inspired). Features: trees/ruins/caves/ore.
+/// Shared overworld height + block rules for terrain providers (ADR §63 / §64 / §71 / §72).
+/// Height: FastNoiseLite OpenSimplex2 FBm + continuous climate bias. Features: trees/ruins/caves/ore.
 /// <see cref="SampleNoiseBlock"/> must stay consistent with <see cref="ChunkPayloads.BuildNoiseOverworldColumn"/>.
 /// Flat mode keeps classic Y≈-61 via <see cref="SampleBlock"/> with constant surface.
 /// </summary>
@@ -19,11 +19,11 @@ static class OverworldTerrainSampler
     /// <summary>Noise mean surface (Bedrock overworld band, not classic flat).</summary>
     public const int NoiseBaseSurfaceY = 64;
 
-    /// <summary>Coarse height swing around <see cref="NoiseBaseSurfaceY"/> (Simplex × this).</summary>
-    public const int NoiseHillAmplitude = 28;
+    /// <summary>Coarse height swing around <see cref="NoiseBaseSurfaceY"/> (noise × this).</summary>
+    public const int NoiseHillAmplitude = 22;
 
-    /// <summary>Max |ΔY| between adjacent surface samples (continuity gate).</summary>
-    public const int MaxAdjacentSurfaceStep = 16;
+    /// <summary>Max |ΔY| between adjacent surface samples (continuity contract — ADR §72).</summary>
+    public const int MaxAdjacentSurfaceStep = 6;
 
     public const int TreeCellSize = 10;
     public const int RuinCellSize = 40;
@@ -33,7 +33,6 @@ static class OverworldTerrainSampler
 
     private const int TreeSalt = unchecked((int)0x7EE7E77Eu);
     private const int RuinSalt = unchecked((int)0x5015015u);
-    private const int BiasSalt = unchecked((int)0xB1A5B1A5u);
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
@@ -107,15 +106,12 @@ static class OverworldTerrainSampler
 
     private static void FillSurfaceAt(int worldX, int worldZ, int seed, out int y, out OverworldBiomeKind biome)
     {
-        biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
-        var fields = OverworldNoiseFields.For(seed);
-        var n = fields.Height.Noise2D(worldX, worldZ, normalized: true);
-        var local = Hash(worldX, worldZ, seed ^ BiasSalt);
-        y = NoiseBaseSurfaceY
-            + (int)Math.Round(n * NoiseHillAmplitude)
-            + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
-        if (biome == OverworldBiomeKind.Ocean)
-            y = Math.Min(y, SeaLevel - 1);
+        OverworldBiomeSampler.SampleClimate(worldX, worldZ, seed, out var temperature, out var rainfall);
+        biome = OverworldBiomeSampler.Lookup(temperature, rainfall);
+        var n = OverworldNoiseFields.For(seed).Height.GetNoise(worldX, worldZ);
+        var bias = OverworldBiomeSampler.ContinuousHeightBias(temperature, rainfall);
+        // No hard ocean Min — that created 1-block cliffs at biome edges (ADR §72).
+        y = NoiseBaseSurfaceY + (int)Math.Round(n * NoiseHillAmplitude + bias);
         y = Math.Clamp(y, Blocks.FlatMinY + 12, 120);
     }
 

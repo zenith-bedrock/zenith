@@ -102,6 +102,27 @@ public class BiomeSamplerTests
         Assert.True(kinds.Count >= 3, $"expected ≥3 biome kinds, got {kinds.Count}");
     }
 
+    [Fact]
+    public void Continuous_height_bias_is_smooth_in_world_space()
+    {
+        const int seed = 99;
+        var maxStep = 0.0;
+        for (var x = -64; x < 64; x++)
+        {
+            for (var z = -64; z < 64; z++)
+            {
+                OverworldBiomeSampler.SampleClimate(x, z, seed, out var t0, out var r0);
+                var b = OverworldBiomeSampler.ContinuousHeightBias(t0, r0);
+                OverworldBiomeSampler.SampleClimate(x + 1, z, seed, out var t1, out var r1);
+                maxStep = Math.Max(maxStep, Math.Abs(b - OverworldBiomeSampler.ContinuousHeightBias(t1, r1)));
+                OverworldBiomeSampler.SampleClimate(x, z + 1, seed, out var t2, out var r2);
+                maxStep = Math.Max(maxStep, Math.Abs(b - OverworldBiomeSampler.ContinuousHeightBias(t2, r2)));
+            }
+        }
+
+        Assert.True(maxStep < 1.25, $"world-adjacent bias step {maxStep} too large");
+    }
+
     private static (int X, int Z) FindBiomeCoords(int seed, OverworldBiomeKind kind)
     {
         for (var x = -512; x < 512; x += 2)
