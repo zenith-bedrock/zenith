@@ -801,18 +801,76 @@ public class IntentContractTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("tooearly");
+        var viewer = fx.AddInGamePlayer("viewer");
         StandNear(player, 0, 90, 0);
         fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
         var need = Blocks.BreakTicks(Blocks.Dirt);
         Assert.True(need > 2);
 
-        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        Assert.True(player.SubmitDigStart(0, 90, 0, fx.Clock.CurrentTick, need));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.True(player.HasBreakTarget);
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
         fx.Clock.AdvanceBy(need - 2);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
             0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
         player.ClearBreakTarget();
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        FlushRaknet(fx.Players);
+
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+        Assert.True(fx.Transport.Captured.Count >= 1,
+            "early DigAuthorized reject must StopCrack (not only Resync)");
+        _ = viewer;
+    }
+
+    [Fact]
+    public void BlockSystem_same_tick_start_and_predict_rejects_when_need_gt_1()
+    {
+        // Real AuthInput same-tick: DigStartedTick == CurrentTick → elapsed 0 < need-1.
+        // Must reject without leaving a zombie crack (CancelPending skips ApplyDig StartCrack).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("sametick");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        Assert.True(need > 1);
+
+        var start = fx.Clock.CurrentTick;
+        Assert.True(player.SubmitDigStart(0, 90, 0, start, need));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
+        player.ClearBreakTarget();
+        player.CancelPendingDigStart(0, 90, 0);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+        Assert.False(player.HasBreakTarget);
+    }
+
+    [Fact]
+    public void BlockSystem_dig_authorized_break_after_elapsed()
+    {
+        // DigAuthorized break after enough ticks (handler ClearBreakTarget before drain).
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fastbreak");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        var start = fx.Clock.CurrentTick;
+        fx.Clock.AdvanceBy(need);
+
+        Assert.True(player.SubmitDigStart(0, 90, 0, start, need));
+        Assert.True(player.TryGetDigAuth(0, 90, 0, out var authStart, out var authNeed));
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, authStart, authNeed)));
+        player.ClearBreakTarget();
+        player.CancelPendingDigStart(0, 90, 0);
+
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.False(player.HasBreakTarget);
     }
 
     [Fact]
@@ -913,28 +971,6 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void BlockSystem_same_packet_dig_start_and_authorized_break()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("fastbreak");
-        StandNear(player, 0, 90, 0);
-        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
-        var need = Blocks.BreakTicks(Blocks.Dirt);
-        var start = fx.Clock.CurrentTick;
-        fx.Clock.AdvanceBy(need);
-
-        Assert.True(player.SubmitDigStart(0, 90, 0, start, need));
-        Assert.True(player.TryGetDigAuth(0, 90, 0, out var authStart, out var authNeed));
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, authStart, authNeed)));
-        player.ClearBreakTarget();
-        player.CancelPendingDigStart(0, 90, 0);
-
-        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
-        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
-        Assert.False(player.HasBreakTarget);
-    }
-
-    [Fact]
     public void BlockSystem_same_cell_two_digs_first_writer_wins_loot()
     {
         var fx = new IntentTestFixture();
@@ -981,13 +1017,49 @@ public class IntentContractTests
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        fx.Clock.AdvanceBy((int)Player.Player.DigIdleAbortTicks);
+        // Idle grace applies only after dig window — advance past need + DigIdleAbortTicks.
+        fx.Clock.AdvanceBy(need + (int)Player.Player.DigIdleAbortTicks);
         new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
         FlushRaknet(fx.Players);
 
         Assert.False(miner.HasBreakTarget);
         Assert.True(fx.Transport.Captured.Count >= 1, "idle dig should StopCrack to peers");
         _ = viewer;
+    }
+
+    [Fact]
+    public void BlockSystem_dig_survives_idle_grace_until_BreakRequiredTicks()
+    {
+        // Regression: stone-by-hand need (~150) > DigIdleAbortTicks (40). Without MarkDigActive
+        // the old idle abort StopCrack'd mid-swing; client AbortBreak cleared provisional auth
+        // → Predict Resync + no loot (§74 still means no cobble without pickaxe).
+        var fx = new IntentTestFixture();
+        var miner = fx.AddInGamePlayer("miner");
+        StandNear(miner, 0, 90, 0);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(miner.Inventory.TrySetBlock(i, Blocks.Air, 0));
+
+        fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        var need = Blocks.BreakTicks(Blocks.Stone);
+        Assert.True(need > (int)Player.Player.DigIdleAbortTicks);
+
+        Assert.True(miner.SubmitDigStart(0, 90, 0, fx.Clock.CurrentTick, need));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.True(miner.HasBreakTarget);
+
+        fx.Clock.AdvanceBy((int)Player.Player.DigIdleAbortTicks);
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.True(miner.HasBreakTarget, "must not idle-abort before BreakRequiredTicks");
+
+        fx.Clock.AdvanceBy(need - 1 - (int)Player.Player.DigIdleAbortTicks);
+        Assert.True(miner.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, miner.BreakStartedTick, miner.BreakRequiredTicks)));
+        miner.ClearBreakTarget();
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(0, fx.World.FloorDrops.Count);
+        Assert.Equal(0, CountRuntime(miner.Inventory, Blocks.Stone));
+        Assert.Equal(0, CountRuntime(miner.Inventory, Blocks.Cobblestone));
     }
 
     [Fact]

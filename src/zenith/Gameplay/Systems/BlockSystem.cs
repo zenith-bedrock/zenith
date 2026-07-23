@@ -177,7 +177,10 @@ sealed class BlockSystem : IGameSystem
 
     /// <summary>
     /// Client StartCrack plays the full dig duration; without Abort the animation keeps going.
-    /// If no crack/continue AuthInput for DigIdleAbortTicks, StopCrack + AbortBreak.
+    /// Idle StopCrack only after the dig window (BreakRequiredTicks) and DigIdleAbortTicks
+    /// without activity — hard blocks (stone-by-hand ~150) exceed DigIdleAbortTicks alone and
+    /// clients often omit PerformBlockActions between sparse crack packets (§27). Aborting
+    /// earlier clears DigAuthorized (and client may AbortBreak on StopCrack) → Resync + no loot.
     /// </summary>
     private void AbortIdleDigIfStale(
         global::Zenith.Player.Player player,
@@ -186,6 +189,13 @@ sealed class BlockSystem : IGameSystem
     {
         if (!player.HasBreakTarget || player.IsDead) return;
         if (clock.CurrentTick < player.LastDigActivityTick) return;
+
+        // Hold dig auth through BreakRequiredTicks even if MarkDigActive never refreshes
+        // (stone-by-hand is ~150 ticks; DigIdleAbortTicks alone is 40).
+        var digWindowEnd = player.BreakStartedTick + (ulong)Math.Max(player.BreakRequiredTicks, 0);
+        if (clock.CurrentTick < digWindowEnd)
+            return;
+
         if (clock.CurrentTick - player.LastDigActivityTick < Player.Player.DigIdleAbortTicks)
             return;
 
@@ -210,7 +220,11 @@ sealed class BlockSystem : IGameSystem
 
         if (!IsWithinReach(player, edit.X, edit.Y, edit.Z))
         {
-            ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+            // DigAuthorized Predict already cleared dig lock — still StopCrack on break reject (§27).
+            if (edit.BlockRuntimeId == World.World.AirRuntimeId)
+                RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
+            else
+                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
             return false;
         }
 
@@ -295,7 +309,7 @@ sealed class BlockSystem : IGameSystem
             var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
             if (previous == World.World.AirRuntimeId)
             {
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                 return false;
             }
 
@@ -311,7 +325,7 @@ sealed class BlockSystem : IGameSystem
                 {
                     player.Session.Context.Logger.Debug(
                         $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                     return false;
                 }
 
@@ -328,7 +342,7 @@ sealed class BlockSystem : IGameSystem
                     {
                         player.Session.Context.Logger.Debug(
                             $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks (min={minElapsed})");
-                        ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                        RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                         return false;
                     }
                 }
@@ -345,7 +359,7 @@ sealed class BlockSystem : IGameSystem
             {
                 player.Session.Context.Logger.Debug(
                     $"Break refused (overlay SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                 return false;
             }
 
@@ -446,6 +460,24 @@ sealed class BlockSystem : IGameSystem
     {
         if (!player.IsInGame) return;
         player.Session.Protocol.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
+    }
+
+    /// <summary>
+    /// DigAuthorized Predict clears the dig lock before tick (chain-break Continue). On reject the
+    /// crack LevelEvent must still Stop — otherwise peers/miner keep cracking while Resync restores
+    /// the block (§27 dig lifecycle).
+    /// </summary>
+    private void RejectBreakToBreaker(
+        global::Zenith.Player.Player player,
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        int x,
+        int y,
+        int z)
+    {
+        BlockCrackFanout.Stop(online, player.Session, x, y, z);
+        if (player.IsBreakTarget(x, y, z))
+            player.AbortBreak();
+        ResyncCellToBreaker(player, x, y, z);
     }
 
     /// <summary>

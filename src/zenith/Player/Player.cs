@@ -138,11 +138,14 @@ class Player
 
     /// <summary>
     /// Last GameClock tick that saw start/crack/continue for the dig target.
-    /// Idle past <see cref="DigIdleAbortTicks"/> → StopCrack (client otherwise plays full duration).
+    /// After <see cref="BreakRequiredTicks"/> + <see cref="DigIdleAbortTicks"/> without activity → StopCrack.
     /// </summary>
     public ulong LastDigActivityTick { get; private set; }
 
-    /// <summary>Ticks without dig AuthInput before aborting crack (~2s @ 20 TPS).</summary>
+    /// <summary>
+    /// Post-dig-window grace without dig AuthInput before aborting crack (~2s @ 20 TPS).
+    /// Idle abort must not fire before <see cref="BreakRequiredTicks"/> elapse (§27).
+    /// </summary>
     public const ulong DigIdleAbortTicks = 40;
 
     /// <summary>Open chest UI (ADR §56) — primary + optional partner; SlotCount 27|54.</summary>
@@ -188,6 +191,8 @@ class Player
         BreakRequiredTicks = 0;
         DigHeldStackId = default;
         LastDigActivityTick = 0;
+        lock (_digLock)
+            _provisionalDig = null;
     }
 
     /// <summary>
