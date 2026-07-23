@@ -81,7 +81,9 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 20. Terrain gen (ADR §63–§67/§71/§72): `world.terrain: flat | noise` applies to overworld Dimension. Noise = **FastNoiseLite** (vendored Auburn MIT) OpenSimplex2 FBm height + **continuous** climate bias (no per-block hash), worm caves, ore, trees, ruins. Join/respawn = `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy. Continuity: adjacent surface |ΔY| ≤ `MaxAdjacentSurfaceStep` (6).
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 22. **Sparse world IO (ADR §45):** base terrain stays RAM on miss (no identical `c:` Put); disk writes are overlays / dirty blobs / inventory / playerdata. Prefer “IO only when state diverges from gen,” not “materialize every column.”
-23. **CreativeContent wire (ADR §31/§52):** one send at join (all modes); remint on every `/gamemode` change (PM-shaped). Survival join + later Creative switch ⇒ two lifetime sends is normal.```
+23. **CreativeContent wire (ADR §31/§52):** one send at join (all modes); remint on every `/gamemode` change (PM-shaped). Survival join + later Creative switch ⇒ two lifetime sends is normal.
+24. **Yes-next after H1:** see [`roadmap.md`](roadmap.md) — default product leaf is small **survival honesty** (Q-throw / drop TTL or death drops) after human smoke on a **fresh** §72 world; §61 Mojang only when import is the goal; smoke-bot `first10` for regression proof.
+```
 
 ### Protocol smoke bot
 
