@@ -784,9 +784,9 @@ Gameplay / `World` talk only to **`IChunkStorage`**. Backends:
 
 **Why:** H1#8 needs a clear native World architecture before BDS. Flat-baked into `World` blocked gen without a storage rewrite. Folder explosion / `Item/` cut still deferred (§55).
 
-**Non-goals:** BDS backend/converter (§61); noise product; `World/Terrain/` subfolders; `Item/` cut; Dimension type; rewriting overlays into subchunks.
+**Non-goals:** BDS backend/converter (§61); noise product; `World/Terrain/` subfolders; `Item/` cut; rewriting overlays into subchunks. (**Dimension type** → shipped as seam in §71 — not multi-dim product.)
 
-**Status (jul 2026):** Shipped — ADR + `WorldStorageKeys` + `ITerrainProvider` / `FlatTerrainProvider`. Product terrain gen → §63.
+**Status (jul 2026):** Shipped — ADR + `WorldStorageKeys` + `ITerrainProvider` / `FlatTerrainProvider`. Product terrain gen → §63. Dimension seam → §71.
 
 ### 63. Noise heightmap terrain (H1#8 product)
 
@@ -926,6 +926,24 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 **Non-goals (next ADR):** `SubChunkRequestModeLimited` + SubChunk handler; `PLAYER_SPAWN` with zero LevelChunks; AvailableCommands / mid-session gamemode UI; client-side gen / full biome JSON authoring.
 
 **Status (jul 2026):** Shipped — config + embedded biomes + `IsSpawning` stream gate.
+
+### 71. Dimension seam + Simplex overworld (PM-inspired)
+
+**Choice:** Introduce a minimal **Dimension** domain type (Serenity/DF-shaped) and attach PM-inspired **Simplex** height/biomes to the overworld generator — without copying Serenity Entity/Feature maps or PM populate-with-adjacents.
+
+1. **`Dimension`** — `Identifier`, `WireId` (= `Packets.DimensionId`), `ITerrainProvider Terrain`. `World` owns default **overworld**; LevelChunk / `ChunkColumnData.DimensionId` come from `World.Overworld.WireId`.
+2. **`SimplexNoise`** leaf under `World/Noise/` (2D + octaves; no NuGet) — PM `Simplex`/`Noise` shape.
+3. **Height** — octaved Simplex × `NoiseHillAmplitude` + biome bias (replaces 8×8 hash lattice).
+4. **Biomes** — temp/rainfall Simplex → lookup mapped onto Ocean/Plains/Desert/Hills/Forest (replaces 48×48 hash cells).
+5. Worms / ores / trees / column pipeline / join contract (§70) unchanged semantically.
+
+**Supersedes:** §62 non-goal “Dimension type” (seam only — not multi-dim product). Clarifies §63–§67 height/biome algorithms.
+
+**Why:** Wire already has DimensionId; gen/storage/spawn must not stay forever glued to an implicit mono-world. Better relief needs real noise, not hash lattices. Serenity proves World→Dimension→Generator; PM Normal proves Simplex climate+height.
+
+**Non-goals:** Nether/End Dimensions; Serenity chunk GC / Entity maps / DimensionFeature; PM `PopulationUtils` 3×3 populate; noise NuGet; rewriting stored `c:` columns.
+
+**Status (jul 2026):** Shipped — Dimension + Simplex overworld + leaf tests.
 
 ## Explicit non-goals (so far)
 

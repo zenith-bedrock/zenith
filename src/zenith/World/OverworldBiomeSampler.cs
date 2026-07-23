@@ -1,6 +1,6 @@
 namespace Zenith.World;
 
-/// <summary>Coarse overworld biomes for noise terrain (ADR §67). IDs match Bedrock network biome ids.</summary>
+/// <summary>Coarse overworld biomes for noise terrain (ADR §67 / §71). IDs match Bedrock network biome ids.</summary>
 enum OverworldBiomeKind
 {
     Ocean = 0,
@@ -11,25 +11,41 @@ enum OverworldBiomeKind
 }
 
 /// <summary>
-/// Deterministic 48×48 biome regions — surface block, height bias, trees, column wire id.
+/// Climate Simplex → biome kind (PocketMine BiomeSelector-shaped lookup, mapped to Zenith's five kinds).
+/// Surface block / trees / height bias stay here; height amplitude lives in <see cref="OverworldTerrainSampler"/>.
 /// </summary>
 static class OverworldBiomeSampler
 {
+    /// <summary>Legacy cell size — kept for tests that scan biome neighborhoods; climate is continuous now.</summary>
     public const int BiomeCellSize = 48;
-
-    private const int BiomeSalt = unchecked((int)0xB10EE001u);
 
     public static OverworldBiomeKind SampleKind(int worldX, int worldZ, int seed)
     {
-        var cellX = FloorDiv(worldX, BiomeCellSize);
-        var cellZ = FloorDiv(worldZ, BiomeCellSize);
-        var h = Hash(cellX, cellZ, seed ^ BiomeSalt);
-        var roll = (int)(h % 100);
-        if (roll < 12) return OverworldBiomeKind.Ocean;
-        if (roll < 24) return OverworldBiomeKind.Desert;
-        if (roll < 44) return OverworldBiomeKind.Forest;
-        if (roll < 58) return OverworldBiomeKind.Hills;
-        return OverworldBiomeKind.Plains;
+        var fields = OverworldNoiseFields.For(seed);
+        // PM: (noise2D normalized + 1) / 2 → [0,1]
+        var temperature = (fields.Temperature.Noise2D(worldX, worldZ, normalized: true) + 1.0) * 0.5;
+        var rainfall = (fields.Rainfall.Noise2D(worldX, worldZ, normalized: true) + 1.0) * 0.5;
+        temperature = Math.Clamp(temperature, 0.0, 1.0);
+        rainfall = Math.Clamp(rainfall, 0.0, 1.0);
+        return Lookup(temperature, rainfall);
+    }
+
+    /// <summary>PM Normal lookup condensed onto Ocean/Plains/Desert/Hills/Forest.</summary>
+    internal static OverworldBiomeKind Lookup(double temperature, double rainfall)
+    {
+        if (rainfall < 0.25)
+            return temperature < 0.85 ? OverworldBiomeKind.Ocean : OverworldBiomeKind.Plains;
+        if (rainfall < 0.60)
+        {
+            if (temperature < 0.25) return OverworldBiomeKind.Hills;
+            if (temperature < 0.75) return OverworldBiomeKind.Plains;
+            return OverworldBiomeKind.Desert;
+        }
+
+        if (rainfall < 0.80)
+            return temperature < 0.25 ? OverworldBiomeKind.Hills : OverworldBiomeKind.Forest;
+
+        return temperature < 0.40 ? OverworldBiomeKind.Hills : OverworldBiomeKind.Ocean;
     }
 
     public static int NetworkId(OverworldBiomeKind kind) => (int)kind;
@@ -81,23 +97,5 @@ static class OverworldBiomeSampler
             OverworldBiomeKind.Hills => mod > 2,
             _ => false,
         };
-    }
-
-    private static int FloorDiv(int value, int divisor)
-    {
-        if (value >= 0) return value / divisor;
-        return (value - (divisor - 1)) / divisor;
-    }
-
-    private static uint Hash(int x, int z, int seed)
-    {
-        unchecked
-        {
-            var h = (uint)seed;
-            h ^= (uint)x * 374761393u;
-            h ^= (uint)z * 668265263u;
-            h = (h ^ (h >> 13)) * 1274126177u;
-            return h;
-        }
     }
 }

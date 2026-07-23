@@ -7,7 +7,7 @@
 | Folder | Role |
 |--------|------|
 | `Gameplay/` | Decide + GameLoop / systems |
-| `World/` | Terrain, Blocks, palettes, chests, floor drops |
+| `World/` | Terrain, Dimension, Blocks, palettes, chests, floor drops |
 | `Geometry/` | AABB / spatial math pura (sem World/Player) |
 | `Player/` | Player, intents, inventory, manager |
 | `Server/` | Boot, config, identity, context |

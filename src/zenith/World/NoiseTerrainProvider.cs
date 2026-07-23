@@ -1,6 +1,6 @@
 namespace Zenith.World;
 
-/// <summary>Deterministic overworld — biomes, hills, water, caves, trees, ruins, ore (ADR §63–§69).</summary>
+/// <summary>Deterministic overworld — Simplex height/biomes, caves, trees, ruins, ore (ADR §63–§71).</summary>
 sealed class NoiseTerrainProvider : ITerrainProvider
 {
     private readonly int _seed;
