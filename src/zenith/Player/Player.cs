@@ -515,7 +515,8 @@ class Player
     public void SetGameMode(GameMode mode) => GameMode = mode;
 
     /// <summary>
-    /// Marks dead on the GameLoop. No-op if already dead. Inventory untouched (§40).
+    /// Marks dead on the GameLoop. No-op if already dead.
+    /// Survival death loot is applied by the caller before this (§73); inventory may already be empty.
     /// </summary>
     public bool BeginDeath(string cause = "generic")
     {

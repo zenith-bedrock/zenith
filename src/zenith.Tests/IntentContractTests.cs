@@ -143,7 +143,7 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void MovementSystem_void_triggers_death_not_soft_rescue()
+    public void MovementSystem_void_triggers_death_and_dumps_survival_inventory()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("faller");
@@ -164,11 +164,12 @@ public class IntentContractTests
         Assert.Equal(3.5f, player.PositionX);
         Assert.Equal(MovementSystem.VoidRescueY - 1f, player.PositionY);
         Assert.Equal(4.5f, player.PositionZ);
-        Assert.Equal(5, player.Inventory.Get(0).Count);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+        Assert.True(fx.World.FloorDrops.Count >= 1);
     }
 
     [Fact]
-    public void MovementSystem_respawn_restores_spawn_and_keeps_inventory()
+    public void MovementSystem_respawn_restores_spawn_with_empty_bag_after_death_loot()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("faller");
@@ -182,6 +183,7 @@ public class IntentContractTests
         var movement = new MovementSystem(fx.Players);
         movement.Tick(fx.Clock);
         Assert.True(player.IsDead);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
 
         player.SubmitRespawn();
         movement.Tick(fx.Clock);
@@ -192,8 +194,28 @@ public class IntentContractTests
         Assert.Equal(Blocks.FlatSpawnY, player.PositionY);
         Assert.Equal(0f, player.PositionZ);
         Assert.Equal(0f, player.Pitch);
-        Assert.Equal(Blocks.Dirt, player.Inventory.GetStackId(0).Value);
-        Assert.Equal(7, player.Inventory.Get(0).Count);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+        Assert.True(fx.World.FloorDrops.Count >= 1);
+    }
+
+    [Fact]
+    public void MovementSystem_void_death_creative_keeps_inventory()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creativefall", GameMode.Creative);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 3.5f,
+            y: MovementSystem.VoidRescueY - 1f,
+            z: 4.5f,
+            pitch: 10f,
+            yaw: 20f));
+
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+
+        Assert.True(player.IsDead);
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+        Assert.Equal(0, fx.World.FloorDrops.Count);
     }
 
     [Fact]
@@ -1573,10 +1595,11 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void InventorySystem_drop_clears_slot()
+    public void InventorySystem_drop_deposits_floor_entity()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("dropper");
+        StandNear(player, 2, 64, 2);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 10));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(3, [
@@ -1585,6 +1608,10 @@ public class IntentContractTests
         fx.CreateInventorySystem().Tick(fx.Clock);
 
         Assert.Equal(6, player.Inventory.Get(0).Count);
+        Assert.Equal(1, fx.World.FloorDrops.Count);
+        Assert.True(fx.World.FloorDrops.TryTake(2, 64, 2, out var id, out var count, out _));
+        Assert.Equal(StackId.FromBlock(Blocks.Stone), id);
+        Assert.Equal(4, count);
     }
 
     [Fact]
@@ -1980,6 +2007,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.Result.IsEmpty);
         Assert.True(player.Inventory.Cursor.IsEmpty);
         Assert.True(player.Inventory.Get(0).IsEmpty);
+        Assert.Equal(1, fx.World.FloorDrops.Count);
     }
 
     [Fact]
