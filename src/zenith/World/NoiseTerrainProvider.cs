@@ -1,6 +1,6 @@
 namespace Zenith.World;
 
-/// <summary>Deterministic overworld — Simplex height/biomes, caves, trees, ruins, ore (ADR §63–§71).</summary>
+/// <summary>Deterministic overworld — FastNoiseLite height/biomes, caves, trees, ruins, ore (ADR §63–§72).</summary>
 sealed class NoiseTerrainProvider : ITerrainProvider
 {
     private readonly int _seed;
@@ -9,7 +9,7 @@ sealed class NoiseTerrainProvider : ITerrainProvider
 
     public TerrainColumn GetBaseColumn(int chunkX, int chunkZ)
     {
-        var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, _seed);
+        using var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, _seed);
         var (subChunkCount, payload) = ChunkPayloads.BuildNoiseOverworldColumn(chunkX, chunkZ, _seed, caves);
         return new TerrainColumn(subChunkCount, payload);
     }

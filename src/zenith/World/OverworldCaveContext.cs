@@ -1,10 +1,13 @@
+using System.Buffers;
+
 namespace Zenith.World;
 
 /// <summary>
-/// Precomputed worm segments for a column neighborhood (ADR §65 / §69).
+/// Precomputed worm segments for a column neighborhood (ADR §65 / §69 / §75).
 /// Built once per noise column; XZ spatial grid for O(nearby) carve tests.
+/// Dispose returns pooled segment/index buffers (column path must <c>using</c>).
 /// </summary>
-readonly struct OverworldCaveContext
+sealed class OverworldCaveContext : IDisposable
 {
     internal const int CellSize = 8;
     internal const int NeighborhoodChunks = 3;
@@ -12,48 +15,67 @@ readonly struct OverworldCaveContext
     internal const int Grid = NeighborhoodBlocks / CellSize; // 6
     internal const int BucketCount = Grid * Grid;
 
-    private readonly CaveSegment[] _segments;
-    private readonly int _originX;
-    private readonly int _originZ;
-    /// <summary>CSR: length <see cref="BucketCount"/> + 1.</summary>
-    private readonly int[] _bucketOffsets;
-    private readonly int[] _bucketIndices;
+    [ThreadStatic] private static List<CaveSegment>? t_scratch;
 
-    private OverworldCaveContext(
-        CaveSegment[] segments,
-        int originX,
-        int originZ,
-        int[] bucketOffsets,
-        int[] bucketIndices)
+    private CaveSegment[] _segments = Array.Empty<CaveSegment>();
+    private int _segmentCount;
+    private int[] _bucketOffsets = EmptyOffsets;
+    private int[] _bucketIndices = Array.Empty<int>();
+    private int _indexCount;
+    private int _originX;
+    private int _originZ;
+    private bool _disposed;
+
+    private static readonly int[] EmptyOffsets = CreateEmptyOffsets();
+
+    private static int[] CreateEmptyOffsets()
     {
-        _segments = segments;
-        _originX = originX;
-        _originZ = originZ;
-        _bucketOffsets = bucketOffsets;
-        _bucketIndices = bucketIndices;
+        var o = new int[BucketCount + 1];
+        return o;
     }
+
+    private OverworldCaveContext() { }
 
     public static OverworldCaveContext ForColumn(int chunkX, int chunkZ, int seed)
     {
-        var list = new List<CaveSegment>(4096);
+        var ctx = new OverworldCaveContext();
+        ctx.Build(chunkX, chunkZ, seed);
+        return ctx;
+    }
+
+    private void Build(int chunkX, int chunkZ, int seed)
+    {
+        var list = t_scratch ??= new List<CaveSegment>(512);
+        list.Clear();
         for (var dcx = -1; dcx <= 1; dcx++)
         {
             for (var dcz = -1; dcz <= 1; dcz++)
                 OverworldCaveCarver.CollectSegments(chunkX + dcx, chunkZ + dcz, seed, list);
         }
 
-        var segments = list.Count == 0 ? Array.Empty<CaveSegment>() : list.ToArray();
-        var originX = (chunkX - 1) * 16;
-        var originZ = (chunkZ - 1) * 16;
-        BuildSpatialIndex(segments, originX, originZ, out var offsets, out var indices);
-        return new OverworldCaveContext(segments, originX, originZ, offsets, indices);
+        _segmentCount = list.Count;
+        if (_segmentCount == 0)
+        {
+            _segments = Array.Empty<CaveSegment>();
+        }
+        else
+        {
+            _segments = ArrayPool<CaveSegment>.Shared.Rent(_segmentCount);
+            list.CopyTo(0, _segments, 0, _segmentCount);
+        }
+
+        _originX = (chunkX - 1) * 16;
+        _originZ = (chunkZ - 1) * 16;
+        _bucketOffsets = new int[BucketCount + 1];
+        BuildSpatialIndex();
     }
 
     /// <summary>Worm segment count in the 3×3 neighborhood (bench / diagnostics).</summary>
-    public int SegmentCount => _segments.Length;
+    public int SegmentCount => _segmentCount;
 
     public bool IsCarved(int worldX, int worldY, int worldZ, int surfaceY)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (worldY <= Blocks.FlatMinY + 1 || worldY >= surfaceY - OverworldCaveCarver.SurfaceGuardDepth)
             return false;
 
@@ -75,16 +97,39 @@ readonly struct OverworldCaveContext
     /// <summary>Linear scan — tests only (ADR §69 spatial must match).</summary>
     internal bool IsCarvedBruteForce(int worldX, int worldY, int worldZ, int surfaceY)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (worldY <= Blocks.FlatMinY + 1 || worldY >= surfaceY - OverworldCaveCarver.SurfaceGuardDepth)
             return false;
 
-        for (var i = 0; i < _segments.Length; i++)
+        for (var i = 0; i < _segmentCount; i++)
         {
             if (_segments[i].Contains(worldX, worldY, worldZ))
                 return true;
         }
 
         return false;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_segmentCount > 0 && _segments.Length > 0)
+        {
+            ArrayPool<CaveSegment>.Shared.Return(_segments, clearArray: false);
+            _segments = Array.Empty<CaveSegment>();
+            _segmentCount = 0;
+        }
+
+        if (_indexCount > 0 && _bucketIndices.Length > 0)
+        {
+            ArrayPool<int>.Shared.Return(_bucketIndices, clearArray: false);
+            _bucketIndices = Array.Empty<int>();
+            _indexCount = 0;
+        }
+
+        _bucketOffsets = EmptyOffsets;
     }
 
     private int BucketIndex(int worldX, int worldZ)
@@ -96,32 +141,33 @@ readonly struct OverworldCaveContext
         return (lz / CellSize) * Grid + (lx / CellSize);
     }
 
-    private static void BuildSpatialIndex(
-        CaveSegment[] segments,
-        int originX,
-        int originZ,
-        out int[] offsets,
-        out int[] indices)
+    private void BuildSpatialIndex()
     {
         Span<int> counts = stackalloc int[BucketCount];
         counts.Clear();
-        for (var i = 0; i < segments.Length; i++)
-            AccumulateBuckets(segments[i], originX, originZ, counts);
+        for (var i = 0; i < _segmentCount; i++)
+            AccumulateBuckets(in _segments[i], _originX, _originZ, counts);
 
-        offsets = new int[BucketCount + 1];
         var total = 0;
         for (var b = 0; b < BucketCount; b++)
         {
-            offsets[b] = total;
+            _bucketOffsets[b] = total;
             total += counts[b];
         }
 
-        offsets[BucketCount] = total;
-        indices = total == 0 ? Array.Empty<int>() : new int[total];
+        _bucketOffsets[BucketCount] = total;
+        _indexCount = total;
+        if (total == 0)
+        {
+            _bucketIndices = Array.Empty<int>();
+            return;
+        }
+
+        _bucketIndices = ArrayPool<int>.Shared.Rent(total);
         counts.Clear();
 
-        for (var i = 0; i < segments.Length; i++)
-            ScatterBuckets(segments[i], originX, originZ, i, offsets, counts, indices);
+        for (var i = 0; i < _segmentCount; i++)
+            ScatterBuckets(in _segments[i], _originX, _originZ, i, _bucketOffsets, counts, _bucketIndices);
     }
 
     private static void AccumulateBuckets(in CaveSegment seg, int originX, int originZ, Span<int> counts)

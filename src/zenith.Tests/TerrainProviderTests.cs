@@ -303,7 +303,7 @@ public class TerrainProviderTests
                 Assert.True(featureMax >= canopyTop,
                     $"neighbor featureMaxY {featureMax} < canopy {canopyTop} at trunk ({x},{z})");
 
-                var caves = OverworldCaveContext.ForColumn(neighborChunkX, neighborChunkZ, seed);
+                using var caves = OverworldCaveContext.ForColumn(neighborChunkX, neighborChunkZ, seed);
                 var col = ChunkPayloads.BuildNoiseOverworldColumn(neighborChunkX, neighborChunkZ, seed, caves);
                 // Section index must reach canopyTop (OverworldMinSubChunkIndex = -4).
                 var sectionForCanopy = (canopyTop >> 4) - (-4);
