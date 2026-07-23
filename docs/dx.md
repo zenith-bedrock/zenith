@@ -140,6 +140,17 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reco
 
 Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
 
+**How to use refs when implementing a leaf (later checklist):**
+
+| Source | Prefer for | Avoid copying |
+|--------|------------|----------------|
+| **Dragonfly** | Minimal / “essentials-only” shapes (break timing, session send, world seams) — good default cross-check | Treating DF as a full SMP product checklist |
+| **PocketMine issues + changelogs** | What actually bites operators: tiny wire/DX gaps that look “bobo” but matter (recipe unregister, creative remint, dig edge cases, …) | PM’s “override everything” plugin surface (block/entity/item/tile god-hooks) as Zenith architecture |
+| **PocketMine 5/6 command API** | Study typed `execute*(sender, …)` / arg-binding **ideas** when `/` framework is unfrozen | Shipping a command framework now (still freeze — single `/gamemode` is §52) |
+| **Serenity / Endstone** | Protocol envelopes, Dimension-ish packaging | ECS/traits stacks or plugin loaders |
+
+Before a product leaf: skim DF for the smallest honest path, then skim **open/closed PM issues** for that feature area so Zenith does not rediscover softcore footguns. Still: decide≠transmit≠serialize; no `Network/` revival; no plugin API until domains force an ADR.
+
 ### Bedrock protocol docs (official)
 
 Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/bedrock-protocol-docs) branch **`r/26_u4`** → typically `~/Development/references/bedrock/bedrock-protocol-docs/`.

@@ -27,6 +27,8 @@ PocketMine is the reference **community** Bedrock (and historically PE) server: 
 
 Philosophically: PM optimizes for **extend everything now**. Zenith optimizes for **layers that stay honest** while the protocol surface is still being finished. When Zenith opens extension points, they should sit on Gameplay — not on raw packet listeners.
 
+**Later (not now):** when pulling a leaf, use Dragonfly as the “essentials” cross-check and PocketMine **issue tracker / changelogs** as a catalog of operator footguns (recipe unregister, overrides everywhere, command DX, …). Steal *symptoms and edge cases*, not PM’s plugin override model or a typed command framework ahead of the freeze. Workflow table: [`dx.md`](dx.md) “How to use refs when implementing a leaf”.
+
 ## Vs Nukkit-family (Java)
 
 Similar story to PM: JVM servers with plugin ecosystems, solid for communities that already live in Java.
