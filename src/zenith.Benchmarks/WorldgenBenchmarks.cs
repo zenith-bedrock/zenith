@@ -67,7 +67,8 @@ public class WorldgenColumnBenchmarks
     public int Noise_CaveContextOnly()
     {
         var x = _chunkCursor++;
-        return OverworldCaveContext.ForColumn(x, 0, Seed).SegmentCount;
+        using var ctx = OverworldCaveContext.ForColumn(x, 0, Seed);
+        return ctx.SegmentCount;
     }
 
     /// <summary>Wire encode of a pre-built flat LevelChunk.</summary>

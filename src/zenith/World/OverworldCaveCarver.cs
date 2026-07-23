@@ -17,8 +17,10 @@ static class OverworldCaveCarver
     private const int MaxWormLength = 128;
 
     public static bool IsCarved(int worldX, int worldY, int worldZ, int seed, int surfaceY)
-        => OverworldCaveContext.ForColumn(FloorDiv(worldX, 16), FloorDiv(worldZ, 16), seed)
-            .IsCarved(worldX, worldY, worldZ, surfaceY);
+    {
+        using var ctx = OverworldCaveContext.ForColumn(FloorDiv(worldX, 16), FloorDiv(worldZ, 16), seed);
+        return ctx.IsCarved(worldX, worldY, worldZ, surfaceY);
+    }
 
     internal static void CollectSegments(int chunkX, int chunkZ, int seed, List<CaveSegment> into)
     {

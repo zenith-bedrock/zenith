@@ -34,20 +34,33 @@ public class CaveCarverTests
         const int chunkX = 3;
         const int chunkZ = -2;
         var ctx = OverworldCaveContext.ForColumn(chunkX, chunkZ, seed);
-
-        for (var x = chunkX * 16; x < chunkX * 16 + 16; x++)
+        try
         {
-            for (var z = chunkZ * 16; z < chunkZ * 16 + 16; z++)
+            for (var x = chunkX * 16; x < chunkX * 16 + 16; x++)
             {
-                for (var y = 8; y < 48; y++)
+                for (var z = chunkZ * 16; z < chunkZ * 16 + 16; z++)
                 {
-                    var surface = OverworldTerrainSampler.SurfaceY(x, z, seed);
-                    Assert.Equal(
-                        ctx.IsCarvedBruteForce(x, y, z, surface),
-                        ctx.IsCarved(x, y, z, surface));
+                    for (var y = 8; y < 48; y++)
+                    {
+                        var surface = OverworldTerrainSampler.SurfaceY(x, z, seed);
+                        Assert.Equal(
+                            ctx.IsCarvedBruteForce(x, y, z, surface),
+                            ctx.IsCarved(x, y, z, surface));
+                    }
                 }
             }
         }
+        finally
+        {
+            ctx.Dispose();
+        }
+    }
+
+    [Fact]
+    public void Cave_context_for_column_has_segments_and_disposes()
+    {
+        using var ctx = OverworldCaveContext.ForColumn(0, 0, seed: 42);
+        Assert.True(ctx.SegmentCount > 0);
     }
 
     [Fact]
