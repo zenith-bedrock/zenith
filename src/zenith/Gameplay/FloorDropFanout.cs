@@ -57,7 +57,7 @@ static class FloorDropFanout
 
     /// <summary>
     /// Survival death loot: craft UI + bag + cursor → floor near death pose.
-    /// Creative = keepInventory (no-op). SoftCap may void remainder after clear.
+    /// Creative = keepInventory (no-op). SoftCap refuse keeps the slot (§74).
     /// </summary>
     public static void DumpOnDeath(
         World.World world,
@@ -92,16 +92,15 @@ static class FloorDropFanout
         {
             var slot = player.CraftUi.GetGrid(g);
             if (slot.IsEmpty) continue;
-            DepositOrVoid(world, players, online, player, ox, oy, oz, slot.Id, slot.Count);
+            if (!TryDepositDeath(world, players, online, player, ox, oy, oz, slot.Id, slot.Count))
+                continue;
             _ = player.CraftUi.TrySetGrid(g, InventorySlot.Empty);
         }
 
         var result = player.CraftUi.Result;
-        if (!result.IsEmpty)
-        {
-            DepositOrVoid(world, players, online, player, ox, oy, oz, result.Id, result.Count);
+        if (!result.IsEmpty &&
+            TryDepositDeath(world, players, online, player, ox, oy, oz, result.Id, result.Count))
             _ = player.CraftUi.TrySetResult(InventorySlot.Empty);
-        }
     }
 
     private static void DumpMainInventory(
@@ -117,19 +116,18 @@ static class FloorDropFanout
         {
             var slot = player.Inventory.Get(i);
             if (slot.IsEmpty) continue;
-            DepositOrVoid(world, players, online, player, ox, oy, oz, slot.Id, slot.Count);
+            if (!TryDepositDeath(world, players, online, player, ox, oy, oz, slot.Id, slot.Count))
+                continue;
             _ = player.Inventory.TrySet(i, StackId.FromBlock(Blocks.Air), 0);
         }
 
         var cursor = player.Inventory.Cursor;
-        if (!cursor.IsEmpty)
-        {
-            DepositOrVoid(world, players, online, player, ox, oy, oz, cursor.Id, cursor.Count);
+        if (!cursor.IsEmpty &&
+            TryDepositDeath(world, players, online, player, ox, oy, oz, cursor.Id, cursor.Count))
             _ = player.Inventory.TrySet(PlayerInventory.CursorSlot, StackId.FromBlock(Blocks.Air), 0);
-        }
     }
 
-    private static void DepositOrVoid(
+    private static bool TryDepositDeath(
         World.World world,
         PlayerManager players,
         IReadOnlyList<Player.Player> online,
@@ -141,10 +139,11 @@ static class FloorDropFanout
         int count)
     {
         if (TryDeposit(world, players, online, ox, oy, oz, id, count, PlayerThrowPickupDelay))
-            return;
+            return true;
 
         player.Session.Context.Logger.Debug(
-            $"Death loot SoftCap void for {player.Username}: {id} x{count}");
+            $"Death loot SoftCap keep for {player.Username}: {id} x{count}");
+        return false;
     }
 
     public static void Publish(

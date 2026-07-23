@@ -275,7 +275,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Instant survival break was an authority hole after AuthInput destroy landed (§15 adendo). Restarting crack on every continue made the animation complete while the server still rejected `predict_destroy`. Live dig + Continue retarget before tick rejected the queued destroy → client ghost + peer desync.
 
-**Deferred:** Efficiency enchant, haste/water/airborne dig modifiers, wrong-tool no-drop loot policy, gold/netherite/copper tools, tool crafting recipes, durability.
+**Deferred:** Efficiency enchant, haste/water/airborne dig modifiers, gold/netherite/copper tools, tool crafting recipes, durability. **Wrong-tool no-drop → §74.**
 
 **Adendo (jul 2026 — crack vs dig gate):** Truncating `65535/ticks` alone was not enough when the client sends `predict_destroy` on the last mining tick (`elapsed == need-1` vs DigStartedTick from AuthInput start). Gate now accepts `elapsed >= need-1` (need&gt;1). `CrackEventData` still truncates like PM `(int)(65535/ticks)` / DF and **guarantees** `floor(65535/data) >= need` so Round-style overshoot cannot finish the crack UI early.
 
@@ -324,7 +324,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 2. Every joiner gets that single mode from config: `Player.GameMode` plus both `StartGamePacket.GameMode` (PlayerGameMode) and `GameType` (WorldGameMode) from the same config value. Runtime Survival↔Creative is §52 (`/gamemode`); Adventure/Spectator still out.
 3. Creative join: empty hotbar (client Creative UI supplies items). Survival: existing starter seed.
 4. `CreativeContentPacket` after `ItemRegistry`, before CraftingData / BiomeDefinitionList — short list from `CreativeCatalog`. Do **not** parse `creative_items.json` (`block_state_b64`). Sent on **every** join regardless of Survival/Creative (catalog seed; UI gated by gamemode — same as PM/DF/Serenity).
-5. `BlockSystem.ApplyEdit` branches: Creative place skips `TryConsumeOne`; Creative break skips timing + inventory/floor loot (still clears chest store). Survival path unchanged.
+5. `BlockSystem.ApplyEdit` branches: Creative place skips `TryConsumeOne`; Creative break skips timing + **block** inventory/floor loot (still clears chest store). **Chest contents → floor even in Creative (§74)** — never silent void of `ct:`. Survival path unchanged until §74 loot gate.
 
 **Why:** LAN feedback needs Creative UI + infinite place/break without inventing entity wire or admin commands. Uniform config mode is the only source of truth while `/` stays frozen.
 
@@ -978,9 +978,23 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 
 **Clarifies:** §26 Deferred Q-throw; §40 “inventory unchanged on death.”
 
-**Non-goals:** Gravity/despawn TTL; LevelDB persist of drops; XP orbs; damage pipeline deaths beyond void; always-floor-on-break (vanilla bag-first stays).
+**Non-goals:** Gravity/despawn TTL; LevelDB persist of drops; XP orbs; damage pipeline deaths beyond void; always-floor-on-break (vanilla bag-first stays). SoftCap refuse on death → keep slot (§74).
 
 **Status (jul 2026):** Shipped — Fanout + TryDrop + death dump + leaf tests.
+
+### 74. Dig/chest honesty — wrong-tool no-drop + Creative chest dump
+
+**Choice:** Close the two LAN “looks like a bug” gaps left after §73 without opening vitals/TTL/Destroy.
+
+1. **Wrong-tool no-drop** — Survival break still removes the cell when dig auth passes. If `DigProfiles.RequiresCorrectToolForDrops` and `!BreakDuration.IsHarvestable(held)`, skip bag/floor for the **broken block rid**. Soft blocks / chest block item still drop with empty hand. Chest **contents** dump unchanged.
+2. **Creative chest contents** — InstantBuild still skips dropping the chest **block**. `RemoveAndDump` contents always go to `FloorDropFanout` (Creative does not TryAdd to bag). Clarifies §31 “clears chest store” ≠ void.
+3. **Death SoftCap** — `DumpOnDeath` clears a slot only after successful floor deposit; SoftCap refuse keeps the stack in bag (Debug). Break SoftCap-after-air remains documented nit (no rollback this ADR).
+
+**Clarifies:** §27 Deferred wrong-tool loot; §31 Creative break; §73 SoftCap death void.
+
+**Non-goals:** Vanilla loot tables (cobble from stone); tool durability; Creative Destroy ISR; floor despawn TTL; break SoftCap world rollback.
+
+**Status (jul 2026):** Shipped — loot gate + Creative chest dump + death SoftCap keep + leaf tests.
 
 ## Explicit non-goals (so far)
 
