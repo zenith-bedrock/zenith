@@ -108,8 +108,8 @@ partial class InGameSessionHandler
     {
         if (!player.HasBreakTarget) return;
 
-        // Client sets PerformBlockActions while holding mine; avoids StopCrack between sparse crack_break packets.
-        if (packet.InputPerformBlockActions)
+        // Holding mine often sets MissedSwing and/or PerformBlockActions; crack_break can be sparse.
+        if (packet.InputMissedSwing || packet.InputPerformBlockActions)
             player.MarkDigActive(tick);
 
         foreach (var action in packet.BlockActions)
@@ -226,7 +226,8 @@ partial class InGameSessionHandler
             need > 0)
         {
             intent = BlockEditIntent.BreakWithDig(x, y, z, started, need);
-            // Clear dig lock + cancel pending Start — StopCrack stays for ApplyEdit success (§27).
+            // Clear dig lock + cancel pending Start so same-AuthInput Continue can retarget (§27).
+            // ApplyEdit must StopCrack on success AND reject — lock is already gone here.
             player.ClearBreakTarget();
             player.CancelPendingDigStart(x, y, z);
         }

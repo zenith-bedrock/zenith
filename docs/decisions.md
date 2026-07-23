@@ -285,6 +285,10 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Adendo (jul 2026 — crack flicker fix):** `DigIdleAbortTicks` was 10 (0.5s) — too short when clients send sparse `crack_break` while holding mine. Now **40** (~2s) + refresh `LastDigActivityTick` when AuthInput **`PerformBlockActions`** flag is set or any block action targets the current break cell. Stops crack only when the client stops reporting block interaction, not between progress packets.
 
+**Adendo (jul 2026 — dig idle vs BreakRequiredTicks):** Hand-mining stone needs ~**150** ticks — still &gt; `DigIdleAbortTicks` (40). Clients often leave `PerformBlockActions` unset between sparse crack packets, so activity never refreshes; idle `StopCrack` + client `AbortBreak` cleared dig auth mid-swing → Predict rejected → `ResyncCell` + no floor loot. Soft blocks (dirt/grass) finish inside the idle window. `AbortIdleDigIfStale` now waits until `BreakStartedTick + BreakRequiredTicks` before applying the idle grace; `AbortBreak` also clears provisional dig auth. Activity refresh also uses AuthInput **MissedSwing** while `HasBreakTarget`. **Tradeoff:** abandon mid-hard-dig without `AbortBreak` may leave peer crack until dig window ends.
+
+**Adendo (jul 2026 — dig lifecycle reject StopCrack):** DigAuthorized Predict still `ClearBreakTarget` + `CancelPendingDigStart` before tick (chain-break Continue). That left **zombie crack** when `ApplyEdit` rejected (early / no-auth / SoftCap / reach): Resync restored the block while LevelEvent 3600 kept playing. `RejectBreakToBreaker` = `StopCrack` + optional `AbortBreak` + `ResyncCell`. Same-tick Start+Predict with `need&gt;1` still rejects (`elapsed==0`); tests must not backdate the clock to hide that.
+
 ### 28. Chests — RAM store + ISR container 7 (MVP)
 
 **Choice:** Ship the §19 sketch minimally:
