@@ -290,13 +290,18 @@ static class Blocks
     public static int BreakTicks(int blockRuntimeId, StackId held) =>
         BreakDuration.BreakTicks(blockRuntimeId, held);
 
-    /// <summary>LevelEvent BLOCK_START_BREAK data — progress per tick scaled to <see cref="CrackProgressMax"/>.</summary>
+    /// <summary>
+    /// LevelEvent BLOCK_START_BREAK / UPDATE data — progress added per game tick toward
+    /// <see cref="CrackProgressMax"/>. Must be <c>65535 / breakTicks</c> (truncating), matching
+    /// PocketMine/Dragonfly: the client finishes when cumulative progress reaches 65535 via
+    /// integer steps; <c>Round</c> overshoots and ends the crack one tick early for many durations.
+    /// </summary>
     public const int CrackProgressMax = 65535;
 
     public static int CrackEventData(int breakTicks)
     {
         if (breakTicks <= 0) return CrackProgressMax;
-        return Math.Max(1, (int)Math.Round(CrackProgressMax / (double)breakTicks));
+        return Math.Max(1, CrackProgressMax / breakTicks);
     }
 
     public static void EnsureLoaded()
