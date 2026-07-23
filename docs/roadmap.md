@@ -16,33 +16,47 @@ Tagged **v0.0.1-alpha** (Jul 2026). `main` and `develop` both at the release tip
 
 ---
 
-## Horizon 1 — After alpha: honesty gaps (suggested order)
+## Horizon 1 — Honesty gaps — **closed** (Zenith leaf)
 
-Do these **as separate ADRs + PRs**. Earlier items unblock later ones.
+Do these **as separate ADRs + PRs**. Earlier items unblock later ones. **All rows below are shipped on `develop`** (Jul 2026). Mojang import (§61) is **not** part of this horizon’s Zenith-native leaf — see [Yes-next](#yes-next-after-h1).
 
 | Order | Leaf | Notes |
 |------:|------|--------|
-| 1 | **Drop-entity wire** (minimal) | **Shipped** (Jul 2026): `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
-| 2 | **Death / Respawn** | **Shipped** (Jul 2026): void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
-| 2b | **Block/item registry honesty** | **Shipped** (Jul 2026): palette reverse `runtimeId→name` + `Blocks.IsPlaceable` allowlist (§12 adendo). Before `/gamemode`. |
-| 3 | **`/gamemode` minimal** | **Shipped** (Jul 2026): chat parse → intent → `GameModeSystem` + SetPlayerGameType/abilities/CreativeContent remint (§52). Not a command framework. |
-| 4 | **Tool dig speed / efficiency** | **Shipped** (Jul 2026): DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
+| 1 | **Drop-entity wire** (minimal) | **Shipped:** `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
+| 2 | **Death / Respawn** | **Shipped:** void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
+| 2b | **Block/item registry honesty** | **Shipped:** palette reverse `runtimeId→name` + `Blocks.IsPlaceable` allowlist (§12 adendo). |
+| 3 | **`/gamemode` minimal** | **Shipped:** CommandRequest/chat → intent → `GameModeSystem` + remint CreativeContent (§52). Not a command framework. |
+| 4 | **Tool dig speed / efficiency** | **Shipped:** DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | **Shipped** in `v0.0.2-alpha` (ADR §56) — pair + 54 UI + 2×`ct:`. |
-| 6 | **Block gravity** (sand/gravel) | **Shipped** (Jul 2026): `GravitySystem` + `GravityPendingStore`; discrete UpdateBlock falls (ADR §57). No falling_block actor. |
-| 7 | **Playerdata reconnect** (`pd:`) | **Shipped** (Jul 2026): pose + GameMode in world LevelDB (ADR §60). No `players/` volume. |
-| 8 | **World beyond flat** | **§62–§67 (shipped):** `ITerrainProvider`, noise overworld + biomes + caves + ore. **§61 later:** Mojang seam. |
+| 6 | **Block gravity** (sand/gravel) | **Shipped:** `GravitySystem` + `GravityPendingStore` (ADR §57). No falling_block actor. |
+| 7 | **Playerdata reconnect** (`pd:`) | **Shipped:** pose + GameMode in world LevelDB (ADR §60). No `players/` volume. |
+| 8 | **World beyond flat** | **Shipped (Zenith leaf):** §62–§67 provider/noise/biomes/caves/ore; §70 join terrain; §71 Dimension seam; §72 FastNoiseLite + anti-pillar height. **§61 Mojang seam = later** (not blocking H1 close). |
 
-If two contributors pick from this list, prefer **different rows**, not both building command infrastructure.
+If two contributors pick work, prefer **different** [Yes-next](#yes-next-after-h1) rows — not both building command/plugin infrastructure.
 
-**Platform health (not H1 product):** cross-thread dig/UI, Online-once, send/tick GC, handler split, DX cleanup — see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. Do not file those as Horizon‑1 rows. **Delivery risks (hard):** dirty&gt;remote, SoftCap honesty, leaf CI vs missing Bedrock E2E — recorded in that debt doc; do not soft-pedal.
+**Platform health (not H1 product):** see [`robustness-dx-debt.md`](robustness-dx-debt.md) and ADR §54. **Delivery risks (hard):** dirty&gt;remote, SoftCap honesty, leaf CI vs missing Bedrock E2E.
 
-**Foundation (not an H1 product row):** block/item **StackId + DigProfiles** (ADR §55) — **Shipped** (`3649391`, Jul 2026). Structural honesty so later leaves do not rewrite inventory identity.
+**Foundation:** StackId + DigProfiles (ADR §55) — shipped. **Join wire fidelity** (ADR §59) — shipped in `v0.0.2-alpha`.
 
-**Join wire fidelity (ADR §59):** Session-owned `ClientProfile` + full join skin; `/gamemode` peer RefreshPeerView; server-authored LevelSound on place/break/hit — **shipped** in `v0.0.2-alpha`.
+**Release tag `v0.0.2-alpha`:** closed H1 rows 1–5 + §55/§56/§59. Post-tag on `develop`: gravity (§57), playerdata (§60), world seams (§62–§72). Dual-storage **direction** is §61 (not shipped).
 
-**Release tag `v0.0.2-alpha`:** closes H1 rows 1–5 + §55/§56/§59 on `main`/`develop`. Notes: [`release-notes-template.md`](release-notes-template.md). Gravity (§57) + playerdata (§60) + dual-storage (§61) + World seams (§62–§67) on develop after the tag. **Next product code:** §61 Mojang spike when needed.
+**Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo**. Human Gate A remains the product smoke authority for tags.
 
-**Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo** (no JS in the C# tree). Human Gate A remains the product smoke authority for tags.
+---
+
+## Yes-next (after H1)
+
+Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSystem, hunger/damage completo, or Serenity traits/ECS without ADR + demonstrated need (see Horizon 2).
+
+| Priority | Leaf | Notes |
+|------:|------|--------|
+| 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Process gate before more gen ADRs. |
+| 1 | **Survival honesty (small)** | **Recommended next product code:** Q-throw and/or floor-drop despawn TTL, **or** death drops (inventory currently kept on void death). One ADR + one PR. Unlocks LAN “prova de fogo” without Mojang import. |
+| 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. |
+| 3 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
+| 4 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
+
+**Default stance:** priority **0 → 1** (smoke gen, then survival leaf). §61 is opt-in adoption work, not the default “next.”
 
 ---
 
@@ -59,6 +73,7 @@ Pull only with ADR + demonstrated need:
 - Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21)
 - `/` command **framework** + Bedrock autocomplete
 - Automating protocol schema CI / full load harness
+- Nether/End Dimensions; custom biome authoring; FormId product UI
 
 ---
 
@@ -68,11 +83,11 @@ Pull only with ADR + demonstrated need:
 |---------------|----------------|---------------|
 | Plugins tomorrow, ops mature | **PocketMine / Nukkit** | Intentional freeze until domains stable ([`comparison.md`](comparison.md)) |
 | Vanilla fidelity, zero source | **BDS** | We own transport + tick; not Realms clone |
-| “Works like PM for survival SMP” | Wait / other stack | Missing entities, death, tools, gen, redstone, … by years |
+| “Works like PM for survival SMP” | Wait / other stack | Missing mobs, redstone, full damage/hunger, Mojang worlds, years of edge cases |
 | Layered .NET platform, LAN spine, leaf libs | **Zenith** | Winning on structure/DX trajectory, not checklist length |
 
 **Behind PM/Nukkit on:** extensibility economy, edge-case years, “just run a server,” gameplay completeness.  
-**Ahead / deliberate on:** decide≠transmit≠serialize, owned Nbt/LevelDB leaves, documented freeze, overlay world model.
+**Ahead / deliberate on:** decide≠transmit≠serialize, owned Nbt/LevelDB leaves, documented freeze, overlay world + Dimension seam, sparse IO.
 
 Do not measure success as “how many PM plugins we can host.” Measure success as **honest LAN multiplayer** → **honest extension points on Gameplay**.
 
@@ -81,16 +96,16 @@ Do not measure success as “how many PM plugins we can host.” Measure success
 ## Contributor map
 
 ```text
-Pick work          →  this file (horizon) + alpha-gate if pre-tag
+Pick work          →  this file (Yes-next) + alpha-gate if pre-tag
 Architecture       →  ARCHITECTURE.md + AGENTS.md (folders)
 Why / Deferred     →  docs/decisions.md (ADR before new layer)
 How to open PR     →  CONTRIBUTING.md + issue/PR templates
 ```
 
-Anti-patterns for drive-by PRs: recreate `Network/`; add Scheduler/ECS/plugin bus “for cleanliness”; start `/` autocomplete before drop-entity/death story exists.
+Anti-patterns for drive-by PRs: recreate `Network/`; add Scheduler/ECS/plugin bus “for cleanliness”; start `/` autocomplete or §61 before a Yes-next survival/smoke leaf is chosen.
 
 ---
 
 ## Maintenance
 
-When tagging alpha or merging a Horizon‑1 leaf: tick/adjust rows here and link the ADR. Prefer deleting stale “next” bullets over accumulating a second Deferred encyclopedia.
+When tagging alpha or merging a Yes-next leaf: tick/adjust rows here and link the ADR. Prefer deleting stale “next” bullets over accumulating a second Deferred encyclopedia.

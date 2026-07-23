@@ -15,7 +15,7 @@ Zenith is a modern Bedrock Edition server written in **C# / .NET**, built around
 | [AGENTS.md](AGENTS.md) | Folder layout (humans & agents) |
 | [docs/architecture.md](docs/architecture.md) | Layered system map |
 | [docs/decisions.md](docs/decisions.md) | Why we made key choices (commit-backed) |
-| [docs/roadmap.md](docs/roadmap.md) | Lean implementation horizons (not PM parity) |
+| [docs/roadmap.md](docs/roadmap.md) | H1 closed; **Yes-next** order (not PM parity) |
 | [docs/comparison.md](docs/comparison.md) | Vs PocketMine, Nukkit, BDS, … |
 | [docs/dx.md](docs/dx.md) | Developer experience |
 | [docs/why-zenith.md](docs/why-zenith.md) | Long-term bet |
@@ -40,11 +40,11 @@ New encode/decode work must match **1001**, not the newest Mojang docs tip (ofte
 
 | Document | Use for |
 |----------|---------|
-| [`docs/decisions.md`](docs/decisions.md) | **ADR §1–§69** — every `ADR §N` / `§N` in code should resolve here |
+| [`docs/decisions.md`](docs/decisions.md) | **ADR §1–§72** — every `ADR §N` / `§N` in code should resolve here |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Layer rules, smoke expectations, freeze list |
 | [`AGENTS.md`](AGENTS.md) | Folder roles (`Gameplay/` decides, `Protocol/` transmits, …) |
 | [`docs/dx.md`](docs/dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
-| [`docs/roadmap.md`](docs/roadmap.md) | What is shipped vs deferred (not PM parity) |
+| [`docs/roadmap.md`](docs/roadmap.md) | H1 closed; **Yes-next** (not PM parity) |
 | [`schemas/zenith.schema.json`](schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
 | [`deploy/README.md`](deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
 | [`deploy/compose/dokploy.md`](deploy/compose/dokploy.md) | Dokploy — Compose Path `./deploy/compose/docker-compose.dokploy.yml` + File Mount |
