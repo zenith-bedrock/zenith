@@ -117,8 +117,10 @@ public class IntentContractTests
 
     private static void BeginBreakReady(GameClock clock, World.World world, Player.Player player, int x, int y, int z)
     {
-        var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
-        player.BeginBreak(x, y, z, clock.CurrentTick, need);
+        var held = player.Inventory.Get(player.SelectedHotbarSlot);
+        var heldId = held.IsEmpty ? default : held.Id;
+        var need = Blocks.BreakTicks(world.GetBlock(x, y, z), heldId);
+        player.BeginBreak(x, y, z, clock.CurrentTick, need, heldId);
         if (need > 0)
             clock.AdvanceBy(need);
     }
@@ -133,13 +135,20 @@ public class IntentContractTests
         int z)
     {
         BeginBreakReady(clock, world, player, x, y, z);
-        var need = Blocks.BreakTicks(world.GetBlock(x, y, z));
+        var need = player.BreakRequiredTicks;
         var intent = need > 0
             ? BlockEditIntent.BreakWithDig(x, y, z, player.BreakStartedTick, player.BreakRequiredTicks)
             : BlockEditIntent.Set(x, y, z, Blocks.Air);
         if (need > 0)
             player.ClearBreakTarget();
         Assert.True(player.SubmitBlockEdit(intent));
+    }
+
+    private static void EquipWoodenPickaxe(Player.Player player, int slot = 0)
+    {
+        Tools.EnsureLoaded();
+        Assert.True(player.Inventory.TrySetItem(slot, Tools.Require("minecraft:wooden_pickaxe"), 1));
+        player.SelectedHotbarSlot = slot;
     }
 
     [Fact]
@@ -216,6 +225,33 @@ public class IntentContractTests
         Assert.True(player.IsDead);
         Assert.Equal(5, player.Inventory.Get(0).Count);
         Assert.Equal(0, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void MovementSystem_void_death_keeps_slot_when_floor_softcap_full()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("capfall");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 3));
+
+        for (var i = 0; i < FloorDropStore.SoftCap; i++)
+            Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+                i, 64, 0, StackId.FromBlock(Blocks.Stone), 1, entityRuntimeIdIfNew: i + 1, out _));
+
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 3.5f,
+            y: MovementSystem.VoidRescueY - 1f,
+            z: 4.5f,
+            pitch: 10f,
+            yaw: 20f));
+        new MovementSystem(fx.Players).Tick(fx.Clock);
+
+        Assert.True(player.IsDead);
+        Assert.Equal(Blocks.Dirt, player.Inventory.Get(0).Id.Value);
+        Assert.Equal(3, player.Inventory.Get(0).Count);
+        Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 
     [Fact]
@@ -548,6 +584,7 @@ public class IntentContractTests
         StandNear(player, 0, 90, 0);
         for (var i = 0; i < PlayerInventory.HotbarSize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        EquipWoodenPickaxe(player, slot: 8);
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
@@ -566,6 +603,7 @@ public class IntentContractTests
         StandNear(player, 0, 90, 0);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        EquipWoodenPickaxe(player, slot: 0);
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
@@ -573,6 +611,44 @@ public class IntentContractTests
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(1, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void BlockSystem_stone_break_without_pickaxe_drops_nothing()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fist");
+        StandNear(player, 0, 90, 0);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
+
+        fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        var beforeFloor = fx.World.FloorDrops.Count;
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(beforeFloor, fx.World.FloorDrops.Count);
+        Assert.Equal(0, CountRuntime(player.Inventory, Blocks.Stone));
+    }
+
+    [Fact]
+    public void BlockSystem_creative_break_dumps_chest_contents_to_floor()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creachest", GameMode.Creative);
+        StandNear(player, 5, 64, 5);
+        fx.World.SetBlock(5, 64, 5, Blocks.Chest);
+        fx.World.Chests.Ensure(5, 64, 5);
+        Assert.True(fx.World.Chests.TrySet(5, 64, 5, 0, InventorySlot.OfBlock(Blocks.Dirt, 7)));
+
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
+        Assert.False(fx.World.Chests.TryGetSlots(5, 64, 5, out _));
+        Assert.True(fx.World.FloorDrops.Count >= 1);
+        Assert.Equal(0, CountRuntime(player.Inventory, Blocks.Dirt));
     }
 
     [Fact]

@@ -378,24 +378,28 @@ sealed class BlockSystem : IGameSystem
 
                 var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
-                if (!creative)
+                // Contents never void — Creative InstantBuild still dumps store to floor (§74).
+                foreach (var (stackId, count) in dumped)
                 {
-                    foreach (var (stackId, count) in dumped)
+                    var id = stackId.IsBlock
+                        ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
+                        : stackId;
+                    if (creative)
                     {
-                        var id = stackId.IsBlock
-                            ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
-                            : stackId;
-                        var added = player.Inventory.TryAddUpTo(id, count);
-                        if (added > 0)
-                            inventoryChanged = true;
-                        var surplus = count - added;
-                        if (surplus > 0)
-                            DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, surplus);
+                        DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, count);
+                        continue;
                     }
+
+                    var added = player.Inventory.TryAddUpTo(id, count);
+                    if (added > 0)
+                        inventoryChanged = true;
+                    var surplus = count - added;
+                    if (surplus > 0)
+                        DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, surplus);
                 }
             }
 
-            if (!creative)
+            if (!creative && ShouldDropBrokenBlock(previous, player))
             {
                 // Oriented chest → item form (south) so stacks merge.
                 var dropRid = Blocks.NormalizeMergeRuntimeId(wasChest ? Blocks.Chest : previous);
@@ -442,6 +446,21 @@ sealed class BlockSystem : IGameSystem
     {
         if (!player.IsInGame) return;
         player.Session.Protocol.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
+    }
+
+    /// <summary>
+    /// Survival block loot gate (ADR §74): when the dig profile requires the correct tool,
+    /// empty hand / wrong tool breaks the cell but drops nothing.
+    /// </summary>
+    private static bool ShouldDropBrokenBlock(int previousRuntimeId, global::Zenith.Player.Player player)
+    {
+        if (!DigProfiles.TryGet(previousRuntimeId, out var profile) ||
+            !profile.RequiresCorrectToolForDrops)
+            return true;
+
+        var held = player.Inventory.Get(player.SelectedHotbarSlot);
+        var tool = held.Id.IsItem ? Tools.AsTool(held.Id.Value) : ToolInfo.None;
+        return BreakDuration.IsHarvestable(profile, tool);
     }
 
     private bool DepositFloorDrop(

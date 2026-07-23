@@ -51,7 +51,7 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 | Priority | Leaf | Notes |
 |------:|------|--------|
 | 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Process gate before more gen ADRs. |
-| 1 | **Survival honesty (small)** | **Shipped §73:** Q-throw + Survival death loot. Remaining leaf: floor-drop despawn TTL (optional). |
+| 1 | **Survival honesty (small)** | **Shipped §73–§74:** Q-throw, death loot, wrong-tool no-drop, Creative chest dump. Remaining optional: floor-drop despawn TTL. |
 | 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. |
 | 3 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 4 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |

@@ -82,7 +82,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 22. **Sparse world IO (ADR §45):** base terrain stays RAM on miss (no identical `c:` Put); disk writes are overlays / dirty blobs / inventory / playerdata. Prefer “IO only when state diverges from gen,” not “materialize every column.”
 23. **CreativeContent wire (ADR §31/§52):** one send at join (all modes); remint on every `/gamemode` change (PM-shaped). Survival join + later Creative switch ⇒ two lifetime sends is normal.
-24. **Yes-next after H1:** see [`roadmap.md`](roadmap.md) — §73 Q-throw + death loot shipped; optional next is floor-drop despawn TTL or smoke-bot `first10`; §61 Mojang only when import is the goal.
+24. **Yes-next after H1:** see [`roadmap.md`](roadmap.md) — §73–§74 survival drop/dig honesty shipped; optional next is floor-drop despawn TTL or smoke-bot `first10`; §61 Mojang only when import is the goal.
 ```
 
 ### Protocol smoke bot
