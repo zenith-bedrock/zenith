@@ -320,10 +320,14 @@ sealed class BlockSystem : IGameSystem
                     var elapsed = clock.CurrentTick >= edit.DigStartedTick
                         ? clock.CurrentTick - edit.DigStartedTick
                         : 0;
-                    if (elapsed < (ulong)need)
+                    // Inclusive last mining tick: client often sends predict_destroy when progress
+                    // completes on tick (need-1) relative to DigStartedTick (AuthInput start).
+                    // Requiring elapsed >= need made crack UI finish while the gate still rejected.
+                    var minElapsed = need > 1 ? (ulong)(need - 1) : (ulong)need;
+                    if (elapsed < minElapsed)
                     {
                         player.Session.Context.Logger.Debug(
-                            $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks");
+                            $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks (min={minElapsed})");
                         ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                         return false;
                     }

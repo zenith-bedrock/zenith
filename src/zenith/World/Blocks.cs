@@ -292,16 +292,21 @@ static class Blocks
 
     /// <summary>
     /// LevelEvent BLOCK_START_BREAK / UPDATE data — progress added per game tick toward
-    /// <see cref="CrackProgressMax"/>. Must be <c>65535 / breakTicks</c> (truncating), matching
-    /// PocketMine/Dragonfly: the client finishes when cumulative progress reaches 65535 via
-    /// integer steps; <c>Round</c> overshoots and ends the crack one tick early for many durations.
+    /// <see cref="CrackProgressMax"/>. PocketMine uses <c>(int)(65535 * (1/breakTicks))</c>;
+    /// Dragonfly uses <c>65535 / ticks</c> (trunc). Both equal truncating division for integer ticks.
+    /// We further guarantee <c>floor(65535/data) &gt;= breakTicks</c> so a div-model client never
+    /// ends the crack before the Survival dig gate (Round overshoots and finishes early).
     /// </summary>
     public const int CrackProgressMax = 65535;
 
     public static int CrackEventData(int breakTicks)
     {
         if (breakTicks <= 0) return CrackProgressMax;
-        return Math.Max(1, CrackProgressMax / breakTicks);
+        var data = Math.Max(1, CrackProgressMax / breakTicks);
+        // Defensive: if data were ever rounded up, shrink until client duration >= breakTicks.
+        while (data > 1 && CrackProgressMax / data < breakTicks)
+            data--;
+        return data;
     }
 
     public static void EnsureLoaded()
