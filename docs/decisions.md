@@ -829,7 +829,7 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 
 **Status (jul 2026):** Shipped — sampler expansion + Blocks (leaves/bedrock/water/cobble/deepslate) + tests.
 
-**Adendo (jul 2026 — continuity):** Height is an **8×8 bilinear lattice** (±`NoiseHillAmplitude`) plus **blended** biome height bias across 48×48 cell corners (surface block / biome id stay hard-sampled). Removes 4×4 terrace + per-block fine hash. `BuildNoiseOverworldColumn` raises `maxWorldY` from **neighbor tree canopy** (`MaxTreeCanopyYAffectingChunk`) so leaves are not truncated at chunk borders.
+**Adendo (jul 2026 — continuity):** Cross-chunk tree canopy: `BuildNoiseOverworldColumn` raises `maxWorldY` from neighbor canopy (`MaxTreeCanopyYAffectingChunk`) so leaves are not truncated at chunk borders. **Height algorithm** → superseded by Simplex in §71 (was 8×8 bilinear + blended biome bias).
 
 ### 65. Worm cave carvers (H1#8 — caves v2)
 
