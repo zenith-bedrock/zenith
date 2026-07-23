@@ -253,7 +253,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Known debt (updated §36):** SoftCap refuse on new cells (`2048`); merge into existing cells still allowed. Warn once at refuse.
 
-**Adendo (jul 2026 — drop-entity wire MVP):** Each floor cell also holds `EntityRuntimeId` (from `PlayerManager.AllocateRuntimeId`). Spawn → `AddItemActor` (0x0f) to peers with `Chunks.Knows`; pickup → `TakeItemActor` (0x11). Merge count change → `RemoveActor` + `AddItemActor`. Late join / column stream catch-up emits Add for drops in known columns. Position = cell center, velocity zero (floating OK). Still **no** WorldEntity/ECS, gravity tick, despawn TTL, Q-throw, or LevelDB persist of drops (§32).
+**Adendo (jul 2026 — drop-entity wire MVP):** Each floor cell also holds `EntityRuntimeId` (from `PlayerManager.AllocateRuntimeId`). Spawn → `AddItemActor` (0x0f) to peers with `Chunks.Knows`; pickup → `TakeItemActor` (0x11). Merge count change → `RemoveActor` + `AddItemActor`. Late join / column stream catch-up emits Add for drops in known columns. Position = cell center, velocity zero (floating OK). Still **no** WorldEntity/ECS, gravity tick, despawn TTL, or LevelDB persist of drops (§32). **Q-throw + death loot → §73.**
 
 **Adendo (jul 2026 — AddItemActor ItemStackWrapper):** Protocol 1001 encodes AddItemActor item as legacy **ItemStackWrapper** (same as AddPlayer held), not NetworkItemStackDescriptor. Wrong shape crashed the Bedrock client after full-inv floor drop. `NetworkItemStack` writers use Mojang wire names (`WriteItemStackWrapper` / `WriteNetworkItemStackDescriptor` / `WriteItemStack`); packet Encode picks; skip Add when `DescribeStack` is air.
 
@@ -424,7 +424,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Deferred:** hunger tick, food, fall damage, drowning, death/Respawn packets.
 
-**Adendo (jul 2026 — death / Respawn MVP):** Soft-rescue **superseded** once Respawn wire shipped. Void `Y < FlatMinY - 8` now sets `Health = 0`, `IsDead`, sends `DeathInfo` (`0xbd`) + `Respawn` SEARCHING (`0x2d`); client `Respawn` CLIENT_READY or `PlayerAction` RESPAWN → `SubmitRespawn` → GameLoop restores Health=20, pose to world spawn `(0, FlatSpawnY, 0)`, Teleport + attributes + Respawn READY, then **InventoryContent + UiInventoryContent** (client clears bag UI on death; domain inventory unchanged). **Inventory unchanged** (death drops Deferred — separate leaf). AuthInput / block edits ignored while dead. No VitalsSystem / DamageSystem; logic stays in `MovementSystem` + handler intents. Hunger/food/fall/drowning still Deferred.
+**Adendo (jul 2026 — death / Respawn MVP):** Soft-rescue **superseded** once Respawn wire shipped. Void `Y < FlatMinY - 8` now sets `Health = 0`, `IsDead`, sends `DeathInfo` (`0xbd`) + `Respawn` SEARCHING (`0x2d`); client `Respawn` CLIENT_READY or `PlayerAction` RESPAWN → `SubmitRespawn` → GameLoop restores Health=20, pose to world spawn `(0, FlatSpawnY, 0)`, Teleport + attributes + Respawn READY, then **InventoryContent + UiInventoryContent** (client clears bag UI on death). **Death loot → §73** (Survival dumps to floor; Creative keepInventory). AuthInput / block edits ignored while dead. No VitalsSystem / DamageSystem; logic stays in `MovementSystem` + handler intents. Hunger/food/fall/drowning still Deferred.
 
 ### 41. Void MovePlayer Teleport + shutdown persistence flush
 
@@ -966,6 +966,21 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 **Non-goals:** NuGet wrapper packages (VL.* etc.); domain warp / 3D density terrain; Nether/End; rewriting stored `c:` columns; PM 3×3 populate.
 
 **Status (jul 2026):** Shipped — vendored FNL + continuous bias + continuity test.
+
+### 73. Floor-drop honesty — Q-throw + death loot
+
+**Choice:** Close the Survival drop holes without WorldEntity/ECS.
+
+1. **Q-throw / ISR Drop** — `InventorySystem.TryDrop` deposits into `FloorDropStore` + `AddItemActor` fan-out (`FloorDropFanout`) at the player feet cell; pickup delay **40** ticks (~2s) so the thrower does not instantly re-collect. SoftCap refuse → ISR rollback (item stays in bag).
+2. **Death loot** — Survival void death dumps craft UI + bag + cursor to floor near death XZ (Y clamped to surface when below `FlatMinY` so void loot is recoverable). Creative = keepInventory. SoftCap may void remainder (Debug).
+3. **Break** — unchanged: TryAdd into inventory first; surplus → floor (already §26). Multi-id chest dump uses spiral neighbor cells (one StackId per cell).
+4. **Store** — `TryAddOrMerge` refuses overwrite when a cell holds a different id (was silent clobber).
+
+**Clarifies:** §26 Deferred Q-throw; §40 “inventory unchanged on death.”
+
+**Non-goals:** Gravity/despawn TTL; LevelDB persist of drops; XP orbs; damage pipeline deaths beyond void; always-floor-on-break (vanilla bag-first stays).
+
+**Status (jul 2026):** Shipped — Fanout + TryDrop + death dump + leaf tests.
 
 ## Explicit non-goals (so far)
 

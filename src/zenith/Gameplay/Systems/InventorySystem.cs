@@ -49,7 +49,7 @@ sealed class InventorySystem : IGameSystem
             while (player.TryConsumeInventoryStack(out var intent))
             {
                 if (player.IsDead) continue;
-                Apply(player, intent);
+                Apply(player, intent, online);
             }
         }
     }
@@ -113,7 +113,10 @@ sealed class InventorySystem : IGameSystem
         }
     }
 
-    private void Apply(global::Zenith.Player.Player player, in InventoryStackIntent intent)
+    private void Apply(
+        global::Zenith.Player.Player player,
+        in InventoryStackIntent intent,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         var protocol = player.Session.Protocol.Inventory;
         var inventory = player.Inventory;
@@ -213,7 +216,7 @@ sealed class InventorySystem : IGameSystem
                     var count = action.Count;
                     if (count == 0)
                         count = GetSlot(player, action.From).Count;
-                    if (!TryDrop(player, action.From, count))
+                    if (!TryDrop(player, action.From, count, online))
                     {
                         ok = false;
                         break;
@@ -360,13 +363,25 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
-    private bool TryDrop(global::Zenith.Player.Player player, int from, int count)
+    private bool TryDrop(
+        global::Zenith.Player.Player player,
+        int from,
+        int count,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (!IsValidFlat(player, from)) return false;
         if (count <= 0 || !PlayerInventory.IsValidStackCount(count)) return false;
 
         var src = GetSlot(player, from);
         if (src.IsEmpty || count > src.Count) return false;
+
+        var x = (int)MathF.Floor(player.PositionX);
+        var y = (int)MathF.Floor(player.PositionY);
+        var z = (int)MathF.Floor(player.PositionZ);
+        if (!FloorDropFanout.TryDeposit(
+                _world, _players, online, x, y, z, src.Id, count,
+                FloorDropFanout.PlayerThrowPickupDelay))
+            return false;
 
         var left = src.Count - count;
         return TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left });

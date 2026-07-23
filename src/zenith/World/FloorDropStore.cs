@@ -59,17 +59,19 @@ sealed class FloorDropStore
         deposit = null;
         if (count <= 0 || id.IsEmpty) return true;
         var key = (x, y, z);
-        if (_drops.TryGetValue(key, out var existing) && existing.Id == id)
+        if (_drops.TryGetValue(key, out var existing))
         {
+            // One StackId per cell — different id must use another cell (FloorDropFanout spiral).
+            if (existing.Id != id) return false;
+
             var merged = Math.Min(MaxStack, existing.Count + count);
             var delay = Math.Max(existing.PickupDelayTicks, pickupDelayTicks);
-            var changed = merged != existing.Count || delay != existing.PickupDelayTicks;
             _drops[key] = new DropSlot(id, merged, existing.EntityRuntimeId, delay);
             deposit = new DepositResult(x, y, z, id, merged, existing.EntityRuntimeId, Created: false, CountChanged: merged != existing.Count);
             return true;
         }
 
-        if (!_drops.ContainsKey(key) && _drops.Count >= SoftCap)
+        if (_drops.Count >= SoftCap)
         {
             if (Interlocked.Exchange(ref _capWarned, 1) == 0)
             {

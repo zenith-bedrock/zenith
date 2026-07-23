@@ -73,7 +73,7 @@ Phase 3  zero-alloc hot pack         done (jul 2026; see docs/dx.md)
 Phase 3b tick/join UpdateBlock lists done (BlockSystem + ColumnSend scratches)
 Phase 4  DX + chat FIFO              done (chat FIFO); ARCHITECTURE stay-honest ongoing
 Phase 5  InventoryProtocol split     done
-Next     roadmap Yes-next: human smoke §72 → survival honesty leaf (throw/TTL or death drops);
+Next     roadmap Yes-next: human smoke §72 → optional floor-drop TTL / smoke-bot; §73 Q-throw+death loot shipped;
          smoke-bot first10; §61 Mojang only when import needed; AuthInput×FPS measure-only.
          SoftCap eviction redesign; Bedrock E2E CI (beta-hard) still open.
 

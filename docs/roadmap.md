@@ -23,7 +23,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones. **All row
 | Order | Leaf | Notes |
 |------:|------|--------|
 | 1 | **Drop-entity wire** (minimal) | **Shipped:** `AddItemActor` / `TakeItemActor`; FloorDropStore holds entity id (§26 adendo). No ECS/physics/despawn. |
-| 2 | **Death / Respawn** | **Shipped:** void → DeathInfo + Respawn handshake (§40 adendo); inventory kept. Soft-rescue retired. No damage pipeline / death drops. |
+| 2 | **Death / Respawn** | **Shipped:** void → DeathInfo + Respawn handshake (§40); Survival death loot → floor (§73). Soft-rescue retired. No full damage pipeline. |
 | 2b | **Block/item registry honesty** | **Shipped:** palette reverse `runtimeId→name` + `Blocks.IsPlaceable` allowlist (§12 adendo). |
 | 3 | **`/gamemode` minimal** | **Shipped:** CommandRequest/chat → intent → `GameModeSystem` + remint CreativeContent (§52). Not a command framework. |
 | 4 | **Tool dig speed / efficiency** | **Shipped:** DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
@@ -51,7 +51,7 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 | Priority | Leaf | Notes |
 |------:|------|--------|
 | 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Process gate before more gen ADRs. |
-| 1 | **Survival honesty (small)** | **Recommended next product code:** Q-throw and/or floor-drop despawn TTL, **or** death drops (inventory currently kept on void death). One ADR + one PR. Unlocks LAN “prova de fogo” without Mojang import. |
+| 1 | **Survival honesty (small)** | **Shipped §73:** Q-throw + Survival death loot. Remaining leaf: floor-drop despawn TTL (optional). |
 | 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. |
 | 3 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 4 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |

@@ -450,43 +450,8 @@ sealed class BlockSystem : IGameSystem
         int y,
         int z,
         StackId id,
-        int count)
-    {
-        var entityId = _players.AllocateRuntimeId();
-        if (!_world.FloorDrops.TryAddOrMerge(x, y, z, id, count, entityId, out var deposit) ||
-            deposit is null)
-            return false;
-
-        var d = deposit.Value;
-        PublishFloorDrop(online, d);
-        return true;
-    }
-
-    private static void PublishFloorDrop(
-        IReadOnlyList<global::Zenith.Player.Player> online,
-        FloorDropStore.DepositResult deposit)
-    {
-        if (!deposit.Created && !deposit.CountChanged) return;
-
-        var cx = PlayerChunkTracker.BlockToChunk(deposit.X);
-        var cz = PlayerChunkTracker.BlockToChunk(deposit.Z);
-        var px = deposit.X + 0.5f;
-        var py = deposit.Y + 0.125f;
-        var pz = deposit.Z + 0.5f;
-
-        foreach (var peer in online)
-        {
-            // InGame always; PreSpawn joiners only if they Know the column (§14).
-            if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
-
-            var entity = peer.Session.Protocol.Entity;
-            var item = peer.Session.Protocol.Inventory.DescribeStack(deposit.Id, deposit.Count);
-            if (!deposit.Created && deposit.CountChanged)
-                entity.SendRemoveActor(deposit.EntityRuntimeId);
-            if (item.NetworkId == 0) continue; // invalid/air item crashes Bedrock near player
-            entity.SendAddItemActor(deposit.EntityRuntimeId, item, px, py, pz);
-        }
-    }
+        int count) =>
+        FloorDropFanout.TryDeposit(_world, _players, online, x, y, z, id, count);
 
     private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -530,7 +495,7 @@ sealed class BlockSystem : IGameSystem
 
                 // Partial: Take despawns entity; republish remaining stack (same entity id / delay).
                 if (remainingPublish is { } rem)
-                    PublishFloorDrop(online, rem);
+                    FloorDropFanout.Publish(online, rem);
 
                 player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
                 _world.PersistInventory(player);

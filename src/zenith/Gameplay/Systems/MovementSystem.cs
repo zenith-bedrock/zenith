@@ -182,7 +182,7 @@ sealed class MovementSystem : IGameSystem
         player.LastReplicatedSprinting = player.IsSprinting;
     }
 
-    /// <summary>Void fall → death screen (inventory kept). Respawn restores world spawn.</summary>
+    /// <summary>Void fall → death screen + Survival death loot (ADR §73). Creative keeps inventory.</summary>
     private void BeginVoidDeath(
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online)
@@ -191,6 +191,10 @@ sealed class MovementSystem : IGameSystem
         var world = player.Session.Context.World;
         if (player.OpenChest.HasValue)
             ChestLidFanout.ReleaseOpener(online, world, player);
+
+        // Craft UI dump before BeginDeath clears the grid.
+        if (player.GameMode != GameMode.Creative)
+            FloorDropFanout.DumpOnDeath(world, _players, online, player);
 
         if (!player.BeginDeath("generic")) return;
 

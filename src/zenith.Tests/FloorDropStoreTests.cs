@@ -8,6 +8,18 @@ public class FloorDropStoreTests
     public FloorDropStoreTests() => Blocks.EnsureLoaded();
 
     [Fact]
+    public void TryAddOrMerge_refuses_different_id_same_cell()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(1, 64, 1, StackId.FromBlock(Blocks.Stone), 1, entityRuntimeIdIfNew: 1, out _));
+        Assert.False(store.TryAddOrMerge(1, 64, 1, StackId.FromBlock(Blocks.Dirt), 1, entityRuntimeIdIfNew: 2, out _));
+        Assert.Equal(1, store.Count);
+        Assert.True(store.TryTake(1, 64, 1, out var id, out var count, out _));
+        Assert.Equal(StackId.FromBlock(Blocks.Stone), id);
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
     public void TryAddOrMerge_refuses_new_cell_at_soft_cap()
     {
         var store = new FloorDropStore();
