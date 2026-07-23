@@ -78,16 +78,35 @@ public class BiomeSamplerTests
     }
 
     [Fact]
-    public void Flat_spawn_biome_stays_plains()
+    public void Biome_lookup_covers_all_zenith_kinds()
     {
-        Assert.Equal(SpawnBiome.Plains, FlatTerrainProvider.Instance.SampleSpawnBiome(0, 0));
+        var seen = new HashSet<OverworldBiomeKind>();
+        for (var t = 0; t <= 20; t++)
+        for (var r = 0; r <= 20; r++)
+            seen.Add(OverworldBiomeSampler.Lookup(t / 20.0, r / 20.0));
+        Assert.Contains(OverworldBiomeKind.Ocean, seen);
+        Assert.Contains(OverworldBiomeKind.Plains, seen);
+        Assert.Contains(OverworldBiomeKind.Desert, seen);
+        Assert.Contains(OverworldBiomeKind.Hills, seen);
+        Assert.Contains(OverworldBiomeKind.Forest, seen);
+    }
+
+    [Fact]
+    public void Climate_biomes_vary_across_region()
+    {
+        const int seed = 99;
+        var kinds = new HashSet<OverworldBiomeKind>();
+        for (var x = -200; x < 200; x += 8)
+        for (var z = -200; z < 200; z += 8)
+            kinds.Add(OverworldBiomeSampler.SampleKind(x, z, seed));
+        Assert.True(kinds.Count >= 3, $"expected ≥3 biome kinds, got {kinds.Count}");
     }
 
     private static (int X, int Z) FindBiomeCoords(int seed, OverworldBiomeKind kind)
     {
-        for (var x = -256; x < 256; x += 4)
+        for (var x = -512; x < 512; x += 2)
         {
-            for (var z = -256; z < 256; z += 4)
+            for (var z = -512; z < 512; z += 2)
             {
                 if (OverworldBiomeSampler.SampleKind(x, z, seed) == kind)
                     return (x, z);

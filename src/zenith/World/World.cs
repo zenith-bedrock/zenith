@@ -6,22 +6,19 @@ using Zenith.Raknet.Log;
 namespace Zenith.World;
 
 /// <summary>
-/// Mundo: colunas base via <see cref="ITerrainProvider"/> + <see cref="IChunkStorage"/> + overlay esparso.
+/// Mundo: colunas base via Dimension overworld (<see cref="ITerrainProvider"/>) + <see cref="IChunkStorage"/> + overlay esparso.
 /// Overlay SoftCap (§36): refuse new keys at <see cref="OverrideSoftCap"/>; compact when rid == base;
 /// overwrite / hydrate always allowed. Mutação nunca reescreve subchunk; só overlay + UpdateBlock.
 /// Column index (§36 adendo): <see cref="GetOverlaysInColumn"/> O(bucket), not O(all overlays).
-/// Terrain / storage seams: ADR §62.
+/// Terrain / storage / Dimension seams: ADR §62 / §71.
 /// </summary>
 sealed class World
 {
-    /// <summary>Wire Overworld — keep equal to Network.Packets.DimensionId.Overworld (dual layer SSOT).</summary>
-    internal const int OverworldDimensionId = 0;
-
     /// <summary>SoftCap for new overlay keys (same order as historical warn threshold).</summary>
     internal const int OverrideSoftCap = 10_000;
 
     private readonly IChunkStorage _storage;
-    private readonly ITerrainProvider _terrain;
+    private readonly Dimension _overworld;
     private readonly ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
     /// <summary>
     /// Secondary index by chunk for column stream. SSOT for GetBlock remains <see cref="_blockOverrides"/>;
@@ -35,18 +32,21 @@ sealed class World
     public ChestStore Chests { get; }
     public GravityPendingStore GravityPending { get; }
 
+    /// <summary>Default playable dimension (only one until Nether/End ADR).</summary>
+    public Dimension Overworld => _overworld;
+
     public int OverrideCount => _blockOverrides.Count;
 
     /// <summary>Feet Y for join/respawn above base terrain at (x,z) — ignores overlays.</summary>
-    public int SampleSpawnFeetY(int x, int z) => _terrain.SampleSpawnFeetY(x, z);
+    public int SampleSpawnFeetY(int x, int z) => _overworld.Terrain.SampleSpawnFeetY(x, z);
 
-    /// <summary>Spawn biome wire pair from terrain provider (flat → plains).</summary>
-    public SpawnBiome SampleSpawnBiome(int x, int z) => _terrain.SampleSpawnBiome(x, z);
+    /// <summary>Spawn biome wire pair from overworld terrain (flat → plains).</summary>
+    public SpawnBiome SampleSpawnBiome(int x, int z) => _overworld.Terrain.SampleSpawnBiome(x, z);
 
     public World(IChunkStorage storage, ILogger? logger = null, ITerrainProvider? terrain = null)
     {
         _storage = storage;
-        _terrain = terrain ?? FlatTerrainProvider.Instance;
+        _overworld = Dimension.CreateOverworld(terrain ?? FlatTerrainProvider.Instance);
         _logger = logger;
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
@@ -160,14 +160,14 @@ sealed class World
         else if (existing is null)
         {
             // ADR §45: miss → in-memory base only (do not materialize identical c:x:z blobs).
-            var terrain = _terrain.GetBaseColumn(chunkX, chunkZ);
-            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, terrain.SubChunkCount, terrain.Payload);
+            var terrain = _overworld.Terrain.GetBaseColumn(chunkX, chunkZ);
+            bas = new ChunkColumnData(coord, dimensionId: _overworld.WireId, terrain.SubChunkCount, terrain.Payload);
         }
         else
         {
             // Legacy empty/corrupt c: — regenerate base and Put so disk self-heals.
-            var terrain = _terrain.GetBaseColumn(chunkX, chunkZ);
-            bas = new ChunkColumnData(coord, dimensionId: OverworldDimensionId, terrain.SubChunkCount, terrain.Payload);
+            var terrain = _overworld.Terrain.GetBaseColumn(chunkX, chunkZ);
+            bas = new ChunkColumnData(coord, dimensionId: _overworld.WireId, terrain.SubChunkCount, terrain.Payload);
             await _storage.PutAsync(bas, ct).ConfigureAwait(false);
             bas = (await _storage.GetAsync(coord, ct).ConfigureAwait(false)) ?? bas;
         }
@@ -213,7 +213,7 @@ sealed class World
     /// </summary>
     public bool CanAcceptBlockWrite(int x, int y, int z, int blockRuntimeId)
     {
-        if (blockRuntimeId == _terrain.SampleBaseBlock(x, y, z))
+        if (blockRuntimeId == _overworld.Terrain.SampleBaseBlock(x, y, z))
             return true;
         if (_blockOverrides.ContainsKey((x, y, z)))
             return true;
@@ -229,7 +229,7 @@ sealed class World
     public bool TrySetBlock(int x, int y, int z, int blockRuntimeId)
     {
         var cell = (x, y, z);
-        var baseRid = _terrain.SampleBaseBlock(x, y, z);
+        var baseRid = _overworld.Terrain.SampleBaseBlock(x, y, z);
         var had = _blockOverrides.ContainsKey(cell);
 
         if (blockRuntimeId == baseRid)
@@ -295,7 +295,7 @@ sealed class World
     {
         if (_blockOverrides.TryGetValue((x, y, z), out var id))
             return id;
-        return _terrain.SampleBaseBlock(x, y, z);
+        return _overworld.Terrain.SampleBaseBlock(x, y, z);
     }
 
     public IReadOnlyList<BlockOverride> GetOverlaysInColumn(int chunkX, int chunkZ)

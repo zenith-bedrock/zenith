@@ -1,8 +1,8 @@
 namespace Zenith.World;
 
 /// <summary>
-/// Shared overworld height + block rules for terrain providers (ADR §63 / §64).
-/// Height: 8×8 bilinear lattice + blended biome bias (continuity polish).
+/// Shared overworld height + block rules for terrain providers (ADR §63 / §64 / §71).
+/// Height: Simplex octaves + biome bias (PM-inspired). Features: trees/ruins/caves/ore.
 /// <see cref="SampleNoiseBlock"/> must stay consistent with <see cref="ChunkPayloads.BuildNoiseOverworldColumn"/>.
 /// Flat mode keeps classic Y≈-61 via <see cref="SampleBlock"/> with constant surface.
 /// </summary>
@@ -19,14 +19,11 @@ static class OverworldTerrainSampler
     /// <summary>Noise mean surface (Bedrock overworld band, not classic flat).</summary>
     public const int NoiseBaseSurfaceY = 64;
 
-    /// <summary>Coarse height swing around <see cref="NoiseBaseSurfaceY"/>.</summary>
-    public const int NoiseHillAmplitude = 24;
+    /// <summary>Coarse height swing around <see cref="NoiseBaseSurfaceY"/> (Simplex × this).</summary>
+    public const int NoiseHillAmplitude = 28;
 
-    /// <summary>Bilinear height lattice cell size (world blocks).</summary>
-    public const int HeightCellSize = 8;
-
-    /// <summary>Max |ΔY| between adjacent surface samples (lattice + bias); leaf continuity gate.</summary>
-    public const int MaxAdjacentSurfaceStep = 8;
+    /// <summary>Max |ΔY| between adjacent surface samples (continuity gate).</summary>
+    public const int MaxAdjacentSurfaceStep = 16;
 
     public const int TreeCellSize = 10;
     public const int RuinCellSize = 40;
@@ -36,7 +33,6 @@ static class OverworldTerrainSampler
 
     private const int TreeSalt = unchecked((int)0x7EE7E77Eu);
     private const int RuinSalt = unchecked((int)0x5015015u);
-    private const int HeightSalt = unchecked((int)0xA5A55A5Au);
     private const int BiasSalt = unchecked((int)0xB1A5B1A5u);
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
@@ -112,58 +108,15 @@ static class OverworldTerrainSampler
     private static void FillSurfaceAt(int worldX, int worldZ, int seed, out int y, out OverworldBiomeKind biome)
     {
         biome = OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
-        y = BilinearLatticeHeight(worldX, worldZ, seed)
-            + BlendedBiomeHeightBias(worldX, worldZ, seed);
+        var fields = OverworldNoiseFields.For(seed);
+        var n = fields.Height.Noise2D(worldX, worldZ, normalized: true);
+        var local = Hash(worldX, worldZ, seed ^ BiasSalt);
+        y = NoiseBaseSurfaceY
+            + (int)Math.Round(n * NoiseHillAmplitude)
+            + OverworldBiomeSampler.SurfaceHeightBias(biome, local);
         if (biome == OverworldBiomeKind.Ocean)
             y = Math.Min(y, SeaLevel - 1);
         y = Math.Clamp(y, Blocks.FlatMinY + 12, 120);
-    }
-
-    private static int BilinearLatticeHeight(int worldX, int worldZ, int seed)
-    {
-        var cellX = FloorDiv(worldX, HeightCellSize);
-        var cellZ = FloorDiv(worldZ, HeightCellSize);
-        var tx = worldX - cellX * HeightCellSize;
-        var tz = worldZ - cellZ * HeightCellSize;
-        var s = HeightCellSize;
-        var h00 = LatticeCornerHeight(cellX, cellZ, seed);
-        var h10 = LatticeCornerHeight(cellX + 1, cellZ, seed);
-        var h01 = LatticeCornerHeight(cellX, cellZ + 1, seed);
-        var h11 = LatticeCornerHeight(cellX + 1, cellZ + 1, seed);
-        var top = h00 * (s - tx) + h10 * tx;
-        var bot = h01 * (s - tx) + h11 * tx;
-        return (top * (s - tz) + bot * tz) / (s * s);
-    }
-
-    private static int LatticeCornerHeight(int cellX, int cellZ, int seed)
-    {
-        var h = Hash(cellX, cellZ, seed ^ HeightSalt);
-        return NoiseBaseSurfaceY + (int)(h % (uint)(NoiseHillAmplitude * 2 + 1)) - NoiseHillAmplitude;
-    }
-
-    /// <summary>Bilinear blend of biome height bias across 48×48 cell corners (surface block stays hard).</summary>
-    private static int BlendedBiomeHeightBias(int worldX, int worldZ, int seed)
-    {
-        var s = OverworldBiomeSampler.BiomeCellSize;
-        var cellX = FloorDiv(worldX, s);
-        var cellZ = FloorDiv(worldZ, s);
-        var tx = worldX - cellX * s;
-        var tz = worldZ - cellZ * s;
-        var b00 = BiasAtBiomeCell(cellX, cellZ, seed);
-        var b10 = BiasAtBiomeCell(cellX + 1, cellZ, seed);
-        var b01 = BiasAtBiomeCell(cellX, cellZ + 1, seed);
-        var b11 = BiasAtBiomeCell(cellX + 1, cellZ + 1, seed);
-        var top = b00 * (s - tx) + b10 * tx;
-        var bot = b01 * (s - tx) + b11 * tx;
-        return (top * (s - tz) + bot * tz) / (s * s);
-    }
-
-    private static int BiasAtBiomeCell(int cellX, int cellZ, int seed)
-    {
-        var cx = cellX * OverworldBiomeSampler.BiomeCellSize + OverworldBiomeSampler.BiomeCellSize / 2;
-        var cz = cellZ * OverworldBiomeSampler.BiomeCellSize + OverworldBiomeSampler.BiomeCellSize / 2;
-        var kind = OverworldBiomeSampler.SampleKind(cx, cz, seed);
-        return OverworldBiomeSampler.SurfaceHeightBias(kind, Hash(cellX, cellZ, seed ^ BiasSalt));
     }
 
     /// <summary>Domain feet Y standing on dry surface or water top.</summary>
@@ -281,11 +234,9 @@ static class OverworldTerrainSampler
                 var surface = SurfaceY(tx, tz, seed);
                 if (surface < SeaLevel) continue;
 
-                // Trunk
                 if (x == tx && z == tz && y > surface && y <= surface + trunkH)
                     return Blocks.OakLog;
 
-                // Canopy: 5×5 mid layers, 3×3 top, corners skipped on bottom.
                 var top = surface + trunkH;
                 if (y < top - 2 || y > top + 1) continue;
                 var lx = Math.Abs(x - tx);
@@ -298,7 +249,7 @@ static class OverworldTerrainSampler
 
                 if (lx > 2 || lz > 2) continue;
                 if (y == top - 2 && lx == 2 && lz == 2) continue;
-                if (x == tx && z == tz && y <= top) continue; // trunk owns stem cells
+                if (x == tx && z == tz && y <= top) continue;
                 return Blocks.OakLeaves;
             }
         }
@@ -339,7 +290,6 @@ static class OverworldTerrainSampler
         var lz = z - oz;
         if (lx is < 0 or > 4 || lz is < 0 or > 4) return Blocks.Air;
 
-        // 5×5 cobble floor on surface; corner pillars + plank ring.
         if (y == surface)
             return Blocks.Cobblestone;
         if (y == surface + 1

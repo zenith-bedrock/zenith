@@ -84,7 +84,7 @@ src/
     Gameplay/
       Runtime/     # GameLoop, GameClock, IGameSystem
       Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
-    World/         # IChunkStorage, World, Blocks, palettes, chests, floor drops
+    World/         # World façade, Dimension, IChunkStorage, Blocks, Noise/, chests, floor drops
     Player/        # Player, intents, inventory, manager
     Server/        # ZenithServer, ServerContext, config, identity
     Event/ Log/
@@ -116,10 +116,10 @@ C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarq
 
 - PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
 - Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM: SoftCap `10_000` em chaves **novas** + compactação quando rid == base flat (ADR §36); overwrite sempre ok. `FloorDropStore` SoftCap refuse em células novas; chests SoftCap `10_000` em células novas.
-- Terreno base via `ITerrainProvider` — default flat; `noise` = coarse biomes + overworld band + worm caves + ore veins + surface features (ADR §63–§67); edits = diff sobre a base (ADR §62).
+- Terreno base via `ITerrainProvider` on a **Dimension** (default overworld — ADR §71); `noise` = Simplex height + climate biomes + worm caves + ore + surface features (§63–§67/§71); edits = diff sobre a base (§62).
 - **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `src/zenith/data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
 - **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves via `WorldStorageKeys` (`c:` / `ov:` / `ct:` / `inv:` / `pd:`). Detalhes: [`libs/leveldb/README.md`](libs/leveldb/README.md). Abrir/converter mundos BDS = backend/`IChunkStorage` + conversor offline (ADR §61) — não reescrever ZLDB como LSM Mojang.
-- **World subdomains (§62):** terrain base · overlay grid · persistence port · block registry · containers · floor/gravity · packed blobs — `World` is the façade; files stay under `World/` until a later cut.
+- **World subdomains (§62/§71):** Dimension (terrain + wire id) · overlay grid · persistence port · block registry · containers · floor/gravity · packed blobs — `World` is the façade; files stay under `World/` until a later cut.
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), ou `{ZENITH_DATA}/zenith.yml` quando `ZENITH_DATA` está definido (Docker/Dokploy — volume único em `/data`). Sem matriz `ZENITH_*` além desse root.
 - JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
