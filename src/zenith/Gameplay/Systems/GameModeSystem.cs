@@ -33,7 +33,6 @@ sealed class GameModeSystem : IGameSystem
             if (!player.IsInGame) continue;
             if (!player.TryConsumeGameMode(out var mode)) continue;
 
-            var previous = player.GameMode;
             player.SetGameMode(mode);
 
             var wire = (int)mode;
@@ -42,8 +41,10 @@ sealed class GameModeSystem : IGameSystem
             entity.SendLocalAbilities(player.RuntimeId, wire);
             entity.SendAdventureSettings();
 
-            if (mode == GameMode.Creative && previous != GameMode.Creative)
-                player.Session.Protocol.Inventory.SendCreativeContent();
+            // PocketMine syncGameMode → syncCreative on every mode change (not only enter Creative).
+            // Join already sent once in ResourcePacks (PM/DF/Serenity all send CreativeContent at spawn).
+            // Dragonfly/Serenity omit remint on SetGameMode and rely on abilities; Zenith follows PM.
+            player.Session.Protocol.Inventory.SendCreativeContent();
 
             PlayerVisibility.RefreshPeerView(player, online);
 
