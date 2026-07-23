@@ -679,6 +679,45 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_break_accepts_on_last_mining_tick()
+    {
+        // Client predict often arrives at elapsed == need-1; gate must not wait for need.
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("lasttick");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        Assert.True(need > 1);
+
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need - 1);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
+    public void BlockSystem_break_rejects_two_ticks_early()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("tooearly");
+        StandNear(player, 0, 90, 0);
+        fx.World.SetBlock(0, 90, 0, Blocks.Dirt);
+        var need = Blocks.BreakTicks(Blocks.Dirt);
+        Assert.True(need > 2);
+
+        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need);
+        fx.Clock.AdvanceBy(need - 2);
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
+            0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        player.ClearBreakTarget();
+        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
+    }
+
+    [Fact]
     public void BlockSystem_break_survives_dig_retarget_before_tick()
     {
         var fx = new IntentTestFixture();

@@ -34,10 +34,10 @@ public class BreakTimingTests
     }
 
     [Fact]
-    public void CrackEventData_integer_duration_never_finishes_before_break_ticks()
+    public void CrackEventData_div_model_never_finishes_before_break_ticks()
     {
-        // Client effective crack ticks ≈ 65535 / EventData (trunc). Must be >= BreakTicks.
-        foreach (var need in new[] { 8, 15, 18, 23, 30, 38, 60, 75, 150 })
+        // Client effective duration ≈ floor(65535 / EventData). Must be >= BreakTicks.
+        for (var need = 1; need <= 200; need++)
         {
             var data = Blocks.CrackEventData(need);
             var clientTicks = Blocks.CrackProgressMax / data;
@@ -45,6 +45,16 @@ public class BreakTimingTests
                 clientTicks >= need,
                 $"need={need} data={data} clientTicks={clientTicks} — crack would finish early");
         }
+    }
+
+    [Fact]
+    public void CrackEventData_round_candidate_is_rejected_when_early()
+    {
+        // Historical bug: Round(65535/8)=8192 → floor(65535/8192)=7 < 8.
+        const int need = 8;
+        var rounded = (int)Math.Round(Blocks.CrackProgressMax / (double)need);
+        Assert.True(Blocks.CrackProgressMax / rounded < need);
+        Assert.True(Blocks.CrackProgressMax / Blocks.CrackEventData(need) >= need);
     }
 
     [Fact]
