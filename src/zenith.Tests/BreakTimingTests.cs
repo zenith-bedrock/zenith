@@ -26,8 +26,25 @@ public class BreakTimingTests
     public void CrackEventData_matches_progress_per_tick_scale()
     {
         Assert.Equal(Blocks.CrackProgressMax, Blocks.CrackEventData(0));
-        Assert.Equal(4369, Blocks.CrackEventData(15)); // round(CrackProgressMax/15)
-        Assert.Equal(437, Blocks.CrackEventData(150)); // round(CrackProgressMax/150)
+        // Truncating division (PM/DF) — Round would finish crack early for many tick counts.
+        Assert.Equal(4369, Blocks.CrackEventData(15)); // 65535/15
+        Assert.Equal(8191, Blocks.CrackEventData(8));  // shovel dirt — not Round(8192)
+        Assert.Equal(3640, Blocks.CrackEventData(18)); // grass — not Round(3641)
+        Assert.Equal(436, Blocks.CrackEventData(150)); // stone hand — not Round(437)
+    }
+
+    [Fact]
+    public void CrackEventData_integer_duration_never_finishes_before_break_ticks()
+    {
+        // Client effective crack ticks ≈ 65535 / EventData (trunc). Must be >= BreakTicks.
+        foreach (var need in new[] { 8, 15, 18, 23, 30, 38, 60, 75, 150 })
+        {
+            var data = Blocks.CrackEventData(need);
+            var clientTicks = Blocks.CrackProgressMax / data;
+            Assert.True(
+                clientTicks >= need,
+                $"need={need} data={data} clientTicks={clientTicks} — crack would finish early");
+        }
     }
 
     [Fact]
