@@ -61,6 +61,7 @@ Spine (decide → transmit → serialize) is healthy. Limits are cross-thread mu
 | `InventoryProtocol` builders + façade | 5 | **Closed** (§54 Phase 5) |
 | Leaf CI on push/PR | — | **Closed (jul 2026):** `.github/workflows/ci.yml` |
 | Bedrock E2E CI | — | **Open — beta-hard**. Spike repo: [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + bedrock-protocol, ADR §58) — opt-in; not Zenith PR-blocking |
+| AuthInput rate × client FPS | Client may emit AuthInput (and related) more often at higher FPS; inbound still decoded every time. Outbound Absolute already dirty-gated (§43). | **Open — measure:** log/bench AuthInput Hz vs FPS under LAN load; only then coalesce/drop earlier (no ECS). Related: unused RakNet payload discard is not a separate leaf — movement already filters “no real move” before fan-out. |
 
 ## Suggested order
 

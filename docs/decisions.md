@@ -321,7 +321,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 1. `ServerConfig.Validate()` accepts only `"Survival"` / `"Creative"` (loud fail; no silent fallback).
 2. Every joiner gets that single mode from config: `Player.GameMode` plus both `StartGamePacket.GameMode` (PlayerGameMode) and `GameType` (WorldGameMode) from the same config value. Runtime Survival↔Creative is §52 (`/gamemode`); Adventure/Spectator still out.
 3. Creative join: empty hotbar (client Creative UI supplies items). Survival: existing starter seed.
-4. `CreativeContentPacket` after `ItemRegistry`, before empty BiomeDefinitionList — short list from `ItemPalette` (stone/grass/dirt/planks/log/sand/chest). Do **not** parse `creative_items.json` (`block_state_b64`).
+4. `CreativeContentPacket` after `ItemRegistry`, before CraftingData / BiomeDefinitionList — short list from `CreativeCatalog`. Do **not** parse `creative_items.json` (`block_state_b64`). Sent on **every** join regardless of Survival/Creative (catalog seed; UI gated by gamemode — same as PM/DF/Serenity).
 5. `BlockSystem.ApplyEdit` branches: Creative place skips `TryConsumeOne`; Creative break skips timing + inventory/floor loot (still clears chest store). Survival path unchanged.
 
 **Why:** LAN feedback needs Creative UI + infinite place/break without inventing entity wire or admin commands. Uniform config mode is the only source of truth while `/` stays frozen.
@@ -537,7 +537,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Why:** Contributor landed DTOs without Id-in-Encode and with broken EmoteList handler decode — unusable outbound and Warning-prone inbound. Wire fix ≠ shipping toast/forms/emote product; H1 smoke stays death/drops.
 
-**Deferred:** Form intent stack; FormId allocator; product title banners (TextObject / timed UI as gameplay). (Emote peer relay → §53.)
+**Deferred:** Form intent stack; FormId allocator + mid-session refresh (re-send `ModalFormRequest` / ServerSettings with the same id — **not** `NetworkSettings`, which is login compression); product title banners (TextObject / timed UI as gameplay). (Emote peer relay → §53.)
 
 **Adendo (jul 2026 — SetTitle wire):** `SetTitlePacket` (0x58) + `UiProtocol.SendTitle` / `SendSubtitle` / `SendActionbar` / `SendTitleTimes` / Clear / Reset shipped as transmit hygiene. Times is a separate packet from text. Inbound ModalFormResponse remains quiet ignore (no Info decode path). Product title use stays Deferred.
 
@@ -547,7 +547,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 1. Inbound `/gamemode` via **`CommandRequest` (0x4D)** (canal Bedrock) ou `Text` chat (fallback). Args: `survival|creative|s|c|0|1`. Outros `/…` quiet ignore (no registry / `/help` / autocomplete).
 2. Valid parse → `Player.SubmitGameMode` (overwrite-latest intent). **Never** `SubmitChat` for slash / command lines — `ChatSystem` must not fan-out commands to peers.
-3. `GameModeSystem` on tick: `SetGameMode` (private set; inventory **not** reseeded) → Protocol `SetPlayerGameType` + `SendLocalAbilities` + `SendAdventureSettings`; remint `CreativeContent` when switching **to** Creative; Toast feedback via existing `UiProtocol`.
+3. `GameModeSystem` on tick: `SetGameMode` (private set; inventory **not** reseeded) → Protocol `SetPlayerGameType` + `SendLocalAbilities` + `SendAdventureSettings`; remint `CreativeContent` on **every** mode change (PocketMine `syncGameMode` → `syncCreative`); Toast feedback via existing `UiProtocol`.
 4. Bad `/gamemode` args → same-session Toast (handler decide + transmit; no world mutation). No Gameplay→Packets.
 
 **Why:** H1-3 LAN need — Survival↔Creative in-session without restart/`zenith.yml`. Modes/abilities already exist (§31/§37). Rule 7: one string parse beats a command framework (`dx.md` freeze). Exception to explicit non-goal “`/` commands” — **one** path only, documented here like void-death in MovementSystem.
@@ -559,6 +559,8 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 **Adendo (jul 2026 — CommandRequest canal):** Bedrock 1.26 envia slash como `CommandRequest` (0x4D), não `Text`. Handler parseia `CommandLine` com o mesmo `GameModeConfig.TryParseCommand` (Text `/gamemode` fica fallback). Origin wire (protocol 1001): origin **string** (`player`, …) + UUID + requestId + **Int64** player unique id (sempre). Sem `AvailableCommands` / `CommandOutput` / palette — quiet ignore outros comandos. Não mergear `dev/commands` framework.
 
 **Adendo (jul 2026 — peer re-AddPlayer):** Closed by §59 — `GameModeSystem` calls `PlayerVisibility.RefreshPeerView` (RemoveActor + AddPlayer + Absolute settle) so peers see the new mode without rejoining. PlayerList is not removed/re-added.
+
+**Adendo (jul 2026 — CreativeContent remint matrix):** Join always sends `CreativeContent` once after `ItemRegistry` (PM PreSpawn `syncCreative`, Dragonfly session start, Serenity spawn) — **including Survival**; the packet seeds the catalog, gamemode/abilities gate the UI. Seeing CreativeContent on Survival join + again on `/gamemode creative` is **expected** (join + remint), not a double-send bug in one stage. Cross-ref: PM remints on every `syncGameMode`; DF/Serenity remint only at join and rely on abilities for mid-session switches. Zenith follows **PM** for remint-on-change.
 
 ### 53. Pose flags + emote relay + arm swing (peer interaction feel)
 

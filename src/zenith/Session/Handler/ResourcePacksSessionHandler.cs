@@ -53,6 +53,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                     biomeType: spawnBiome.NetworkId,
                     biomeName: spawnBiome.WireName);
                 session.Protocol.Inventory.SendItemRegistry();
+                // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.Inventory.SendCraftingData();
                 // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).

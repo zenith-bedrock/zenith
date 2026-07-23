@@ -1270,29 +1270,29 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void GameModeSystem_remints_creative_content_only_when_entering_creative()
+    public void GameModeSystem_remints_creative_content_on_every_mode_change()
     {
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("switcher", GameMode.Creative);
+        var player = fx.AddInGamePlayer("switcher", GameMode.Survival);
+        var creativePayload = InventoryProtocol.BuildCreativeContent(
+            fx.Context.Creative, fx.Context.ItemPalette).Encode().ToArray();
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         player.SubmitGameMode(GameMode.Creative);
-        var beforeSame = fx.Transport.Captured.Count;
         new GameModeSystem(fx.Players).Tick(fx.Clock);
         FlushRaknet(fx.Players);
-        var afterSame = fx.Transport.Captured.Count;
+        Assert.Equal(GameMode.Creative, player.GameMode);
+        Assert.Contains(creativePayload, ConcatCaptured(fx));
+
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         player.SubmitGameMode(GameMode.Survival);
         new GameModeSystem(fx.Players).Tick(fx.Clock);
         FlushRaknet(fx.Players);
         Assert.Equal(GameMode.Survival, player.GameMode);
-
-        player.SubmitGameMode(GameMode.Creative);
-        var beforeEnter = fx.Transport.Captured.Count;
-        new GameModeSystem(fx.Players).Tick(fx.Clock);
-        FlushRaknet(fx.Players);
-        Assert.Equal(GameMode.Creative, player.GameMode);
-        Assert.True(fx.Transport.Captured.Count > beforeEnter);
-        Assert.True(afterSame > beforeSame);
+        Assert.Contains(creativePayload, ConcatCaptured(fx));
     }
 
     [Fact]
