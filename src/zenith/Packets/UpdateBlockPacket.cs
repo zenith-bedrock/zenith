@@ -1,42 +1,29 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
-class UpdateBlockPacket : DataPacket
+[GamePacket((int)ProtocolInfo.UPDATE_BLOCK_PACKET)]
+sealed partial class UpdateBlockPacket : DataPacket
 {
     public const int FlagNeighbors = 1;
     public const int FlagNetwork = 2;
     public const int FlagNeighborsAndNetwork = FlagNeighbors | FlagNetwork; // 3 — default wire
 
-    public override int Id => (int)ProtocolInfo.UPDATE_BLOCK_PACKET;
-
+    [WireVar]
     public int X { get; set; }
+
+    [WireVar]
     public int Y { get; set; }
+
+    [WireVar]
     public int Z { get; set; }
+
+    [WireVar(unsigned: true)]
     public int BlockRuntimeId { get; set; }
+
+    [WireVar(unsigned: true)]
     public int Flags { get; set; } = FlagNeighborsAndNetwork;
+
+    [WireVar(unsigned: true)]
     public int DataLayerId { get; set; }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarInt(X);
-        writer.WriteVarInt(Y);
-        writer.WriteVarInt(Z);
-        writer.WriteUnsignedVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(Flags);
-        writer.WriteUnsignedVarInt(DataLayerId);
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        X = stream.ReadVarInt();
-        Y = stream.ReadVarInt();
-        Z = stream.ReadVarInt();
-        BlockRuntimeId = stream.ReadUnsignedVarInt();
-        Flags = stream.ReadUnsignedVarInt();
-        DataLayerId = stream.ReadUnsignedVarInt();
-    }
 }

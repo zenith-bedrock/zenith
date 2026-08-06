@@ -275,6 +275,11 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
                         : 0;
                     field.Endianess = Convert.ToInt32(endianessArg) == 1 ? "Little" : "Big";
                 }
+                else
+                {
+                    field.IsUnsignedVar = baseAttr.ConstructorArguments.Length > 0 &&
+                                           baseAttr.ConstructorArguments[0].Value is true;
+                }
 
                 break;
             }
@@ -552,6 +557,25 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
         return WireTypeVocabulary.FixedSuffix(typeName);
     }
 
+    /// <summary>[WireVar(unsigned: true)] on an int/long property forces UnsignedVarInt/
+    /// UnsignedVarLong directly (BinaryStream's Unsigned* methods already take/return signed
+    /// int/long, so no cast is needed) instead of the default zigzag VarInt/VarLong - see
+    /// WireVarAttribute's doc comment for why this can't be inferred from CLR type alone.</summary>
+    private static (string MethodSuffix, string? StorageCastType) ResolveVarMethod(string underlying, bool isUnsignedVar)
+    {
+        if (isUnsignedVar)
+        {
+            return underlying switch
+            {
+                "int" => ("UnsignedVarInt", null),
+                "long" => ("UnsignedVarLong", null),
+                _ => WireTypeVocabulary.VarInfo(underlying)
+            };
+        }
+
+        return WireTypeVocabulary.VarInfo(underlying);
+    }
+
     private static string BuildEncodeCore(FieldModel f)
     {
         var valueExpr = f.IsOptional && f.IsValueTypeNullable ? $"{f.PropertyName}.Value" : f.PropertyName;
@@ -570,7 +594,7 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
             {
                 var underlying = f.EnumUnderlyingTypeName ?? f.ClrTypeName;
                 var castExpr = f.IsEnum ? $"({underlying}){valueExpr}" : valueExpr;
-                var (methodSuffix, storageCast) = WireTypeVocabulary.VarInfo(underlying);
+                var (methodSuffix, storageCast) = ResolveVarMethod(underlying, f.IsUnsignedVar);
                 var argExpr = storageCast is null ? castExpr : $"({storageCast}){castExpr}";
                 return $"writer.Write{methodSuffix}({argExpr});";
             }
@@ -604,7 +628,7 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
             case WireKind.WireVar:
             {
                 var underlying = f.EnumUnderlyingTypeName ?? f.ClrTypeName.TrimEnd('?');
-                var (methodSuffix, storageCast) = WireTypeVocabulary.VarInfo(underlying);
+                var (methodSuffix, storageCast) = ResolveVarMethod(underlying, f.IsUnsignedVar);
                 var readExpr = storageCast is null
                     ? $"stream.Read{methodSuffix}()"
                     : $"({underlying})stream.Read{methodSuffix}()";
