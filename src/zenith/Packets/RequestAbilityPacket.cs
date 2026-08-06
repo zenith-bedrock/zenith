@@ -1,29 +1,25 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>
 /// RequestAbility (0xB8) — client toggle (FLYING). Decode only; AbilityValue always reads type+bool+float.
 /// </summary>
-sealed class RequestAbilityPacket : DataPacket
+[GamePacket((int)ProtocolInfo.REQUEST_ABILITY_PACKET)]
+sealed partial class RequestAbilityPacket : DataPacket
 {
     public const byte ValueTypeBool = 1;
     public const byte ValueTypeFloat = 2;
 
-    public override int Id => (int)ProtocolInfo.REQUEST_ABILITY_PACKET;
-
+    [WireVar]
     public int Ability { get; set; }
+
+    [Wire]
     public byte ValueType { get; set; }
+
+    [Wire]
     public bool BoolValue { get; set; }
+
+    [Wire(Zenith.Raknet.Stream.BinaryStream.Endianess.Little)]
     public float FloatValue { get; set; }
-
-    public override Span<byte> Encode() => [];
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        Ability = stream.ReadVarInt();
-        ValueType = stream.ReadByte();
-        BoolValue = stream.ReadBool();
-        FloatValue = stream.ReadFloat(BinaryStream.Endianess.Little);
-    }
 }

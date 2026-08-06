@@ -2,8 +2,11 @@ namespace Zenith.LevelDB;
 
 /// <summary>
 /// Snapshot on-disk ordenado (formato Zenith ZLDB — não compatível com LevelDB.Standard/NuGet).
-/// Header: magic "ZLDB" | version u32=1 | count u32 | entries: u32 klen | key | u32 vlen | value.
+/// Header: magic "ZLDB" | version u32=1 | count u32 | entries: i32 klen | key | u32 vlen | value.
 /// Tombstones não são gravados no snapshot compactado (só live keys).
+/// Key length shares <see cref="KvFraming"/>'s int32 convention with Journal/WriteBatch. Value
+/// length is deliberately its own uint32 (not KvFraming) because <c>uint.MaxValue</c> doubles as
+/// a tombstone sentinel here (see TryLoadInto) - a real format difference, not an oversight.
 /// </summary>
 static class TableFile
 {

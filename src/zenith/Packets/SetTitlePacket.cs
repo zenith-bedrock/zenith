@@ -1,9 +1,10 @@
-﻿using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>SetTitle (0x58) — server → client title/subtitle/actionbar UI banners.</summary>
-sealed class SetTitlePacket : DataPacket
+[GamePacket((int)ProtocolInfo.SET_TITLE_PACKET)]
+sealed partial class SetTitlePacket : DataPacket
 {
     public enum TitleType : int
     {
@@ -18,41 +19,27 @@ sealed class SetTitlePacket : DataPacket
         ActionbarTextObject = 8,
     }
 
-    public override int Id => (int)ProtocolInfo.SET_TITLE_PACKET;
-
+    [WireVar]
     public TitleType Type { get; set; }
+
+    [WireString]
     public string TitleText { get; set; } = "";
+
+    [WireVar]
     public int FadeInTime { get; set; }
+
+    [WireVar]
     public int StayTime { get; set; }
+
+    [WireVar]
     public int FadeOutTime { get; set; }
+
+    [WireString]
     public string Xuid { get; set; } = "";
+
+    [WireString]
     public string PlatformOnlineId { get; set; } = "";
+
+    [WireString]
     public string FilteredTitleMessage { get; set; } = "";
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        Type = (TitleType)stream.ReadVarInt();
-        TitleText = stream.ReadVarString();
-        FadeInTime = stream.ReadVarInt();
-        StayTime = stream.ReadVarInt();
-        FadeOutTime = stream.ReadVarInt();
-        Xuid = stream.ReadVarString();
-        PlatformOnlineId = stream.ReadVarString();
-        FilteredTitleMessage = stream.ReadVarString();
-    }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarInt((int)Type);
-        writer.WriteVarString(TitleText);
-        writer.WriteVarInt(FadeInTime);
-        writer.WriteVarInt(StayTime);
-        writer.WriteVarInt(FadeOutTime);
-        writer.WriteVarString(Xuid);
-        writer.WriteVarString(PlatformOnlineId);
-        writer.WriteVarString(FilteredTitleMessage);
-        return writer.GetBufferDisposing();
-    }
 }

@@ -1,30 +1,17 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>ContainerClose (0x2f).</summary>
-sealed class ContainerClosePacket : DataPacket
+[GamePacket((int)ProtocolInfo.CONTAINER_CLOSE_PACKET)]
+sealed partial class ContainerClosePacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.CONTAINER_CLOSE_PACKET;
-
+    [Wire]
     public byte WindowId { get; set; }
+
+    [Wire]
     public byte WindowType { get; set; }
+
+    [Wire]
     public bool ServerInitiated { get; set; }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteByte(WindowId);
-        writer.WriteByte(WindowType);
-        writer.WriteBool(ServerInitiated);
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        WindowId = stream.ReadByte();
-        WindowType = stream.ReadByte();
-        ServerInitiated = stream.ReadBool();
-    }
 }

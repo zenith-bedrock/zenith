@@ -106,31 +106,36 @@ public sealed class DB : IDisposable
         return false;
     }
 
+    /// <summary>Enumerates "{ulong number}.{ext}" files in _dir, skipping anything whose stem
+    /// isn't a plain number - the one place the {n:D6}.{log,ldb} naming scheme is parsed, used
+    /// by every method below that needs to walk numbered journal/table files.</summary>
+    private IEnumerable<(ulong Num, string Path)> EnumerateNumberedFiles(string searchPattern)
+    {
+        foreach (var path in Directory.EnumerateFiles(_dir, searchPattern))
+        {
+            var stem = Path.GetFileNameWithoutExtension(path);
+            if (ulong.TryParse(stem, out var n))
+                yield return (n, path);
+        }
+    }
+
+    private static void TryDeleteBestEffort(string path)
+    {
+        try { File.Delete(path); } catch { /* best effort */ }
+    }
+
     private void RecoverFileNumbers()
     {
-        foreach (var path in Directory.EnumerateFiles(_dir))
+        foreach (var (n, _) in EnumerateNumberedFiles("*.ldb").Concat(EnumerateNumberedFiles("*.log")))
         {
-            var name = Path.GetFileName(path);
-            if (name.EndsWith(".ldb", StringComparison.OrdinalIgnoreCase) ||
-                name.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
-            {
-                var stem = Path.GetFileNameWithoutExtension(name);
-                if (ulong.TryParse(stem, out var n) && n >= _nextFileNum)
-                    _nextFileNum = n + 1;
-            }
+            if (n >= _nextFileNum)
+                _nextFileNum = n + 1;
         }
     }
 
     private void ReplayJournals()
     {
-        var nums = new List<ulong>();
-        foreach (var path in Directory.EnumerateFiles(_dir, "*.log"))
-        {
-            var stem = Path.GetFileNameWithoutExtension(path);
-            if (ulong.TryParse(stem, out var n))
-                nums.Add(n);
-        }
-
+        var nums = EnumerateNumberedFiles("*.log").Select(f => f.Num).ToList();
         nums.Sort();
         foreach (var n in nums)
             JournalWriter.Replay(Path.Combine(_dir, JournalName(n)), _mem);
@@ -147,13 +152,10 @@ public sealed class DB : IDisposable
 
     private void RemoveOldJournals(ulong keep)
     {
-        foreach (var path in Directory.EnumerateFiles(_dir, "*.log"))
+        foreach (var (n, path) in EnumerateNumberedFiles("*.log"))
         {
-            var stem = Path.GetFileNameWithoutExtension(path);
-            if (ulong.TryParse(stem, out var n) && n < keep)
-            {
-                try { File.Delete(path); } catch { /* best effort */ }
-            }
+            if (n < keep)
+                TryDeleteBestEffort(path);
         }
     }
 
@@ -166,7 +168,7 @@ public sealed class DB : IDisposable
             var name = Path.GetFileName(path);
             if (live is not null && string.Equals(name, live, StringComparison.OrdinalIgnoreCase))
                 continue;
-            try { File.Delete(path); } catch { /* best effort */ }
+            TryDeleteBestEffort(path);
         }
     }
 
@@ -277,7 +279,7 @@ public sealed class DB : IDisposable
 
         if (oldPath is not null && !string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
         {
-            try { File.Delete(oldPath); } catch { /* best effort */ }
+            TryDeleteBestEffort(oldPath);
         }
 
         RemoveOrphanTables();

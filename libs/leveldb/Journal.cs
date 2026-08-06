@@ -5,6 +5,8 @@ namespace Zenith.LevelDB;
 /// Record types: 1=put, 2=delete (legacy single-op), 3=batch (payload = WriteBatch.Encode).
 /// Legacy: u8 type | i32 keyLen | key | i32 valLen | value.
 /// Batch: u8 type=3 | i32 payloadLen | payload.
+/// Both length-prefixed pieces go through <see cref="KvFraming"/> (shared with WriteBatch's own
+/// op encoding, which uses the identical int32-LE-length shape).
 /// </summary>
 sealed class JournalWriter : IDisposable
 {
@@ -13,47 +15,39 @@ sealed class JournalWriter : IDisposable
     public const byte TypeBatch = 3;
 
     private readonly FileStream _stream;
-    private readonly BinaryWriter _writer;
 
     public JournalWriter(string path, bool append)
     {
         _stream = new FileStream(path, append ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.Read);
-        _writer = new BinaryWriter(_stream);
     }
 
     public void AppendPut(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
     {
-        _writer.Write(TypePut);
-        _writer.Write(key.Length);
-        _writer.Write(key);
-        _writer.Write(value.Length);
-        _writer.Write(value);
+        _stream.WriteByte(TypePut);
+        KvFraming.WriteLengthPrefixed(_stream, key);
+        KvFraming.WriteLengthPrefixed(_stream, value);
     }
 
     public void AppendDelete(ReadOnlySpan<byte> key)
     {
-        _writer.Write(TypeDelete);
-        _writer.Write(key.Length);
-        _writer.Write(key);
-        _writer.Write(0);
+        _stream.WriteByte(TypeDelete);
+        KvFraming.WriteLengthPrefixed(_stream, key);
+        KvFraming.WriteLengthPrefixed(_stream, []);
     }
 
     public void AppendBatch(ReadOnlySpan<byte> encodedBatch)
     {
-        _writer.Write(TypeBatch);
-        _writer.Write(encodedBatch.Length);
-        _writer.Write(encodedBatch);
+        _stream.WriteByte(TypeBatch);
+        KvFraming.WriteLengthPrefixed(_stream, encodedBatch);
     }
 
     public void Flush(bool sync)
     {
-        _writer.Flush();
         _stream.Flush(sync);
     }
 
     public void Dispose()
     {
-        _writer.Dispose();
         _stream.Dispose();
     }
 
@@ -76,10 +70,7 @@ sealed class JournalWriter : IDisposable
 
             if (type == TypeBatch)
             {
-                if (stream.Position + 4 > stream.Length) break;
-                var payloadLen = reader.ReadInt32();
-                if (payloadLen < 0 || stream.Position + payloadLen > stream.Length) break;
-                var payload = reader.ReadBytes(payloadLen);
+                if (!KvFraming.TryReadLengthPrefixed(reader, stream.Length, out var payload)) break;
                 try
                 {
                     WriteBatch.ApplyEncoded(payload, mem);
@@ -92,21 +83,15 @@ sealed class JournalWriter : IDisposable
                 continue;
             }
 
-            if (stream.Position + 4 > stream.Length) break;
-            var keyLen = reader.ReadInt32();
-            if (keyLen < 0 || stream.Position + keyLen + 4 > stream.Length) break;
-            var key = reader.ReadBytes(keyLen);
-            var valLen = reader.ReadInt32();
-            if (valLen < 0 || stream.Position + valLen > stream.Length) break;
+            if (!KvFraming.TryReadLengthPrefixed(reader, stream.Length, out var key)) break;
+            if (!KvFraming.TryReadLengthPrefixed(reader, stream.Length, out var value)) break;
 
             if (type == TypePut)
             {
-                var value = reader.ReadBytes(valLen);
                 mem.Put(key, value);
             }
             else if (type == TypeDelete)
             {
-                if (valLen > 0) reader.ReadBytes(valLen);
                 mem.Delete(key);
             }
             else

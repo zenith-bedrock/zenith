@@ -15,6 +15,15 @@ public class Frame
 
     public const byte MAX_ORDER_CHANNELS = 32;
 
+    /// <summary>Single source of truth for the OrderChannel bound both the send path
+    /// (SendFrameLocked) and the receive path (HandleFrame) must agree on - the
+    /// OutputOrderIndex/OutputSequenceIndex/InputOrderIndex/InputHighestSequenceIndex arrays are
+    /// all sized exactly MAX_ORDER_CHANNELS, so an out-of-range channel indexes past the end.
+    /// The two call sites used to compare against this bound with different, independently
+    /// hand-written expressions (`&gt; 31` vs `&gt;= MAX_ORDER_CHANNELS`) that could silently
+    /// desync if this constant ever changed.</summary>
+    public static bool IsValidOrderChannel(byte channel) => channel < MAX_ORDER_CHANNELS;
+
     public Reliability Reliability { get; set; }
 
     public uint MessageIndex { get; set; }

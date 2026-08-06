@@ -1,15 +1,10 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
-class RequestNetworkSettingsPacket : DataPacket
+[GamePacket((int)ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET)]
+sealed partial class RequestNetworkSettingsPacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.REQUEST_NETWORK_SETTINGS_PACKET;
-
+    [Wire]
     public int ProtocolVersion { get; set; }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        ProtocolVersion = stream.ReadInt();
-    }
 }

@@ -301,43 +301,11 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
-    private InventorySlot GetSlot(global::Zenith.Player.Player player, int flat)
-    {
-        if (InventoryContainerMap.IsChestFlat(flat))
-        {
-            if (player.OpenChest is not { } view) return InventorySlot.Empty;
-            var openSlot = flat - InventoryContainerMap.ChestBase;
-            if (openSlot < 0 || openSlot >= view.SlotCount) return InventorySlot.Empty;
-            return _world.Chests.GetOpen(view, openSlot);
-        }
+    private InventorySlot GetSlot(global::Zenith.Player.Player player, int flat) =>
+        InventorySlotResolver.GetSlot(player, _world, flat);
 
-        if (InventoryContainerMap.IsCraftGridFlat(flat))
-            return player.CraftUi.GetGrid(flat - InventoryContainerMap.CraftUiBase);
-
-        if (flat == InventoryContainerMap.CraftResultFlat)
-            return player.CraftUi.Result;
-
-        return player.Inventory.Get(flat);
-    }
-
-    private bool TrySetSlot(global::Zenith.Player.Player player, int flat, InventorySlot value)
-    {
-        if (InventoryContainerMap.IsChestFlat(flat))
-        {
-            if (player.OpenChest is not { } view) return false;
-            var openSlot = flat - InventoryContainerMap.ChestBase;
-            if (openSlot < 0 || openSlot >= view.SlotCount) return false;
-            return _world.Chests.TrySetOpen(view, openSlot, value);
-        }
-
-        if (InventoryContainerMap.IsCraftGridFlat(flat))
-            return player.CraftUi.TrySetGrid(flat - InventoryContainerMap.CraftUiBase, value);
-
-        if (flat == InventoryContainerMap.CraftResultFlat)
-            return player.CraftUi.TrySetResult(value);
-
-        return player.Inventory.TrySet(flat, value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id, value.IsEmpty ? 0 : value.Count);
-    }
+    private bool TrySetSlot(global::Zenith.Player.Player player, int flat, InventorySlot value) =>
+        InventorySlotResolver.TrySetSlot(player, _world, flat, value);
 
     private bool TryTransfer(global::Zenith.Player.Player player, int from, int to, int count)
     {
