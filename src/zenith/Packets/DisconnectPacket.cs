@@ -1,41 +1,24 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
-class DisconnectPacket : DataPacket
+[GamePacket((int)ProtocolInfo.DISCONNECT_PACKET)]
+sealed partial class DisconnectPacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.DISCONNECT_PACKET;
-
     /// <summary>Bedrock DisconnectFailReason base (iota 0). More values when outbound kick needs them.</summary>
     public const int ReasonUnknown = 0;
 
-    public int Reason;
-    public bool HideDisconnectionScreen;
-    public string Message = "";
-    public string FilteredMessage = "";
+    [WireVar]
+    public int Reason { get; set; }
 
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarInt(Reason);
-        writer.WriteBool(HideDisconnectionScreen);
-        if (!HideDisconnectionScreen)
-        {
-            writer.WriteVarString(Message);
-            writer.WriteVarString(FilteredMessage);
-        }
-        return writer.GetBufferDisposing();
-    }
+    [Wire]
+    public bool HideDisconnectionScreen { get; set; }
 
-    public override void Decode(ref BinaryStream stream)
-    {
-        Reason = stream.ReadVarInt();
-        HideDisconnectionScreen = stream.ReadBool();
-        if (!HideDisconnectionScreen)
-        {
-            Message = stream.ReadVarString();
-            FilteredMessage = stream.ReadVarString();
-        }
-    }
+    [WireString]
+    [WireWhen(nameof(HideDisconnectionScreen), false)]
+    public string Message { get; set; } = "";
+
+    [WireString]
+    [WireWhen(nameof(HideDisconnectionScreen), false)]
+    public string FilteredMessage { get; set; } = "";
 }

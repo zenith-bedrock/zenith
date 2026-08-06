@@ -14,6 +14,29 @@ namespace Zenith.Session.Handler;
 /// </summary>
 partial class InGameSessionHandler : ISessionHandler
 {
+    /// <summary>Decodes a packet that may legitimately be malformed on the wire (client bug,
+    /// hostile input) - logs and returns false instead of letting the decode exception escape
+    /// into the session's dispatch loop. Previously reimplemented per-handler with drifting
+    /// exception-type/log-level choices (CommandRequest caught Exception+Warning, PlayerSkin
+    /// caught only InvalidOperationException+Debug, Emote caught Exception+Debug).</summary>
+    private static bool TryDecode<T>(NetworkSession session, ref BinaryStream stream, string label, out T packet, bool warnOnFailure = false)
+        where T : DataPacket, new()
+    {
+        try
+        {
+            packet = DataPacket.From<T>(ref stream);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            var message = $"{label} decode rejected: {ex.Message}";
+            if (warnOnFailure) session.Context.Logger.Warning(message);
+            else session.Context.Logger.Debug(message);
+            packet = new T();
+            return false;
+        }
+    }
+
     public void OnEnable(NetworkSession session)
     {
         if (session.Player is not null)
@@ -156,16 +179,8 @@ partial class InGameSessionHandler : ISessionHandler
 
     private static void HandleCommandRequest(NetworkSession session, ref BinaryStream stream)
     {
-        CommandRequestPacket packet;
-        try
-        {
-            packet = DataPacket.From<CommandRequestPacket>(ref stream);
-        }
-        catch (Exception ex)
-        {
-            session.Context.Logger.Warning($"CommandRequest decode failed: {ex.Message}");
+        if (!TryDecode<CommandRequestPacket>(session, ref stream, "CommandRequest", out var packet, warnOnFailure: true))
             return;
-        }
 
         var player = session.Player;
         if (player is null) return;
@@ -225,16 +240,8 @@ partial class InGameSessionHandler : ISessionHandler
 
     private static void HandlePlayerSkin(NetworkSession session, ref BinaryStream stream)
     {
-        PlayerSkinPacket packet;
-        try
-        {
-            packet = DataPacket.From<PlayerSkinPacket>(ref stream);
-        }
-        catch (InvalidOperationException ex)
-        {
-            session.Context.Logger.Debug($"PlayerSkin decode rejected: {ex.Message}");
+        if (!TryDecode<PlayerSkinPacket>(session, ref stream, "PlayerSkin", out var packet))
             return;
-        }
 
         var player = session.Player;
         if (player is null) return;
@@ -264,16 +271,8 @@ partial class InGameSessionHandler : ISessionHandler
 
     private static void HandleEmote(NetworkSession session, ref BinaryStream stream)
     {
-        EmotePacket packet;
-        try
-        {
-            packet = DataPacket.From<EmotePacket>(ref stream);
-        }
-        catch (Exception ex)
-        {
-            session.Context.Logger.Debug($"Emote decode rejected: {ex.Message}");
+        if (!TryDecode<EmotePacket>(session, ref stream, "Emote", out var packet))
             return;
-        }
 
         var player = session.Player;
         if (player is null || player.IsDead) return;

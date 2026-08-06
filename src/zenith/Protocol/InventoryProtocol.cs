@@ -257,24 +257,8 @@ sealed class InventoryProtocol
         SendItemStackResponseOk(requestId, player, touches);
     }
 
-    private InventorySlot ResolveStack(global::Zenith.Player.Player player, int flat)
-    {
-        if (InventoryContainerMap.IsChestFlat(flat))
-        {
-            if (player.OpenChest is not { } view) return InventorySlot.Empty;
-            var openSlot = flat - InventoryContainerMap.ChestBase;
-            if (openSlot < 0 || openSlot >= view.SlotCount) return InventorySlot.Empty;
-            return _session.Context.World.Chests.GetOpen(view, openSlot);
-        }
-
-        if (InventoryContainerMap.IsCraftGridFlat(flat))
-            return player.CraftUi.GetGrid(flat - InventoryContainerMap.CraftUiBase);
-
-        if (flat == InventoryContainerMap.CraftResultFlat)
-            return player.CraftUi.Result;
-
-        return player.Inventory.Get(flat);
-    }
+    private InventorySlot ResolveStack(global::Zenith.Player.Player player, int flat) =>
+        InventorySlotResolver.GetSlot(player, _session.Context.World, flat);
 
     private NetworkItemStack ToNetworkStack(InventorySlot slot, int stackNetworkId)
     {

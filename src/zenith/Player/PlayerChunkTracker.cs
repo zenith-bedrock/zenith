@@ -137,7 +137,7 @@ sealed class PlayerChunkTracker
         return true;
     }
 
-    public static int BlockToChunk(float block) => (int)Math.Floor(block / 16f);
+    public static int BlockToChunk(float block) => ChunkMath.BlockToChunk(block);
 
     public static void ForEachInSquare(int centerX, int centerZ, int radius, Action<int, int> visit)
     {

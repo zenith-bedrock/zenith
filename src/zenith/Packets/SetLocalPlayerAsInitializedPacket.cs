@@ -1,4 +1,4 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
@@ -8,14 +8,9 @@ namespace Zenith.Packets;
 /// real signal that the client left the loading screen and the session can switch to the
 /// final in-game handler.
 /// </summary>
-class SetLocalPlayerAsInitializedPacket : DataPacket
+[GamePacket((int)ProtocolInfo.SET_LOCAL_PLAYER_AS_INITIALIZED_PACKET)]
+sealed partial class SetLocalPlayerAsInitializedPacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.SET_LOCAL_PLAYER_AS_INITIALIZED_PACKET;
-
-    public long ActorRuntimeId { get; set; }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        ActorRuntimeId = stream.ReadUnsignedVarLong();
-    }
+    [WireVar]
+    public ulong ActorRuntimeId { get; set; }
 }

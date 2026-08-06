@@ -126,28 +126,24 @@ public class RakNetSession
 
         lock (_sessionLock)
         {
-            if (ReceivedFrameSequences.Count > 0)
-            {
-                var ack = new ACK
-                {
-                    Sequences = ReceivedFrameSequences.ToList()
-                };
-                ReceivedFrameSequences.Clear();
-                Server.Send(EndPoint, ack.Encode());
-            }
-
-            if (LostFrameSequences.Count > 0)
-            {
-                var nack = new NACK
-                {
-                    Sequences = LostFrameSequences.ToList()
-                };
-                LostFrameSequences.Clear();
-                Server.Send(EndPoint, nack.Encode());
-            }
+            FlushAcknowledgeLocked<ACK>(ReceivedFrameSequences);
+            FlushAcknowledgeLocked<NACK>(LostFrameSequences);
 
             SendQueueLocked(OutputFrames.Count);
         }
+    }
+
+    /// <summary>Drains a pending ACK/NACK sequence set into its packet and sends it - ACK and
+    /// NACK are otherwise handled identically (same AcknowledgePacket shape, same
+    /// build-clear-send sequence), only the packet type and source set differ.
+    /// Caller must hold <see cref="_sessionLock"/>.</summary>
+    private void FlushAcknowledgeLocked<T>(HashSet<uint> sequences) where T : AcknowledgePacket, new()
+    {
+        if (sequences.Count == 0) return;
+
+        var packet = new T { Sequences = sequences.ToList() };
+        sequences.Clear();
+        Server.Send(EndPoint, packet.Encode());
     }
 
     /// <summary>Drain all pending outbound frames to UDP (call before Close / disconnect kick).</summary>
@@ -196,8 +192,8 @@ public class RakNetSession
     /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
     private void SendFrameLocked(Frame frame, Priority priority)
     {
-        // OrderChannel fora de 0..31 crashava nos arrays de índice.
-        if (frame.OrderChannel > 31)
+        // OrderChannel fora de 0..MAX_ORDER_CHANNELS-1 crashava nos arrays de índice.
+        if (!Frame.IsValidOrderChannel(frame.OrderChannel))
         {
             Server.Logger?.Warning($"[{EndPoint}] Dropped frame with invalid OrderChannel={frame.OrderChannel}.");
             return;
@@ -524,7 +520,7 @@ public class RakNetSession
         // slots. Sem essa validação, um frame malformado/hostil com OrderChannel >= 32 derruba
         // a sessão inteira com IndexOutOfRangeException assim que qualquer código abaixo tenta
         // indexar por ele — drop instead.
-        if (Frame.IsSequencedOrOrdered(frame.Reliability) && frame.OrderChannel >= Frame.MAX_ORDER_CHANNELS)
+        if (Frame.IsSequencedOrOrdered(frame.Reliability) && !Frame.IsValidOrderChannel(frame.OrderChannel))
         {
             Server.Logger?.Warning($"[{EndPoint}] Dropped frame with invalid order channel {frame.OrderChannel}.");
             return false;

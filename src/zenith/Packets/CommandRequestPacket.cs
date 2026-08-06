@@ -1,3 +1,4 @@
+using Zenith.Packets.Generation;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
@@ -41,31 +42,18 @@ readonly struct CommandOriginData
 }
 
 /// <summary>CommandRequest (0x4D) — client slash command line (ADR §52 adendo).</summary>
-sealed class CommandRequestPacket : DataPacket
+[GamePacket((int)ProtocolInfo.COMMAND_REQUEST_PACKET)]
+sealed partial class CommandRequestPacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.COMMAND_REQUEST_PACKET;
-
+    [WireString]
     public string CommandLine { get; set; } = "";
+
+    [WireNested]
     public CommandOriginData Origin { get; set; }
+
+    [Wire]
     public bool Internal { get; set; }
+
+    [WireString]
     public string Version { get; set; } = "";
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        CommandLine = stream.ReadVarString();
-        Origin = CommandOriginData.Read(ref stream);
-        Internal = stream.ReadBool();
-        Version = stream.ReadVarString();
-    }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarString(CommandLine);
-        Origin.Write(ref writer);
-        writer.WriteBool(Internal);
-        writer.WriteVarString(Version);
-        return writer.GetBufferDisposing();
-    }
 }

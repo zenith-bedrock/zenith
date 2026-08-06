@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Zenith.ProtocolImport</RootNamespace>
+    <AssemblyName>protocol-import</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Cli" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="protocol-import.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared wire-type vocabulary with zenith.PacketGenerator - linked, not referenced, since
+         that project is a netstandard2.0 Roslyn analyzer and this is a net10.0 exe (incompatible
+         TFMs for a normal ProjectReference). See WireTypeVocabulary.cs's doc comment. -->
+    <Compile Include="..\..\src\zenith.PacketGenerator\WireTypeVocabulary.cs" Link="Schema\WireTypeVocabulary.cs" />
+  </ItemGroup>
+
+</Project>

@@ -82,3 +82,4 @@ artifacts/
 BenchmarkDotNet.Artifacts/
 **/zenith.Benchmarks-*/
 tmp-nbt-dump.csx
+tools/protocol-import/.cache/

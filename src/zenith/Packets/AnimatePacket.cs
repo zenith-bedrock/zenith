@@ -1,3 +1,4 @@
+using Zenith.Packets.Generation;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
@@ -7,52 +8,26 @@ namespace Zenith.Packets;
 /// action u8 + runtime id + data f32 + optional swingSource string.
 /// Inbound client Animate stays quiet (no rebroadcast).
 /// </summary>
-sealed class AnimatePacket : DataPacket
+[GamePacket((int)ProtocolInfo.ANIMATE_PACKET)]
+sealed partial class AnimatePacket : DataPacket
 {
-    public const int ActionSwingArm = 1;
-    public const int ActionStopSleep = 3;
-    public const int ActionCriticalHit = 4;
-    public const int ActionMagicCriticalHit = 5;
+    public const byte ActionSwingArm = 1;
+    public const byte ActionStopSleep = 3;
+    public const byte ActionCriticalHit = 4;
+    public const byte ActionMagicCriticalHit = 5;
 
-    public override int Id => (int)ProtocolInfo.ANIMATE_PACKET;
+    [Wire]
+    public byte Action { get; set; }
 
-    public int Action { get; set; }
+    [WireVar]
     public ulong ActorRuntimeId { get; set; }
 
     /// <summary>Always present on wire (rowing used this historically; SwingArm uses 0).</summary>
+    [Wire(BinaryStream.Endianess.Little)]
     public float Data { get; set; }
 
     /// <summary>Optional; e.g. "attack", "mine". Null → optional bool false.</summary>
+    [WireString]
+    [WireOptional]
     public string? SwingSource { get; set; }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteByte((byte)Action);
-        writer.WriteUnsignedVarLong((long)ActorRuntimeId);
-        writer.WriteFloat(Data, BinaryStream.Endianess.Little);
-        if (SwingSource is { } src)
-        {
-            writer.WriteBool(true);
-            writer.WriteVarString(src);
-        }
-        else
-        {
-            writer.WriteBool(false);
-        }
-
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        Action = stream.ReadByte();
-        ActorRuntimeId = (ulong)stream.ReadUnsignedVarLong();
-        Data = stream.ReadFloat(BinaryStream.Endianess.Little);
-        if (stream.ReadBool())
-            SwingSource = stream.ReadVarString();
-        else
-            SwingSource = null;
-    }
 }

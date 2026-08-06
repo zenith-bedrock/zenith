@@ -22,10 +22,8 @@ public sealed class WriteBatch
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(value);
         _ops.WriteByte(OpPut);
-        WriteInt32(_ops, key.Length);
-        _ops.Write(key);
-        WriteInt32(_ops, value.Length);
-        _ops.Write(value);
+        KvFraming.WriteLengthPrefixed(_ops, key);
+        KvFraming.WriteLengthPrefixed(_ops, value);
         _count++;
     }
 
@@ -33,8 +31,7 @@ public sealed class WriteBatch
     {
         ArgumentNullException.ThrowIfNull(key);
         _ops.WriteByte(OpDelete);
-        WriteInt32(_ops, key.Length);
-        _ops.Write(key);
+        KvFraming.WriteLengthPrefixed(_ops, key);
         _count++;
     }
 
@@ -75,32 +72,19 @@ public sealed class WriteBatch
         while (pos < ops.Length)
         {
             var type = ops[pos++];
-            if (pos + 4 > ops.Length)
-                throw new InvalidDataException("leveldb: corrupted batch key length");
 
-            var keyLen = BinaryPrimitives.ReadInt32LittleEndian(ops.Slice(pos, 4));
-            pos += 4;
-            if (keyLen < 0 || pos + keyLen > ops.Length)
+            if (!KvFraming.TryReadLengthPrefixed(ops, ref pos, out var key))
                 throw new InvalidDataException("leveldb: corrupted batch key");
-
-            var key = ops.Slice(pos, keyLen).ToArray();
-            pos += keyLen;
 
             if (type == OpPut)
             {
-                if (pos + 4 > ops.Length)
-                    throw new InvalidDataException("leveldb: corrupted batch value length");
-                var valLen = BinaryPrimitives.ReadInt32LittleEndian(ops.Slice(pos, 4));
-                pos += 4;
-                if (valLen < 0 || pos + valLen > ops.Length)
+                if (!KvFraming.TryReadLengthPrefixed(ops, ref pos, out var value))
                     throw new InvalidDataException("leveldb: corrupted batch value");
-                var value = ops.Slice(pos, valLen).ToArray();
-                pos += valLen;
-                mem.Put(key, value);
+                mem.Put(key.ToArray(), value.ToArray());
             }
             else if (type == OpDelete)
             {
-                mem.Delete(key);
+                mem.Delete(key.ToArray());
             }
             else
             {
@@ -112,12 +96,5 @@ public sealed class WriteBatch
 
         if (n != expectedCount)
             throw new InvalidDataException("leveldb: batch count mismatch");
-    }
-
-    private static void WriteInt32(Stream stream, int value)
-    {
-        Span<byte> buf = stackalloc byte[4];
-        BinaryPrimitives.WriteInt32LittleEndian(buf, value);
-        stream.Write(buf);
     }
 }

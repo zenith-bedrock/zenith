@@ -1,9 +1,10 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>PlayerAction (0x24) — destroy predict/creative sufficient for break path.</summary>
-class PlayerActionPacket : DataPacket
+[GamePacket((int)ProtocolInfo.PLAYER_ACTION_PACKET)]
+sealed partial class PlayerActionPacket : DataPacket
 {
     public const int ActionCreativeDestroy = 13;
     public const int ActionPredictDestroy = 26;
@@ -14,30 +15,30 @@ class PlayerActionPacket : DataPacket
     /// <summary>Bedrock STOP_ITEM_USE_ON — expected noise; not logged at Debug.</summary>
     public const int ActionStopItemUseOn = 29;
 
-    public override int Id => (int)ProtocolInfo.PLAYER_ACTION_PACKET;
-
+    [WireVar]
     public ulong ActorRuntimeId { get; set; }
+
+    [WireVar]
     public int Action { get; set; }
+
+    [WireVar]
     public int BlockX { get; set; }
+
+    [WireVar]
     public int BlockY { get; set; }
+
+    [WireVar]
     public int BlockZ { get; set; }
+
+    [WireVar]
     public int ResultX { get; set; }
+
+    [WireVar]
     public int ResultY { get; set; }
+
+    [WireVar]
     public int ResultZ { get; set; }
+
+    [WireVar]
     public int Face { get; set; }
-
-    public override Span<byte> Encode() => Array.Empty<byte>();
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        ActorRuntimeId = (ulong)stream.ReadUnsignedVarLong();
-        Action = stream.ReadVarInt();
-        BlockX = stream.ReadVarInt();
-        BlockY = stream.ReadVarInt();
-        BlockZ = stream.ReadVarInt();
-        ResultX = stream.ReadVarInt();
-        ResultY = stream.ReadVarInt();
-        ResultZ = stream.ReadVarInt();
-        Face = stream.ReadVarInt();
-    }
 }

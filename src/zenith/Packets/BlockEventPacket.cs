@@ -1,11 +1,12 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>
 /// BlockEvent (0x1a) — S→C block-local FX (chest lid). ADR §28 adendo.
 /// </summary>
-sealed class BlockEventPacket : DataPacket
+[GamePacket((int)ProtocolInfo.BLOCK_EVENT_PACKET)]
+sealed partial class BlockEventPacket : DataPacket
 {
     /// <summary>gophertunnel / PM: ChangeChestState — EventData 1 open, 0 close.</summary>
     public const int EventChangeChestState = 1;
@@ -13,32 +14,18 @@ sealed class BlockEventPacket : DataPacket
     public const int ChestStateClosed = 0;
     public const int ChestStateOpen = 1;
 
-    public override int Id => (int)ProtocolInfo.BLOCK_EVENT_PACKET;
-
+    [WireVar]
     public int X { get; set; }
+
+    [WireVar]
     public int Y { get; set; }
+
+    [WireVar]
     public int Z { get; set; }
+
+    [WireVar]
     public int EventType { get; set; }
+
+    [WireVar]
     public int EventData { get; set; }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarInt(X);
-        writer.WriteVarInt(Y);
-        writer.WriteVarInt(Z);
-        writer.WriteVarInt(EventType);
-        writer.WriteVarInt(EventData);
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream)
-    {
-        X = stream.ReadVarInt();
-        Y = stream.ReadVarInt();
-        Z = stream.ReadVarInt();
-        EventType = stream.ReadVarInt();
-        EventData = stream.ReadVarInt();
-    }
 }

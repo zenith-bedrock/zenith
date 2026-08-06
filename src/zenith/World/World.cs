@@ -345,5 +345,5 @@ sealed class World
         return column.ExtraPayload.Length >= 3 && column.ExtraPayload[0] == 8;
     }
 
-    private static int ToChunk(int block) => block >> 4;
+    private static int ToChunk(int block) => ChunkMath.BlockToChunk(block);
 }
