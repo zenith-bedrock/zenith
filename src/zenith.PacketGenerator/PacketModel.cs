@@ -20,6 +20,7 @@ internal sealed class FieldModel
     public string? EnumUnderlyingTypeName { get; set; }
     public string Endianess { get; set; } = "Big";
     public bool Utf16LengthPrefixed { get; set; }
+    public bool IsUnsignedVar { get; set; }
     public string? NestedTypeName { get; set; }
     public bool NestedHasStaticRead { get; set; }
     public string CountEncoding { get; set; } = "UnsignedVarInt";

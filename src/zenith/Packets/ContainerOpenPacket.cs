@@ -1,34 +1,29 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>ContainerOpen (0x2e) — abre UI de inventário / container.</summary>
-sealed class ContainerOpenPacket : DataPacket
+[GamePacket((int)ProtocolInfo.CONTAINER_OPEN_PACKET)]
+sealed partial class ContainerOpenPacket : DataPacket
 {
     public const byte WindowTypeChest = 0;
     public const byte WindowTypeInventory = 0xff;
 
-    public override int Id => (int)ProtocolInfo.CONTAINER_OPEN_PACKET;
-
+    [Wire]
     public byte WindowId { get; set; }
+
+    [Wire]
     public byte WindowType { get; set; } = WindowTypeInventory;
+
+    [WireVar]
     public int BlockX { get; set; }
+
+    [WireVar]
     public int BlockY { get; set; }
+
+    [WireVar]
     public int BlockZ { get; set; }
+
+    [WireVar]
     public long ActorUniqueId { get; set; } = -1;
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteByte(WindowId);
-        writer.WriteByte(WindowType);
-        writer.WriteVarInt(BlockX);
-        writer.WriteVarInt(BlockY);
-        writer.WriteVarInt(BlockZ);
-        writer.WriteVarLong(ActorUniqueId);
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream) { }
 }

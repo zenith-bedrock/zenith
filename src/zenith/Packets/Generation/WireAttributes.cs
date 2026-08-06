@@ -25,8 +25,19 @@ public sealed class WireAttribute(BinaryStream.Endianess endianess = BinaryStrea
 }
 
 /// <summary>LEB128 family (UnsignedVarInt/VarInt zigzag/UnsignedVarLong/VarLong) - no endianness, resolved by CLR type.</summary>
+/// <summary>
+/// By default an `int`/`long` property maps to the zigzag VarInt/VarLong family and a
+/// `uint`/`ulong` property maps to UnsignedVarInt/UnsignedVarLong (with the cast that requires).
+/// Some existing fields are `int`-typed by convention (ids/flags/counts that are never actually
+/// negative) but are written directly via UnsignedVarInt with no cast at all - set
+/// <paramref name="unsigned"/> to true to get that encoding on an `int`/`long` property without
+/// changing its CLR type (and rippling into every call site that already treats it as int).
+/// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-public sealed class WireVarAttribute : Attribute;
+public sealed class WireVarAttribute(bool unsigned = false) : Attribute
+{
+    public bool Unsigned { get; } = unsigned;
+}
 
 /// <summary>string property. Default is varint-length-prefixed (Bedrock-standard VarString); set Utf16LengthPrefixed for the rare u16-len-prefixed String() variant.</summary>
 [AttributeUsage(AttributeTargets.Property)]

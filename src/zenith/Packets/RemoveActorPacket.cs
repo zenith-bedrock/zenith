@@ -1,21 +1,11 @@
-using Zenith.Raknet.Stream;
+using Zenith.Packets.Generation;
 
 namespace Zenith.Packets;
 
 /// <summary>RemoveActor (0x0e). uniqueId = RuntimeId.</summary>
-class RemoveActorPacket : DataPacket
+[GamePacket((int)ProtocolInfo.REMOVE_ACTOR_PACKET)]
+sealed partial class RemoveActorPacket : DataPacket
 {
-    public override int Id => (int)ProtocolInfo.REMOVE_ACTOR_PACKET;
-
+    [WireVar]
     public long ActorUniqueId { get; set; }
-
-    public override Span<byte> Encode()
-    {
-        var writer = new BinaryStream();
-        writer.WriteUnsignedVarInt(Id);
-        writer.WriteVarLong(ActorUniqueId);
-        return writer.GetBufferDisposing();
-    }
-
-    public override void Decode(ref BinaryStream stream) { }
 }

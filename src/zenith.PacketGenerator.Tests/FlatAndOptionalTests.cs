@@ -29,6 +29,30 @@ public class FlatAndOptionalTests
     }
 
     [Fact]
+    public void Unsigned_var_int_forces_UnsignedVarInt_without_a_cast()
+    {
+        const string source = """
+            using Zenith.Packets.Generation;
+            namespace Zenith.Packets;
+
+            [GamePacket(21)]
+            sealed partial class SomePacket : DataPacket
+            {
+                [WireVar(unsigned: true)]
+                public int Flags { get; set; }
+            }
+            """;
+
+        var (generated, diagnostics) = GeneratorTestHelper.Run(source);
+
+        Assert.Empty(diagnostics);
+        var text = Assert.Single(generated);
+        Assert.Contains("writer.WriteUnsignedVarInt(Flags);", text);
+        Assert.Contains("Flags = stream.ReadUnsignedVarInt();", text);
+        Assert.DoesNotContain("WriteVarInt(Flags)", text);
+    }
+
+    [Fact]
     public void Optional_field_generates_has_value_flag_pattern()
     {
         const string source = """

@@ -87,7 +87,10 @@ internal static class GeneratorTestHelper
             }
 
             [System.AttributeUsage(System.AttributeTargets.Property)]
-            public sealed class WireVarAttribute : System.Attribute;
+            public sealed class WireVarAttribute(bool unsigned = false) : System.Attribute
+            {
+                public bool Unsigned { get; } = unsigned;
+            }
 
             [System.AttributeUsage(System.AttributeTargets.Property)]
             public sealed class WireStringAttribute(bool utf16LengthPrefixed = false) : System.Attribute
