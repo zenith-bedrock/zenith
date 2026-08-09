@@ -16,6 +16,7 @@ Zenith is a modern Bedrock Edition server written in **C# / .NET**, built around
 | [docs/architecture.md](docs/architecture.md) | Layered system map |
 | [docs/decisions.md](docs/decisions.md) | Why we made key choices (commit-backed) |
 | [docs/roadmap.md](docs/roadmap.md) | H1 closed; **Yes-next** order (not PM parity) |
+| [docs/vanilla-behavior.md](docs/vanilla-behavior.md) | Tester guide: what should match vanilla, what's known-different, where to report bugs |
 | [docs/comparison.md](docs/comparison.md) | Vs PocketMine, Nukkit, BDS, … |
 | [docs/dx.md](docs/dx.md) | Developer experience |
 | [docs/why-zenith.md](docs/why-zenith.md) | Long-term bet |
