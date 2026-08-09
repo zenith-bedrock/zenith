@@ -1,23 +1,61 @@
 # Zenith documentation
 
-Narrative docs for architecture, history, comparisons, and developer experience.
-Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHITECTURE.md) (living rules).
+Everything here lives in-repo and is reviewed via PR, not on the GitHub Wiki — Zenith's doc culture is ADR-first and commit-backed (see [`decisions.md`](decisions.md)), which needs version control tied to the code it describes. Think of this page as the wiki sidebar: pick the section that matches what you're trying to do.
 
-| Doc | What it covers |
-|-----|----------------|
-| [Architecture](architecture.md) | Layers, data flow, project graph, freeze list |
-| [Decision history](decisions.md) | Why we chose X — traced from commits and milestones |
-| [Protocol churn](protocol-churn.md) | Human checklist vs Bedrock client bumps (ADR §22) |
+Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHITECTURE.md) (living rules, not narrative).
+
+---
+
+## Start here
+
+New to the repo? Read in this order: root [`readme.md`](../readme.md) → [`architecture.md`](architecture.md) → [`AGENTS.md`](../AGENTS.md) → [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+
+## How-to guides
+
+Task-oriented — you have a specific thing to do.
+
+| Guide | Use for |
+|-------|---------|
+| [Developer experience](dx.md) | Contributor workflow, hot-path conventions, local reference clones |
+| [Vanilla behavior guide](vanilla-behavior.md) | Testing in-game: what should match vanilla, what to report as a bug |
 | [Alpha gate](alpha-gate.md) | `v0.0.1-alpha` tag checklist (compose / test / non-goals) |
-| [Vanilla behavior guide](vanilla-behavior.md) | Tester-facing: what should match vanilla, what's simplified, what's not implemented yet |
-| [Roadmap](roadmap.md) | H1 closed; **Yes-next** order (not PM parity) |
-| [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
-| [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
-| [Developer experience](dx.md) | What you get day-to-day as a contributor or extension author |
-| [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
+| [Protocol churn](protocol-churn.md) | Checklist for bumping to a new Bedrock client protocol (ADR §22) |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
+| [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
+
+## Reference
+
+Lookup-oriented — you know what you need, you just need the exact value or rule.
+
+| Reference | Covers |
+|-----------|--------|
+| [Technical reference](technical-reference.md) | Protocol version SSOT, embedded assets, external study repos, owned vs borrowed |
+| [Architecture](architecture.md) | Layers, data flow, project graph, freeze list |
+| [Naming conventions](naming.md) | Verb/prefix vocabulary by layer (`Handle*`, `Submit*`, …) |
+| [`ARCHITECTURE.md`](../ARCHITECTURE.md) | Full constraint list, GameLoop rules, smoke manual, roadmap phases |
 | [`AGENTS.md`](../AGENTS.md) | Folder layout for humans and agents |
-| [Technical reference](technical-reference.md) | SSOT for protocol, ADR § tags, external study repos, embedded assets |
+| [`schemas/zenith.schema.json`](../schemas/zenith.schema.json) | Config IDE autocomplete (boot validation is `ServerConfig.Validate()`) |
+
+## Explanation
+
+Understanding-oriented — the *why* behind a choice, not the mechanics.
+
+| Doc | Covers |
+|-----|--------|
+| [Decision history](decisions.md) | ADR §1–§76 — why we chose X, traced from commits and milestones |
+| [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
+| [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
+| [Robustness / DX debt](robustness-dx-debt.md) | Platform-health risks tracked apart from product roadmap (ADR §54) |
+
+## Planning
+
+Where the project is headed — check before picking up work.
+
+| Doc | Covers |
+|-----|--------|
+| [Roadmap](roadmap.md) | H1 closed; **Yes-next** order (not PM parity) |
+
+---
 
 Library-specific notes:
 
