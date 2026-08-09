@@ -17,7 +17,7 @@ Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHI
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
 | [`AGENTS.md`](../AGENTS.md) | Folder layout for humans and agents |
-| [Technical references](../readme.md#technical-references-transparency) | SSOT for protocol, ADR § tags, external study repos, embedded assets |
+| [Technical reference](technical-reference.md) | SSOT for protocol, ADR § tags, external study repos, embedded assets |
 
 Library-specific notes:
 
