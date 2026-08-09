@@ -1,0 +1,34 @@
+---
+description: RakNet concurrency and reliability invariants — test before shape changes
+globs: src/raknet/**/*.cs,src/raknet.Tests/**/*.cs,src/zenith/Session/**/*.cs
+alwaysApply: false
+---
+
+# RakNet invariants
+
+Subtle bugs live here; prefer `raknet.Tests` before changing frame/reliability shape.
+
+## Concurrency
+
+- `SendFrame` / output queue / reliable & order indexes / `OutputBackup` are guarded by the session lock.
+- GameLoop (or any thread) may call `SendFrame` on peer sessions; receive/`Tick` may run concurrently — never assume single-threaded access to `OutputFrames`.
+- Prefer short critical sections; do not invent an Actor model for sends.
+
+## Reliability shape (regressions we already hit)
+
+- Split fragments: **each** fragment gets its own `MessageIndex` (never share one across a split).
+- `OrderChannel` must be `< Frame.MAX_ORDER_CHANNELS` (32) on both ingress and egress — invalid = drop + warn, never index OOB crash.
+- Ordered vs sequenced: ordered advances `OrderIndex` and resets sequence; sequenced keeps order and advances sequence.
+- **Bedrock outbound** (`NetworkSession.SendDataPacket`): always `Reliability.ReliableOrdered` on channel 0 — never plain `Reliable`. Unordered delivery can apply `LevelChunk` before `StartGame` (`UseBlockNetworkIdHashes`) → empty skybox with working inventory.
+
+## Tests expected for related changes
+
+Extend [`src/raknet.Tests`](src/raknet.Tests/) rather than only client smoke:
+
+- Distinct MessageIndexes on split
+- Invalid OrderChannel does not throw
+- Order/Sequence index progression
+- Concurrent `SendFrame` does not corrupt indexes
+- Bedrock egress: `NetworkSession.GamePacketReliability` is `ReliableOrdered` ([`StartGameWireTests`](src/zenith.Tests/StartGameWireTests.cs))
+
+Skip full handshake coverage unless the change is handshake-specific.

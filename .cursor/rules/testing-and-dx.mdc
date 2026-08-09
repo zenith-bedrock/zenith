@@ -1,0 +1,36 @@
+---
+description: When and where to add tests; DX leaf-lib discipline
+alwaysApply: true
+---
+
+# Testing & DX (agents)
+
+## Prefer leaf tests over client smoke
+
+| Change touches | Add/extend tests in |
+|----------------|---------------------|
+| NBT endian / compounds | `nbt.Tests` |
+| LevelDB WAL/snapshot/API | `leveldb.Tests` |
+| Frame reliability / split / indexes | `raknet.Tests` |
+| World overlay, intents, config, palettes, packet DTOs | `zenith.Tests` |
+
+`dotnet test zenith.sln` should stay green. Do not treat Bedrock client connect as a substitute for format/invariant tests.
+
+## What to test next (priority if growing features)
+
+1. **Intent contracts** — queue overflow, ChatSystem does not require receive-thread fan-out, BlockSystem drains FIFO.
+2. **Critical packet round-trips** — encode→decode for Login/StartGame/UpdateBlock/Text/InventoryContent (Packets layer only).
+3. **RakNet receive path** — reliable window dedup, fragment bounds (DoS caps), NACK retransmit uses locked send.
+
+## DX do / don't
+
+```text
+✅ Smallest leaf first; InternalsVisibleTo for internal types
+✅ Document trade-offs in docs/decisions.md when behavior changes
+✅ Config via zenith.yml (AppContext.BaseDirectory) — no new ZENITH_* env soup
+❌ New DI / plugin / Actor “to make testing easier”
+❌ Silent InMemory fallback when LevelDB open fails
+❌ Drive-by refactors unrelated to the task
+```
+
+Narrative DX: [`docs/dx.md`](docs/dx.md). Keep docs candid about non-goals.
