@@ -69,8 +69,13 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 | 3 | **Floor-drop despawn TTL** | Optional remainder of §73 — drops never disappear today. |
 | 4 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 5 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
+| 6 | **EventBus second consumer (proposed, needs ADR)** | Not a plugin API. `EventBus` today only `Publish`es login/quit with zero domain consumers (ARCHITECTURE.md notes). Pick one existing Gameplay moment (e.g. death/respawn or chat) and wire a **second** internal `Subscribe<T>` consumer through it, to prove the seam holds under >1 listener before any plugin surface is promised. See "Competitive read" below for why this is next, not Horizon 2 plugin API itself. |
 
-**Default stance:** priority **0 → 1 → 2** (confirm the terrain smoke gate, keep chipping at codegen migration, then smoke-bot). §61 is opt-in adoption work, not the default “next.”
+**Default stance:** priority **0 → 1 → 2** (confirm the terrain smoke gate, keep chipping at codegen migration, then smoke-bot). §61 is opt-in adoption work, not the default “next.” **6** is the proposed step *after* 0–2 close — flagged now so it doesn't get skipped straight to Horizon 2's full plugin API.
+
+### Competitive read (Aug 2026)
+
+Cross-checked against local clones of comparable/newer projects (`dx.md` § "Bedrock references"): **Basalt** (C#/.NET, comparable age to Zenith) already ships plugin support, enchantments, hoppers, and forms — ahead of Zenith on breadth precisely because it didn't gate features behind an architecture-first bet. Dragonfly and Endstone, the two projects whose extension models are most mature, only got there because their event/handler seam was proven with real internal consumers *before* any plugin promise. Priority 6 is that proof step for Zenith — small, ADR-gated, reversible — not a decision to open plugins.
 
 ---
 
@@ -84,7 +89,7 @@ Pull only with ADR + demonstrated need:
 - Armor / ender chest / hoppers
 - Stairs/beds/doors generic block-state facing stack
 - Multi-world load / Mojang world format (**direction:** §61 seam + converter — not ZLDB replacement)
-- Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21)
+- Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21) — **stepping stone:** [Yes-next priority 6](#yes-next-after-h1) proves the `EventBus` seam with a second internal consumer first
 - `/` command **framework** + Bedrock autocomplete
 - Automating protocol schema CI / full load harness
 - Nether/End Dimensions; custom biome authoring; FormId product UI
