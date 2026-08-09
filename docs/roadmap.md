@@ -38,9 +38,22 @@ If two contributors pick work, prefer **different** [Yes-next](#yes-next-after-h
 
 **Foundation:** StackId + DigProfiles (ADR §55) — shipped. **Join wire fidelity** (ADR §59) — shipped in `v0.0.2-alpha`.
 
-**Release tag `v0.0.2-alpha`:** closed H1 rows 1–5 + §55/§56/§59. Post-tag on `develop`: gravity (§57), playerdata (§60), world seams (§62–§72). Dual-storage **direction** is §61 (not shipped).
+**Release tag `v0.0.2-alpha`:** closed H1 rows 1–5 + §55/§56/§59. Post-tag on `develop`: gravity (§57), playerdata (§60), world seams (§62–§72), survival/dig honesty (§73–§74), cave-gen perf (§75), packet wire codegen (§76). Dual-storage **direction** is §61 (not shipped).
 
 **Protocol smoke bot (ADR §58):** [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol, **separate repo**. Human Gate A remains the product smoke authority for tags.
+
+---
+
+## Shipped since H1 close (platform work, not new horizon rows)
+
+Not gameplay leaves — recorded here so this file stays the accurate "what actually landed" list instead of drifting behind `git log`.
+
+| ADR | Leaf | Notes |
+|----:|------|-------|
+| §73 | **Floor-drop honesty** | Q-throw / ISR Drop, Survival death loot to floor, `TryAddOrMerge` no silent clobber. No gravity/despawn TTL/XP orbs. |
+| §74 | **Dig/chest honesty** | Wrong-tool no-drop, Creative chest content dump, death SoftCap keeps slot on refuse. No loot tables/durability. |
+| §75 | **Cave-gen alloc cut** | `OverworldCaveContext` disposable + ThreadStatic scratch + `ArrayPool` — cut §69 cave-context GC pressure. No carve-semantics change. |
+| §76 | **Packet wire codegen** | Roslyn incremental source generator (`[GamePacket]` + `[Wire*]` attributes) mechanizes `Encode`/`Decode` boilerplate. 31/64 packet types migrated so far (opt-in, Tier B packets stay hand-written by design). `tools/protocol-import` (Mojang + Endstone schema sources) scaffolds new migrations and diffs protocol drift. |
 
 ---
 
@@ -50,13 +63,14 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 
 | Priority | Leaf | Notes |
 |------:|------|--------|
-| 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Process gate before more gen ADRs. |
-| 1 | **Survival honesty (small)** | **Shipped §73–§74:** Q-throw, death loot, wrong-tool no-drop, Creative chest dump. Remaining optional: floor-drop despawn TTL. |
+| 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Still owed — code shipped and later gen work (§75) landed on top of it, but the human confirmation pass itself isn't recorded as done. Do this before opening another *terrain* ADR (perf/infra leaves like §75/§76 are not gated by this). |
+| 1 | **Packet codegen migration, remaining Tier A** | §76 shipped the generator; 33/64 packets still hand-written and eligible (Tier B list in ADR §76 stays hand-written on purpose — don't force those). Plain migration PRs, no new ADR needed per packet. |
 | 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. |
-| 3 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
-| 4 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
+| 3 | **Floor-drop despawn TTL** | Optional remainder of §73 — drops never disappear today. |
+| 4 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
+| 5 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
 
-**Default stance:** priority **0 → 1** (smoke gen, then survival leaf). §61 is opt-in adoption work, not the default “next.”
+**Default stance:** priority **0 → 1 → 2** (confirm the terrain smoke gate, keep chipping at codegen migration, then smoke-bot). §61 is opt-in adoption work, not the default “next.”
 
 ---
 
