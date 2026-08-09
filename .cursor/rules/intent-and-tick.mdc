@@ -1,0 +1,33 @@
+---
+description: Intent queues, GameLoop systems, and handler boundaries
+globs: src/zenith/Session/Handler/**/*.cs,src/zenith/Gameplay/**/*.cs,src/zenith/Player/**/*.cs
+alwaysApply: false
+---
+
+# Intent → tick (handlers & systems)
+
+## Handler rules
+
+- Decode + validate (NaN/Inf, bounds, rate limits).
+- Write **pending intent only** (`SubmitMovementInput`, `SubmitBlockEdit`, `SubmitChat`, …).
+- **Never** call `peer.Session.Protocol.*` for fan-out from the receive thread.
+- **Never** call `World.SetBlock` / inventory mutate as authority here.
+
+## System rules
+
+- Mutate domain on the single-threaded GameLoop tick.
+- Drain **queues** for discrete actions (`while (TryConsumeBlockEdit)`); one slot only for continuous state (movement).
+- Block-edit capacity is `Player.MaxPendingBlockEdits` (8); overflow = reject newest + debug log.
+- Bake identifiers needed at apply time into the intent (e.g. hotbar slot for place) — do not re-read raced network fields.
+
+## GameLoop hygiene
+
+- No LevelDB / disk `GetResult` on the tick path.
+- Exception in one system: log and continue (same idea as EventBus).
+- Do not introduce a generic “scheduler” or packet DI inside `GameLoop`.
+
+## Checklist before merging handler/system PRs
+
+1. Is authoritative mutation only in a `*System.Tick`?
+2. Can rapid discrete packets within ~50ms drop silently? If yes, use a bounded queue.
+3. Does any send touch another player’s `RakNetSession` outside tick + locked send path?
