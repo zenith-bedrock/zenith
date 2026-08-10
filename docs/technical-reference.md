@@ -18,7 +18,7 @@ New encode/decode work must match **1001**, not the newest Mojang docs tip (ofte
 
 | Document | Use for |
 |----------|---------|
-| [`decisions.md`](decisions.md) | **ADR §1–§76** — every `ADR §N` / `§N` in code should resolve here |
+| [`decisions.md`](decisions.md) | **ADR §1–§77** — every `ADR §N` / `§N` in code should resolve here |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer rules, smoke expectations, freeze list |
 | [`../AGENTS.md`](../AGENTS.md) | Folder roles (`Gameplay/` decides, `Protocol/` transmits, …) |
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |

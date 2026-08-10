@@ -130,4 +130,53 @@ public class FloorDropStoreTests
         Assert.Equal(7, snap.PickupDelayTicks);
         Assert.Equal(4, snap.Count);
     }
+
+    [Fact]
+    public void TickDespawn_below_threshold_keeps_cell_and_ages_it()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(1, 64, 1, StackId.FromBlock(Blocks.Dirt), 1, entityRuntimeIdIfNew: 1, out _));
+
+        var expired = new List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)>();
+        store.TickDespawn(expired, tickDiff: FloorDropStore.DefaultDespawnTicks - 1);
+
+        Assert.Empty(expired);
+        Assert.Equal(1, store.Count);
+        Assert.Equal(FloorDropStore.DefaultDespawnTicks - 1, store.Snapshot().Single().AgeTicks);
+    }
+
+    [Fact]
+    public void TickDespawn_at_threshold_removes_cell_and_reports_it()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(2, 64, 2, StackId.FromBlock(Blocks.Stone), 3, entityRuntimeIdIfNew: 7, out _));
+
+        var expired = new List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)>();
+        store.TickDespawn(expired, tickDiff: FloorDropStore.DefaultDespawnTicks);
+
+        Assert.Equal(0, store.Count);
+        var e = Assert.Single(expired);
+        Assert.Equal((2, 64, 2), (e.X, e.Y, e.Z));
+        Assert.Equal(StackId.FromBlock(Blocks.Stone), e.Id);
+        Assert.Equal(3, e.Count);
+        Assert.Equal(7, e.EntityRuntimeId);
+    }
+
+    [Fact]
+    public void TickDespawn_merge_does_not_reset_age()
+    {
+        var store = new FloorDropStore();
+        Assert.True(store.TryAddOrMerge(4, 64, 4, StackId.FromBlock(Blocks.Dirt), 1, entityRuntimeIdIfNew: 1, out _));
+
+        var expired = new List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)>();
+        store.TickDespawn(expired, tickDiff: FloorDropStore.DefaultDespawnTicks - 1);
+        Assert.Empty(expired);
+
+        // Topping off the pile one tick before despawn must not grant it a fresh lifetime.
+        Assert.True(store.TryAddOrMerge(4, 64, 4, StackId.FromBlock(Blocks.Dirt), 1, entityRuntimeIdIfNew: 2, out _));
+        store.TickDespawn(expired, tickDiff: 1);
+
+        Assert.Equal(0, store.Count);
+        Assert.Single(expired);
+    }
 }

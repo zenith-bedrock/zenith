@@ -1049,6 +1049,22 @@ The `[WireWhen]` open question from above is still open on the Mojang source too
 
 **Status (ago 2026):** Shipped — generator + attributes + diagnostics + Phase 1 proof-of-concept migrations + `zenith.PacketGenerator.Tests` + `protocol-import` CLI with Endstone and Mojang sources + `protocol-import.Tests`.
 
+**Addendum (ago 2026) — migration audited, `TextPacket` classified Tier B, no plain candidates remain:** re-checked all 50 still-unmigrated files in `src/zenith/Packets/`. 40 are outbound-only packets with an intentionally empty `Decode` — already covered by the "left as-is" note above. Of the 10 with real `Decode` logic, 9 (`EmoteListPacket`, `InteractPacket`, `InventoryTransactionPacket`, `ItemStackRequestPacket`, `LoginPacket`, `MobEquipmentPacket`, `PlaySoundPacket`, `PlayerAuthInputPacket`, `PlayerSkinPacket`) were already named Tier B above. The 10th, `TextPacket`, was unclassified — on inspection it belongs in Tier B too: `Encode` writes a derived `category` byte (`CategoryFor(Type)`) that `Decode` reads and discards (`stream.ReadByte(); // category`), a discard-on-decode/asymmetric pattern; and its field list is a 3-way switch on `Type` (`TypeChat`/`TypeWhisper`/`TypeAnnouncement` vs `TypeTranslation`/`TypePopup`/`TypeJukeboxPopup` vs default), not a single-condition `[WireWhen]`. Forcing it into attributes would be exactly the "forcing Tier B packets into attributes" non-goal above. **No further plain (no-ADR) packet migrations remain** — the 31/64 figure is the practical ceiling for the current attribute set; growing it further needs either a multi-branch conditional attribute (new ADR) or accepting a wire-format-preserving Encode/Decode asymmetry in the generator (against this ADR's stated design).
+
+### 77. Floor-drop despawn TTL
+
+**Choice:** Close the remaining §73 gap — uncollected floor drops now disappear after a fixed lifetime, matching vanilla's 5-minute item-entity despawn, without a generic entity/TTL layer.
+
+1. `FloorDropStore.DropSlot` gains an `AgeTicks` field (default `0`, optional positional parameter — no call-site churn). `TryAddOrMerge`/`TryTakeUpTo` explicitly carry the existing cell's `AgeTicks` forward; **merging more of the same item onto a pile does not reset its age** (a cell can't be kept alive forever by topping it off).
+2. `FloorDropStore.TickDespawn(expired, tickDiff, despawnTicks = DefaultDespawnTicks)` ages every cell once per `BlockSystem` tick (same two-phase scratch-list pattern as `TickPickupDelays`, to avoid mutating `_drops` mid-iteration) and removes + reports cells that cross `DefaultDespawnTicks` (6000 ticks / 5 min at 20 TPS).
+3. `BlockSystem.PickupFloorDrops` sends `RemoveActor` for each expired cell to peers who are in-game or already know the chunk (same visibility rule `FloorDropFanout.Publish` uses) — no bag mutation, the item is just gone, as in vanilla.
+
+**Clarifies:** §73 "Non-goals: ... floor-drop despawn TTL" (that gap is now closed); `roadmap.md` Yes-next priority 3.
+
+**Non-goals:** Per-item despawn time variance (vanilla varies this for some items/enchants — out of scope); despawn timer reset on player proximity or re-throw; LevelDB persistence of drop age across restart (drops are already RAM-only per §26); a generic `Entity`/TTL component — this stays a `FloorDropStore`-local concept.
+
+**Status (ago 2026):** Shipped — `AgeTicks` + `TickDespawn` + `BlockSystem` wiring + leaf tests (`FloorDropStoreTests`).
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
