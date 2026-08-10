@@ -1,5 +1,4 @@
 using Xunit;
-using Zenith.Event;
 using Zenith.Player;
 using Zenith.World;
 
@@ -227,21 +226,6 @@ public class ColumnTerrainEmitterTests
         Assert.Equal(
             new[] { "chunk:2,3", "block:32,64,48", "block:33,64,48" },
             sequence);
-    }
-}
-
-public class EventBusTests
-{
-    [Fact]
-    public void Publish_isolates_listener_exceptions()
-    {
-        var bus = new EventBus();
-        var secondRan = false;
-        bus.Subscribe<string>(_ => throw new InvalidOperationException("boom"));
-        bus.Subscribe<string>(_ => secondRan = true);
-
-        bus.Publish("hi");
-        Assert.True(secondRan);
     }
 }
 

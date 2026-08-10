@@ -125,7 +125,7 @@ C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarq
 - JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
 - **Item palette:** `ItemPalette` no `ServerContext` (JSON embedded); `ItemRegistryPacket` após StartGame. Inventário de domínio = `StackId` (ADR §55); map wire no Protocol. `Blocks.*` static = dívida conhecida — novos registries via Context.
 - Visibilidade join/leave: `PlayerVisibility` + `EntityProtocol`; pose só no `MovementSystem`.
-- **EventBus:** infra reservada (Publish login/quit); sem consumidores de domínio ainda. `Publish` isola exceção por listener (como GameLoop).
+- **EventBus:** Publish login/quit; primeiros consumidores de domínio (ADR §78) — `PlayerPresenceAnnouncer` (join/leave system chat), registrado no composition root (`ZenithServer`). `Publish` isola exceção por listener (como GameLoop). Ainda **não** é superfície de plugin — só composição interna.
 - **i18n (futuro):** quando implementado, usar `lang/*.toml` (TOML) — Norway problem do YAML em strings de tradução + catálogo chave→string com diff mais limpo. Config operacional permanece em `zenith.yml`.
 
 ## Smoke manual

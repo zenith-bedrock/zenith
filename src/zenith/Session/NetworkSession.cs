@@ -137,8 +137,9 @@ class NetworkSession
 
         if (Player is not null)
         {
+            var wasInGame = Player.IsInGame;
             var online = Context.PlayerManager.SnapshotOnline();
-            if (Player.IsInGame)
+            if (wasInGame)
                 PlayerVisibility.AnnounceLeave(Player, online);
 
             // Release chest lid opener before leaving Online (ADR §28 adendo).
@@ -154,7 +155,7 @@ class NetworkSession
 
             Player.IsInGame = false;
             Context.PlayerManager.Remove(Player);
-            Context.EventBus.Publish(new PlayerQuitEvent(Player));
+            Context.EventBus.Publish(new PlayerQuitEvent(Player, wasInGame));
         }
 
         RakSession.HasGameIdentity = false;

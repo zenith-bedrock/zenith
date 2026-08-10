@@ -76,7 +76,12 @@ internal sealed class IntentTestFixture
     public InventorySystem CreateInventorySystem() =>
         new(Players, World, Context.Recipes, Context.Creative);
 
-    public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival)
+    public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival) =>
+        AddPlayer(name, gameMode, isInGame: true);
+
+    /// <summary>Registered in <see cref="Players"/> but not yet spawned — mirrors the window between
+    /// login accept and <c>InGameSessionHandler</c> setting <c>IsInGame</c> (e.g. mid resource-pack).</summary>
+    public Player.Player AddPlayer(string name, GameMode gameMode = GameMode.Survival, bool isInGame = false)
     {
         var rak = new RakNetSession
         {
@@ -88,7 +93,7 @@ internal sealed class IntentTestFixture
         var session = new NetworkSession(rak, new StubSessionHandler(), Context);
         var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode)
         {
-            IsInGame = true
+            IsInGame = isInGame
         };
         session.Player = player;
         Assert.True(Players.TryAdd(player));

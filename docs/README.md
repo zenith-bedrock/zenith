@@ -42,7 +42,7 @@ Understanding-oriented — the *why* behind a choice, not the mechanics.
 
 | Doc | Covers |
 |-----|--------|
-| [Decision history](decisions.md) | ADR §1–§77 — why we chose X, traced from commits and milestones |
+| [Decision history](decisions.md) | ADR §1–§78 — why we chose X, traced from commits and milestones |
 | [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
 | [Robustness / DX debt](robustness-dx-debt.md) | Platform-health risks tracked apart from product roadmap (ADR §54) |

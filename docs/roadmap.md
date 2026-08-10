@@ -55,6 +55,7 @@ Not gameplay leaves — recorded here so this file stays the accurate "what actu
 | §75 | **Cave-gen alloc cut** | `OverworldCaveContext` disposable + ThreadStatic scratch + `ArrayPool` — cut §69 cave-context GC pressure. No carve-semantics change. |
 | §76 | **Packet wire codegen** | Roslyn incremental source generator (`[GamePacket]` + `[Wire*]` attributes) mechanizes `Encode`/`Decode` boilerplate. 31/64 packet types migrated (opt-in, Tier B packets stay hand-written by design — audited aug 2026, `TextPacket` added to Tier B, **no plain migrations remain**). `tools/protocol-import` (Mojang + Endstone schema sources) scaffolds new migrations and diffs protocol drift. |
 | §77 | **Floor-drop despawn TTL** | `FloorDropStore.AgeTicks` (merge-safe) + `TickDespawn` + `RemoveActor` fan-out. 6000-tick (5 min) vanilla-parity default. Closes the last §73 non-goal. |
+| §78 | **EventBus first domain consumers** | `PlayerPresenceAnnouncer` (join/leave system chat) on the existing `PlayerLoginEvent`/`PlayerQuitEvent` — no new event types. `EventBusTests` closes a coverage gap the infra shipped without. |
 
 ---
 
@@ -70,9 +71,9 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 | ~~3~~ | ~~Floor-drop despawn TTL~~ | **Shipped (ADR §77):** `FloorDropStore.TickDespawn` + `AgeTicks` (merge-safe) + `RemoveActor` fan-out, 6000-tick vanilla-parity default. |
 | 4 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 5 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
-| 6 | **EventBus second consumer (proposed, needs ADR)** | Not a plugin API. `EventBus` today only `Publish`es login/quit with zero domain consumers (ARCHITECTURE.md notes). Pick one existing Gameplay moment (e.g. death/respawn or chat) and wire a **second** internal `Subscribe<T>` consumer through it, to prove the seam holds under >1 listener before any plugin surface is promised. See "Competitive read" below for why this is next, not Horizon 2 plugin API itself. |
+| ~~6~~ | ~~EventBus second consumer~~ | **Shipped (ADR §78):** `PlayerPresenceAnnouncer` (join/leave system chat) on the existing `PlayerLoginEvent`/`PlayerQuitEvent` — no new event types (§21 still holds). `EventBusTests` closes the coverage gap the infra shipped with. Not a plugin API — see "Competitive read" below for why this was the right-sized next step. |
 
-**Default stance:** priority **0 → 1 → 2** (confirm the terrain smoke gate, keep chipping at codegen migration, then smoke-bot). §61 is opt-in adoption work, not the default “next.” **6** is the proposed step *after* 0–2 close — flagged now so it doesn't get skipped straight to Horizon 2's full plugin API.
+**Default stance:** priority **0 → 2** (confirm the terrain smoke gate, then smoke-bot). §61 is opt-in adoption work, not the default “next.”
 
 ### Competitive read (Aug 2026)
 
@@ -90,7 +91,7 @@ Pull only with ADR + demonstrated need:
 - Armor / ender chest / hoppers
 - Stairs/beds/doors generic block-state facing stack
 - Multi-world load / Mojang world format (**direction:** §61 seam + converter — not ZLDB replacement)
-- Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21) — **stepping stone:** [Yes-next priority 6](#yes-next-after-h1) proves the `EventBus` seam with a second internal consumer first
+- Plugin API / DI / VisibilitySystem / EventBus product surface beyond login/quit (§21) — **stepping stone shipped:** ADR §78 proved the `EventBus` seam with a real internal consumer (`PlayerPresenceAnnouncer`); this bullet is still the actual plugin-API boundary, unchanged
 - `/` command **framework** + Bedrock autocomplete
 - Automating protocol schema CI / full load harness
 - Nether/End Dimensions; custom biome authoring; FormId product UI

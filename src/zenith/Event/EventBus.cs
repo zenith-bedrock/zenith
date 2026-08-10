@@ -3,8 +3,9 @@ using Zenith.Raknet.Log;
 namespace Zenith.Event;
 
 /// <summary>
-/// Barramento tipado publish/subscribe. Infra reservada: login/quit já publicam; ainda sem
-/// consumidores de domínio (scoreboard etc.). Deliberadamente sem prioridade/cancelamento.
+/// Barramento tipado publish/subscribe. Login/quit publicam; primeiro consumidor de domínio é
+/// <see cref="Zenith.Gameplay.PlayerPresenceAnnouncer"/> (ADR §78, join/leave chat), registrado
+/// no composition root. Deliberadamente sem prioridade/cancelamento/unsubscribe (ADR §21).
 /// </summary>
 class EventBus
 {

@@ -17,7 +17,18 @@ class PlayerQuitEvent
 {
     public Player.Player Player { get; }
 
-    public PlayerQuitEvent(Player.Player player) => Player = player;
+    /// <summary>
+    /// True se o player chegou a ficar InGame (spawn completo) antes de sair — false pra quem
+    /// caiu durante login/resource-pack/spawn. Consumidores que anunciam "saiu" pros outros
+    /// jogadores devem checar isto; senão anunciam a saída de alguém que ninguém viu entrar.
+    /// </summary>
+    public bool WasInGame { get; }
+
+    public PlayerQuitEvent(Player.Player player, bool wasInGame)
+    {
+        Player = player;
+        WasInGame = wasInGame;
+    }
 }
 
 /// <summary>
