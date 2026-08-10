@@ -3,8 +3,18 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>
-/// PlayerList (0x3f). ADD embeds full <see cref="SerializedSkin"/> (join fidelity).
-/// Fallback: classic RGBA via SkinWire, else white placeholder.
+/// PlayerList (0x3f), protocol 2168+ shape (ADR §92). No more packet-level <c>Type</c> byte +
+/// parallel per-entry arrays (uuid list, then add-only fields list, then trailing trusted-skin
+/// bool list) — each entry is now a self-contained tagged union (<c>RemoveEntry | AddEntry</c>),
+/// carrying its own action twice: once as the union's variant index, once again as the payload's
+/// own leading member (same "double write" Cereal convention as §82's entity metadata). Zenith
+/// never mixes Add/Remove in one packet (every call site sends exactly one entry of one type —
+/// see <c>EntityProtocol.SendPlayerListAdd</c>/<c>SendPlayerListRemove</c>), so the packet-level
+/// <see cref="Type"/> field stays as the domain API; only the wire encoding changed.
+/// The old trailing "trusted skins" bool array is gone too — the flag now lives inside the skin
+/// structure itself (<c>trusted_skin_flag</c> + <c>profile_hash</c>, same fields §91 already
+/// found and fixed locally for <see cref="PlayerSkinPacket"/> — <see cref="SerializedSkin"/>'s
+/// shared Write stops short of them for the same reason documented there).
 /// </summary>
 class PlayerListPacket : DataPacket
 {
@@ -20,11 +30,21 @@ class PlayerListPacket : DataPacket
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
-        writer.WriteByte(Type);
         writer.WriteUnsignedVarInt(Entries.Length);
+
+        // Wire union index is RemoveEntry=0/AddEntry=1 (declaration order) — the OPPOSITE of
+        // Zenith's own TypeAdd=0/TypeRemove=1 domain constants. Confirmed by reading gophertunnel's
+        // playerListAction: it computes the variant separately (1 only when domain action==Add,
+        // 0 otherwise) and leaves the *second* field ("legacy" action byte) as the unmodified
+        // domain value — so the two "double write" fields are genuinely different values here,
+        // not a repeat of the same one like §82's entity metadata. Caught live: sending Type
+        // (0=Add) for both fields made a real client decode an intended Add as "remove".
+        var wireVariant = Type == TypeAdd ? 1 : 0;
 
         foreach (var entry in Entries)
         {
+            writer.WriteUnsignedVarInt(wireVariant);
+            writer.WriteByte(Type); // payload's own action member — domain value, unmodified
             writer.WriteUuid(entry.Uuid);
             if (Type != TypeAdd) continue;
 
@@ -37,13 +57,11 @@ class PlayerListPacket : DataPacket
             writer.WriteBool(entry.IsTeacher);
             writer.WriteBool(entry.IsHost);
             writer.WriteBool(entry.IsSubClient);
+            // NOTE: gophertunnel packs this as A|R<<8|G<<16|B<<24 then writes it big-endian —
+            // net byte order [B,G,R,A]. Unverified against this little-endian write because the
+            // only value Zenith ever sends is 0xffffffff (white), which is byte-identical either
+            // way; revisit if a non-white player colour is ever needed (ADR §92).
             writer.WriteUInt(entry.Color, BinaryStream.Endianess.Little);
-        }
-
-        if (Type == TypeAdd)
-        {
-            foreach (var entry in Entries)
-                writer.WriteBool(entry.Verified);
         }
 
         return writer.GetBufferDisposing();
@@ -52,15 +70,16 @@ class PlayerListPacket : DataPacket
     private static void WriteSkin(ref BinaryStream writer, PlayerListEntry entry)
     {
         if (entry.Skin is { } full && full.Image.Data is { Length: > 0 })
-        {
             full.Write(ref writer);
-            return;
-        }
-
-        if (entry.SkinRgba is { Length: > 0 } pixels && entry.SkinWidth > 0 && entry.SkinHeight > 0)
+        else if (entry.SkinRgba is { Length: > 0 } pixels && entry.SkinWidth > 0 && entry.SkinHeight > 0)
             SkinWire.Write(ref writer, entry.SkinId, pixels, entry.SkinWidth, entry.SkinHeight);
         else
             SkinWire.WritePlaceholder(ref writer, entry.SkinId);
+
+        // trusted_skin_flag (name-coded enum) + profile_hash — same two fields §91 added locally
+        // to PlayerSkinPacket; the old trailing per-packet "trusted skins" bool array is gone.
+        writer.WriteVarString(entry.Verified ? "True" : "False");
+        writer.WriteVarString("");
     }
 
     public override void Decode(ref BinaryStream stream) { }

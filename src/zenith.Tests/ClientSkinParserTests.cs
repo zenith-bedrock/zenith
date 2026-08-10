@@ -79,8 +79,9 @@ public class ClientSkinParserTests
         var encoded = packet.Encode().ToArray();
         var reader = new BinaryStream(encoded);
         Assert.Equal((int)ProtocolInfo.PLAYER_LIST_PACKET, (int)reader.ReadUnsignedVarInt());
-        Assert.Equal(PlayerListPacket.TypeAdd, reader.ReadByte());
-        Assert.Equal(1, (int)reader.ReadUnsignedVarInt());
+        Assert.Equal(1, (int)reader.ReadUnsignedVarInt()); // entries count (ADR §92)
+        Assert.Equal(1, (int)reader.ReadUnsignedVarInt()); // union variant (Add) — wire-inverted, see PlayerListPacket.cs
+        Assert.Equal(PlayerListPacket.TypeAdd, reader.ReadByte()); // payload's own action member — domain value
         _ = reader.ReadUuid();
         _ = reader.ReadVarLong();
         Assert.Equal("Alex", reader.ReadVarString());

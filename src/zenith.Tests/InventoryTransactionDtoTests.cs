@@ -92,15 +92,16 @@ public class InventoryTransactionDtoTests
         writer.WriteVarInt(7);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(3); // count
         writer.WriteByte(28); // hotbar container
         writer.WriteBool(false);
         writer.WriteByte(0);
-        writer.WriteVarInt(10);
+        writer.WriteInt(10, BinaryStream.Endianess.Little); // stack_id (li32, ADR §90)
         writer.WriteByte(12); // inventory
         writer.WriteBool(false);
         writer.WriteByte(5);
-        writer.WriteVarInt(11);
+        writer.WriteInt(11, BinaryStream.Endianess.Little); // stack_id (li32, ADR §90)
         writer.WriteUnsignedVarInt(0);
         writer.WriteInt(0, BinaryStream.Endianess.Little);
 

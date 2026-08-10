@@ -76,7 +76,11 @@ sealed class MovePlayerPacket : DataPacket
         writer.WriteByte(Mode);
         writer.WriteBool(OnGround);
         writer.WriteUnsignedVarLong((long)RiddenEntityRuntimeId);
-        if (Mode == ModeTeleport)
+        // TeleportData optional (Cereal, ADR §79): presence bool then the two int32 fields,
+        // no longer implicit from Mode == Teleport on the wire.
+        var hasTeleportData = Mode == ModeTeleport;
+        writer.WriteBool(hasTeleportData);
+        if (hasTeleportData)
         {
             writer.WriteInt(TeleportCause, BinaryStream.Endianess.Little);
             writer.WriteInt(TeleportSourceEntityType, BinaryStream.Endianess.Little);

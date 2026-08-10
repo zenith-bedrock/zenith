@@ -56,7 +56,6 @@ class ZenithServer
                 "*** AUTH WARNING: auth.accept includes self-signed and/or offline. " +
                 "Clients may join without Xbox Live. Use accept: [xbox] before public exposure. ***");
         }
-
         var players = new PlayerManager();
         var clock = new GameClock();
         var gameLoop = new GameLoop(clock, players, serverLogger);

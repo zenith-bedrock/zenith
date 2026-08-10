@@ -1,6 +1,6 @@
 # Protocol churn checklist
 
-**Last review:** Jul 2026 (UpdateAbilities + AdventureSettings §37 after §34 HUD; CraftingData §35; RequestAbility inbound)
+**Last review:** Aug 2026 — bumped 1001/1.26.33 → 2169/1.26.50 (ADR §79) via `protocol-import pull --source mojang --ref r/26_u4`. **15 packets left pre-Cereal shaped as tracked debt** — see `roadmap.md` § "Cereal migration debt" before assuming any of those 15 match this branch's schema.
 
 Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Manual** — no remote schema scraper.
 

@@ -44,7 +44,7 @@ sealed class AddPlayerPacket : DataPacket
         writer.WriteFloat(Pitch, BinaryStream.Endianess.Little);
         writer.WriteFloat(Yaw, BinaryStream.Endianess.Little);
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
-        HeldItem.WriteItemStackWrapper(ref writer);
+        HeldItem.WriteSerializedNetworkItemStackDescriptor(ref writer);
         writer.WriteVarInt(GameMode);
         EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Username, Sneaking, Sprinting);
         writer.WriteUnsignedVarInt(0); // property sync ints

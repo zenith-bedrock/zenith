@@ -31,7 +31,9 @@ class LevelChunkPacket : DataPacket
         writer.WriteVarInt(ChunkZ);
         writer.WriteVarInt(DimensionId);
         writer.WriteUnsignedVarInt(SubChunkCount);
+        writer.WriteBool(false); // ClientRequestSubChunkLimit optional (Cereal, ADR §79) - not used, no payload
         writer.WriteBool(false); // client-side chunk cache (blob hashing) - not supported yet
+        writer.WriteUnsignedVarInt(0); // CacheMetadata list - always present since 2168, empty when cache disabled
         writer.WriteUnsignedVarInt(ExtraPayload.Length);
         writer.Write(ExtraPayload);
         return writer.GetBufferDisposing();

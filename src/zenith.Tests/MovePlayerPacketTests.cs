@@ -31,6 +31,7 @@ public class MovePlayerPacketTests
         Assert.Equal(MovePlayerPacket.ModeTeleport, stream.ReadByte());
         Assert.True(stream.ReadBool());
         Assert.Equal(0ul, (ulong)stream.ReadUnsignedVarLong()); // ridden
+        Assert.True(stream.ReadBool()); // TeleportData presence (Cereal optional, ADR §79/§88)
         Assert.Equal(MovePlayerPacket.TeleportCauseCommand, stream.ReadInt(BinaryStream.Endianess.Little));
         Assert.Equal(0, stream.ReadInt(BinaryStream.Endianess.Little)); // source entity type
         Assert.Equal(0ul, (ulong)stream.ReadUnsignedVarLong()); // tick

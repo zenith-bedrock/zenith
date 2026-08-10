@@ -24,7 +24,7 @@ static class CraftingDataBuilder
                         $"CraftingData: recipe {snap.NetId} input must be StackKind.Block (got {id}).");
                 if (!Blocks.TryGetName(id.Value, out var inName))
                     throw new InvalidOperationException($"CraftingData: unknown input BlockRuntimeId {id.Value}.");
-                inputs[j] = new DefaultDescriptorInput(palette.Require(inName), 0, count);
+                inputs[j] = new DefaultDescriptorInput(inName, 0, count);
             }
 
             if (!snap.Output.IsBlock)

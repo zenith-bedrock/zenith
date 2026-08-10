@@ -322,11 +322,14 @@ public class RakNetSession
         List<Frame>? packets = null;
         lock (_sessionLock)
         {
-            if (ReceivedFrameSequences.Contains(frameSet.Sequence)) return; // TODO: duplicate framesets
+            // Duplicate frameset (retransmit we already saw) — drop.
+            if (ReceivedFrameSequences.Contains(frameSet.Sequence)) return;
 
             LostFrameSequences.Remove(frameSet.Sequence);
 
-            if (frameSet.Sequence < LastInputSequence || frameSet.Sequence == LastInputSequence) return; // TODO: out of order
+            // Stale/old frameset (<= last accepted sequence) — drop. Per-message ordering
+            // within a channel is handled separately in HandleFrame via InputOrderIndex.
+            if (frameSet.Sequence < LastInputSequence || frameSet.Sequence == LastInputSequence) return;
 
             ReceivedFrameSequences.Add(frameSet.Sequence);
 
