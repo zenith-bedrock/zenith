@@ -53,7 +53,8 @@ Not gameplay leaves — recorded here so this file stays the accurate "what actu
 | §73 | **Floor-drop honesty** | Q-throw / ISR Drop, Survival death loot to floor, `TryAddOrMerge` no silent clobber. No gravity/despawn TTL/XP orbs. |
 | §74 | **Dig/chest honesty** | Wrong-tool no-drop, Creative chest content dump, death SoftCap keeps slot on refuse. No loot tables/durability. |
 | §75 | **Cave-gen alloc cut** | `OverworldCaveContext` disposable + ThreadStatic scratch + `ArrayPool` — cut §69 cave-context GC pressure. No carve-semantics change. |
-| §76 | **Packet wire codegen** | Roslyn incremental source generator (`[GamePacket]` + `[Wire*]` attributes) mechanizes `Encode`/`Decode` boilerplate. 31/64 packet types migrated so far (opt-in, Tier B packets stay hand-written by design). `tools/protocol-import` (Mojang + Endstone schema sources) scaffolds new migrations and diffs protocol drift. |
+| §76 | **Packet wire codegen** | Roslyn incremental source generator (`[GamePacket]` + `[Wire*]` attributes) mechanizes `Encode`/`Decode` boilerplate. 31/64 packet types migrated (opt-in, Tier B packets stay hand-written by design — audited aug 2026, `TextPacket` added to Tier B, **no plain migrations remain**). `tools/protocol-import` (Mojang + Endstone schema sources) scaffolds new migrations and diffs protocol drift. |
+| §77 | **Floor-drop despawn TTL** | `FloorDropStore.AgeTicks` (merge-safe) + `TickDespawn` + `RemoveActor` fan-out. 6000-tick (5 min) vanilla-parity default. Closes the last §73 non-goal. |
 
 ---
 
@@ -64,9 +65,9 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 | Priority | Leaf | Notes |
 |------:|------|--------|
 | 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Still owed — code shipped and later gen work (§75) landed on top of it, but the human confirmation pass itself isn't recorded as done. Do this before opening another *terrain* ADR (perf/infra leaves like §75/§76 are not gated by this). |
-| 1 | **Packet codegen migration, remaining Tier A** | §76 shipped the generator; 33/64 packets still hand-written and eligible (Tier B list in ADR §76 stays hand-written on purpose — don't force those). Plain migration PRs, no new ADR needed per packet. |
-| 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. |
-| 3 | **Floor-drop despawn TTL** | Optional remainder of §73 — drops never disappear today. |
+| ~~1~~ | ~~Packet codegen migration, remaining Tier A~~ | **Closed (aug 2026, no ADR needed):** audited all 50 unmigrated packets — 40 are outbound-only no-op `Decode` (already "left as-is" per §76), the other 10 are all Tier B (`TextPacket` added to that list — discard-on-decode category byte + 3-way variant field switch). **No plain migration candidates remain**; 31/64 is the ceiling for the current attribute set. |
+| 2 | **Smoke-bot `first10` green** | Regression proof (ADR §58). Reduces bus factor; not a gameplay feature. Needs `zenith-smoke-bot` cloned separately — not in this tree. |
+| ~~3~~ | ~~Floor-drop despawn TTL~~ | **Shipped (ADR §77):** `FloorDropStore.TickDespawn` + `AgeTicks` (merge-safe) + `RemoveActor` fan-out, 6000-tick vanilla-parity default. |
 | 4 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 5 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
 | 6 | **EventBus second consumer (proposed, needs ADR)** | Not a plugin API. `EventBus` today only `Publish`es login/quit with zero domain consumers (ARCHITECTURE.md notes). Pick one existing Gameplay moment (e.g. death/respawn or chat) and wire a **second** internal `Subscribe<T>` consumer through it, to prove the seam holds under >1 listener before any plugin surface is promised. See "Competitive read" below for why this is next, not Horizon 2 plugin API itself. |

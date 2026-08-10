@@ -17,12 +17,16 @@ sealed class FloorDropStore
     /// <summary>Ticks after deposit before the drop may be picked up (~0.5s at 20 TPS).</summary>
     public const int DefaultPickupDelay = 10;
 
+    /// <summary>Ticks alive before an uncollected drop despawns (5 min at 20 TPS — vanilla parity).</summary>
+    public const int DefaultDespawnTicks = 6000;
+
     private readonly Dictionary<(int X, int Y, int Z), DropSlot> _drops = new();
     private readonly List<(int X, int Y, int Z)> _delayScratch = new();
+    private readonly List<(int X, int Y, int Z)> _ageScratch = new();
     private readonly ILogger? _logger;
     private int _capWarned;
 
-    readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks);
+    readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks = 0);
 
     /// <summary>Result of a successful deposit (wire fan-out).</summary>
     public readonly record struct DepositResult(
@@ -66,7 +70,8 @@ sealed class FloorDropStore
 
             var merged = Math.Min(MaxStack, existing.Count + count);
             var delay = Math.Max(existing.PickupDelayTicks, pickupDelayTicks);
-            _drops[key] = new DropSlot(id, merged, existing.EntityRuntimeId, delay);
+            // Age is not reset by topping off an existing pile — a cell doesn't get to live forever.
+            _drops[key] = new DropSlot(id, merged, existing.EntityRuntimeId, delay, existing.AgeTicks);
             deposit = new DepositResult(x, y, z, id, merged, existing.EntityRuntimeId, Created: false, CountChanged: merged != existing.Count);
             return true;
         }
@@ -113,10 +118,43 @@ sealed class FloorDropStore
         }
     }
 
-    public IEnumerable<((int X, int Y, int Z) Pos, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks)> Snapshot()
+    /// <summary>
+    /// Ages every cell by <paramref name="tickDiff"/>; cells reaching <paramref name="despawnTicks"/>
+    /// are removed and appended to <paramref name="expired"/> (caller sends RemoveActor / drops the wire entity).
+    /// </summary>
+    public void TickDespawn(
+        List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)> expired,
+        int tickDiff = 1,
+        int despawnTicks = DefaultDespawnTicks)
+    {
+        if (tickDiff <= 0 || _drops.Count == 0) return;
+
+        _ageScratch.Clear();
+        foreach (var key in _drops.Keys)
+            _ageScratch.Add(key);
+
+        for (var i = 0; i < _ageScratch.Count; i++)
+        {
+            var key = _ageScratch[i];
+            if (!_drops.TryGetValue(key, out var slot)) continue;
+
+            var age = slot.AgeTicks + tickDiff;
+            if (age >= despawnTicks)
+            {
+                _drops.Remove(key);
+                expired.Add((key.X, key.Y, key.Z, slot.Id, slot.Count, slot.EntityRuntimeId));
+            }
+            else
+            {
+                _drops[key] = slot with { AgeTicks = age };
+            }
+        }
+    }
+
+    public IEnumerable<((int X, int Y, int Z) Pos, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks)> Snapshot()
     {
         foreach (var (pos, slot) in _drops)
-            yield return (pos, slot.Id, slot.Count, slot.EntityRuntimeId, slot.PickupDelayTicks);
+            yield return (pos, slot.Id, slot.Count, slot.EntityRuntimeId, slot.PickupDelayTicks, slot.AgeTicks);
     }
 
     public bool TryTake(int x, int y, int z, out StackId id, out int count, out long entityRuntimeId)
@@ -169,7 +207,7 @@ sealed class FloorDropStore
         }
 
         var left = slot.Count - taken;
-        _drops[key] = new DropSlot(slot.Id, left, slot.EntityRuntimeId, slot.PickupDelayTicks);
+        _drops[key] = new DropSlot(slot.Id, left, slot.EntityRuntimeId, slot.PickupDelayTicks, slot.AgeTicks);
         remainingPublish = new DepositResult(
             x, y, z, slot.Id, left, slot.EntityRuntimeId,
             Created: false, CountChanged: true);

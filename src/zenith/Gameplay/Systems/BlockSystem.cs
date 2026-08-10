@@ -17,6 +17,7 @@ sealed class BlockSystem : IGameSystem
     private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
+    private readonly List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)> _despawnScratch = new();
     private readonly World.World _world;
 
     public BlockSystem(PlayerManager players, World.World world)
@@ -509,7 +510,20 @@ sealed class BlockSystem : IGameSystem
         _ = clock;
         _world.FloorDrops.TickPickupDelays();
 
-        foreach (var (pos, stackId, count, entityRuntimeId, pickupDelay) in _world.FloorDrops.Snapshot())
+        _despawnScratch.Clear();
+        _world.FloorDrops.TickDespawn(_despawnScratch);
+        foreach (var (x, y, z, _, _, entityRuntimeId) in _despawnScratch)
+        {
+            var cx = PlayerChunkTracker.BlockToChunk(x);
+            var cz = PlayerChunkTracker.BlockToChunk(z);
+            foreach (var peer in online)
+            {
+                if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
+                peer.Session.Protocol.Entity.SendRemoveActor(entityRuntimeId);
+            }
+        }
+
+        foreach (var (pos, stackId, count, entityRuntimeId, pickupDelay, _) in _world.FloorDrops.Snapshot())
         {
             if (pickupDelay > 0) continue;
 
