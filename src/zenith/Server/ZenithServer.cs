@@ -102,9 +102,14 @@ class ZenithServer
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
         gameLoop.Register(new ChunkStreamSystem(players, world));
 
-        Context = new ServerContext(serverLogger, players, new EventBus(serverLogger), clock, world, config, blockPalette, itemPalette, recipes, creative);
+        var eventBus = new EventBus(serverLogger);
+        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative);
         GameLoop = gameLoop;
         _gravity = gravity;
+
+        // First real EventBus domain consumers (ADR §78) — join/leave system chat.
+        eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
+        eventBus.Subscribe<PlayerQuitEvent>(e => PlayerPresenceAnnouncer.OnQuit(Context, e));
 
         _sessionListener = new ZenithSessionListener(Context);
         var serverGuid = LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger);

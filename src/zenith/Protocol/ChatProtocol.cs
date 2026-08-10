@@ -24,6 +24,18 @@ sealed class ChatProtocol
     public void SendChat(string sourceName, string message, string xboxUserId = "") =>
         _session.SendDataPacket(CreateChatPacket(sourceName, message, xboxUserId));
 
+    /// <summary>Server-authored line (no player source) — join/leave announcements, etc.</summary>
+    public void SendSystem(string message) =>
+        _session.SendDataPacket(new TextPacket
+        {
+            Type = TextPacket.TypeSystem,
+            NeedsTranslation = false,
+            Message = message,
+            XboxUserId = "",
+            PlatformChatId = "",
+            FilteredMessage = null
+        });
+
     /// <summary>
     /// Valida mensagem e rate do jogador dono desta sessão.
     /// Retorna false se vazia, longa demais ou flood.
