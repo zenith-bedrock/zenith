@@ -138,7 +138,9 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reco
 
 ### Bedrock references (local clones)
 
-Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
+Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`), `gophertunnel`, `bedrock-v/protocol`, and **`endstone-bedrock-protocol`** (`EndstoneMC/bedrock-protocol` — ADR §82). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
+
+**Cereal-era (protocol 2168+) packet shapes specifically:** prefer `endstone-bedrock-protocol`'s `protocol/*.py` over the others. gophertunnel / `bedrock-v/protocol` / Endstone's C++ headers are all currently at **2168**, meaning for anything on the §79 Cereal-migration list their code still shows the shape being *replaced*, not the new one — a real trap, hit once already (§81). `endstone-bedrock-protocol` versions its schema explicitly (`@type(until=2168)` / `@type(since=2168)`, covering 975/1001/2168/2181 in one file), so the delta reads directly off the source instead of being inferred from a single snapshot. Its `CLAUDE.md` is worth reading before trusting any one field — it documents which source wins for which aspect (names vs. wire shape vs. golden bytes) and a list of settled disagreements.
 
 **How to use refs when implementing a leaf (later checklist):**
 
@@ -157,12 +159,12 @@ Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/
 
 | Source | Role for Zenith |
 |--------|-----------------|
-| `ServerIdentity.ProtocolVersion` (**1001**) / `VersionName` (**1.26.33**) | What we encode today |
-| Docs JSON `x-protocol-version` on `r/26_u4` (**2169** / **1.26.50**) | Newer train — shapes useful, **bit indices / new fields may shift** |
-| `previous_changelogs/changelog_1001_*.md` | What changed at 1001 |
-| PocketMine `BedrockProtocol` @ 1001 / Endstone BDS headers | Wire cross-check when docs are ahead of our protocol |
+| `ServerIdentity.ProtocolVersion` (**2169**) / `VersionName` (**1.26.50**) | What we announce today (ADR §79) |
+| Docs JSON `x-protocol-version` on `r/26_u4` (**2169** / **1.26.50**) | Current target — matches `ServerIdentity` since the §79 bump |
+| `changelog_2168_07_07_26.md` | What changed to reach 2169 — **~23 packets moved to Cereal serialization, not backwards compatible.** Zenith has **not** re-implemented those yet (§79 tracked debt); everything else on this branch is safe to encode against |
+| PocketMine `BedrockProtocol` / Endstone BDS headers (older, pre-Cereal era) | Wire cross-check for the ~23 debt packets until they're migrated — these still reflect the pre-Cereal shape Zenith currently encodes |
 
-**Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against the protocol we speak (1001), not blindly against 2169 enums. AuthInput flag indices: keep Endstone/PM 1001 (`Sneaking=8`, …) until we bump protocol.
+**Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against `r/26_u4` (2169) — **except** the §79 Cereal-debt list, which stays pre-Cereal shaped until migrated (don't half-migrate one packet's fields to Cereal without doing the tagged-variant/optional-presence-byte encoding correctly — see ADR §79 non-goals).
 
 Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live in [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 

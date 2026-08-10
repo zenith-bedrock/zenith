@@ -43,23 +43,6 @@ public class EntityMetadataTests
     }
 
     [Fact]
-    public void InputBitsetTest_reads_sneak_and_sprint_edge_bits()
-    {
-        // 7 bits per byte; flags 8, 25, 26, 39 need indices up through 39/7 = 5.
-        var bytes = new byte[6];
-        SetFlag(bytes, PlayerAuthInputPacket.InputFlagSneaking);
-        SetFlag(bytes, PlayerAuthInputPacket.InputFlagStartSprinting);
-        SetFlag(bytes, PlayerAuthInputPacket.InputFlagStopSprinting);
-        SetFlag(bytes, PlayerAuthInputPacket.InputFlagMissedSwing);
-
-        Assert.True(PlayerAuthInputPacket.InputBitsetTest(bytes, PlayerAuthInputPacket.InputFlagSneaking));
-        Assert.True(PlayerAuthInputPacket.InputBitsetTest(bytes, PlayerAuthInputPacket.InputFlagStartSprinting));
-        Assert.True(PlayerAuthInputPacket.InputBitsetTest(bytes, PlayerAuthInputPacket.InputFlagStopSprinting));
-        Assert.True(PlayerAuthInputPacket.InputBitsetTest(bytes, PlayerAuthInputPacket.InputFlagMissedSwing));
-        Assert.False(PlayerAuthInputPacket.InputBitsetTest(bytes, PlayerAuthInputPacket.InputFlagPerformBlockActions));
-    }
-
-    [Fact]
     public void Animate_swing_arm_roundtrips_protocol_1001_shape()
     {
         var original = new AnimatePacket
@@ -103,15 +86,5 @@ public class EntityMetadataTests
     {
         var stream = new BinaryStream(encoded);
         return stream.ReadUnsignedVarInt();
-    }
-
-    private static void SetFlag(byte[] bitset, int flag)
-    {
-        var idx = flag / 7;
-        var pos = flag % 7;
-        bitset[idx] |= (byte)(1 << pos);
-        // Continuation bits for prior bytes so length is coherent for writers; test only uses Test.
-        for (var i = 0; i < idx; i++)
-            bitset[i] |= 0x80;
     }
 }

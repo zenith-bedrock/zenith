@@ -24,7 +24,9 @@ sealed class CreativeContentPacket : DataPacket
         writer.WriteUnsignedVarInt(Groups.Length);
         foreach (var group in Groups)
         {
-            writer.WriteInt(group.Category, BinaryStream.Endianess.Little);
+            // category is a mapper<u8> on the wire — one byte, not a fixed int32 (was
+            // over-writing 3 extra bytes per group and misaligning everything after it).
+            writer.WriteByte((byte)group.Category);
             writer.WriteVarString(group.Name);
             group.Icon.WriteItemStack(ref writer);
         }
@@ -32,6 +34,8 @@ sealed class CreativeContentPacket : DataPacket
         writer.WriteUnsignedVarInt(Items.Length);
         foreach (var item in Items)
         {
+            // entry_id / group_index are unsigned varint on the wire (protodef "varint", not
+            // "zigzag32") — unchanged from before this ADR's audit.
             writer.WriteUnsignedVarInt((int)item.CreativeItemNetworkId);
             item.Item.WriteItemStack(ref writer);
             writer.WriteUnsignedVarInt((int)item.GroupIndex);

@@ -24,7 +24,7 @@ sealed class AddItemActorPacket : DataPacket
         writer.WriteUnsignedVarInt(Id);
         writer.WriteVarLong(EntityUniqueId);
         writer.WriteUnsignedVarLong((long)EntityRuntimeId);
-        Item.WriteItemStackWrapper(ref writer);
+        Item.WriteSerializedNetworkItemStackDescriptor(ref writer);
         writer.WriteFloat(PositionX, BinaryStream.Endianess.Little);
         writer.WriteFloat(PositionY, BinaryStream.Endianess.Little);
         writer.WriteFloat(PositionZ, BinaryStream.Endianess.Little);

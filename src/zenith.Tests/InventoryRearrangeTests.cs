@@ -126,15 +126,33 @@ public class InventoryPacketEncodeTests
     }
 
     [Fact]
-    public void AddPlayer_encode_includes_legacy_held_item()
+    public void AddPlayer_encode_carried_item_uses_serialized_network_item_stack_descriptor()
     {
-        var air = new AddPlayerPacket { Username = "a", HeldItem = NetworkItemStack.Empty }.Encode();
+        // Protocol 2168+ (ADR §82): SerializedNetworkItemStackDescriptor has no air-item
+        // early-out, so an empty held item is the same byte count as a real one — the network
+        // id is a fixed i16, not the old VarInt that used to make air collapse to one byte.
+        var air = new AddPlayerPacket { Username = "a", HeldItem = NetworkItemStack.Empty }.Encode().ToArray();
         var held = new AddPlayerPacket
         {
             Username = "a",
             HeldItem = new NetworkItemStack(1, 3, 50)
-        }.Encode();
-        Assert.True(held.Length > air.Length);
+        }.Encode().ToArray();
+        Assert.Equal(air.Length, held.Length);
+
+        var stream = new BinaryStream(held);
+        Assert.Equal((int)ProtocolInfo.ADD_PLAYER_PACKET, stream.ReadUnsignedVarInt());
+        _ = stream.ReadUuid();
+        Assert.Equal("a", stream.ReadVarString());
+        _ = stream.ReadUnsignedVarLong(); // runtime id
+        _ = stream.ReadVarString(); // platform chat id
+        for (var i = 0; i < 9; i++) _ = stream.ReadFloat(BinaryStream.Endianess.Little); // pos+velocity+pitch/yaw/headyaw
+
+        Assert.Equal(1, stream.ReadShort(BinaryStream.Endianess.Little)); // carried item id — fixed i16, not VarInt
+        Assert.Equal((ushort)3, stream.ReadUShort(BinaryStream.Endianess.Little));
+        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // aux_value
+        Assert.False(stream.ReadBool()); // net_id_variant has-flag
+        Assert.Equal(50, (int)stream.ReadUnsignedVarInt()); // block_runtime_id
+        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // user_data_buffer length
     }
 
     [Fact]
@@ -160,24 +178,25 @@ public class InventoryPacketEncodeTests
     }
 
     [Fact]
-    public void ItemStackRequest_marks_PlaceInContainer_supported()
+    public void ItemStackRequest_marks_Place_supported()
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
         writer.WriteVarInt(1); // request id
         writer.WriteUnsignedVarInt(1); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionPlaceInContainer);
+        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(1); // count
-        // source FullContainerName + slot + net id
+        // source FullContainerName + slot + net id (stack_id is li32, ADR §90)
         writer.WriteByte(7);
         writer.WriteBool(false);
         writer.WriteByte(0);
-        writer.WriteVarInt(1);
+        writer.WriteInt(1, BinaryStream.Endianess.Little);
         // dest
         writer.WriteByte(28);
         writer.WriteBool(false);
         writer.WriteByte(0);
-        writer.WriteVarInt(2);
+        writer.WriteInt(2, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(0); // filter strings
         writer.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
 
@@ -198,6 +217,7 @@ public class InventoryPacketEncodeTests
         writer.WriteVarInt(3);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteUnsignedVarInt(1); // recipe net id
         writer.WriteByte(1); // times
         writer.WriteUnsignedVarInt(0);
@@ -220,6 +240,7 @@ public class InventoryPacketEncodeTests
         writer.WriteVarInt(4);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(5); // times — shift-click multi-craft
         writer.WriteUnsignedVarInt(0);
@@ -240,11 +261,12 @@ public class InventoryPacketEncodeTests
         writer.WriteVarInt(2);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionDrop);
+        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(1); // count
         writer.WriteByte(28);
         writer.WriteBool(false);
         writer.WriteByte(0);
-        writer.WriteVarInt(1);
+        writer.WriteInt(1, BinaryStream.Endianess.Little); // stack_id (li32, ADR §90)
         writer.WriteBool(false); // randomly
         writer.WriteUnsignedVarInt(0);
         writer.WriteInt(0, BinaryStream.Endianess.Little);

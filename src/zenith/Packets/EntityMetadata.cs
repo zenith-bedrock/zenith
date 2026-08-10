@@ -41,6 +41,21 @@ static class EntityFlag
 /// <summary>Shared metadata wire for AddPlayer / SetActorData (no domain types).</summary>
 static class EntityMetadataWriter
 {
+    /// <summary>
+    /// DataItemEntry.Payload at protocol 2168+ (ADR §82): a union discriminator (uvarint32, cases
+    /// in DataItemType declaration order) followed by the chosen payload struct, whose own first
+    /// field is that same DataItemType value again — a genuine double-write, confirmed against
+    /// EndstoneMC/bedrock-protocol's compiler (VariantFieldGenerator writes the tag, then the
+    /// struct's own fields including its "type" member) and the raw Mojang schema's per-variant
+    /// "Type" field. Both writes use the same varint call: identical bytes to a raw uint8 for
+    /// DataItemType's 0-9 range, so no width mismatch either way.
+    /// </summary>
+    private static void WriteEntryType(ref BinaryStream writer, int type)
+    {
+        writer.WriteUnsignedVarInt(type); // union discriminator
+        writer.WriteUnsignedVarInt(type); // payload struct's own "type" field
+    }
+
     /// <summary>Base spawn FLAGS (Breathing, collision, name) plus optional pose bits (§53).</summary>
     public static long BuildSpawnFlags(bool sneaking = false, bool sprinting = false)
     {
@@ -75,35 +90,35 @@ static class EntityMetadataWriter
         writer.WriteUnsignedVarInt(8);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
-        writer.WriteUnsignedVarInt(EntityMetaType.Long);
+        WriteEntryType(ref writer, EntityMetaType.Long);
         writer.WriteVarLong(flags);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.ColorIndex);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
+        WriteEntryType(ref writer, EntityMetaType.Byte);
         writer.WriteByte(0);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Name);
-        writer.WriteUnsignedVarInt(EntityMetaType.String);
+        WriteEntryType(ref writer, EntityMetaType.String);
         writer.WriteVarString(name);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.EffectColor);
-        writer.WriteUnsignedVarInt(EntityMetaType.Int);
+        WriteEntryType(ref writer, EntityMetaType.Int);
         writer.WriteVarInt(0);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.EffectAmbience);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
+        WriteEntryType(ref writer, EntityMetaType.Byte);
         writer.WriteByte(0);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Width);
-        writer.WriteUnsignedVarInt(EntityMetaType.Float);
+        WriteEntryType(ref writer, EntityMetaType.Float);
         writer.WriteFloat(0.6f, BinaryStream.Endianess.Little);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Height);
-        writer.WriteUnsignedVarInt(EntityMetaType.Float);
+        WriteEntryType(ref writer, EntityMetaType.Float);
         writer.WriteFloat(1.8f, BinaryStream.Endianess.Little);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.AlwaysShowNameTag);
-        writer.WriteUnsignedVarInt(EntityMetaType.Byte);
+        WriteEntryType(ref writer, EntityMetaType.Byte);
         writer.WriteByte(1);
     }
 
@@ -112,7 +127,7 @@ static class EntityMetadataWriter
     {
         writer.WriteUnsignedVarInt(1);
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
-        writer.WriteUnsignedVarInt(EntityMetaType.Long);
+        WriteEntryType(ref writer, EntityMetaType.Long);
         writer.WriteVarLong(flags);
     }
 }

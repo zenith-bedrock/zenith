@@ -187,6 +187,8 @@ public class TerrainProviderTests
         Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var world = new World.World(new InMemoryChunkStorage(), terrain: new NoiseTerrainProvider(42));
+        // Warm up JIT/codegen so the timed run isn't skewed by cold-start cost (flaked on slower CI runners).
+        await world.GetRadiusAsync(100, 100, radius: 1);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var columns = await world.GetRadiusAsync(0, 0, radius: 4);
         sw.Stop();

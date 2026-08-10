@@ -24,9 +24,9 @@ class ResourcePacksInfoPacket : DataPacket
         writer.WriteBool(HasAddons);
         writer.WriteBool(HasScripts);
         writer.WriteBool(ForceDisableVibrantVisuals);
-        writer.WriteUuid(Guid.Empty); // world template UUID — empty until packs product
-        writer.WriteVarString(WorldTemplateVersion);
-        writer.WriteShort(0, BinaryStream.Endianess.Little);
+        writer.WriteUuid(Guid.Empty); // world_template.uuid — empty until packs product
+        writer.WriteVarString(WorldTemplateVersion); // world_template.version
+        writer.WriteUnsignedVarInt(0); // texture_packs — varint-count array, not a fixed int16 (ADR §90)
         return writer.GetBufferDisposing();
     }
 

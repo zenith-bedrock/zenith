@@ -7,7 +7,7 @@ namespace Zenith.Tests;
 public class ItemActorPacketTests
 {
     [Fact]
-    public void AddItemActor_encode_shape_uses_item_stack_wrapper()
+    public void AddItemActor_encode_shape_uses_serialized_network_item_stack_descriptor()
     {
         var item = new NetworkItemStack(1, 3, 100);
         var bytes = new AddItemActorPacket
@@ -25,13 +25,13 @@ public class ItemActorPacketTests
         Assert.Equal((int)ProtocolInfo.ADD_ITEM_ACTOR_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(42L, stream.ReadVarLong());
         Assert.Equal(42ul, (ulong)stream.ReadUnsignedVarLong());
-        // ItemStackWrapper / legacy ItemInstance (same as AddPlayer held) — not ItemInstanceNew i16.
-        Assert.Equal(1, stream.ReadVarInt());
+        // SerializedNetworkItemStackDescriptor (protocol 2168+, ADR §82) — fixed i16 id, no air early-out.
+        Assert.Equal(1, stream.ReadShort(BinaryStream.Endianess.Little));
         Assert.Equal((ushort)3, stream.ReadUShort(BinaryStream.Endianess.Little));
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // meta
-        Assert.False(stream.ReadBool()); // no stack net id
-        Assert.Equal(100, stream.ReadVarInt()); // block runtime
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // extra
+        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // aux_value
+        Assert.False(stream.ReadBool()); // net_id_variant has-flag
+        Assert.Equal(100, (int)stream.ReadUnsignedVarInt()); // block_runtime_id
+        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // user_data_buffer length
         Assert.Equal(1.5f, stream.ReadFloat(BinaryStream.Endianess.Little));
         Assert.Equal(64.125f, stream.ReadFloat(BinaryStream.Endianess.Little));
         Assert.Equal(-2.5f, stream.ReadFloat(BinaryStream.Endianess.Little));

@@ -9,12 +9,21 @@ readonly struct StackResponseSlotInfo
     public byte Count { get; init; }
     public int StackNetworkId { get; init; }
 
+    /// <summary>
+    /// item_stack_id is a genuine optional (ADR §90): a decorative presence bool followed by
+    /// the option's own bool, then the zigzag32 payload if present — Zenith previously wrote a
+    /// bare unconditional varint with neither marker.
+    /// </summary>
     public void Write(ref BinaryStream writer)
     {
         writer.WriteByte(Slot);
         writer.WriteByte(HotbarSlot);
         writer.WriteByte(Count);
-        writer.WriteVarInt(StackNetworkId);
+        var hasStackId = StackNetworkId != 0;
+        writer.WriteBool(hasStackId); // item_stack_id_presence (decorative)
+        writer.WriteBool(hasStackId); // item_stack_id option
+        if (hasStackId)
+            writer.WriteVarInt(StackNetworkId);
         writer.WriteVarString(""); // custom_name
         writer.WriteVarString(""); // filtered_custom_name
         writer.WriteVarInt(0); // durability_correction
@@ -44,14 +53,24 @@ readonly struct ItemStackResponseEntry
     public int RequestId { get; init; }
     public StackResponseContainerInfo[] ContainerInfo { get; init; }
 
+    /// <summary>
+    /// containers is unconditional in the struct (not gated by Status, ADR §90) — a decorative
+    /// presence bool then the option's own bool, then the array if present. Zenith previously
+    /// skipped both markers entirely on error and wrote a bare count on success.
+    /// </summary>
     public void Write(ref BinaryStream writer)
     {
         writer.WriteByte(Status);
         writer.WriteVarInt(RequestId);
-        if (Status != StatusOk) return;
-        writer.WriteUnsignedVarInt(ContainerInfo.Length);
-        foreach (var ci in ContainerInfo)
-            ci.Write(ref writer);
+        var hasContainers = Status == StatusOk && ContainerInfo.Length > 0;
+        writer.WriteBool(hasContainers); // containers_presence (decorative)
+        writer.WriteBool(hasContainers); // containers option
+        if (hasContainers)
+        {
+            writer.WriteUnsignedVarInt(ContainerInfo.Length);
+            foreach (var ci in ContainerInfo)
+                ci.Write(ref writer);
+        }
     }
 }
 

@@ -78,7 +78,10 @@ class StartGamePacket : DataPacket
         writer.WriteBool(false); // CreatedInEditor
         writer.WriteBool(false); // ExportedFromEditor
         writer.WriteVarInt(StopTime); // DayCycleLockTime
-        writer.WriteVarInt(EducationEditionOfferNone); // EducationEditionOffer
+        // EducationEditionOffer's enum underlying is uint32, so its default (cerealised) wire is
+        // unsigned uvarint32, not zigzag — value is always 0 here so this was byte-identical either
+        // way, but matches gophertunnel's io.Varuint32 exactly now (ADR §93).
+        writer.WriteUnsignedVarInt(EducationEditionOfferNone); // EducationEditionOffer
         writer.WriteBool(false); // EducationFeaturesEnabled
         writer.WriteVarString(""); // EducationProductID
         writer.WriteFloat(0, BinaryStream.Endianess.Little); // RainLevel
@@ -99,7 +102,11 @@ class StartGamePacket : DataPacket
         writer.WriteBool(false); // BonusChestEnabled
         writer.WriteBool(false); // StartWithMapEnabled
         // StartGame Operator vs AbilityData Member — intentional split (current wire).
-        writer.WriteVarInt(AbilityBits.PlayerPermissionOperator); // PlayerPermissions
+        // PlayerPermissionLevel's underlying is int8 -> one raw byte, no varint compression (was
+        // wrongly zigzag-varint'd: OPERATOR=2 encoded as 0x04, not the wire's 0x02 — found this
+        // session, ADR §93; harmless so far because nothing downstream depended on this byte lining
+        // up, but a genuine wire-shape bug per gophertunnel's io.Uint8(&pk.PlayerPermissions)).
+        writer.WriteByte(AbilityBits.PlayerPermissionOperator); // PlayerPermissions
         writer.WriteInt(DefaultServerChunkTickRadius, BinaryStream.Endianess.Little); // ServerChunkTickRadius
         writer.WriteBool(false); // HasLockedBehaviourPack
         writer.WriteBool(false); // HasLockedTexturePack
@@ -157,9 +164,12 @@ class StartGamePacket : DataPacket
         
         writer.WriteBool(false); // ClientSideGeneration
         writer.WriteBool(UseBlockNetworkIdHashes);
-        writer.WriteBool(false); // ServerAuthoritativeSound
-        writer.WriteBool(false); // IsLoggingChat
-        
+        writer.WriteBool(false); // ServerAuthoritativeSound (NetworkPermissions.server_auth_sound_enabled)
+        // NOTE: no IsLoggingChat here — that field only existed pre-2168 (endstone-bedrock-protocol's
+        // until=2168 StartGamePacket has it; since=2168 dropped it entirely, confirmed against
+        // gophertunnel's current (2168) Marshal, which also has no such write between
+        // ServerAuthoritativeSound and ServerJoinInformation). ADR §93.
+
         // ServerJoinInformation Optional
         writer.WriteBool(false); // has value = false
         

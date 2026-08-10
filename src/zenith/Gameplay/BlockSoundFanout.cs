@@ -8,8 +8,8 @@ namespace Zenith.Gameplay;
 /// </summary>
 static class BlockSoundFanout
 {
-    // Sound names match PM LevelSoundEvent string ids (protocol 1001) — kept here so
-    // Gameplay never references Packets DTOs.
+    // Sound names match PM LevelSoundEvent string ids (stable pre-Cereal shape, unaffected
+    // by the §79 protocol bump) — kept here so Gameplay never references Packets DTOs.
     public const string SoundPlace = "place";
     public const string SoundBreak = "break";
     public const string SoundHit = "hit";

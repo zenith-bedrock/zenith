@@ -2193,12 +2193,34 @@ public class IntentContractTests
             Items = []
         };
         var bytes = emptyPk.Encode().ToArray();
-        // packet id UVInt + groups UVInt(1) + category i32 + name UVInt(0) + Item VarInt(0) + items UVInt(0)
+        // packet id UVInt + groups UVInt(1) + category u8 (ADR §85) + name UVInt(0) + Item VarInt(0) + items UVInt(0)
         Assert.True(bytes.Length < 20);
 
         var writer = new BinaryStream();
         NetworkItemStack.Empty.WriteItemStack(ref writer);
         var air = writer.GetBufferDisposing().ToArray();
         Assert.Equal(new byte[] { 0 }, air); // VarInt 0
+    }
+
+    [Fact]
+    public void CreativeContent_group_category_is_a_single_byte()
+    {
+        // ADR §85: category is a wire mapper<u8> (one byte), not a fixed int32 — found via
+        // zenith-smoke-bot decoding CreativeContentPacket ("array size is abnormally large").
+        var pk = new CreativeContentPacket
+        {
+            Groups = [new CreativeGroupEntry(CreativeContentPacket.CategoryConstruction, "", NetworkItemStack.Empty)],
+            Items = []
+        };
+        var bytes = pk.Encode().ToArray();
+
+        var stream = new BinaryStream(bytes);
+        Assert.Equal((int)ProtocolInfo.CREATIVE_CONTENT_PACKET, stream.ReadUnsignedVarInt());
+        Assert.Equal(1, stream.ReadUnsignedVarInt()); // groups count
+        Assert.Equal((byte)CreativeContentPacket.CategoryConstruction, stream.ReadByte()); // category — exactly one byte
+        Assert.Equal("", stream.ReadVarString());
+        Assert.Equal(0, stream.ReadVarInt()); // empty icon
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // items count
+        Assert.True(stream.IsEndOfFile);
     }
 }

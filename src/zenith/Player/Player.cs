@@ -59,7 +59,11 @@ class Player
     /// </summary>
     public bool IsSpawning { get; set; }
 
-    /// <summary>Hotbar 0–8; selected slot bounds-checked no handler.</summary>
+    /// <summary>
+    /// Hotbar 0–8; selected slot bounds-checked no handler. Intentional rule-6 exception:
+    /// handlers write this directly (not via a pending-intent queue) — atomic scalar,
+    /// <see cref="Gameplay.Systems.EquipmentSystem"/> diffs + fans out on tick (ADR §80).
+    /// </summary>
     public int SelectedHotbarSlot { get; set; }
 
     public PlayerInventory Inventory { get; }

@@ -11,10 +11,35 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     public static NetworkItemStack Empty => new(0, 0, 0);
 
     /// <summary>
-    /// NetworkItemStackDescriptor — i16 LE network id + count + meta + optional stack net id.
-    /// Use from: InventoryContent, MobEquipment.
+    /// ItemV4 (protocol 2168+, ADR §87) — i16 LE network id + count + meta + optional stack net
+    /// id + block runtime id + extra blob. Use from: InventoryContent, MobEquipment.
     /// </summary>
     public void WriteNetworkItemStackDescriptor(ref BinaryStream writer)
+    {
+        writer.WriteShort(NetworkId, BinaryStream.Endianess.Little);
+        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(Meta);
+
+        // has_stack_id(bool) then a bare stack_id(zigzag32) if present — no separate variant/tag
+        // byte (that was the bug: ItemV4 dropped it, unlike the older ItemInstance shape).
+        var hasNetId = StackNetworkId != 0;
+        writer.WriteBool(hasNetId);
+        if (hasNetId)
+            writer.WriteVarInt(StackNetworkId);
+
+        writer.WriteUnsignedVarInt(BlockRuntimeId);
+        writer.WriteUnsignedVarInt(0); // raw_extra_data length
+    }
+
+    /// <summary>
+    /// cerealizer&lt;NetworkItemStackDescriptor&gt;::SerializedData — protocol 2168+ shape for
+    /// AddPlayer's held item / AddItemActor's item (ADR §82). Fixed i16 network id (not VarInt);
+    /// no air-item early-out — every field is always written, matching a cerealised struct's
+    /// flat unconditional layout. Net id variant lost its tag byte at 2168 (sign/parity encode
+    /// the case instead) — Zenith only ever sends a server-assigned non-negative id outbound, so
+    /// that nuance doesn't affect what gets written here.
+    /// </summary>
+    public void WriteSerializedNetworkItemStackDescriptor(ref BinaryStream writer)
     {
         writer.WriteShort(NetworkId, BinaryStream.Endianess.Little);
         writer.WriteUShort(Count, BinaryStream.Endianess.Little);
@@ -23,33 +48,10 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         var hasNetId = StackNetworkId != 0;
         writer.WriteBool(hasNetId);
         if (hasNetId)
-        {
-            writer.WriteUnsignedVarInt(0); // stack_id_variant
             writer.WriteVarInt(StackNetworkId);
-        }
 
         writer.WriteUnsignedVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(0); // raw_extra_data length
-    }
-
-    /// <summary>
-    /// ItemStackWrapper / legacy ItemInstance (VarInt network id). Stack net id always omitted.
-    /// Use from: AddPlayer held, AddItemActor.
-    /// </summary>
-    public void WriteItemStackWrapper(ref BinaryStream writer)
-    {
-        if (NetworkId == 0)
-        {
-            writer.WriteVarInt(0);
-            return;
-        }
-
-        writer.WriteVarInt(NetworkId);
-        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
-        writer.WriteUnsignedVarInt(Meta);
-        writer.WriteBool(false); // no stack net id for entity/held display
-        writer.WriteVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(0); // extra bytes
+        writer.WriteUnsignedVarInt(0); // user_data_buffer — empty (no NBT / can-place / can-break tracked)
     }
 
     /// <summary>
