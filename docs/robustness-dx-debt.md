@@ -73,7 +73,7 @@ Phase 3  zero-alloc hot pack         done (jul 2026; see docs/dx.md)
 Phase 3b tick/join UpdateBlock lists done (BlockSystem + ColumnSend scratches)
 Phase 4  DX + chat FIFO              done (chat FIFO); ARCHITECTURE stay-honest ongoing
 Phase 5  InventoryProtocol split     done
-Next     roadmap Phase A runtime baseline; then health/damage and first actor evidence. §61 Mojang remains
+Next     roadmap Phase C actor characterization; then a materially different second actor and actor-pressure evidence. §61 Mojang remains
          opt-in only when import is needed; AuthInput×FPS remains measure-only.
          SoftCap eviction redesign; Bedrock E2E CI (beta-hard) still open.
 

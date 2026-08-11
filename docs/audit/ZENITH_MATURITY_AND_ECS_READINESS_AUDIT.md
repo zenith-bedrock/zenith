@@ -1,16 +1,16 @@
 # Zenith maturity and ECS-readiness audit
 
-**Baseline:** `6ea73bdcd77ca3e50d05b13a9322df4d53b7ace6` (`develop`, 2026-08-11).
+**Baseline:** `10517afaf30fde34437f24025e6a01d48eabf6e2` (`develop`, 2026-08-11, post-integration revalidation).
 
-**Scope:** source, leaf libraries, tests, benchmarks, CI, documentation, recent history, local reference clones in `D:\Development\bedrock`, and smoke-tooling references. The initial baseline was revalidated against `origin/develop` at `8a9bbb32d46cd7120e502744b728a2f6dfde43db` (2026-08-11), which committed the Runtime Validation baseline; classification below reflects that final revalidation.
+**Scope:** source, leaf libraries, tests, benchmarks, CI, documentation, recent history, local reference clones in `D:\Development\bedrock`, and smoke-tooling references. This revision also accounts for the committed health/actor slices and protocol-independent command slice after the original audit.
 
 ## Executive summary
 
-Zenith is a **functional/characterized multiplayer alpha**, not a mature Bedrock server. It has a real authoritative spine: clients join, see peers, move, chat, edit terrain, use inventory/chests/crafting, persist selected state, die/respawn, and observe floor-item and falling-block actors. The strongest maturity is the enforced split: gameplay decides on the single-writer tick, Protocol transmits, and Packets serialize.
+Zenith is a **functional/characterized multiplayer alpha**, not a mature Bedrock server. It has a real authoritative spine: clients join, see peers, move, chat, edit terrain, use inventory/chests/crafting, persist selected state, die/respawn, observe floor-item/falling-block actors, and now exercise a concrete Zombie actor and protocol-independent command slice. The strongest maturity is the enforced split: gameplay decides on the single-writer tick, Protocol transmits, and Packets serialize.
 
-Zenith is **feature-limited first and validation-limited second; it is not currently architecture-limited by missing ECS**. The immediate missing capabilities are a general health/damage contract, a real actor lifecycle/replication contract, two materially different dynamic actor behaviours, and measured actor/observer workloads. The current GameLoop is a strong basis for a future single-thread ECS, but does not establish a need for one.
+Zenith is **feature-limited first and validation-limited second; it is not currently architecture-limited by missing ECS**. HealthState and one concrete Zombie now exist, but the immediate missing capabilities are a materially different second actor, shared lifecycle/replication evidence, visibility requirements and measured actor/observer workloads. The current GameLoop is a strong basis for a future single-thread ECS, but does not establish a need for one.
 
-ECS is **NOT READY**. At revalidation, the player runtime harness and falling-block lifecycle are complete prerequisites, but floor drops remain sparse cells with item wire. There is no mob, projectile, shared actor lifecycle, actor visibility policy, or actor workload baseline. Evaluate ECS after real actor pressure appears and before an inheritance tree or public entity/plugin API freezes the wrong shape.
+ECS is **NOT READY**. The player runtime harness, health primitive, falling-block lifecycle and first Zombie slice exist, but floor drops remain sparse cells with item wire and there is no materially different second actor, shared actor workload baseline or actor visibility policy. Evaluate ECS after real actor pressure appears and before an inheritance tree or public entity/plugin API freezes the wrong shape.
 
 ## Evidence and documentation authority
 
@@ -27,12 +27,12 @@ ECS is **NOT READY**. At revalidation, the player runtime harness and falling-bl
 | Layer split and single writer | DOCUMENTED AND IMPLEMENTED | `ARCHITECTURE.md`, `GameLoop.cs`, `ArchitectureBoundaryTests.cs` |
 | LAN multiplayer/inventory/chest persistence | DOCUMENTED AND IMPLEMENTED | `alpha-gate.md`, smoke rows, intent and duplication tests |
 | Falling block actor | DOCUMENTED AND IMPLEMENTED | ADR §95, `GravitySystem.cs`, `GravityTests.cs` |
-| Health/damage | DOCUMENTED BUT PARTIAL | ADR §96; only fall/void damage; fall lacks recorded live smoke |
+| Health/damage | DOCUMENTED AND IMPLEMENTED, STILL PARTIAL IN BREADTH | ADR §§96/98; HealthState and fall/void/melee paths exist; effects/mitigation/attribution remain absent |
 | Floor item actor | DOCUMENTED BUT PARTIAL | `FloorDropStore.cs`: sparse cell/TTL/pickup, not general free actor lifecycle |
 | Runtime load harness | DOCUMENTED AND IMPLEMENTED | `RuntimeLoadHarness.cs`, `docs/runtime-validation.md`, `GameLoopTests.cs`, commit `8a9bbb3`; it remains a synthetic player baseline, not actor-scale proof |
-| “~23 Cereal debts remain” | OBSOLETE DOCUMENTATION | roadmap and ADR §§88–93 record closure; technical reference must be corrected |
-| H1/Yes-next as active future | OBSOLETE DOCUMENTATION | H1 is closed; feature list lacks actor/ECS dependency gates |
-| ECS, generic WorldEntity, VisibilitySystem frozen | DOCUMENTED AND IMPLEMENTED AS CONSTRAINT | architecture + ADR §97; no generic layer exists |
+| Runtime validation | DOCUMENTED AND IMPLEMENTED | `RuntimeLoadHarness.cs`, `docs/runtime-validation.md`, GameLoop tests and committed baseline; actor-scale proof remains absent |
+| H1/Yes-next as active future | OBSOLETE DOCUMENTATION | H1 is closed; roadmap now tracks actor/ECS dependency gates |
+| ECS, generic WorldEntity, VisibilitySystem frozen | DOCUMENTED AND IMPLEMENTED AS CONSTRAINT | architecture + ADR §99; no generic layer exists |
 
 ## Current capability map
 
@@ -45,18 +45,18 @@ States: **Absent**, **Prototype**, **Functional**, **Characterized**, **Hardened
 | Runtime ownership | ordered single-writer 20 TPS GameLoop, intents | no actor budgets/telemetry | `GameLoop.cs`, boundary/intent tests | Hardened |
 | World | terrain, overlays, Dimension seam, sand/gravel gravity | fluids/redstone/block breadth/multiworld | `World/`, terrain/gravity tests | Functional |
 | Movement | authoritative player movement/fall/void | no full collision/anti-cheat proof | `MovementSystem.cs`, fall tests | Functional |
-| Health/damage | health, fall/void death and respawn | no generic sources, mitigation, effects, knockback | `Player.cs`, ADR §96 | Prototype |
+| Health/damage | health, fall/void death/respawn and explicit melee source | no mitigation, effects, knockback or attribution breadth | `HealthState`, `Player.cs`, ADR §§96/98 | Functional |
 | Inventory | ISR, craft/chests, persistence and conservation | broader item semantics/actor interactions | inventory tests | Hardened |
 | Persistence | Zenith LevelDB overlays/inventory/chest/player data | in-flight actors RAM-only, no actor persistence contract | storage tests | Functional |
 | Player replication | join/leave, dirty pose, skin/equipment | all-online fan-out; no interest policy | `PlayerVisibility.cs`, movement tests | Functional |
 | Non-player replication | item/falling-block packets | bespoke paths, no shared lifecycle/observer contract | `EntityProtocol.cs`, `ColumnSend.cs` | Prototype |
 | Visibility/interest | player visibility + known-chunk checks | no spatial actor interest/activation policy | `PlayerChunkTracker.cs`, `FloorDropFanout.cs` | Prototype |
-| Dynamic actors | falling blocks + floor drops | mob/projectile/general lifecycle absent | gravity/drop sources | Prototype |
-| AI/navigation | none | first simple actor before pathfinding | no mob/AI source | Absent |
+| Dynamic actors | falling blocks, floor drops and concrete Zombie | no materially different second actor or shared lifecycle | `ZombieSystem`, gravity/drop sources | Functional |
+| AI/navigation | Zombie proximity targeting/movement only | no navigation/pathfinding/behavior scheduling | `ZombieSystem.cs` | Prototype |
 | Load/observability | hot-path BenchmarkDotNet; reproducible synthetic player harness | actor workloads, real-client scale and CPU/memory profiles | `RuntimeLoadHarness.cs`, `runtime-validation.md`, robustness §54 | Functional |
 | Testing | leaf/unit suite, architecture tests, human smoke | Bedrock E2E not in CI | CI, `alpha-gate.md` | Characterized |
 | Operations | Docker/compose/config/graceful flush | backup/recovery/SLOs/public hardening | deploy docs | Prototype |
-| Commands / operator UX | one focused `/gamemode` path | next is a protocol-independent command core with a thin Bedrock metadata/autocomplete adapter; no plugin surface | ADR §52 / §99 | Prototype |
+| Commands / operator UX | protocol-independent core plus Bedrock `AvailableCommands` metadata/autocomplete for a small slice | broader command coverage and plugin-facing surface remain deferred | `CommandCatalog`, `CommandRuntime`, adapter tests/smoke, ADR §100 | Functional |
 | Extensibility | internal EventBus with one consumer | no public plugin API; correct intentional freeze | ADR §78 | Prototype |
 
 ## Mature server comparison
@@ -137,7 +137,7 @@ Inventory/container multi-owner transaction pressure is a separate branch. It ma
 
 ## ECS readiness matrix
 
-**2 DONE, 2 PARTIAL, 9 NOT STARTED.** The count is a checklist, not a forecast; partial does not count as complete.
+**2 DONE, 3 PARTIAL, 8 NOT STARTED.** The count is a checklist, not a forecast; partial does not count as complete.
 
 | Prerequisite | Status | Evidence / done condition |
 |---|---|---|
@@ -145,8 +145,8 @@ Inventory/container multi-owner transaction pressure is a separate branch. It ma
 | Entity workload baseline | NOT STARTED | non-player simulation plus observer fan-out |
 | Dropped-item lifecycle | PARTIAL | cell pickup/TTL exists; free actor lifecycle/physics does not |
 | Falling-block lifecycle | DONE | ADR §95, active multi-tick actor, tests/smoke |
-| Health/damage | PARTIAL | fall/void only; require shared operation |
-| First mob | NOT STARTED | spawn→replicate→act→damage→despawn |
+| Health/damage | PARTIAL | HealthState and explicit damage sources exist; broader gameplay damage remains |
+| First mob | PARTIAL | Zombie spawn/tick/target/attack/death exists; complete two-client lifecycle evidence remains |
 | Second actor behavior | NOT STARTED | projectile/equivalent with different access pattern |
 | Projectile/equivalent | NOT STARTED | continuous collision/lifecycle evidence |
 | Entity replication | PARTIAL | two bespoke paths; shared actor lifecycle required |
@@ -198,9 +198,9 @@ The concise canonical version is [`docs/roadmap.md`](../roadmap.md).
 
 | Phase | Objective | Exit evidence | Unlocks | Explicitly deferred |
 |---|---|---|---|---|
-| A Runtime proof | close player runtime/scale baseline | reproducible report, invariants, smoke status | honest capacity envelope | ECS, visibility system, jobs |
-| B Survival state core | general health/damage/death | source/cause tests, atomic death/drop/respawn, client smoke | actor interaction | hunger/armor/effects breadth |
-| C First actor | one mob vertical slice | lifecycle/replication/interaction tests and multiplayer smoke | second actor | inheritance/AI framework |
+| A Runtime proof | characterize player runtime/scale baseline | reproducible report, invariants, smoke status | honest capacity envelope | ECS, visibility system, jobs |
+| B Survival state core | general health/damage/death | HealthState, source/cause tests, atomic death/drop/respawn | actor interaction | hunger/armor/effects breadth |
+| C First actor | one mob vertical slice | Zombie lifecycle/replication/interaction tests and smoke evidence | second actor | inheritance/AI framework |
 | D Actor pressure | second actor, workload, visibility requirements | repeated patterns + measurements | ECS decision | speculative visibility impl |
 | E Decision | simple vs ECS comparison | benchmark + ADR accept/reject | limited ECS if accepted | players/inventory/jobs in ECS |
 | F Scale/behavior | expand actor, AI and interest independently | per-domain gates | extension surface later | public API before stability |
@@ -208,9 +208,9 @@ The concise canonical version is [`docs/roadmap.md`](../roadmap.md).
 
 ## Next three recommended goals
 
-1. **Close Runtime Validation & Multiplayer Scale Baseline.** Proves reproducibility, a defined player 20-TPS envelope, conservation under load and global-fan-out cost; unlocks honest capacity guidance. It explicitly does not add ECS, visibility, jobs or mobs.
-2. **Establish a general gameplay health/damage/death primitive.** Proves source/cause attribution, atomic death/drop/respawn and client/multiplayer synchronization; unlocks actor interaction. It does not add hunger, armor/effects, broad combat or an entity hierarchy.
-3. **Deliver one real mob vertical slice using the smallest direct actor model.** Proves spawn, active tick, basic behavior, replication, interaction and removal; unlocks second actor, actor benchmark and ECS evidence. It does not add generic Entity, AI framework, ECS, plugins or visibility system.
+1. **Characterize the concrete Zombie slice.** Proves the remaining spawn/late-join/health/movement/removal observations and records direct-model lifecycle cost. It does not add a generic Entity hierarchy, ECS or plugin API.
+2. **Deliver a materially different second actor.** Prefer a projectile or equivalent with collision, short lifetime and observer updates; prove which state/lifecycle patterns are genuinely shared. It does not add a component registry or visibility framework.
+3. **Build the actor pressure baseline.** Measure simulation separately from replication/observer fan-out across meaningful populations and document visibility/activation requirements. It does not implement ECS, parallel jobs or assume ECS solves visibility.
 
 ## ECS decision gate
 
@@ -239,11 +239,11 @@ Limit it initially to **world actors**: mobs, projectiles, dropped items, fallin
 | Mature capabilities that wait? | Broad AI, effects, persistence breadth, plugin API, production ops, jobs and parity. |
 | Minimum entity set? | Falling block + improved item/equivalent, one mob, one projectile/second behavior, shared replication/lifecycle tests and workload data. |
 | When does waiting become debt? | When ≥3 paths duplicate actor state/stores/type-switches or public entity API is imminent. |
-| When is ECS premature? | Now: no mob/projectile/shared lifecycle/visibility requirements/actor benchmark. |
+| When is ECS premature? | Still now: only one concrete mob exists; no materially different second actor, shared lifecycle pressure, visibility requirements or actor benchmark. |
 | Is GameLoop a good base? | Yes for single-writer ECS; no implication of parallel ECS. |
 | Players in ECS? | Later or potentially never; they are session/inventory-heavy. |
 | Outside ECS? | Sessions, RakNet, packets/protocol, inventory/containers, storage, commands, plugin runtime; players by default. |
 | Visibility timing? | Requirements precede decision; implementation evolves independently when fan-out warrants it. |
 | Worthwhile benchmark? | Real simple-vs-SoA/archetype actors with tail tick/alloc/memory and lifecycle/fan-out measures. |
 | Falsifier? | Simple model meets target, bottleneck is network/visibility/I/O, or ECS makes churn/complexity worse. |
-| Next goals? | Runtime baseline; general damage; first direct-model mob. |
+| Next goals? | Characterize Zombie; add a materially different second actor; measure actor simulation versus observer fan-out. |

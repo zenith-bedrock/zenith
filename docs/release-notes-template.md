@@ -46,7 +46,7 @@ Not production-ready — LAN / private feedback only.
 - Enchants / durability / tool recipes / gold-netherite / wrong-tool no-drop
 - Sand/gravel gravity (ADR §57 written — implement next); Mojang worlds / biomes; `players/` volume
 - Floor drops not persisted across process restart (RAM-only)
-- Adventure / Spectator; `/` command framework / autocomplete
+- Adventure / Spectator; full vanilla command catalogue / plugin-facing command API
 - Full creative catalogue / `block_state_b64`; 3×3 crafting table
 - Hunger / damage / armor; plugins / DI / VisibilitySystem / ECS
 - Public production with `auth.accept` including `self-signed` or `offline` (use `[xbox]` only)
@@ -110,4 +110,4 @@ Gate: [`docs/alpha-gate.md`](alpha-gate.md). Release: [v0.0.1-alpha](https://git
 ### Explicitly **not** on that tag
 - `/gamemode`; death–Respawn handshake; drop-entity wire
 - Tool dig speed; double-chest 54 UI; sand/gravel gravity
-- Plugins / DI / command framework; `players/` volume; Mojang worlds / biomes; hunger tick
+- Plugins / DI / plugin-facing command framework; `players/` volume; Mojang worlds / biomes; hunger tick
