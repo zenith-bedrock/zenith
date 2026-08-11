@@ -22,7 +22,7 @@ These are **harder** than the soft LAN-alpha grade. Do not sand them down in the
 
 | Basket | What | Action |
 |--------|------|--------|
-| **A** | H1 product gaps (closed on `develop`) | Historical — see [`roadmap.md`](roadmap.md) Yes-next; **out of scope** for this platform-health program |
+| **A** | H1 product gaps (closed on `develop`) | Historical — see [`roadmap.md`](roadmap.md) for current gates; **out of scope** for this platform-health program |
 | **B** | Dig/UI mutation on RakNet thread; dual Online fan-out; fat `InGameSessionHandler`; chat overwrite-latest; mega `InventoryProtocol`; GC on send/tick | Phases 1–5 mostly done; leftover scratch-list nits below |
 | **C** | Stale ARCHITECTURE Fase 3, missing `.cursor/rules` stubs, dead `ChunkUtils` / usings | Mostly closed (jul 2026) |
 
@@ -73,8 +73,8 @@ Phase 3  zero-alloc hot pack         done (jul 2026; see docs/dx.md)
 Phase 3b tick/join UpdateBlock lists done (BlockSystem + ColumnSend scratches)
 Phase 4  DX + chat FIFO              done (chat FIFO); ARCHITECTURE stay-honest ongoing
 Phase 5  InventoryProtocol split     done
-Next     roadmap Yes-next: human smoke §72 → optional floor-drop TTL / smoke-bot; §73–§74 honesty shipped;
-         smoke-bot first10; §61 Mojang only when import needed; AuthInput×FPS measure-only.
+Next     roadmap Phase A runtime baseline; then health/damage and first actor evidence. §61 Mojang remains
+         opt-in only when import is needed; AuthInput×FPS remains measure-only.
          SoftCap eviction redesign; Bedrock E2E CI (beta-hard) still open.
 
 ```

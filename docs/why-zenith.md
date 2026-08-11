@@ -44,6 +44,14 @@ Plugin ecosystems that attach to raw packets ossify bad boundaries. Zenith delay
 
 That is slower marketing; faster decade.
 
+### 5. Entity architecture after actor evidence
+
+Zenith does not assume that ECS is the destination. First it must run enough real world actors
+to know their lifecycle, state access, replication and visibility cost, then compare the direct
+model against an ECS workload. This protects the project from both a decorative early rewrite and
+an inheritance/plugin API that makes a later correction expensive. The current decision path and
+exit evidence are canonical in [`roadmap.md`](roadmap.md).
+
 ### 5. Ops that match how binaries ship
 
 Config beside the exe, LevelDB open failure that **does not** silently drop to empty RAM worlds, auth verify as an explicit public-exposure switch — boring reliability that production operators remember.

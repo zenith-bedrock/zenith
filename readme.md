@@ -78,7 +78,7 @@ workspace/       Local development scratch (not product)
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for issue/PR norms. Pick work from [docs/roadmap.md](docs/roadmap.md) "Yes-next" rather than opening large new subsystems ahead of an ADR. `AGENTS.md` is available when using coding agents or automation.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for issue/PR norms. Pick work from the **NOW** / **NEXT** gates in [docs/roadmap.md](docs/roadmap.md) rather than opening large new subsystems ahead of an ADR. `AGENTS.md` is available when using coding agents or automation.
 
 ## License
 

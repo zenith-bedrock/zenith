@@ -45,7 +45,7 @@ them; for resource movement, test conservation across all participating stores.
 - Protocol smoke bot (ADR §58): [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol; **not** inside this C# repo
 - **Delivery:** if you close an audit/hygiene gap, **commit + push the same day** — dirty tree ahead of `origin` is a process failure, not WIP
 
-Frozen: Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` commands — unless a concrete feature forces them (record in decisions first).
+Frozen: Scheduler, Actor/ECS, VisibilitySystem, DI and plugin API — unless a concrete feature forces them (record in decisions first). `/` commands are an allowed product/DX surface: grow them from concrete gameplay commands. Their core is protocol-independent (definitions, parse/validation, permissions, aliases and feedback); Bedrock adapts definitions to client metadata/autocomplete only. Commands never own gameplay state, and plugin-facing command hooks/discovery remain deferred until the plugin API has a real domain boundary.
 
 ## Before implementing a new gameplay feature (ADR §97)
 

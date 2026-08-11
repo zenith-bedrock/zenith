@@ -217,6 +217,19 @@ Gates: se item **11** falhar, não começar containers. Se **S39** ou **S41** fa
 
 ## Roadmap
 
+> **Historical snapshot only.** The active dependency- and gate-based roadmap is
+> [`docs/roadmap.md`](docs/roadmap.md), and the evidence for the ECS decision is
+> [`docs/audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](docs/audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md).
+> Do not use the legacy phase/Yes-next material below to select new work.
+
+### ECS decision boundary
+
+ECS remains frozen until real world-actor pressure is measured. The decision applies, if ever,
+only to world actors (mobs, projectiles, drops, falling blocks), starts single-writer on the
+GameLoop, and requires an ADR after a representative straightforward-vs-SoA/archetype spike.
+It does **not** imply a VisibilitySystem or parallel scheduler, and does not pull players,
+inventory, sessions, transport, packets or persistence into ECS by default.
+
 Espinha: **Chat → World in-memory → Inventory/blocks → LevelDB**, skins cosméticas em paralelo. Não espelhar Actor→Events; Zenith já usa `GameLoop` + pending input.
 
 Config operacional (`zenith.yml`) **não** é uma “fase de gameplay”; entra cedo para não depender de env. i18n fica **depois** de haver mensagens de jogador estáveis.

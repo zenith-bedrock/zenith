@@ -54,7 +54,8 @@ Where the project is headed — check before picking up work.
 
 | Doc | Covers |
 |-----|--------|
-| [Roadmap](roadmap.md) | H1 closed; **Yes-next** order (not PM parity) |
+| [Roadmap](roadmap.md) | Current dependency graph, maturity gates and NOW/NEXT/LATER |
+| [Maturity & ECS readiness audit](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability evidence, mature-server comparison and ECS decision gate |
 
 ---
 
