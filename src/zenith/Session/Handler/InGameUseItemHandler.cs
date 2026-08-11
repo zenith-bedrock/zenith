@@ -57,6 +57,7 @@ partial class InGameSessionHandler
         if (useActionType is InventoryTransactionPacket.UseClickAir
             or InventoryTransactionPacket.UseAsAttack)
         {
+            player.SubmitAttackIntent();
             // Air punch / attack-style use — peer arm swing (§53). MissedSwing AuthInput also covers this.
             PlayerVisibility.RelaySwingArm(
                 player,

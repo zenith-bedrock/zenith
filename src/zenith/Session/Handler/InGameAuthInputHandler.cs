@@ -51,6 +51,9 @@ partial class InGameSessionHandler
 
         player.SubmitMovementInput(input);
 
+        if (packet.InputMissedSwing)
+            player.SubmitAttackIntent();
+
         if (packet.ItemInteraction is { } useItem)
             HandleUseItemInteraction(session, player, useItem);
 
