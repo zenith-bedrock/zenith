@@ -5,7 +5,7 @@ Thanks for helping. Zenith is early alpha — small, reviewable PRs beat large �
 ## Before you write code
 
 1. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) (constraints) and [`docs/architecture.md`](docs/architecture.md).
-2. Skim [`AGENTS.md`](AGENTS.md) for folder layout (`Packets` / `Protocol` / `Session` — **do not recreate `Network/`**).
+2. Keep the folder boundaries in [`ARCHITECTURE.md`](ARCHITECTURE.md) (`Packets` / `Protocol` / `Session` — **do not recreate `Network/`**). If you use a coding agent, also give it [`AGENTS.md`](AGENTS.md).
 3. Check [`docs/roadmap.md`](docs/roadmap.md) for **which horizon** your idea belongs to (alpha gate vs after-alpha leaves).
 4. Check [`docs/decisions.md`](docs/decisions.md). New layers or freeze-list items need an ADR **first**.
 5. Prefer the leaf that owns the bug (`src/raknet`, `libs/nbt`, `libs/leveldb`) when possible.
@@ -28,7 +28,7 @@ Unless an ADR says otherwise: Scheduler, Actor/ECS, VisibilitySystem, DI contain
 - Use the PR template. One concern per PR when practical.
 - Keep Gameplay free of `DataPacket` / `BinaryStream`; Packets free of `Player` / `World` / `Server`.
 - Include tests for format/wire/behaviour when the change is testable without a Bedrock client.
-- After implementation, contributors using agents should run:
+- Contributors using coding agents may also use the repository's optional agent checks:
   - skill **`zenith-post-impl-audit`** — audit `git status`/`diff` against architecture, freeze list, DX
   - skill **`zenith-unit-tests`** — add/extend leaf tests when the diff warrants them  
   Skills are mirrored for Cursor / Claude Code / OpenCode: [`.cursor/skills/`](.cursor/skills/), [`.claude/skills/`](.claude/skills/), [`.opencode/skills/`](.opencode/skills/).

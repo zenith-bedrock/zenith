@@ -107,7 +107,7 @@ Fan-out a “todos online” (ex. TimeSync / movimento **quando pose dirty**, AD
 ## GameLoop e sistemas
 
 - **GameLoop** controla 20 TPS, avança `GameClock` e chama sistemas — **sem** regras de gameplay. Exceção de sistema é registrada e encerra o loop; `ZenithServer` propaga essa falha ao lifecycle de shutdown: continuar aceitando pacotes após uma mutação autoritativa parcialmente aplicada seria esconder corrupção potencial. Recuperação/retry deve ser desenhada no boundary específico que conhece a operação; não há circuit breaker genérico.
-- **Lifetime crítico:** `GameLoop` e RakNet compartilham o lifetime do servidor. A terminação inesperada de um inicia shutdown coordenado: cancelar a autoridade, bloquear novo tráfego, drenar os loops, então settle autoritativo e flush de persistência. `ShutdownAsync` é idempotente e só completa após essa sequência.
+- **Lifetime crítico:** `GameLoop` e RakNet compartilham o lifetime do servidor. A terminação inesperada de um inicia shutdown coordenado: cancelar a autoridade, bloquear novo tráfego, drenar os loops, então settle autoritativo e flush de persistência. `RunAsync` representa uma única lifetime por instância e chamadas repetidas retornam a mesma task; `ShutdownAsync` é idempotente, retorna a mesma operação de cleanup e só completa após essa sequência. Uma instância já parada não é reiniciada: crie uma nova instância em vez disso. A falha crítica permanece observável pela task de `RunAsync`, mesmo após o cleanup a colocar no estado terminal stopped.
 - **GameClock** guarda tick / world time / TPS medido.
 - **Sistemas** (`IGameSystem`): ordem de **registro** = ordem de **execução**; cada um só com a própria lógica.
 - GameLoop é **single-threaded** até existir necessidade real de paralelismo.

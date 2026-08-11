@@ -17,6 +17,9 @@ public class RakNetServer
 
     private readonly UdpClient _listener;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private Task? _runTask;
+    private Task? _shutdownTask;
+    private readonly object _lifecycleGate = new();
     private readonly UnconnectedRakNet _unconnected;
 
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();
@@ -166,7 +169,28 @@ public class RakNetServer
 
     public int MotdOnlineCount => OnlinePlayerCount?.Invoke() ?? ConnectionCount;
 
-    public async Task StartAsync()
+    /// <summary>
+    /// Starts the single transport lifetime. Repeated calls return the same task; a transport that has
+    /// already begun shutdown is terminal and cannot bind again.
+    /// </summary>
+    public Task StartAsync()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_runTask is not null)
+                return _runTask;
+
+            if (_shutdownTask is not null)
+            {
+                return Task.FromException(new InvalidOperationException(
+                    "A stopped RakNetServer instance cannot be started. Create a new transport instance."));
+            }
+
+            return _runTask = RunCoreAsync();
+        }
+    }
+
+    private async Task RunCoreAsync()
     {
         Logger?.Debug("Starting RakNet connection...");
         _listener.Client.Bind(RemoteEndPoint);
@@ -176,16 +200,41 @@ public class RakNetServer
         var datagramTask = ReceiveDatagramAsync(_cancellationTokenSource.Token);
         var tickTask = Task.Run(() => TickAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
 
-        await Task.WhenAll(datagramTask, tickTask);
+        try
+        {
+            await Task.WhenAll(datagramTask, tickTask);
+        }
+        catch (OperationCanceledException) when (_cancellationTokenSource.IsCancellationRequested)
+        {
+            // Expected coordinated shutdown.
+        }
         Logger?.Debug("RakNet gracefully stopped.");
     }
 
-    public async Task ShutdownAsync()
+    /// <summary>Stops the transport once; repeated calls return the same drain task.</summary>
+    public Task ShutdownAsync()
+    {
+        lock (_lifecycleGate)
+            return _shutdownTask ??= ShutdownCoreAsync();
+    }
+
+    private async Task ShutdownCoreAsync()
     {
         Logger?.Debug("Requesting RakNet shutdown...");
         _cancellationTokenSource.Cancel();
         _listener.Close();
-        await Task.CompletedTask;
+        Task? run;
+        lock (_lifecycleGate)
+            run = _runTask;
+        if (run is not null)
+        {
+            try { await run.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+            catch when (_cancellationTokenSource.IsCancellationRequested)
+            {
+                // The owner that observed the unexpected failure preserves and propagates it.
+            }
+        }
     }
 
     private async Task ReceiveDatagramAsync(CancellationToken token)

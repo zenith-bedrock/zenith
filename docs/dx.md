@@ -59,7 +59,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 ## Workflow suggestions
 
 ```text
-1. Read docs/architecture.md + ARCHITECTURE.md (+ CONTRIBUTING.md / AGENTS.md for PRs and folders)
+1. Read docs/architecture.md + ARCHITECTURE.md + CONTRIBUTING.md. If you use a coding agent, also provide AGENTS.md.
 2. Touch the smallest leaf (`libs/nbt`, `libs/leveldb`, `src/raknet`) when possible
 3. Add a unit test before a Bedrock client smoke when the change is format/protocol shape
 4. Keep gameplay free of DataPacket / BinaryStream

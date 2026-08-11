@@ -55,7 +55,7 @@ dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 | [docs/technical-reference.md](docs/technical-reference.md) | Protocol version SSOT, embedded assets, external study refs |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Living engineering rules (constraints) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issues, PRs, contribution norms |
-| [AGENTS.md](AGENTS.md) | Folder layout (humans & agents) |
+| [AGENTS.md](AGENTS.md) | Optional guide for coding agents and automation |
 
 ## Solution layout
 
@@ -71,12 +71,12 @@ src/
   *.Tests/
 deploy/          Product image + Compose/Dokploy + Pterodactyl adapters — not used by dotnet run
 docs/            Narrative documentation
-workspace/       Local agent/dev scratch (not product)
+workspace/       Local development scratch (not product)
 ```
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for issue/PR norms and [AGENTS.md](AGENTS.md) for the folder layout. Pick work from [docs/roadmap.md](docs/roadmap.md) "Yes-next" rather than opening large new subsystems ahead of an ADR.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for issue/PR norms. Pick work from [docs/roadmap.md](docs/roadmap.md) "Yes-next" rather than opening large new subsystems ahead of an ADR. `AGENTS.md` is available when using coding agents or automation.
 
 ## License
 

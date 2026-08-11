@@ -4,7 +4,7 @@
 
 ## Context
 
-A auditoria de arquitetura (`docs/audit/ZENITH_ARCHITECTURE_AUDIT.md`) mapeou 9 `IGameSystem` e 7+ fluxos de pending-state/lock/queue no runtime do Zenith. Um risco identificado durante a revisão dessa auditoria: ao corrigir a preocupação original ("Chat/GameMode/Equipment não deveriam rodar a 20 TPS"), é fácil substituir uma rigidez por outra — trocar "tudo é `IGameSystem`" por "tudo que não precisa de tick vira `Command`/`Event`/`Service`". Nenhuma das duas é a heurística certa.
+Uma revisão do runtime encontrou nove `IGameSystem` e vários fluxos de estado pendente, lock e fila. A pergunta não era se sistemas são "bons" ou "ruins", mas qual comportamento realmente precisa de tick. Ao questionar `Chat`, `GameMode` e `Equipment`, fica fácil trocar uma rigidez por outra: sair de "tudo é `IGameSystem`" para "tudo que não precisa de tick vira `Command`/`Event`/`Service`". Nenhuma das duas é uma heurística útil.
 
 O Zenith tem hoje, e vai ter cada vez mais conforme mobs/AI/combate/redstone/fluidos chegarem, tipos de trabalho com semânticas genuinamente diferentes:
 
@@ -18,7 +18,7 @@ replication                 (movement pose, equipment diff)
 protocol synchronization    (time sync)
 ```
 
-Forçar tudo através de `IGameSystem.Tick()` gera polling, estado temporário, locks e ordering implícito onde não são necessários. Forçar tudo para `Command`/`Event`/`Service` geraria exatamente o mesmo tipo de fricção arquitetural, só com nomes diferentes — um dispatcher, um handler registry, um estado intermediário "Command pendente" em vez de "Intent pendente". A auditoria confirmou (ver seção "Reavaliação à luz do behavior-first") que nenhuma implementação madura pesquisada (PocketMine, Minestom, Dragonfly, Cuberite) usa uma separação formal Systems/Commands/Events para o tipo de transição discreta que motivou a dúvida original — todas resolvem inline, no mecanismo mais direto que preserva as garantias que o problema exige.
+Forçar tudo através de `IGameSystem.Tick()` gera polling, estado temporário, locks e ordering implícito onde não são necessários. Forçar tudo para `Command`/`Event`/`Service` gera a mesma fricção com outros nomes: dispatcher, registry e estado intermediário em vez de uma operação direta. As implementações de referência estudadas (PocketMine, Minestom, Dragonfly e Cuberite) convergem no princípio prático: uma transição discreta usa o mecanismo mais direto que preserva as garantias de autoridade, ordering e teste de que ela precisa.
 
 ## Decision
 
@@ -84,8 +84,7 @@ STRICT (nunca trocar sem uma feature concreta forçando e um novo ADR):
      de gameplay — não podem *ser* a decisão de gameplay).
   - Mutação de estado autoritativo tem dono claro e normalmente um único escritor no
     contexto de gameplay que a ordena (hoje, o tick para Player/World/inventário;
-    exceções devem ser explícitas e justificadas — single-writer, ver auditoria
-    ZAR-001/ZAR-002 para a motivação).
+    exceções devem ser explícitas e justificadas).
   - Thread ownership e concorrência são explícitos — produtores de rede/I/O publicam
     intents ou conclusões imutáveis em boundaries limitados; não recuperam autoridade
     para mutar estado autoritativo após o handoff. `single-writer` não torna o servidor
@@ -134,4 +133,4 @@ autoritativo ou por que a exceção preserva sua corretude.
 
 ## Status
 
-Decidido (esta sessão). Não bloqueante — não exige nenhuma mudança de código imediata. Usado para reavaliar os findings da auditoria de arquitetura (`docs/audit/ZENITH_ARCHITECTURE_AUDIT.md`, seção "Reavaliação à luz do behavior-first") e para orientar o plano de migração (`docs/plans/ZENITH_ARCHITECTURE_REFACTOR_PLAN.md`). Próximo passo de enforcement: `AGENTS.md`/`ARCHITECTURE.md` recebem a checklist e as frases-guia derivadas deste ADR (ver seção "Documentação para agentes" da auditoria).
+Esta decisão orienta mudanças novas e revisões de código. As regras de camada e de ownership resumidas aqui também aparecem em `ARCHITECTURE.md`; `ArchitectureBoundaryTests` protege automaticamente as dependências de camada que podem ser verificadas por código. A escolha concreta de mecanismo continua sendo uma decisão de feature, registrada em ADR quando introduzir uma camada ou compromisso novo.
