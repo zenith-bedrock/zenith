@@ -15,7 +15,7 @@ public class RakNetSession
     }
 
     public const int DGRAM_HEADER_SIZE = 4;
-    public const int DGRAM_MTU_OVERHEAD = 36;
+    public const int IP_UDP_HEADER_SIZE = 28;
 
     public required IPEndPoint EndPoint { get; init; }
     public int Id { get; init; }
@@ -210,7 +210,16 @@ public class RakNetSession
             OutputSequenceIndex[frame.OrderChannel] = 0;
         }
 
-        var maxSize = Math.Max(MTU - DGRAM_MTU_OVERHEAD, 1);
+        // RakNet negotiates an IP-packet MTU. FrameSets travel as UDP payload,
+        // so they must leave room for the 20-byte IP and 8-byte UDP headers.
+        // A split frame also carries its own frame/split headers.
+        var maxDatagramSize = Math.Max(MTU - IP_UDP_HEADER_SIZE, 1);
+        var splitFrameOverhead = new Frame
+        {
+            Reliability = frame.Reliability,
+            SplitInfo = new Frame.SplitPacketInfo(0, 0, 0)
+        }.GetByteLength();
+        var maxSize = Math.Max(maxDatagramSize - DGRAM_HEADER_SIZE - splitFrameOverhead, 1);
 
         if (frame.Buffer.Length > maxSize)
         {
@@ -250,7 +259,11 @@ public class RakNetSession
     {
         var length = DGRAM_HEADER_SIZE + _outputFramesByteLength;
 
-        if (length + frame.GetByteLength() > MTU + DGRAM_MTU_OVERHEAD)
+        // The negotiated MTU includes IP and UDP headers. Packing beyond the
+        // effective UDP payload made strict RakNet peers reject oversized UDP
+        // datagrams even when every individual frame had been fragmented.
+        var maxDatagramSize = Math.Max(MTU - IP_UDP_HEADER_SIZE, 1);
+        if (length + frame.GetByteLength() > maxDatagramSize)
             SendQueueLocked(OutputFrames.Count);
 
         OutputFrames.Add(frame);

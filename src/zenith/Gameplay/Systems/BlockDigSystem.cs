@@ -21,6 +21,12 @@ sealed class BlockDigSystem : IGameSystem
 
         foreach (var player in online)
         {
+            if (!player.IsInGame)
+            {
+                while (player.TryConsumeDig(out _)) { }
+                continue;
+            }
+
             while (player.TryConsumeDig(out var dig))
                 ApplyDig(player, dig, clock, online);
             UpdateDigToolIfHeldChanged(player, clock, online);

@@ -33,7 +33,9 @@ sealed class BlockEditSystem : IGameSystem
         {
             while (player.TryConsumeBlockEdit(out var edit))
             {
-                if (player.IsDead) continue;
+                // The online list is captured once per tick. A disconnect can remove a player
+                // after that snapshot; its queued client edit must not mutate world state.
+                if (!player.IsInGame || player.IsDead) continue;
                 if (ApplyEdit(player, edit, clock, online))
                     updates.Add((edit.X, edit.Y, edit.Z, edit.BlockRuntimeId));
             }

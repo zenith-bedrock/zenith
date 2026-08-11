@@ -154,6 +154,94 @@ public class IntentContractTests
         player.SelectedHotbarSlot = slot;
     }
 
+    private static void SubmitCraftRecipeRequest(Player.Player player, int requestId, uint recipeNetId)
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(requestId);
+        writer.WriteUnsignedVarInt(1); // action count
+        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteByte(0); // legacy type id
+        writer.WriteUnsignedVarInt(checked((int)recipeNetId));
+        writer.WriteByte(1); // craft times
+        writer.WriteUnsignedVarInt(0); // filter strings
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        var handled = new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET },
+            ref stream);
+        Assert.True(handled);
+    }
+
+    private static void SubmitDropRequest(Player.Player player, int requestId, byte containerId, byte slot)
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(requestId);
+        writer.WriteUnsignedVarInt(1); // action count
+        writer.WriteByte(ItemStackRequestPacket.ActionDrop);
+        writer.WriteByte(0); // legacy type id
+        writer.WriteByte(1); // count
+        WriteSlotInfo(ref writer, containerId, slot);
+        writer.WriteBool(false); // randomly
+        SubmitItemStackRequest(player, writer);
+    }
+
+    private static void SubmitChestAndCraftRequest(Player.Player player, int requestId, uint recipeNetId)
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(requestId);
+        writer.WriteUnsignedVarInt(2); // action count
+        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        writer.WriteByte(0); // legacy type id
+        writer.WriteByte(1); // count
+        WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
+        WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);
+        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteByte(0); // legacy type id
+        writer.WriteUnsignedVarInt(checked((int)recipeNetId));
+        writer.WriteByte(1); // craft times
+        SubmitItemStackRequest(player, writer);
+    }
+
+    private static void SubmitChestTransferRequest(Player.Player player, int requestId)
+    {
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(requestId);
+        writer.WriteUnsignedVarInt(1); // action count
+        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        writer.WriteByte(0); // legacy type id
+        writer.WriteByte(1); // count
+        WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
+        WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);
+        SubmitItemStackRequest(player, writer);
+    }
+
+    private static void WriteSlotInfo(ref BinaryStream writer, byte containerId, byte slot)
+    {
+        writer.WriteByte(containerId);
+        writer.WriteBool(false); // dynamic container id
+        writer.WriteByte(slot);
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // stack network id
+    }
+
+    private static void SubmitItemStackRequest(Player.Player player, BinaryStream writer)
+    {
+        writer.WriteUnsignedVarInt(0); // filter strings
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        var handled = new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET },
+            ref stream);
+        Assert.True(handled);
+    }
+
     [Fact]
     public void MovementSystem_void_triggers_death_and_dumps_survival_inventory()
     {
@@ -1943,6 +2031,182 @@ public class IntentContractTests
         Assert.Equal(10, player.Inventory.Get(0).Count);
         Assert.True(fx.World.Chests.Get(1, 64, 1, 0).IsEmpty);
         Assert.True(fx.World.Chests.Get(3, 64, 1, 0).IsEmpty);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_crafting_when_player_inventory_ui_is_not_open()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("closed-craft");
+        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        SubmitCraftRecipeRequest(player, requestId: 501, RecipeRegistry.OakLogToPlanks);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void ItemStackRequest_crafting_bound_to_closed_player_inventory_ui_does_not_commit()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stale-craft");
+        var session = player.OpenPlayerContainer(0, 0xff);
+        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        SubmitCraftRecipeRequest(player, requestId: 502, RecipeRegistry.OakLogToPlanks);
+        Assert.True(player.TryCloseContainer(session.WindowId, session.WindowType, out _));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void ItemStackRequest_crafting_bound_to_replaced_player_inventory_ui_does_not_commit()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("replaced-craft");
+        player.OpenPlayerContainer(0, 0xff);
+        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        SubmitCraftRecipeRequest(player, requestId: 503, RecipeRegistry.OakLogToPlanks);
+        player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_crafting_while_chest_is_the_active_session()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("chest-craft");
+        player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
+        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        SubmitCraftRecipeRequest(player, requestId: 504, RecipeRegistry.OakLogToPlanks);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_cursor_drop_without_an_active_container_session()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("closed-cursor");
+
+        SubmitDropRequest(player, requestId: 505, InventoryContainerMap.Cursor, 0);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_a_chest_slot_when_player_inventory_ui_is_active()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("wrong-chest");
+        player.OpenPlayerContainer(0, 0xff);
+
+        SubmitChestTransferRequest(player, requestId: 506);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_a_request_that_spans_chest_and_crafting_ui()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("mixed-ui");
+        player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
+
+        SubmitChestAndCraftRequest(player, requestId: 507, RecipeRegistry.OakLogToPlanks);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+    }
+
+    [Fact]
+    public void InventorySystem_cancels_pending_window_open_after_player_leaves_gameplay()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-window");
+        fx.World.SetBlock(1, 64, 1, Blocks.Chest);
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(1, 64, 1)));
+
+        // Models a disconnect after GameLoop captured Online but before InventorySystem runs.
+        player.IsInGame = false;
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Null(player.OpenContainer);
+        Assert.Equal(0, fx.World.Chests.OpenerCount(1, 64, 1));
+    }
+
+    [Fact]
+    public void InventorySystem_cancels_pending_mutation_after_player_leaves_gameplay()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-stack");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 2));
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(508, [
+            InventoryStackAction.Transfer(0, 9, 1)
+        ])));
+
+        // The request was accepted before teardown but has no authority after disconnect.
+        player.IsInGame = false;
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(2, player.Inventory.Get(0).Count);
+        Assert.True(player.Inventory.Get(9).IsEmpty);
+    }
+
+    [Fact]
+    public void BlockEditSystem_cancels_pending_world_mutation_after_player_leaves_gameplay()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-edit");
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Dirt)));
+
+        player.IsInGame = false;
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(1, 64, 1));
+    }
+
+    [Fact]
+    public void BlockDigSystem_cancels_pending_dig_after_player_leaves_gameplay()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-dig");
+        Assert.True(player.SubmitDigStart(1, 64, 1, fx.Clock.CurrentTick, requiredTicks: 20));
+
+        player.IsInGame = false;
+        new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.False(player.HasBreakTarget);
+    }
+
+    [Fact]
+    public void MovementSystem_cancels_pending_input_after_player_leaves_gameplay()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-movement");
+        var originalY = player.PositionY;
+        player.SubmitMovementInput(MovementInputState.From(
+            x: 20f, y: MovementSystem.VoidRescueY - 1f, z: 20f, pitch: 0f, yaw: 0f));
+
+        player.IsInGame = false;
+        new MovementSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(0f, player.PositionX);
+        Assert.Equal(originalY, player.PositionY);
+        Assert.Equal(0f, player.PositionZ);
+        Assert.False(player.IsDead);
     }
 
     [Fact]

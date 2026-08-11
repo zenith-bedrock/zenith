@@ -20,6 +20,7 @@ Task-oriented — you have a specific thing to do.
 | [Vanilla behavior guide](vanilla-behavior.md) | Testing in-game: what should match vanilla, what to report as a bug |
 | [Alpha gate](alpha-gate.md) | `v0.0.1-alpha` tag checklist (compose / test / non-goals) |
 | [Protocol churn](protocol-churn.md) | Checklist for bumping to a new Bedrock client protocol (ADR §22) |
+| [Runtime and behavioral validation](runtime-validation.md) | Load baseline and real-client differential-smoke workflow |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
 | [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
 
