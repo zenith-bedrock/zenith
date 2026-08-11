@@ -211,6 +211,8 @@ partial class InGameSessionHandler : ISessionHandler
 
     private static void HandleRequestAbility(NetworkSession session, ref BinaryStream stream)
     {
+        // ADR §97 immediate runtime operation: this packet only requests a same-session wire
+        // refresh. It neither mutates Player ability authority nor affects gameplay ordering.
         var packet = new RequestAbilityPacket();
         packet.Decode(ref stream);
 

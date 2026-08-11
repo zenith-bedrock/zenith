@@ -13,12 +13,12 @@ public class TimeSyncSystemTests
     {
         var fx = new IntentTestFixture();
         _ = fx.AddInGamePlayer("alice");
-        var system = new TimeSyncSystem(fx.Players);
+        var system = new TimeSyncSystem();
 
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        system.Tick(fx.Clock); // CurrentTick == 0 here, 0 % TicksPerSecond == 0
+        system.Tick(fx.Clock, fx.Players.Online); // CurrentTick == 0 here, 0 % TicksPerSecond == 0
         FlushRaknet(fx.Players);
 
         Assert.Single(fx.Transport.Captured);
@@ -29,13 +29,13 @@ public class TimeSyncSystemTests
     {
         var fx = new IntentTestFixture();
         _ = fx.AddInGamePlayer("alice");
-        var system = new TimeSyncSystem(fx.Players);
+        var system = new TimeSyncSystem();
         fx.Clock.AdvanceBy(1); // CurrentTick == 1, 1 % TicksPerSecond != 0
 
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Empty(fx.Transport.Captured);
@@ -46,13 +46,13 @@ public class TimeSyncSystemTests
     {
         var fx = new IntentTestFixture();
         _ = fx.AddInGamePlayer("alice");
-        var system = new TimeSyncSystem(fx.Players);
+        var system = new TimeSyncSystem();
         fx.Clock.AdvanceBy(Zenith.Gameplay.Runtime.GameClock.TicksPerSecond); // CurrentTick == 20
 
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Single(fx.Transport.Captured);
@@ -62,9 +62,9 @@ public class TimeSyncSystemTests
     public void Tick_with_no_online_players_is_a_no_op()
     {
         var fx = new IntentTestFixture();
-        var system = new TimeSyncSystem(fx.Players);
+        var system = new TimeSyncSystem();
 
-        system.Tick(fx.Clock); // must not throw with an empty online list
+        system.Tick(fx.Clock, Array.Empty<Zenith.Player.Player>()); // must not throw with an empty online list
         Assert.Empty(fx.Transport.Captured);
     }
 

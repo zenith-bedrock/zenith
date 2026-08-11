@@ -43,7 +43,7 @@ static class ChestLidFanout
         Player.Player player)
     {
         if (player.OpenChest is not { } view) return;
-        player.OpenChest = null;
+        _ = player.TryClearOpenContainer(out _);
 
         var primaryClosed = world.Chests.TryRemoveOpener(
             view.PrimaryX, view.PrimaryY, view.PrimaryZ, player.RuntimeId);

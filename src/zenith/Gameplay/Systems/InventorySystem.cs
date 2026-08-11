@@ -8,8 +8,7 @@ namespace Zenith.Gameplay.Systems;
 
 /// <summary>
 /// Aplica <see cref="InventoryStackIntent"/> no tick e responde ItemStackResponse (same-session).
-/// Slots flat ≥ <see cref="InventoryContainerMap.ChestBase"/> → chest;
-/// craft UI flats → <see cref="PlayerCraftUi"/>.
+/// Slot references are resolved against the authoritative open-container session and player UI.
 /// </summary>
 sealed class InventorySystem : IGameSystem
 {
@@ -17,7 +16,6 @@ sealed class InventorySystem : IGameSystem
     private readonly World.World _world;
     private readonly RecipeRegistry _recipes;
     private readonly CreativeCatalog _creative;
-    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
 
     public InventorySystem(PlayerManager players, World.World world, RecipeRegistry recipes, CreativeCatalog creative)
     {
@@ -27,15 +25,15 @@ sealed class InventorySystem : IGameSystem
         _creative = creative;
     }
 
-    public void Tick(GameClock clock)
-    {
-        _players.FillOnline(_onlineScratch);
-        Tick(clock, _onlineScratch);
-    }
-
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;
+
+        // Disconnect is produced by the network lifecycle, but ChestStore opener state remains
+        // gameplay-owned. Drain even when the departing player has already left Online.
+        while (_players.TryConsumeDisconnectedContainerCleanup(out var disconnected))
+            ChestLidFanout.ReleaseOpener(online, _world, disconnected);
+
         if (online.Count == 0) return;
 
         foreach (var player in online)
@@ -63,7 +61,12 @@ sealed class InventorySystem : IGameSystem
         switch (intent.Action)
         {
             case InventoryWindowIntent.Kind.OpenInventory:
-                player.InventoryWindowOpen = true;
+                if (player.OpenChest.HasValue)
+                    ChestLidFanout.ReleaseOpener(online, _world, player);
+                var inventorySession = player.OpenPlayerContainer(
+                    (byte)InventoryContainerMap.WindowInventory,
+                    InventoryContainerMap.WindowTypeInventory);
+                inv.BeginOpenContainerSession(inventorySession.Generation);
                 inv.SendContainerOpen(
                     (int)MathF.Floor(player.PositionX),
                     (int)MathF.Floor(player.PositionY),
@@ -81,7 +84,11 @@ sealed class InventorySystem : IGameSystem
                 if (view.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
                     _world.Chests.Ensure(partnerX, partnerY, partnerZ);
 
-                player.OpenChest = view;
+                var chestSession = player.OpenChestContainer(
+                    (byte)InventoryContainerMap.WindowChest,
+                    InventoryContainerMap.WindowTypeChest,
+                    view);
+                inv.BeginOpenContainerSession(chestSession.Generation);
 
                 var primaryFirst = _world.Chests.TryAddOpener(
                     view.PrimaryX, view.PrimaryY, view.PrimaryZ, player.RuntimeId);
@@ -102,12 +109,19 @@ sealed class InventorySystem : IGameSystem
                 break;
 
             case InventoryWindowIntent.Kind.Close:
-                if (intent.WindowId == InventoryContainerMap.WindowInventory)
-                    player.InventoryWindowOpen = false;
-                if (player.OpenChest.HasValue)
+                if (player.OpenContainer is not { } active ||
+                    active.WindowId != intent.WindowId || active.WindowType != intent.WindowType)
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Ignored stale container close from {player.Username}: {intent.WindowId}/{intent.WindowType}.");
+                    return;
+                }
+
+                if (active.Target == OpenContainerSession.TargetKind.Chest)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
                 else
-                    player.OpenChest = null;
+                    _ = player.TryCloseContainer(intent.WindowId, intent.WindowType, out _);
+                inv.EndOpenContainerSession();
                 inv.SendContainerClose(intent.WindowId, intent.WindowType);
                 break;
         }
@@ -120,6 +134,32 @@ sealed class InventorySystem : IGameSystem
     {
         var protocol = player.Session.Protocol.Inventory;
         var inventory = player.Inventory;
+
+        if (!player.TryClaimInventoryRequest(intent.RequestId))
+        {
+            protocol.SendItemStackResponseError(intent.RequestId);
+            protocol.SendInventoryContent(inventory);
+            protocol.SendUiInventoryContent(player);
+            if (player.OpenChest is { } openReplay)
+                protocol.SendChestContent(_world.Chests, openReplay);
+            player.Session.Context.Logger.Debug(
+                $"ISR rejected for {player.Username}: duplicate request {intent.RequestId}.");
+            return;
+        }
+
+        if (intent.ExpectedOpenContainerGeneration != 0 &&
+            (player.OpenContainer is not { } openContainer ||
+             openContainer.Generation != intent.ExpectedOpenContainerGeneration))
+        {
+            protocol.SendItemStackResponseError(intent.RequestId);
+            protocol.SendInventoryContent(inventory);
+            protocol.SendUiInventoryContent(player);
+            if (player.OpenChest is { } openStale)
+                protocol.SendChestContent(_world.Chests, openStale);
+            player.Session.Context.Logger.Debug(
+                $"ISR rejected for {player.Username}: stale open-container session (request {intent.RequestId}).");
+            return;
+        }
 
         if (!ValidateClientStackNetIds(protocol, intent.Actions))
         {
@@ -141,6 +181,7 @@ sealed class InventorySystem : IGameSystem
             chestSnap = _world.Chests.CaptureOpenSnapshot(cv);
 
         var wireTouches = new List<WireTouch>();
+        var pendingDrops = new List<FloorDropFanout.DepositRequest>();
         var ok = true;
 
         foreach (var action in intent.Actions)
@@ -150,9 +191,9 @@ sealed class InventorySystem : IGameSystem
                 case InventoryStackActionKind.CraftRecipe:
                     // Materialize CreatedOutput so same-request Take/Place can move it;
                     // refuse if a prior result is still sitting untaken.
-                    if (!GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty ||
+                    if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty ||
                         !_recipes.TryCraftFromGrid(player.CraftUi, action.RecipeNetId, out var crafted, action.CraftTimes) ||
-                        !TrySetSlot(player, InventoryContainerMap.CraftResultFlat, crafted))
+                        !TrySetSlot(player, InventorySlotReference.CraftResult, crafted))
                     {
                         ok = false;
                         break;
@@ -160,13 +201,12 @@ sealed class InventorySystem : IGameSystem
 
                     for (var g = 0; g < PlayerCraftUi.GridSize; g++)
                     {
-                        var flat = InventoryContainerMap.CraftUiBase + g;
-                        AddWireTouch(wireTouches, flat,
+                        AddWireTouch(wireTouches, InventorySlotReference.CraftGrid(g),
                             InventoryContainerMap.CraftingInput,
                             InventoryContainerMap.CraftGridWireSlot(g));
                     }
 
-                    AddWireTouch(wireTouches, InventoryContainerMap.CraftResultFlat,
+                    AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
                         InventoryContainerMap.CreatedOutput,
                         InventoryContainerMap.CraftingResultWireSlot);
                     break;
@@ -175,21 +215,21 @@ sealed class InventorySystem : IGameSystem
                     // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
                     if (player.GameMode != GameMode.Creative ||
                         !_creative.TryGet(action.CreativeNetId, out var creativeId, out _) ||
-                        !TrySetSlot(player, InventoryContainerMap.CraftResultFlat,
+                        !TrySetSlot(player, InventorySlotReference.CraftResult,
                             new InventorySlot(creativeId, PlayerInventory.MaxStack)))
                     {
                         ok = false;
                         break;
                     }
 
-                    AddWireTouch(wireTouches, InventoryContainerMap.CraftResultFlat,
+                    AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
                         InventoryContainerMap.CreatedOutput,
                         InventoryContainerMap.CraftingResultWireSlot);
                     break;
 
                 case InventoryStackActionKind.Create:
-                    // Idempotent ack after CraftRecipe/CraftCreative wrote CraftResultFlat.
-                    if (GetSlot(player, InventoryContainerMap.CraftResultFlat).IsEmpty)
+                    // Idempotent ack after CraftRecipe/CraftCreative wrote the craft result.
+                    if (GetSlot(player, InventorySlotReference.CraftResult).IsEmpty)
                     {
                         ok = false;
                         break;
@@ -216,7 +256,7 @@ sealed class InventorySystem : IGameSystem
                     var count = action.Count;
                     if (count == 0)
                         count = GetSlot(player, action.From).Count;
-                    if (!TryDrop(player, action.From, count, online))
+                    if (!TryRemoveForDrop(player, action.From, count, pendingDrops))
                     {
                         ok = false;
                         break;
@@ -244,6 +284,16 @@ sealed class InventorySystem : IGameSystem
             }
 
             if (!ok) break;
+        }
+
+        if (ok && pendingDrops.Count != 0)
+        {
+            var x = (int)MathF.Floor(player.PositionX);
+            var y = (int)MathF.Floor(player.PositionY);
+            var z = (int)MathF.Floor(player.PositionZ);
+            ok = FloorDropFanout.TryDepositBatch(
+                _world, _players, online, x, y, z, pendingDrops,
+                FloorDropFanout.PlayerThrowPickupDelay);
         }
 
         if (!ok)
@@ -301,16 +351,16 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
-    private InventorySlot GetSlot(global::Zenith.Player.Player player, int flat) =>
-        InventorySlotResolver.GetSlot(player, _world, flat);
+    private InventorySlot GetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference) =>
+        InventorySlotResolver.GetSlot(player, _world, reference);
 
-    private bool TrySetSlot(global::Zenith.Player.Player player, int flat, InventorySlot value) =>
-        InventorySlotResolver.TrySetSlot(player, _world, flat, value);
+    private bool TrySetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference, InventorySlot value) =>
+        InventorySlotResolver.TrySetSlot(player, _world, reference, value);
 
-    private bool TryTransfer(global::Zenith.Player.Player player, int from, int to, int count)
+    private bool TryTransfer(global::Zenith.Player.Player player, in InventorySlotReference from, in InventorySlotReference to, int count)
     {
         if (from == to) return false;
-        if (!IsValidFlat(player, from) || !IsValidFlat(player, to)) return false;
+        if (!IsValidReference(player, from) || !IsValidReference(player, to)) return false;
         if (count <= 0 || !PlayerInventory.IsValidStackCount(count)) return false;
 
         var src = GetSlot(player, from);
@@ -331,34 +381,30 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
-    private bool TryDrop(
+    private bool TryRemoveForDrop(
         global::Zenith.Player.Player player,
-        int from,
+        in InventorySlotReference from,
         int count,
-        IReadOnlyList<global::Zenith.Player.Player> online)
+        List<FloorDropFanout.DepositRequest> pendingDrops)
     {
-        if (!IsValidFlat(player, from)) return false;
+        if (!IsValidReference(player, from)) return false;
         if (count <= 0 || !PlayerInventory.IsValidStackCount(count)) return false;
 
         var src = GetSlot(player, from);
         if (src.IsEmpty || count > src.Count) return false;
 
-        var x = (int)MathF.Floor(player.PositionX);
-        var y = (int)MathF.Floor(player.PositionY);
-        var z = (int)MathF.Floor(player.PositionZ);
-        if (!FloorDropFanout.TryDeposit(
-                _world, _players, online, x, y, z, src.Id, count,
-                FloorDropFanout.PlayerThrowPickupDelay))
+        var left = src.Count - count;
+        if (!TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left }))
             return false;
 
-        var left = src.Count - count;
-        return TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left });
+        pendingDrops.Add(new FloorDropFanout.DepositRequest(src.Id, count));
+        return true;
     }
 
-    private bool TrySwap(global::Zenith.Player.Player player, int a, int b)
+    private bool TrySwap(global::Zenith.Player.Player player, in InventorySlotReference a, in InventorySlotReference b)
     {
         if (a == b) return false;
-        if (!IsValidFlat(player, a) || !IsValidFlat(player, b)) return false;
+        if (!IsValidReference(player, a) || !IsValidReference(player, b)) return false;
 
         var sa = GetSlot(player, a);
         var sb = GetSlot(player, b);
@@ -367,32 +413,50 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
-    private static bool IsValidFlat(global::Zenith.Player.Player player, int flat)
+    private bool IsValidReference(global::Zenith.Player.Player player, in InventorySlotReference reference)
     {
-        if (InventoryContainerMap.IsChestFlat(flat))
-            return player.OpenChest is { } view &&
-                   flat - InventoryContainerMap.ChestBase < view.SlotCount;
-        if (InventoryContainerMap.IsCraftUiFlat(flat))
-            return true;
-        return PlayerInventory.IsValidLocation(flat);
+        return reference.Area switch
+        {
+            InventorySlotArea.OpenContainer => player.OpenContainer is
+                { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view } &&
+                reference.Index >= 0 && reference.Index < view.SlotCount && IsOpenChestAccessible(player, view),
+            InventorySlotArea.CraftGrid => reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize,
+            InventorySlotArea.CraftResult => reference.Index == 0,
+            InventorySlotArea.Cursor => reference.Index == 0,
+            InventorySlotArea.PlayerInventory => PlayerInventory.IsValidInventorySlot(reference.Index),
+            _ => false
+        };
     }
 
-    private static void AddWireTouch(List<WireTouch> touches, int flat, WireSlot wire)
+    private bool IsOpenChestAccessible(global::Zenith.Player.Player player, in OpenChestView view)
     {
-        if (wire.ContainerId == 0 && InventoryContainerMap.TryToWire(flat, out var c, out var s))
-            AddWireTouch(touches, flat, c, s);
+        if (!Blocks.IsChest(_world.GetBlock(view.PrimaryX, view.PrimaryY, view.PrimaryZ)))
+            return false;
+
+        var primaryInReach = BlockEditSystem.IsWithinReach(player, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+        if (!view.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
+            return primaryInReach;
+
+        return Blocks.IsChest(_world.GetBlock(partnerX, partnerY, partnerZ)) &&
+               (primaryInReach || BlockEditSystem.IsWithinReach(player, partnerX, partnerY, partnerZ));
+    }
+
+    private static void AddWireTouch(List<WireTouch> touches, in InventorySlotReference reference, WireSlot wire)
+    {
+        if (wire.ContainerId == 0 && InventoryContainerMap.TryToWire(reference, out var c, out var s))
+            AddWireTouch(touches, reference, c, s);
         else
-            AddWireTouch(touches, flat, wire.ContainerId, wire.Slot);
+            AddWireTouch(touches, reference, wire.ContainerId, wire.Slot);
     }
 
-    private static void AddWireTouch(List<WireTouch> touches, int flat, byte containerId, byte slot)
+    private static void AddWireTouch(List<WireTouch> touches, in InventorySlotReference reference, byte containerId, byte slot)
     {
         foreach (var t in touches)
         {
-            if (t.Flat == flat && t.ContainerId == containerId && t.Slot == slot)
+            if (t.Reference == reference && t.ContainerId == containerId && t.Slot == slot)
                 return;
         }
 
-        touches.Add(new WireTouch(flat, containerId, slot));
+        touches.Add(new WireTouch(reference, containerId, slot));
     }
 }

@@ -23,13 +23,13 @@ public class TickBatchEgressTests
         // Seed last-replicated with different baseline so both go dirty.
         a.SubmitMovementInput(MovementInputState.From(1f, Blocks.FlatSpawnY, 0f, 0f, 0f));
         b.SubmitMovementInput(MovementInputState.From(2f, Blocks.FlatSpawnY, 0f, 0f, 0f));
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         a.SubmitMovementInput(MovementInputState.From(1.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
         b.SubmitMovementInput(MovementInputState.From(2.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
 
         // Watcher should get one datagram carrying both Absolutes; a gets b's; b gets a's.

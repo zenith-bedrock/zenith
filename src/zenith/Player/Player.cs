@@ -24,9 +24,13 @@ class Player
     private readonly Queue<BlockEditIntent> _blockEdits = new();
     private readonly object _inventoryStackLock = new();
     private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
+    // GameLoop-owned replay ledger: request IDs are protocol correlation tokens, not item authority.
+    private readonly HashSet<int> _claimedInventoryRequests = new();
+    private readonly Queue<int> _claimedInventoryRequestOrder = new();
     private readonly object _digLock = new();
     private readonly Queue<DigIntent> _digIntents = new();
     private DigIntent? _provisionalDig;
+    private DigIntent? _suppressedDigAuthorization;
     private readonly object _windowLock = new();
     private readonly Queue<InventoryWindowIntent> _windowIntents = new();
     private readonly object _chatLock = new();
@@ -35,6 +39,12 @@ class Player
     private GameMode? _pendingGameMode;
     private readonly object _respawnLock = new();
     private bool _pendingRespawn;
+    private readonly object _spawnReadyLock = new();
+    private bool _pendingSpawnReady;
+    // The GameLoop is the only writer. This lock is a narrow snapshot handoff for the network
+    // decoder, which must bind a wire container action to the session it observed.
+    private readonly object _containerLock = new();
+    private OpenContainerSession? _openContainer;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -50,12 +60,17 @@ class Player
     /// </summary>
     public bool IdentityStable { get; }
 
-    /// <summary>True após SetLocalPlayerAsInitialized → InGame.</summary>
+    /// <summary>
+    /// True after SetLocalPlayerAsInitialized → InGame. Connection-lifecycle scalar deliberately
+    /// written by session transitions (ADR §97), not an intent: it gates visibility and protocol
+    /// handling but does not itself mutate world, inventory, combat, or movement authority.
+    /// </summary>
     public bool IsInGame { get; set; }
 
     /// <summary>
     /// True while SpawnResponse (after PLAYER_SPAWN, before InGame). Allows ChunkStream
-    /// to fill the view ring during loading (ADR §70).
+    /// to fill the view ring during loading (ADR §70). Like <see cref="IsInGame"/>, this is a
+    /// direct connection-lifecycle transition rather than gameplay state owned by a simulation.
     /// </summary>
     public bool IsSpawning { get; set; }
 
@@ -136,21 +151,30 @@ class Player
     public ulong LastEmoteTick { get; set; }
 
     /// <summary>Server-authoritative break progress (AuthInput start → predict). Cleared on abort/success.</summary>
-    public int BreakTargetX { get; private set; }
-    public int BreakTargetY { get; private set; }
-    public int BreakTargetZ { get; private set; }
-    public ulong BreakStartedTick { get; private set; }
+    private int _breakTargetX;
+    private int _breakTargetY;
+    private int _breakTargetZ;
+    private ulong _breakStartedTick;
+    private int _breakRequiredTicks;
+    private StackId _digHeldStackId;
+    private bool _hasBreakTarget;
+    private ulong _lastDigActivityTick;
+
+    public int BreakTargetX { get { lock (_digLock) return _breakTargetX; } }
+    public int BreakTargetY { get { lock (_digLock) return _breakTargetY; } }
+    public int BreakTargetZ { get { lock (_digLock) return _breakTargetZ; } }
+    public ulong BreakStartedTick { get { lock (_digLock) return _breakStartedTick; } }
     /// <summary>Dig duration snapshotted at <see cref="BeginBreak"/> (GameLoop ticks).</summary>
-    public int BreakRequiredTicks { get; private set; }
+    public int BreakRequiredTicks { get { lock (_digLock) return _breakRequiredTicks; } }
     /// <summary>Held <see cref="StackId"/> at dig start / last retarget (ADR §55).</summary>
-    public StackId DigHeldStackId { get; private set; }
-    public bool HasBreakTarget { get; private set; }
+    public StackId DigHeldStackId { get { lock (_digLock) return _digHeldStackId; } }
+    public bool HasBreakTarget { get { lock (_digLock) return _hasBreakTarget; } }
 
     /// <summary>
     /// Last GameClock tick that saw start/crack/continue for the dig target.
     /// After <see cref="BreakRequiredTicks"/> + <see cref="DigIdleAbortTicks"/> without activity → StopCrack.
     /// </summary>
-    public ulong LastDigActivityTick { get; private set; }
+    public ulong LastDigActivityTick { get { lock (_digLock) return _lastDigActivityTick; } }
 
     /// <summary>
     /// Post-dig-window grace without dig AuthInput before aborting crack (~2s @ 20 TPS).
@@ -158,81 +182,206 @@ class Player
     /// </summary>
     public const ulong DigIdleAbortTicks = 40;
 
-    /// <summary>Open chest UI (ADR §56) — primary + optional partner; SlotCount 27|54.</summary>
-    public OpenChestView? OpenChest { get; set; }
+    private uint _nextContainerGeneration;
 
-    /// <summary>Player inventory UI open (ContainerOpen window 0).</summary>
-    public bool InventoryWindowOpen { get; set; }
+    /// <summary>Single authoritative active container for this connection; assigned on GameLoop.</summary>
+    public OpenContainerSession? OpenContainer
+    {
+        get
+        {
+            lock (_containerLock)
+                return _openContainer;
+        }
+    }
+
+    /// <summary>
+    /// Takes a coherent protocol-to-domain container-session snapshot at the network handoff.
+    /// It grants no mutation authority; the InventorySystem revalidates its generation on tick.
+    /// </summary>
+    public bool TryGetOpenContainerSession(out OpenContainerSession session)
+    {
+        lock (_containerLock)
+        {
+            if (_openContainer is not { } active)
+            {
+                session = default;
+                return false;
+            }
+
+            session = active;
+            return true;
+        }
+    }
+
+    /// <summary>Compatibility projection of the active chest target; null for every other view.</summary>
+    public OpenChestView? OpenChest => OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest }
+        ? chest
+        : null;
+
+    /// <summary>Compatibility projection of the active player-inventory window.</summary>
+    public bool InventoryWindowOpen => OpenContainer is { Target: OpenContainerSession.TargetKind.PlayerInventory };
+
+    public OpenContainerSession OpenPlayerContainer(byte windowId, byte windowType)
+    {
+        lock (_containerLock)
+        {
+            var session = OpenContainerSession.PlayerInventory(windowId, windowType, ++_nextContainerGeneration);
+            _openContainer = session;
+            return session;
+        }
+    }
+
+    public OpenContainerSession OpenChestContainer(byte windowId, byte windowType, in OpenChestView view)
+    {
+        lock (_containerLock)
+        {
+            var session = OpenContainerSession.ChestView(windowId, windowType, ++_nextContainerGeneration, view);
+            _openContainer = session;
+            return session;
+        }
+    }
+
+    public bool TryCloseContainer(byte windowId, byte windowType, out OpenContainerSession closed)
+    {
+        lock (_containerLock)
+        {
+            if (_openContainer is not { } active || active.WindowId != windowId || active.WindowType != windowType)
+            {
+                closed = default;
+                return false;
+            }
+
+            _openContainer = null;
+            closed = active;
+            return true;
+        }
+    }
+
+    public bool TryClearOpenContainer(out OpenContainerSession closed)
+    {
+        lock (_containerLock)
+        {
+            if (_openContainer is not { } active)
+            {
+                closed = default;
+                return false;
+            }
+
+            _openContainer = null;
+            closed = active;
+            return true;
+        }
+    }
 
     /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
     public PlayerCraftUi CraftUi { get; } = new();
 
+    /// <summary>GameLoop-only authoritative start; network submits <see cref="DigIntent"/> instead.</summary>
     public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks, StackId heldStackId = default)
     {
-        BreakTargetX = x;
-        BreakTargetY = y;
-        BreakTargetZ = z;
-        BreakStartedTick = tick;
-        BreakRequiredTicks = requiredTicks;
-        DigHeldStackId = heldStackId;
-        HasBreakTarget = true;
-        LastDigActivityTick = tick;
+        lock (_digLock)
+        {
+            _breakTargetX = x;
+            _breakTargetY = y;
+            _breakTargetZ = z;
+            _breakStartedTick = tick;
+            _breakRequiredTicks = requiredTicks;
+            _digHeldStackId = heldStackId;
+            _hasBreakTarget = true;
+            _lastDigActivityTick = tick;
+        }
     }
 
     /// <summary>Refresh dig activity (same-cell crack/continue) so idle abort does not fire.</summary>
     public void MarkDigActive(ulong tick)
     {
-        if (!HasBreakTarget) return;
-        LastDigActivityTick = tick;
+        lock (_digLock)
+        {
+            if (!_hasBreakTarget) return;
+            _lastDigActivityTick = tick;
+        }
     }
 
     /// <summary>Progress-preserving dig retarget when held tool changes mid-break (ADR §27).</summary>
     public void RetargetBreakTiming(ulong startedTick, int requiredTicks, StackId heldStackId)
     {
-        if (!HasBreakTarget) return;
-        BreakStartedTick = startedTick;
-        BreakRequiredTicks = requiredTicks;
-        DigHeldStackId = heldStackId;
+        lock (_digLock)
+        {
+            if (!_hasBreakTarget) return;
+            _breakStartedTick = startedTick;
+            _breakRequiredTicks = requiredTicks;
+            _digHeldStackId = heldStackId;
+        }
     }
 
+    /// <summary>GameLoop-only authoritative abort; network submits an abort <see cref="DigIntent"/> instead.</summary>
     public void AbortBreak()
     {
-        HasBreakTarget = false;
-        BreakRequiredTicks = 0;
-        DigHeldStackId = default;
-        LastDigActivityTick = 0;
         lock (_digLock)
+        {
+            _hasBreakTarget = false;
+            _breakRequiredTicks = 0;
+            _digHeldStackId = default;
+            _lastDigActivityTick = 0;
             _provisionalDig = null;
+        }
     }
 
     /// <summary>
-    /// Clears dig lock without crack fan-out — used after queueing a Survival break so
-    /// Continue can retarget without poisoning the pending intent (§27).
+    /// Network-side handoff only: suppresses authorization until the queued edit/abort is applied.
+    /// It never mutates the tick-owned break target.
     /// </summary>
-    public void ClearBreakTarget()
+    public void CancelDigAuthorization(int x, int y, int z)
     {
-        AbortBreak();
         lock (_digLock)
+        {
+            _suppressedDigAuthorization = DigIntent.Abort(x, y, z);
             _provisionalDig = null;
+            CancelPendingDigStartUnsafe(x, y, z);
+        }
     }
 
-    public bool IsBreakTarget(int x, int y, int z) =>
-        HasBreakTarget && BreakTargetX == x && BreakTargetY == y && BreakTargetZ == z;
+    public bool IsBreakTarget(int x, int y, int z)
+    {
+        lock (_digLock)
+            return _hasBreakTarget && _breakTargetX == x && _breakTargetY == y && _breakTargetZ == z;
+    }
+
+    /// <summary>Gets one coherent break-state snapshot for readers outside the GameLoop.</summary>
+    public bool TryGetBreakState(out BreakState state)
+    {
+        lock (_digLock)
+        {
+            if (!_hasBreakTarget)
+            {
+                state = default;
+                return false;
+            }
+
+            state = new BreakState(
+                _breakTargetX, _breakTargetY, _breakTargetZ,
+                _breakStartedTick, _breakRequiredTicks, _digHeldStackId, _lastDigActivityTick);
+            return true;
+        }
+    }
 
     /// <summary>
     /// Dig auth for same-packet Predict before tick applies <see cref="BeginBreak"/> (§27/§54).
     /// </summary>
     public bool TryGetDigAuth(int x, int y, int z, out ulong startedTick, out int requiredTicks)
     {
-        if (IsBreakTarget(x, y, z))
-        {
-            startedTick = BreakStartedTick;
-            requiredTicks = BreakRequiredTicks;
-            return true;
-        }
-
         lock (_digLock)
         {
+            if (_suppressedDigAuthorization is { } suppressed &&
+                suppressed.X == x && suppressed.Y == y && suppressed.Z == z)
+                goto NoAuth;
+            if (_hasBreakTarget && _breakTargetX == x && _breakTargetY == y && _breakTargetZ == z)
+            {
+                startedTick = _breakStartedTick;
+                requiredTicks = _breakRequiredTicks;
+                return true;
+            }
+
             if (_provisionalDig is { HasValue: true, IsAbort: false } dig &&
                 dig.X == x && dig.Y == y && dig.Z == z)
             {
@@ -242,6 +391,7 @@ class Player
             }
         }
 
+    NoAuth:
         startedTick = 0;
         requiredTicks = 0;
         return false;
@@ -259,19 +409,16 @@ class Player
                 return false;
             _digIntents.Enqueue(intent);
             _provisionalDig = intent;
+            _suppressedDigAuthorization = null;
             return true;
         }
     }
 
     /// <summary>
-    /// Queue dig abort (handler). Clears live dig lock + provisional immediately so same-packet
-    /// stale Predict rejects (§27); crack Stop still fans on tick.
+    /// Queue dig abort (handler). Suppresses same-packet auth; tick owns the actual abort.
     /// </summary>
     public bool SubmitDigAbort(int x, int y, int z)
     {
-        if (IsBreakTarget(x, y, z))
-            AbortBreak();
-
         var intent = DigIntent.Abort(x, y, z);
         lock (_digLock)
         {
@@ -279,6 +426,28 @@ class Player
                 return false;
             _digIntents.Enqueue(intent);
             _provisionalDig = null;
+            _suppressedDigAuthorization = intent;
+            return true;
+        }
+    }
+
+    /// <summary>Queues refresh activity; only BlockDigSystem updates the active dig timestamp.</summary>
+    public bool SubmitDigActivity(int x, int y, int z, ulong tick)
+    {
+        lock (_digLock)
+        {
+            if (_digIntents.Count >= MaxPendingDig) return false;
+            _digIntents.Enqueue(DigIntent.Activity(x, y, z, tick));
+            return true;
+        }
+    }
+
+    public bool SubmitDigActivityForActive(ulong tick)
+    {
+        lock (_digLock)
+        {
+            if (!_hasBreakTarget || _digIntents.Count >= MaxPendingDig) return false;
+            _digIntents.Enqueue(DigIntent.Activity(_breakTargetX, _breakTargetY, _breakTargetZ, tick));
             return true;
         }
     }
@@ -306,6 +475,12 @@ class Player
         lock (_digLock)
         {
             _provisionalDig = null;
+            CancelPendingDigStartUnsafe(x, y, z);
+        }
+    }
+
+    private void CancelPendingDigStartUnsafe(int x, int y, int z)
+    {
             if (_digIntents.Count == 0) return;
             var kept = new Queue<DigIntent>(_digIntents.Count);
             var removed = false;
@@ -323,8 +498,17 @@ class Player
 
             while (kept.Count > 0)
                 _digIntents.Enqueue(kept.Dequeue());
-        }
     }
+
+    /// <summary>Coherent view of one active break target and its server-authoritative timing.</summary>
+    public readonly record struct BreakState(
+        int X,
+        int Y,
+        int Z,
+        ulong StartedTick,
+        int RequiredTicks,
+        StackId HeldStackId,
+        ulong LastActivityTick);
 
     public bool SubmitWindowIntent(in InventoryWindowIntent intent)
     {
@@ -542,8 +726,7 @@ class Player
         IsSneaking = false;
         IsSprinting = false;
         AbortBreak();
-        OpenChest = null;
-        InventoryWindowOpen = false;
+        _ = TryClearOpenContainer(out _);
         CraftUi.Clear();
         lock (_respawnLock)
             _pendingRespawn = false;
@@ -564,6 +747,41 @@ class Player
         {
             if (!_pendingRespawn) return false;
             _pendingRespawn = false;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Claims one ISR request id exactly once before any authoritative mutation. Kept bounded so
+    /// a long-lived session cannot turn replay protection into unbounded memory.
+    /// </summary>
+    public bool TryClaimInventoryRequest(int requestId)
+    {
+        if (!_claimedInventoryRequests.Add(requestId))
+            return false;
+
+        _claimedInventoryRequestOrder.Enqueue(requestId);
+        if (_claimedInventoryRequestOrder.Count > 256)
+            _claimedInventoryRequests.Remove(_claimedInventoryRequestOrder.Dequeue());
+        return true;
+    }
+
+    /// <summary>
+    /// Client confirmation after PLAYER_SPAWN. The network thread records only this one-shot;
+    /// the gameplay owner performs the visible join/session transition in ChunkStreamSystem.
+    /// </summary>
+    public void SubmitSpawnReady()
+    {
+        lock (_spawnReadyLock)
+            _pendingSpawnReady = true;
+    }
+
+    public bool TryConsumeSpawnReady()
+    {
+        lock (_spawnReadyLock)
+        {
+            if (!_pendingSpawnReady) return false;
+            _pendingSpawnReady = false;
             return true;
         }
     }

@@ -5,7 +5,7 @@ namespace Zenith.Gameplay;
 
 /// <summary>
 /// Fan-out dig crack LevelEvents (ADR §42). Protocol stays session-scoped;
-/// callers decide recipients — same pattern as EquipmentSystem / BlockSystem UpdateBlock.
+/// callers decide recipients — same pattern as EquipmentSystem / BlockEditSystem UpdateBlock.
 /// </summary>
 static class BlockCrackFanout
 {

@@ -56,6 +56,22 @@ public class FloorDropFanoutTests
     }
 
     [Fact]
+    public void TryDeposit_spirals_when_matching_origin_stack_has_no_space()
+    {
+        var fx = new IntentTestFixture();
+        _ = fx.AddInGamePlayer("dropper");
+        var dirt = StackId.FromBlock(Blocks.Dirt);
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            24, 64, 24, dirt, 64, entityRuntimeIdIfNew: 1, out _));
+
+        Assert.True(FloorDropFanout.TryDeposit(
+            fx.World, fx.Players, fx.Players.Online, 24, 64, 24, dirt, 1, searchRadius: 1));
+
+        Assert.Equal(65, fx.World.FloorDrops.Snapshot().Where(drop => drop.Id == dirt).Sum(drop => drop.Count));
+        Assert.Equal(2, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
     public void TryDeposit_returns_false_when_no_free_cell_within_radius()
     {
         var fx = new IntentTestFixture();

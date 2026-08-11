@@ -10,23 +10,25 @@ namespace Zenith.Tests;
 public class InventoryContainerMapTests
 {
     [Theory]
-    [InlineData(InventoryContainerMap.Hotbar, 0, 0)]
-    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 8, 8)]
-    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 9, 9)]
-    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 35, 35)]
-    [InlineData(InventoryContainerMap.Inventory, 0, 0)]
-    [InlineData(InventoryContainerMap.Inventory, 9, 9)]
-    [InlineData(InventoryContainerMap.Inventory, 35, 35)]
-    [InlineData(InventoryContainerMap.Cursor, 0, PlayerInventory.CursorSlot)]
-    [InlineData(InventoryContainerMap.Chest, 0, InventoryContainerMap.ChestBase)]
-    [InlineData(InventoryContainerMap.Chest, 26, InventoryContainerMap.ChestBase + 26)]
-    [InlineData(InventoryContainerMap.CraftingInput, 28, InventoryContainerMap.CraftUiBase)]
-    [InlineData(InventoryContainerMap.CraftingInput, 31, InventoryContainerMap.CraftUiBase + 3)]
-    [InlineData(InventoryContainerMap.CreatedOutput, 50, InventoryContainerMap.CraftResultFlat)]
-    public void Maps_wire_containers_to_flat(byte container, byte slot, int expectedFlat)
+    [InlineData(InventoryContainerMap.Hotbar, 0, InventorySlotArea.PlayerInventory, 0)]
+    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 8, InventorySlotArea.PlayerInventory, 8)]
+    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 9, InventorySlotArea.PlayerInventory, 9)]
+    [InlineData(InventoryContainerMap.CombinedHotbarAndInventory, 35, InventorySlotArea.PlayerInventory, 35)]
+    [InlineData(InventoryContainerMap.Inventory, 0, InventorySlotArea.PlayerInventory, 0)]
+    [InlineData(InventoryContainerMap.Inventory, 9, InventorySlotArea.PlayerInventory, 9)]
+    [InlineData(InventoryContainerMap.Inventory, 35, InventorySlotArea.PlayerInventory, 35)]
+    [InlineData(InventoryContainerMap.Cursor, 0, InventorySlotArea.Cursor, 0)]
+    [InlineData(InventoryContainerMap.Chest, 0, InventorySlotArea.OpenContainer, 0)]
+    [InlineData(InventoryContainerMap.Chest, 26, InventorySlotArea.OpenContainer, 26)]
+    [InlineData(InventoryContainerMap.CraftingInput, 28, InventorySlotArea.CraftGrid, 0)]
+    [InlineData(InventoryContainerMap.CraftingInput, 31, InventorySlotArea.CraftGrid, 3)]
+    [InlineData(InventoryContainerMap.CreatedOutput, 50, InventorySlotArea.CraftResult, 0)]
+    public void Maps_wire_containers_to_domain_slot_reference(
+        byte container, byte slot, InventorySlotArea expectedArea, int expectedIndex)
     {
-        Assert.True(InventoryContainerMap.TryMap(container, slot, out var flat));
-        Assert.Equal(expectedFlat, flat);
+        Assert.True(InventoryContainerMap.TryMap(container, slot, out var reference));
+        Assert.Equal(expectedArea, reference.Area);
+        Assert.Equal(expectedIndex, reference.Index);
     }
 
     [Fact]
@@ -37,7 +39,7 @@ public class InventoryContainerMapTests
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Inventory, 36, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 54, out _));
         Assert.True(InventoryContainerMap.TryMap(InventoryContainerMap.Chest, 27, out var chest27));
-        Assert.Equal(InventoryContainerMap.ChestBase + 27, chest27);
+        Assert.Equal(InventorySlotReference.OpenContainer(27), chest27);
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 27, out _));
@@ -45,29 +47,29 @@ public class InventoryContainerMapTests
     }
 
     [Fact]
-    public void Flat_to_wire_round_trip()
+    public void Domain_slot_references_map_back_to_wire_coordinates()
     {
-        Assert.True(InventoryContainerMap.TryToWire(0, out var c0, out var s0));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.Player(0), out var c0, out var s0));
         Assert.Equal(InventoryContainerMap.Hotbar, c0);
         Assert.Equal(0, s0);
 
-        Assert.True(InventoryContainerMap.TryToWire(9, out var c9, out var s9));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.Player(9), out var c9, out var s9));
         Assert.Equal(InventoryContainerMap.Inventory, c9);
         Assert.Equal(9, s9);
 
-        Assert.True(InventoryContainerMap.TryToWire(PlayerInventory.CursorSlot, out var cc, out var sc));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.Cursor, out var cc, out var sc));
         Assert.Equal(InventoryContainerMap.Cursor, cc);
         Assert.Equal(0, sc);
 
-        Assert.True(InventoryContainerMap.TryToWire(InventoryContainerMap.ChestBase + 3, out var c7, out var s7));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.OpenContainer(3), out var c7, out var s7));
         Assert.Equal(InventoryContainerMap.Chest, c7);
         Assert.Equal(3, s7);
 
-        Assert.True(InventoryContainerMap.TryToWire(InventoryContainerMap.CraftUiBase + 1, out var c13, out var s13));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.CraftGrid(1), out var c13, out var s13));
         Assert.Equal(InventoryContainerMap.CraftingInput, c13);
         Assert.Equal(29, s13);
 
-        Assert.True(InventoryContainerMap.TryToWire(InventoryContainerMap.CraftResultFlat, out var c60, out var s60));
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.CraftResult, out var c60, out var s60));
         Assert.Equal(InventoryContainerMap.CreatedOutput, c60);
         Assert.Equal(50, s60);
     }

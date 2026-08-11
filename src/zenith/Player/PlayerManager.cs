@@ -9,6 +9,9 @@ namespace Zenith.Player;
 class PlayerManager
 {
     private readonly ConcurrentDictionary<string, Player> _players = new();
+    // Connection teardown is a network-thread concern, but releasing a chest opener mutates
+    // authoritative world container state. Each live Player can be queued once on disconnect.
+    private readonly ConcurrentQueue<Player> _disconnectedContainerCleanup = new();
     private long _nextRuntimeId = 1;
 
     public int Count => _players.Count;
@@ -47,6 +50,14 @@ class PlayerManager
     public bool TryAdd(Player player) => _players.TryAdd(player.Username, player);
 
     public void Remove(Player player) => _players.TryRemove(player.Username, out _);
+
+    /// <summary>Network lifecycle handoff; consumed by <c>InventorySystem</c> on the GameLoop.</summary>
+    public void SubmitDisconnectedContainerCleanup(Player player) =>
+        _disconnectedContainerCleanup.Enqueue(player);
+
+    /// <summary>GameLoop only — drains a disconnected player's pending chest opener release.</summary>
+    public bool TryConsumeDisconnectedContainerCleanup(out Player player) =>
+        _disconnectedContainerCleanup.TryDequeue(out player!);
 
     public Player? Get(string username) => _players.GetValueOrDefault(username);
 }

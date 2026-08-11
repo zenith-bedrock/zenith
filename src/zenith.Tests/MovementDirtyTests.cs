@@ -19,12 +19,12 @@ public class MovementDirtyTests
         var system = new MovementSystem(fx.Players);
 
         SubmitPose(mover, 1f, Blocks.FlatSpawnY, 2f, pitch: 0f, yaw: 90f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         SubmitPose(mover, 1f, Blocks.FlatSpawnY, 2f, pitch: 0f, yaw: 90f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         Assert.Empty(fx.Transport.Captured);
     }
@@ -38,12 +38,12 @@ public class MovementDirtyTests
         var system = new MovementSystem(fx.Players);
 
         SubmitPose(mover, 1f, Blocks.FlatSpawnY, 2f, pitch: 0f, yaw: 90f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         SubmitPose(mover, 1f, Blocks.FlatSpawnY, 2f, pitch: 15f, yaw: 90f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         Assert.True(fx.Transport.Captured.Count >= 1,
             "look-only AuthInput must fan Absolute to peers");
@@ -59,12 +59,12 @@ public class MovementDirtyTests
 
         // Seed last-replicated at spawn so void Y change is dirty.
         SubmitPose(mover, 0f, Blocks.FlatSpawnY, 0f, 0f, 0f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         SubmitPose(mover, 32f, MovementSystem.VoidRescueY - 1f, -16f, 10f, 45f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         Assert.True(fx.Transport.Captured.Count >= 1,
             "void death must fan Absolute to peers at death pose");
@@ -83,12 +83,12 @@ public class MovementDirtyTests
         var system = new MovementSystem(fx.Players);
 
         SubmitPose(mover, 32f, MovementSystem.VoidRescueY - 1f, -16f, 10f, 45f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         mover.SubmitRespawn();
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         Assert.False(mover.IsDead);
         Assert.Equal(0f, mover.PositionX);

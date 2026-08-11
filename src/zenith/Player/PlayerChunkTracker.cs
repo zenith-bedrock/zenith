@@ -11,11 +11,70 @@ sealed class PlayerChunkTracker
     private readonly object _gate = new();
     private readonly HashSet<(int X, int Z)> _known = new();
     private readonly Dictionary<(int X, int Z), int> _epoch = new();
+    private readonly Queue<StreamCompletion> _completedStreams = new();
+    private PreSpawnRequest? _pendingPreSpawn;
+    private PreSpawnCompletion? _completedPreSpawn;
     private readonly List<(int X, int Z)> _scratch = new();
     private int _nextEpoch = 1;
 
     /// <summary>Raio de view em chunks (confirmado ao cliente).</summary>
     public int Radius { get; set; }
+
+    /// <summary>
+    /// Network receives the requested view radius, but only the gameplay owner starts the
+    /// associated pre-spawn load and changes tracker state. One request/result is sufficient:
+    /// session infrastructure rejects duplicate radius packets before this handoff.
+    /// </summary>
+    public bool TrySubmitPreSpawn(int viewRadius)
+    {
+        lock (_gate)
+        {
+            if (_pendingPreSpawn.HasValue || _completedPreSpawn.HasValue)
+                return false;
+            _pendingPreSpawn = new PreSpawnRequest(viewRadius);
+            return true;
+        }
+    }
+
+    public bool TryConsumePreSpawnRequest(out PreSpawnRequest request)
+    {
+        lock (_gate)
+        {
+            if (_pendingPreSpawn is not { } pending)
+            {
+                request = default;
+                return false;
+            }
+
+            _pendingPreSpawn = null;
+            request = pending;
+            return true;
+        }
+    }
+
+    /// <summary>Async I/O completion handoff. It must not apply Player/session state itself.</summary>
+    public void CompletePreSpawn(in PreSpawnCompletion completion)
+    {
+        lock (_gate)
+            _completedPreSpawn = completion;
+    }
+
+    /// <summary>Consumes the one pending pre-spawn result on the gameplay thread.</summary>
+    public bool TryConsumePreSpawnCompletion(out PreSpawnCompletion completion)
+    {
+        lock (_gate)
+        {
+            if (_completedPreSpawn is not { } pending)
+            {
+                completion = default;
+                return false;
+            }
+
+            _completedPreSpawn = null;
+            completion = pending;
+            return true;
+        }
+    }
 
     public int LastPublisherChunkX { get; private set; } = int.MinValue;
     public int LastPublisherChunkZ { get; private set; } = int.MinValue;
@@ -94,6 +153,39 @@ sealed class PlayerChunkTracker
     }
 
     /// <summary>
+    /// Accepts an asynchronous column-read result. The I/O continuation may only enqueue here;
+    /// stream validity, player state and protocol emission stay owned by the GameLoop.
+    /// </summary>
+    public void CompleteStream(int chunkX, int chunkZ, int epoch, ColumnReadResult column)
+    {
+        lock (_gate)
+            _completedStreams.Enqueue(StreamCompletion.Success(chunkX, chunkZ, epoch, column));
+    }
+
+    /// <summary>Queues a failed asynchronous read for tick-owned abandonment and logging.</summary>
+    public void FailStream(int chunkX, int chunkZ, int epoch, string error)
+    {
+        lock (_gate)
+            _completedStreams.Enqueue(StreamCompletion.Failure(chunkX, chunkZ, epoch, error));
+    }
+
+    /// <summary>Consumes one completed read from the GameLoop thread.</summary>
+    public bool TryConsumeCompletedStream(out StreamCompletion completion)
+    {
+        lock (_gate)
+        {
+            if (_completedStreams.Count == 0)
+            {
+                completion = default;
+                return false;
+            }
+
+            completion = _completedStreams.Dequeue();
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Forget columns outside the view square. Uses a reused scratch list (no LINQ).
     /// Call when the publisher center chunk changes — not every tick.
     /// </summary>
@@ -144,5 +236,55 @@ sealed class PlayerChunkTracker
         for (var x = centerX - radius; x <= centerX + radius; x++)
         for (var z = centerZ - radius; z <= centerZ + radius; z++)
             visit(x, z);
+    }
+
+    /// <summary>Result of a background column read, awaiting tick-owned validation and emission.</summary>
+    public readonly record struct StreamCompletion(
+        int ChunkX,
+        int ChunkZ,
+        int Epoch,
+        ColumnReadResult Column,
+        string? Error)
+    {
+        public bool Succeeded => Error is null;
+
+        public static StreamCompletion Success(int chunkX, int chunkZ, int epoch, ColumnReadResult column) =>
+            new(chunkX, chunkZ, epoch, column, null);
+
+        public static StreamCompletion Failure(int chunkX, int chunkZ, int epoch, string error) =>
+            new(chunkX, chunkZ, epoch, default, error);
+    }
+
+    /// <summary>Immutable request passed from the network/session boundary to the tick.</summary>
+    public readonly record struct PreSpawnRequest(int ViewRadius);
+
+    /// <summary>
+    /// Immutable snapshot captured by the gameplay owner before storage I/O starts. The worker
+    /// returns it unchanged with columns; it never reads Player state after <c>await</c>.
+    /// </summary>
+    public readonly record struct PreSpawnSnapshot(
+        int ViewRadius,
+        int ReadyRadius,
+        int CenterChunkX,
+        int CenterChunkZ,
+        int BlockX,
+        int BlockY,
+        int BlockZ);
+
+    /// <summary>Background pre-spawn load result awaiting gameplay-owned publication.</summary>
+    public readonly record struct PreSpawnCompletion(
+        PreSpawnSnapshot Snapshot,
+        IReadOnlyList<ColumnReadResult>? Columns,
+        string? Error,
+        long LoadElapsedMilliseconds)
+    {
+        public bool Succeeded => Error is null && Columns is not null;
+
+        public static PreSpawnCompletion Success(
+            in PreSpawnSnapshot snapshot, IReadOnlyList<ColumnReadResult> columns, long elapsedMilliseconds) =>
+            new(snapshot, columns, null, elapsedMilliseconds);
+
+        public static PreSpawnCompletion Failure(in PreSpawnSnapshot snapshot, string error, long elapsedMilliseconds) =>
+            new(snapshot, null, error, elapsedMilliseconds);
     }
 }

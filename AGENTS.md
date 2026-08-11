@@ -18,6 +18,18 @@
 
 **Do not recreate `Network/`** as a catch-all. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`) stay separate and never reference `zenith`.
 
+**Single-writer gameplay ownership:** authoritative `Player`/`World`/inventory/combat state is
+normally written only by its owning gameplay execution context (currently the GameLoop). Network
+and async work publish bounded immutable intents/results; locks belong at those handoff boundaries,
+not as permission for shared domain writers. This does not prohibit concurrent I/O, networking,
+compression, storage, caches, metrics, or session infrastructure. Never hold a lock across await,
+I/O, protocol send, or external callback.
+
+**Correctness-critical state:** do not claim “anti-dup” generically. Define and test the concrete
+invariant: duplicate/stale/failed/cancelled input must not create extra authoritative state or
+leave a partial commit. Use generation/request IDs/snapshots only where a real transition needs
+them; for resource movement, test conservation across all participating stores.
+
 ## Rules & docs
 
 - Always-on: [`.cursor/rules/zenith-architecture.mdc`](.cursor/rules/zenith-architecture.mdc), [`.cursor/rules/folder-layout.mdc`](.cursor/rules/folder-layout.mdc), [`.cursor/rules/naming.mdc`](.cursor/rules/naming.mdc)
@@ -34,3 +46,20 @@
 - **Delivery:** if you close an audit/hygiene gap, **commit + push the same day** — dirty tree ahead of `origin` is a process failure, not WIP
 
 Frozen: Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` commands — unless a concrete feature forces them (record in decisions first).
+
+## Before implementing a new gameplay feature (ADR §97)
+
+`IGameSystem` is a tool, not a mandatory boundary. Do not default to "gameplay feature → create a System" or "discrete action → create a Command + Handler + Event" without justification — both are equally rigid, just with different names. Read [`docs/adr/0097-runtime-execution-model.md`](docs/adr/0097-runtime-execution-model.md) before choosing a mechanism, and answer these internally first:
+
+1. What triggers this behavior?
+2. Who owns the authoritative state?
+3. Does it require tick execution (continuous evaluation, ordering against other gameplay this tick)?
+4. Does ordering against other gameplay matter?
+5. Does it need temporary/pending state — or can it call a runtime API directly (see `Player.SelectedHotbarSlot`, ADR §80, for the existing direct-call template)?
+6. Does it need cross-thread synchronization — and is that concurrency inherent to the problem (real-time network arrival, async I/O) or created by the mechanism you're about to add?
+7. Can it execute directly inside the gameplay runtime, synchronously, from the handler?
+8. Is a new abstraction (Command/Event/Scheduler/Dispatcher) justified by ≥2 real, current use cases — not a hypothetical future one?
+9. How will this be tested — does it need a substitutable seam, or does a direct test of the method already suffice?
+10. How does the closest reference implementation (PocketMine/Dragonfly/Minestom/Cuberite) handle this behavior, and is that technique applicable, partially applicable, or inadequate given Zenith's constraints (single-thread tick, C#, no ECS)?
+
+Do not create an `IGameSystem` merely to move work out of a packet handler. Preserving the gameplay/network boundary does not imply deferring every operation to the next tick. Prefer the simplest execution model that preserves authority, ordering, thread ownership, and testability.

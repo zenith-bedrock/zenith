@@ -15,6 +15,7 @@ sealed class InventoryProtocol
     private readonly NetworkSession _session;
     private readonly HashSet<int> _warnedUnknownBlocks = new();
     private readonly InventoryNetIds _netIds = new();
+    private uint _openContainerGeneration;
 
     public InventoryProtocol(NetworkSession session) => _session = session;
 
@@ -54,10 +55,10 @@ sealed class InventoryProtocol
         var slots = inventory.SnapshotMainInventory();
         var wire = new NetworkItemStack[slots.Length];
         for (var i = 0; i < slots.Length; i++)
-            wire[i] = DescribeForWire(i, slots[i]);
+            wire[i] = DescribeForWire(InventorySlotReference.Player(i), slots[i]);
 
         // Keep cursor advertisement warm even though window 0 payload is bag-only.
-        _ = DescribeForWire(PlayerInventory.CursorSlot, inventory.Cursor);
+        _ = DescribeForWire(InventorySlotReference.Cursor, inventory.Cursor);
 
         _session.SendDataPacket(new InventoryContentPacket
         {
@@ -87,17 +88,16 @@ sealed class InventoryProtocol
             wire[i] = NetworkItemStack.Empty;
 
         wire[InventoryContainerMap.UiCursorSlot] =
-            DescribeForWire(PlayerInventory.CursorSlot, player.Inventory.Cursor);
+            DescribeForWire(InventorySlotReference.Cursor, player.Inventory.Cursor);
 
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
-            var flat = InventoryContainerMap.CraftUiBase + g;
             wire[InventoryContainerMap.CraftingGridWireOffset + g] =
-                DescribeForWire(flat, player.CraftUi.GetGrid(g));
+                DescribeForWire(InventorySlotReference.CraftGrid(g), player.CraftUi.GetGrid(g));
         }
 
         wire[InventoryContainerMap.CraftingResultWireSlot] =
-            DescribeForWire(InventoryContainerMap.CraftResultFlat, player.CraftUi.Result);
+            DescribeForWire(InventorySlotReference.CraftResult, player.CraftUi.Result);
 
         return wire;
     }
@@ -111,8 +111,7 @@ sealed class InventoryProtocol
         var wire = new NetworkItemStack[view.SlotCount];
         for (var i = 0; i < view.SlotCount; i++)
         {
-            var flat = InventoryContainerMap.ChestBase + i;
-            wire[i] = DescribeForWire(flat, chests.GetOpen(view, i));
+            wire[i] = DescribeForWire(InventorySlotReference.OpenContainer(i), chests.GetOpen(view, i));
         }
 
         _session.SendDataPacket(new InventoryContentPacket
@@ -127,15 +126,36 @@ sealed class InventoryProtocol
         SendChestContent(chests, OpenChestView.Single(x, y, z));
 
     /// <summary>
+    /// Reconciles the player-owned inventory plus the currently visible authoritative view after
+    /// a rejected wire request. Container-specific replication stays at the protocol boundary;
+    /// inbound handlers do not inspect gameplay container implementations.
+    /// </summary>
+    public void ResyncActiveInventoryView(global::Zenith.Player.Player player)
+    {
+        SendInventoryContent(player.Inventory);
+        SendUiInventoryContent(player);
+        if (player.OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest })
+            SendChestContent(_session.Context.World.Chests, chest);
+    }
+
+    /// <summary>
     /// Single path for InventoryContent / UI / chest / ISR OK: refresh advertisement then
     /// build wire DTO. Prefer this over separate Refresh+Get (ADR §54).
     /// Wire fields: <c>ItemNetworkId</c> + optional <c>BlockRuntimeId</c> + <c>StackNetworkId</c> (ISR) —
     /// three distinct ids (ADR §55 glossary); do not confuse with <c>CreativeNetId</c>.
     /// </summary>
+    public NetworkItemStack DescribeForWire(in InventorySlotReference reference, InventorySlot slot)
+    {
+        var netId = _netIds.Refresh(reference, slot);
+        return ToNetworkStack(slot, netId);
+    }
+
+    /// <summary>Compatibility overload for flat-index characterization tests.</summary>
     public NetworkItemStack DescribeForWire(int flat, InventorySlot slot)
     {
-        var netId = _netIds.Refresh(flat, slot);
-        return ToNetworkStack(slot, netId);
+        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
+            throw new ArgumentOutOfRangeException(nameof(flat));
+        return DescribeForWire(reference, slot);
     }
 
     /// <summary>
@@ -143,11 +163,37 @@ sealed class InventoryProtocol
     /// <paramref name="clientStackNetId"/> ≤ 0 → accept (air / prediction deferred).
     /// Positive mismatch → false (caller rejects + resync).
     /// </summary>
-    public bool MatchesAdvertisedStackNetId(int flat, int clientStackNetId)
+    public bool MatchesAdvertisedStackNetId(in InventorySlotReference reference, int clientStackNetId)
     {
         if (clientStackNetId <= 0)
             return true;
-        return _netIds.Peek(flat) == clientStackNetId;
+        return _netIds.Peek(reference) == clientStackNetId;
+    }
+
+    /// <summary>Compatibility overload for flat-index characterization tests.</summary>
+    public bool MatchesAdvertisedStackNetId(int flat, int clientStackNetId)
+    {
+        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
+            return false;
+        return MatchesAdvertisedStackNetId(reference, clientStackNetId);
+    }
+
+    /// <summary>
+    /// Starts a new authoritative open-container view. Its protocol stack IDs cannot be reused
+    /// from the previous view, even when the same wire slot contains the same item.
+    /// </summary>
+    public void BeginOpenContainerSession(uint generation)
+    {
+        if (_openContainerGeneration == generation) return;
+        _openContainerGeneration = generation;
+        _netIds.ClearOpenContainer();
+    }
+
+    /// <summary>Forgets tokens belonging to a closed open-container view.</summary>
+    public void EndOpenContainerSession()
+    {
+        _openContainerGeneration = 0;
+        _netIds.ClearOpenContainer();
     }
 
     /// <summary>Peer display / AddPlayer — no stack net id allocation.</summary>
@@ -210,8 +256,8 @@ sealed class InventoryProtocol
         foreach (var touch in wireTouches)
         {
             // Always include CreatedOutput (60) in OK — omitting it desyncs sequential craft take.
-            var stack = ResolveStack(player, touch.Flat);
-            var wire = DescribeForWire(touch.Flat, stack);
+            var stack = ResolveStack(player, touch.Reference);
+            var wire = DescribeForWire(touch.Reference, stack);
             var info = new StackResponseSlotInfo
             {
                 Slot = touch.Slot,
@@ -249,16 +295,17 @@ sealed class InventoryProtocol
         var touches = new List<WireTouch>(touchedFlats.Count);
         foreach (var flat in touchedFlats)
         {
-            if (!InventoryContainerMap.TryToWire(flat, out var containerId, out var wireSlot))
+            if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference) ||
+                !InventoryContainerMap.TryToWire(reference, out var containerId, out var wireSlot))
                 continue;
-            touches.Add(new WireTouch(flat, containerId, wireSlot));
+            touches.Add(new WireTouch(reference, containerId, wireSlot));
         }
 
         SendItemStackResponseOk(requestId, player, touches);
     }
 
-    private InventorySlot ResolveStack(global::Zenith.Player.Player player, int flat) =>
-        InventorySlotResolver.GetSlot(player, _session.Context.World, flat);
+    private InventorySlot ResolveStack(global::Zenith.Player.Player player, in InventorySlotReference reference) =>
+        InventorySlotResolver.GetSlot(player, _session.Context.World, reference);
 
     private NetworkItemStack ToNetworkStack(InventorySlot slot, int stackNetworkId)
     {

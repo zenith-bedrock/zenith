@@ -7,42 +7,25 @@ using Zenith.World;
 namespace Zenith.Gameplay.Systems;
 
 /// <summary>
-/// Aplica <see cref="BlockEditIntent"/> no tick e replica UpdateBlock aos peers in-game.
-/// Break timing (§27): dig auth snapshotted on the intent when BreakTicks &gt; 0.
-/// Floor drops (§26): se TryAdd falha, bloco quebra e cai em <see cref="FloorDropStore"/> + AddItemActor wire.
+/// Applies authorized <see cref="BlockEditIntent"/> mutations and replicates UpdateBlock outcomes.
+/// Dig authorization is prepared beforehand by <see cref="BlockDigSystem"/>.
 /// </summary>
-sealed class BlockSystem : IGameSystem
+sealed class BlockEditSystem : IGameSystem
 {
     private readonly PlayerManager _players;
-    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
-    private readonly List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)> _despawnScratch = new();
     private readonly World.World _world;
 
-    public BlockSystem(PlayerManager players, World.World world)
+    public BlockEditSystem(PlayerManager players, World.World world)
     {
         _players = players;
         _world = world;
     }
 
-    public void Tick(GameClock clock)
-    {
-        _players.FillOnline(_onlineScratch);
-        Tick(clock, _onlineScratch);
-    }
-
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (online.Count == 0) return;
-
-        foreach (var player in online)
-        {
-            while (player.TryConsumeDig(out var dig))
-                ApplyDig(player, dig, clock, online);
-            UpdateDigToolIfHeldChanged(player, clock, online);
-            AbortIdleDigIfStale(player, clock, online);
-        }
 
         var updates = _updatesScratch;
         updates.Clear();
@@ -84,129 +67,6 @@ sealed class BlockSystem : IGameSystem
             }
         }
 
-        PickupFloorDrops(clock, online);
-    }
-
-    private void ApplyDig(
-        global::Zenith.Player.Player player,
-        in DigIntent dig,
-        GameClock clock,
-        IReadOnlyList<global::Zenith.Player.Player> online)
-    {
-        _ = clock;
-        if (player.IsDead) return;
-
-        if (dig.IsAbort)
-        {
-            BlockCrackFanout.Stop(online, player.Session, dig.X, dig.Y, dig.Z);
-            if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-                player.AbortBreak();
-            return;
-        }
-
-        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-            return;
-
-        if (player.HasBreakTarget)
-            BlockCrackFanout.Stop(
-                online,
-                player.Session,
-                player.BreakTargetX,
-                player.BreakTargetY,
-                player.BreakTargetZ);
-
-        player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
-        if (dig.RequiredTicks > 0)
-        {
-            BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
-            var hitBlock = _world.GetBlock(dig.X, dig.Y, dig.Z);
-            if (hitBlock != World.World.AirRuntimeId)
-                BlockSoundFanout.Hit(online, player.Session, dig.X, dig.Y, dig.Z, hitBlock);
-        }
-        PlayerVisibility.RelaySwingArm(player, online, swingSource: "mine");
-    }
-
-    /// <summary>
-    /// Mid-dig held tool change → progress-preserving retarget + 3602 when crack rate changes (§27).
-    /// </summary>
-    private void UpdateDigToolIfHeldChanged(
-        global::Zenith.Player.Player player,
-        GameClock clock,
-        IReadOnlyList<global::Zenith.Player.Player> online)
-    {
-        if (!player.HasBreakTarget || player.IsDead) return;
-        if (player.GameMode == GameMode.Creative) return;
-
-        var held = player.Inventory.Get(player.SelectedHotbarSlot);
-        var heldId = held.IsEmpty ? default : held.Id;
-        if (heldId == player.DigHeldStackId) return;
-
-        var block = _world.GetBlock(player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
-        var oldNeed = player.BreakRequiredTicks;
-        var newNeed = Blocks.BreakTicks(block, heldId);
-        // Unknown dig profile mid-break → abort (ADR §55).
-        if (newNeed < 0)
-        {
-            BlockCrackFanout.Stop(
-                online, player.Session,
-                player.BreakTargetX, player.BreakTargetY, player.BreakTargetZ);
-            player.AbortBreak();
-            return;
-        }
-
-        var now = clock.CurrentTick;
-        var elapsed = now >= player.BreakStartedTick ? now - player.BreakStartedTick : 0ul;
-        var progress = oldNeed > 0 ? Math.Clamp(elapsed / (double)oldNeed, 0.0, 1.0) : 1.0;
-        var newStarted = newNeed <= 0
-            ? now
-            : now - (ulong)Math.Round(progress * newNeed);
-
-        player.RetargetBreakTiming(newStarted, newNeed, heldId);
-        player.MarkDigActive(now);
-
-        if (Blocks.CrackEventData(oldNeed) != Blocks.CrackEventData(newNeed) && newNeed > 0)
-        {
-            BlockCrackFanout.UpdateSpeed(
-                online,
-                player.Session,
-                player.BreakTargetX,
-                player.BreakTargetY,
-                player.BreakTargetZ,
-                newNeed);
-        }
-    }
-
-    /// <summary>
-    /// Client StartCrack plays the full dig duration; without Abort the animation keeps going.
-    /// Idle StopCrack only after the dig window (BreakRequiredTicks) and DigIdleAbortTicks
-    /// without activity — hard blocks (stone-by-hand ~150) exceed DigIdleAbortTicks alone and
-    /// clients often omit PerformBlockActions between sparse crack packets (§27). Aborting
-    /// earlier clears DigAuthorized (and client may AbortBreak on StopCrack) → Resync + no loot.
-    /// </summary>
-    private void AbortIdleDigIfStale(
-        global::Zenith.Player.Player player,
-        GameClock clock,
-        IReadOnlyList<global::Zenith.Player.Player> online)
-    {
-        if (!player.HasBreakTarget || player.IsDead) return;
-        if (clock.CurrentTick < player.LastDigActivityTick) return;
-
-        // Hold dig auth through BreakRequiredTicks even if MarkDigActive never refreshes
-        // (stone-by-hand is ~150 ticks; DigIdleAbortTicks alone is 40).
-        var digWindowEnd = player.BreakStartedTick + (ulong)Math.Max(player.BreakRequiredTicks, 0);
-        if (clock.CurrentTick < digWindowEnd)
-            return;
-
-        if (clock.CurrentTick - player.LastDigActivityTick < Player.Player.DigIdleAbortTicks)
-            return;
-
-        BlockCrackFanout.Stop(
-            online,
-            player.Session,
-            player.BreakTargetX,
-            player.BreakTargetY,
-            player.BreakTargetZ);
-        player.AbortBreak();
     }
 
     /// <returns>True when the world mutation was applied (peers need UpdateBlock).</returns>
@@ -383,7 +243,7 @@ sealed class BlockSystem : IGameSystem
                 foreach (var peer in online)
                 {
                     if (peer.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
-                        peer.OpenChest = null;
+                        _ = peer.TryClearOpenContainer(out _);
                 }
 
                 if (lidBroken)
@@ -504,82 +364,6 @@ sealed class BlockSystem : IGameSystem
         StackId id,
         int count) =>
         FloorDropFanout.TryDeposit(_world, _players, online, x, y, z, id, count);
-
-    private void PickupFloorDrops(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
-    {
-        _ = clock;
-        _world.FloorDrops.TickPickupDelays();
-
-        _despawnScratch.Clear();
-        _world.FloorDrops.TickDespawn(_despawnScratch);
-        foreach (var (x, y, z, _, _, entityRuntimeId) in _despawnScratch)
-        {
-            var cx = PlayerChunkTracker.BlockToChunk(x);
-            var cz = PlayerChunkTracker.BlockToChunk(z);
-            foreach (var peer in online)
-            {
-                if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
-                peer.Session.Protocol.Entity.SendRemoveActor(entityRuntimeId);
-            }
-        }
-
-        foreach (var (pos, stackId, count, entityRuntimeId, pickupDelay, _) in _world.FloorDrops.Snapshot())
-        {
-            if (pickupDelay > 0) continue;
-
-            var pickupId = stackId.IsBlock
-                ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
-                : stackId;
-            foreach (var player in online)
-            {
-                if (!player.IsInGame || player.IsDead) continue;
-                if (!IsWithinFloorPickupReach(player, pos.X, pos.Y, pos.Z)) continue;
-
-                var invSnap = player.Inventory.CaptureSnapshot();
-                var added = player.Inventory.TryAddUpTo(pickupId, count);
-                if (added == 0) continue;
-
-                if (!_world.FloorDrops.TryTakeUpTo(
-                        pos.X, pos.Y, pos.Z, added,
-                        out _, out _, out var takenEntity, out var remainingPublish))
-                {
-                    player.Inventory.RestoreSnapshot(invSnap);
-                    continue;
-                }
-
-                var eid = takenEntity != 0 ? takenEntity : entityRuntimeId;
-                var cx = PlayerChunkTracker.BlockToChunk(pos.X);
-                var cz = PlayerChunkTracker.BlockToChunk(pos.Z);
-                foreach (var peer in online)
-                {
-                    if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
-                    peer.Session.Protocol.Entity.SendTakeItemActor(
-                        (ulong)eid,
-                        (ulong)player.RuntimeId);
-                }
-
-                // Partial: Take despawns entity; republish remaining stack (same entity id / delay).
-                if (remainingPublish is { } rem)
-                    FloorDropFanout.Publish(online, rem);
-
-                player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-                _world.PersistInventory(player);
-                break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Pickup — standing AABB expanded by <see cref="EntityHitboxes.PickupExpand"/>
-    /// vs item entity AABB at cell. Domain <see cref="Player.Player.PositionY"/> is feet.
-    /// </summary>
-    internal static bool IsWithinFloorPickupReach(global::Zenith.Player.Player player, int x, int y, int z)
-    {
-        var playerBb = EntityHitboxes.PlayerStanding(player.PositionX, player.PositionY, player.PositionZ)
-            .Expand(EntityHitboxes.PickupExpand);
-        var itemBb = EntityHitboxes.ItemAtCell(x, y, z);
-        return playerBb.Intersects(itemBb);
-    }
 
     /// <summary>
     /// True when the place cell intersects the placer or another InGame player's standing BB

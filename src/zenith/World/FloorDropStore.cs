@@ -62,13 +62,15 @@ sealed class FloorDropStore
     {
         deposit = null;
         if (count <= 0 || id.IsEmpty) return true;
+        if (count > MaxStack) return false;
         var key = (x, y, z);
         if (_drops.TryGetValue(key, out var existing))
         {
             // One StackId per cell — different id must use another cell (FloorDropFanout spiral).
             if (existing.Id != id) return false;
+            if (existing.Count > MaxStack - count) return false;
 
-            var merged = Math.Min(MaxStack, existing.Count + count);
+            var merged = existing.Count + count;
             var delay = Math.Max(existing.PickupDelayTicks, pickupDelayTicks);
             // Age is not reset by topping off an existing pile — a cell doesn't get to live forever.
             _drops[key] = new DropSlot(id, merged, existing.EntityRuntimeId, delay, existing.AgeTicks);
@@ -88,7 +90,7 @@ sealed class FloorDropStore
         }
 
         var entityId = entityRuntimeIdIfNew;
-        var newCount = Math.Min(MaxStack, count);
+        var newCount = count;
         _drops[key] = new DropSlot(id, newCount, entityId, Math.Max(0, pickupDelayTicks));
         deposit = new DepositResult(
             x, y, z, id, newCount, entityId, Created: true, CountChanged: true);

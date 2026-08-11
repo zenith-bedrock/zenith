@@ -3,13 +3,14 @@ using Zenith.World;
 namespace Zenith.Player;
 
 /// <summary>
-/// Dig start/abort queued on the receive thread; <see cref="Gameplay.Systems.BlockSystem"/>
+/// Dig start/abort queued on the receive thread; <see cref="Gameplay.Systems.BlockDigSystem"/>
 /// applies <c>BeginBreak</c>/<c>AbortBreak</c> + crack/swing fan-out on tick (§54).
 /// </summary>
 readonly struct DigIntent
 {
     public bool HasValue { get; init; }
     public bool IsAbort { get; init; }
+    public bool IsActivity { get; init; }
     public int X { get; init; }
     public int Y { get; init; }
     public int Z { get; init; }
@@ -38,5 +39,15 @@ readonly struct DigIntent
         X = x,
         Y = y,
         Z = z
+    };
+
+    public static DigIntent Activity(int x, int y, int z, ulong tick) => new()
+    {
+        HasValue = true,
+        IsActivity = true,
+        X = x,
+        Y = y,
+        Z = z,
+        StartedTick = tick
     };
 }

@@ -45,7 +45,8 @@ sealed class GameLoop
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Game system {system.GetType().Name} failed: {ex}");
+                    _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
+                    throw;
                 }
             }
 

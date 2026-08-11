@@ -54,7 +54,7 @@ RakNet thread
   → Handler
   → pending intent (e.g. movement / place)
   → GameLoop Tick
-  → System (MovementSystem, BlockSystem, …)
+  → System (MovementSystem, BlockDigSystem, BlockEditSystem, …)
   → Protocol → RakNet
 ```
 

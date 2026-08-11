@@ -51,12 +51,7 @@ class SpawnResponseSessionHandler : ISessionHandler
         var player = session.Player;
         if (player is null) return;
 
-        session.Context.Logger.Info($"{player.Username} finished spawning (actor {packet.ActorRuntimeId}), entering in-game phase.");
-
-        // Fan-out de visibilidade antes de marcar IsInGame / trocar handler.
-        PlayerVisibility.AnnounceJoin(player, session.Context.PlayerManager.SnapshotOnline());
-        session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-        session.Protocol.Inventory.SendUiInventoryContent(player);
-        session.SetHandler(new InGameSessionHandler());
+        session.Context.Logger.Info($"{player.Username} confirmed spawn (actor {packet.ActorRuntimeId}); queued for gameplay transition.");
+        player.SubmitSpawnReady();
     }
 }

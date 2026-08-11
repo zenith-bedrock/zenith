@@ -44,6 +44,34 @@ RakNet thread
 
 A thread de rede **nunca** muta estado de gameplay (posição final, inventário, mundo). Só escreve intenção pendente. Mutação acontece no tick, de forma determinística.
 
+### Single-writer ownership
+
+Estado autoritativo de gameplay normalmente tem **um único escritor**: seu contexto de execução
+de gameplay (hoje, o `GameLoop`). Rede e workers assíncronos são produtores de mensagens
+imutáveis; publicam inputs ou conclusões em handoffs limitados, e o tick revalida/aplica o
+resultado. Locks e atomics continuam adequados para filas, sessões, storage, caches e métricas,
+mas não devem transformar campos compostos de domínio em estado com múltiplos escritores.
+
+`single-writer ownership ≠ single-thread entire server`: I/O, compressão, rede e persistência
+continuam concorrentes. A restrição é sobre quem decide e aplica mutações autoritativas de
+`Player`, `World`, inventário, combate e estado equivalente. Nunca manter lock durante await,
+I/O, envio de protocolo ou callback externo.
+
+Antes de criar um handoff para o `GameLoop`, prove que o resultado precisa mutar/dependender de
+estado autoritativo ou participar do ordering determinístico do gameplay. Antes de permitir uma
+mutação fora do owner, prove que ela não é estado autoritativo — ou registre uma exceção concreta.
+Concorrência fora dessa autoridade é esperada quando melhora isolamento, throughput ou latência;
+não crie intents/queues para logging, métricas, storage, conexão, cache ou compressão por reflexo.
+
+### Correctness-critical transitions
+
+Não descreva subsistemas como “anti-dup” por impressão geral. Para estado autoritativo valioso,
+defina e teste a propriedade concreta: input do cliente não cria item por si só; uma request aceita
+tem um único commit; falha/rejeição preserva o estado; request/session/resultados stale não se
+aplicam; replay não cria novo estado; cancelamento/disconnect não deixa commit parcial. Para uma
+operação que move recursos, teste conservação através de todos os participantes. Proteções de
+generation, request id ou snapshot só devem ser adicionadas onde esse risco real existe.
+
 A seta de dependência de tipos é sempre unidirecional. Camadas inferiores não conhecem as superiores.
 
 ## Regras
@@ -63,15 +91,29 @@ Após o GameLoop estável, **não introduzir** Scheduler, Actor Model, ECS, Job 
 
 Fan-out a “todos online” (ex. TimeSync / movimento **quando pose dirty**, ADR §44) é aceitável neste estágio; Absolute/UpdateBlock no tick batelam por peer. Um futuro VisibilitySystem pode restringir peers relevantes — não implementado agora.
 
+## Escolha de execution model (ADR §97)
+
+`IGameSystem`/tick não é o boundary obrigatório para "qualquer coisa que não seja rede". A unidade de execução certa depende do comportamento da feature, não da abstração disponível — ver [`docs/adr/0097-runtime-execution-model.md`](docs/adr/0097-runtime-execution-model.md) para o heurístico completo.
+
+**Estrito (não trocar sem ADR + feature concreta forçando):** transport não decide gameplay; serialization não conhece domínio; packets são só wire; handlers interpretam e chamam uma API do runtime — não são a decisão; mutação de estado autoritativo normalmente tem um único escritor no seu contexto de gameplay (hoje, o tick), com exceções explícitas e justificadas; thread ownership é explícito; nenhuma continuation assíncrona recupera autoridade após `await` — ela publica uma conclusão para o owner aplicar.
+
+**Flexível (escolher por comportamento, revisar quando a feature mudar):** `IGameSystem`, Command, Event, Intent/pending-state, Queue, Dirty flag, Scheduler, chamada direta de runtime, Dispatcher, Service.
+
+- **Não crie um `IGameSystem` só para tirar trabalho de um packet handler.** Se a feature não precisa de avaliação contínua nem de ordering determinístico contra outro trabalho de gameplay, uma chamada direta `Handler → Gameplay Runtime API → Domain operation` pode preservar o boundary sem esperar o próximo tick. Exemplo já existente e correto: `Player.SelectedHotbarSlot` (ADR §80) — escalar único, idempotente, sem lock, sem fila.
+- **Preservar o boundary gameplay/network não implica esperar o próximo tick para tudo.** "Handler não decide" e "handler não pode chamar uma API síncrona do runtime" são coisas diferentes.
+- **Antes de introduzir pending state, fila, lock, Command, Event ou System, identifique o requisito comportamental que justifica isso** (tick determinism, batching, coalescing, ordering entre jogadores, rate limiting, reconciliation, transaction semantics, dependência assíncrona real) — "porque os Systems rodam no tick" ou "porque precisamos atravessar uma camada" não são justificativas suficientes.
+- **Prefira o modelo de execução mais simples que preserve autoridade, ordering, thread ownership e testabilidade** — nessa ordem de prioridade quando houver conflito.
+
 ## GameLoop e sistemas
 
-- **GameLoop** controla 20 TPS, avança `GameClock` e chama sistemas — **sem** regras de gameplay. Exceção em um sistema é logada e o loop continua.
+- **GameLoop** controla 20 TPS, avança `GameClock` e chama sistemas — **sem** regras de gameplay. Exceção de sistema é registrada e encerra o loop; `ZenithServer` propaga essa falha ao lifecycle de shutdown: continuar aceitando pacotes após uma mutação autoritativa parcialmente aplicada seria esconder corrupção potencial. Recuperação/retry deve ser desenhada no boundary específico que conhece a operação; não há circuit breaker genérico.
+- **Lifetime crítico:** `GameLoop` e RakNet compartilham o lifetime do servidor. A terminação inesperada de um inicia shutdown coordenado: cancelar a autoridade, bloquear novo tráfego, drenar os loops, então settle autoritativo e flush de persistência. `ShutdownAsync` é idempotente e só completa após essa sequência.
 - **GameClock** guarda tick / world time / TPS medido.
 - **Sistemas** (`IGameSystem`): ordem de **registro** = ordem de **execução**; cada um só com a própria lógica.
 - GameLoop é **single-threaded** até existir necessidade real de paralelismo.
 - Tick de **jogo** ≠ tick de **RakNet** (transporte).
 
-Proibido no GameLoop como *orquestração genérica*: DI de pacotes, chat fan-out, session wiring. Sistemas (`MovementSystem`, `BlockSystem`) mutam estado de domínio no tick — isso é o contrato inbound da regra 6.
+Proibido no GameLoop como *orquestração genérica*: DI de pacotes, chat fan-out, session wiring. Sistemas (`MovementSystem`, `BlockDigSystem`, `BlockEditSystem`) mutam estado de domínio no tick — isso é o contrato inbound da regra 6.
 
 ## Layout
 
@@ -83,7 +125,7 @@ src/
   zenith/
     Gameplay/
       Runtime/     # GameLoop, GameClock, IGameSystem
-      Systems/     # TimeSyncSystem, MovementSystem, BlockSystem, …
+      Systems/     # TimeSyncSystem, MovementSystem, BlockDigSystem, BlockEditSystem, …
     World/         # World façade, Dimension, IChunkStorage, Blocks, Noise/ (FastNoiseLite), chests, floor drops
     Player/        # Player, intents, inventory, manager
     Server/        # ZenithServer, ServerContext, config, identity
@@ -213,7 +255,7 @@ flowchart LR
 
 Não significa “produto completo”: fecha place/break + inventário 36 + ISR rearrange no domínio do **jogador**.
 
-- Intent pendente → `BlockSystem` → overlay + `UpdateBlock`; place consome hotbar.
+- Intent de dig → `BlockDigSystem`; intent de edição → `BlockEditSystem` → overlay + `UpdateBlock`; place consome hotbar.
 - Bounds de coordenada, slot `0..8` e stack count no handler.
 - Overlay permanente (não CoW de coluna).
 - Tick authority: reach (olhos + `MaxBlockReach`), place só em air, break só se `TryAdd` couber — smoke 6/8 assumem rejeição correta (sem voidar item / sem overwrite ocupado).

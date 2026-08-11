@@ -11,18 +11,6 @@ namespace Zenith.Gameplay.Systems;
 /// </summary>
 sealed class GameModeSystem : IGameSystem
 {
-    private readonly PlayerManager _players;
-    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
-
-    public GameModeSystem(PlayerManager players) => _players = players;
-
-    public void Tick(GameClock clock)
-    {
-        _players.FillOnline(_onlineScratch);
-        Tick(clock, _onlineScratch);
-    }
-
-
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         _ = clock;

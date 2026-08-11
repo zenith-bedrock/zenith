@@ -1,6 +1,6 @@
 namespace Zenith.Player;
 
-/// <summary>Intenção de bloco pendente — escrita só no handler; mutação no BlockSystem.</summary>
+/// <summary>Intenção de bloco pendente — escrita só no handler; mutação no BlockEditSystem.</summary>
 readonly struct BlockEditIntent
 {
     public bool HasValue { get; init; }
