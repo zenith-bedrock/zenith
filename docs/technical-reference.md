@@ -18,7 +18,7 @@ Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). **Known debt:**
 
 | Document | Use for |
 |----------|---------|
-| [`decisions.md`](decisions.md) | **ADR §1–§93** — every `ADR §N` / `§N` in code should resolve here |
+| [`decisions.md`](decisions.md) | **ADR §1–§96** — every `ADR §N` / `§N` in code should resolve here |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer rules, smoke expectations, freeze list |
 | [`../AGENTS.md`](../AGENTS.md) | Folder roles (`Gameplay/` decides, `Protocol/` transmits, …) |
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |

@@ -31,6 +31,7 @@ sealed class World
     public FloorDropStore FloorDrops { get; }
     public ChestStore Chests { get; }
     public GravityPendingStore GravityPending { get; }
+    public FallingBlockStore FallingBlocks { get; }
 
     /// <summary>Default playable dimension (only one until Nether/End ADR).</summary>
     public Dimension Overworld => _overworld;
@@ -51,6 +52,7 @@ sealed class World
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
         GravityPending = new GravityPendingStore(logger);
+        FallingBlocks = new FallingBlockStore(logger);
         storage.ForEachOverlayAsync(StoreOverlay)
             .AsTask()
             .GetAwaiter()

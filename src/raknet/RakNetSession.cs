@@ -308,7 +308,18 @@ public class RakNetSession
                 if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
                 foreach (var frame in frames)
                 {
-                    SendFrameLocked(frame, Priority.Immediate);
+                    // Retransmit the frame AS-BACKED-UP — do not route through SendFrameLocked,
+                    // which unconditionally re-derives OrderIndex/SequenceIndex/MessageIndex as if
+                    // this were a brand-new logical message. `frame` here already carries the
+                    // metadata from its first (and only correct) assignment in SendFrameLocked;
+                    // re-deriving it on resend silently reassigns a LATER OrderIndex, permanently
+                    // orphaning the original slot — every peer waiting on that exact order index
+                    // (Reliable Ordered is per-channel FIFO) blocks forever, since nothing will
+                    // ever arrive claiming it again. QueueFrameLocked only re-batches the frame
+                    // into a fresh FrameSet/datagram (a real resend needs a new outer sequence
+                    // number) without touching its reliability identity. Root cause of the
+                    // smoke:respawn timeout (roadmap Yes-next priority 2) — ADR §94.
+                    QueueFrameLocked(frame, Priority.Immediate);
                 }
             }
         }

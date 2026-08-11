@@ -28,7 +28,7 @@ Do these **as separate ADRs + PRs**. Earlier items unblock later ones. **All row
 | 3 | **`/gamemode` minimal** | **Shipped:** CommandRequest/chat → intent → `GameModeSystem` + remint CreativeContent (§52). Not a command framework. |
 | 4 | **Tool dig speed / efficiency** | **Shipped:** DF `BreakDuration` + curated tools + 3602 on speed delta (§27 adendo). No enchants. |
 | 5 | **Double-chest** (sneak-place + 54 UI) | **Shipped** in `v0.0.2-alpha` (ADR §56) — pair + 54 UI + 2×`ct:`. |
-| 6 | **Block gravity** (sand/gravel) | **Shipped:** `GravitySystem` + `GravityPendingStore` (ADR §57). No falling_block actor. |
+| 6 | **Block gravity** (sand/gravel) | **Shipped:** `GravitySystem` + `GravityPendingStore` (ADR §57); real falling_block actor added in ADR §95 (visible per-tick fall, no more instant column teleport). |
 | 7 | **Playerdata reconnect** (`pd:`) | **Shipped:** pose + GameMode in world LevelDB (ADR §60). No `players/` volume. |
 | 8 | **World beyond flat** | **Shipped (Zenith leaf):** §62–§67 provider/noise/biomes/caves/ore; §70 join terrain; §71 Dimension seam; §72 FastNoiseLite + anti-pillar height. **§61 Mojang seam = later** (not blocking H1 close). |
 
@@ -95,7 +95,7 @@ Pick **one** axis. Do **not** open plugins/JS, Spectator, custom biomes, FormSys
 |------:|------|--------|
 | 0 | **Human smoke — fresh noise world (§72)** | Delete/`c:`-clear world; Gate A look for pillar columns. Still owed — code shipped and later gen work (§75) landed on top of it, but the human confirmation pass itself isn't recorded as done. Do this before opening another *terrain* ADR (perf/infra leaves like §75/§76 are not gated by this). |
 | ~~1~~ | ~~Packet codegen migration, remaining Tier A~~ | **Closed (aug 2026, no ADR needed):** audited all 50 unmigrated packets — 40 are outbound-only no-op `Decode` (already "left as-is" per §76), the other 10 are all Tier B (`TextPacket` added to that list — discard-on-decode category byte + 3-way variant field switch). **No plain migration candidates remain**; 31/64 is the ceiling for the current attribute set. |
-| 2 | **Smoke-bot `first10` green** | **In progress (ADR §83/§85/§86/§87/§88/§89/§90/§91):** `join`/`place`/`break`/`inv-hotbar` all pass in sequence now (§89 closed the `PlayerAuthInputPacket` blocker). Next failure is `smoke:respawn` (void → `death_info` timeout) — **root-caused, not a wire/Cereal bug**: `MovementSystem` detects the void fall and `DeathInfoPacket`/`RespawnPacket` are sent server-side with zero exceptions (verified), but the client never receives or errors on them — looks like a RakNet transport-layer delivery issue during a concurrent `LevelChunkPacket` burst on the same reliable-ordered channel. Also found a real bug in `zenith-smoke-bot` itself: `client.ts`'s post-spawn error listener silently no-ops, masking transport errors — fix that first so the real symptom is visible. Tracked separately (RakNet-level, not packet-shape). Once resolved, re-run `first10`/`wave2` to confirm green end to end. |
+| 2 | **Smoke-bot `first10` green** | **Shipped (ADR §94):** `smoke:respawn` was the last blocker — root cause was Zenith's own `RakNetSession.HandleNack` corrupting `OrderIndex`/`MessageIndex` on every retransmission (routed resends through the same code path as a brand-new send), not a wire/Cereal bug. Fixed (`HandleNack` now replays the frame verbatim via `QueueFrameLocked`) + a real RakNet order-channel split (bulk `LevelChunkPacket` streaming no longer shares a channel with gameplay packets). `join`/`place`/`break`/`inv-hotbar`/`respawn`/`chest-open` all pass in sequence now; `double-chest` has an unrelated pre-existing place-cell-collision flake. Also fixed a `zenith-smoke-bot` bug: `client.ts`'s post-spawn error listener was silently no-op'ing, masking transport errors during the investigation. |
 | ~~3~~ | ~~Floor-drop despawn TTL~~ | **Shipped (ADR §77):** `FloorDropStore.TickDespawn` + `AgeTicks` (merge-safe) + `RemoveActor` fan-out, 6000-tick vanilla-parity default. |
 | 4 | **§61 Mojang spike** | Only when the goal is open/import PM/BDS worlds. Seam + offline converter — never replace ZLDB default. |
 | 5 | **AuthInput × client FPS** | Measure-only ([`robustness-dx-debt.md`](robustness-dx-debt.md)); coalesce only after numbers. |
@@ -119,7 +119,7 @@ Pull only with ADR + demonstrated need:
 - Full creative catalogue / `block_state_b64`
 - 3×3 crafting table / Mojang recipe dump
 - **Wire-palette refresh past 1.26.30** (`block_palette.nbt`/`item_palette.json`/`creative_items.json`) — checked ADR §84: no community source has published an extraction past 1.26.30 yet (PNX `GameData`, `minecraft-data`, PMMP `BedrockData` all stuck there); `Mojang/bedrock-samples` has newer raw data but not the runtime-ID-assigned wire format. Would mean building the extraction pipeline ourselves — not a data refresh, a new tool.
-- Hunger / food / damage pipeline (beyond spawn attributes)
+- Hunger / food / drowning / other damage sources (fall damage shipped, ADR §96 — the rest of the pipeline still doesn't exist)
 - Armor / ender chest / hoppers
 - Stairs/beds/doors generic block-state facing stack
 - Multi-world load / Mojang world format (**direction:** §61 seam + converter — not ZLDB replacement)

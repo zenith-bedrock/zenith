@@ -59,6 +59,7 @@ sealed class MovementSystem : IGameSystem
 
             if (!player.TryConsumeMovementInput(out var input)) continue;
 
+            var wasOnGround = player.IsOnGround;
             player.PositionX = input.X;
             player.PositionY = input.Y;
             player.PositionZ = input.Z;
@@ -72,7 +73,9 @@ sealed class MovementSystem : IGameSystem
             if (input.MissedSwing)
                 _swing.Add(player);
 
-            if (player.PositionY < VoidRescueY)
+            ApplyFallDamage(player, wasOnGround, online);
+
+            if (!player.IsDead && player.PositionY < VoidRescueY)
                 BeginVoidDeath(player, online);
 
             if (IsPoseDirty(player))
@@ -185,7 +188,17 @@ sealed class MovementSystem : IGameSystem
     /// <summary>Void fall → death screen + Survival death loot (ADR §73). Creative keeps inventory.</summary>
     private void BeginVoidDeath(
         global::Zenith.Player.Player player,
-        IReadOnlyList<global::Zenith.Player.Player> online)
+        IReadOnlyList<global::Zenith.Player.Player> online) =>
+        Kill(player, online, "generic");
+
+    /// <summary>
+    /// Any lethal Health drop → death screen + Survival death loot (ADR §73/§96). Creative keeps
+    /// inventory. Shared by void fall and fall damage — both end at the same handshake.
+    /// </summary>
+    private void Kill(
+        global::Zenith.Player.Player player,
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        string cause)
     {
         // Capture before BeginDeath clears OpenChest — release lid opener (§28).
         var world = player.Session.Context.World;
@@ -196,7 +209,7 @@ sealed class MovementSystem : IGameSystem
         if (player.GameMode != GameMode.Creative)
             FloorDropFanout.DumpOnDeath(world, _players, online, player);
 
-        if (!player.BeginDeath("generic")) return;
+        if (!player.BeginDeath(cause)) return;
 
         var entity = player.Session.Protocol.Entity;
         var rid = (ulong)player.RuntimeId;
@@ -207,6 +220,46 @@ sealed class MovementSystem : IGameSystem
         entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
         entity.SendDeathInfo(player.DeathCause);
         entity.SendRespawnSearching(eyeX, eyeY, eyeZ, rid);
+    }
+
+    /// <summary>
+    /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per block beyond
+    /// that (vanilla-parity, ADR §96). Creative is immune — matches vanilla's creative fall
+    /// immunity and Zenith's existing Creative-keeps-inventory convention on death.
+    /// </summary>
+    private const float SafeFallDistance = 3f;
+
+    private void ApplyFallDamage(
+        global::Zenith.Player.Player player,
+        bool wasOnGround,
+        IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (!wasOnGround && player.IsOnGround)
+        {
+            var fallDistance = player.FallPeakY - player.PositionY;
+            player.FallPeakY = player.PositionY;
+
+            if (fallDistance <= SafeFallDistance || player.GameMode == GameMode.Creative)
+                return;
+
+            var damage = MathF.Floor(fallDistance - SafeFallDistance);
+            if (damage <= 0) return;
+
+            player.Health = MathF.Max(0f, player.Health - damage);
+            if (player.Health <= 0f)
+            {
+                Kill(player, online, "fall");
+                return;
+            }
+
+            player.Session.Protocol.Entity.SendDefaultAttributes((ulong)player.RuntimeId, player.Health, player.Hunger);
+            return;
+        }
+
+        if (player.IsOnGround)
+            player.FallPeakY = player.PositionY;
+        else if (player.PositionY > player.FallPeakY)
+            player.FallPeakY = player.PositionY;
     }
 
     private static void ApplyRespawn(global::Zenith.Player.Player player)

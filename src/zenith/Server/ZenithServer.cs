@@ -95,7 +95,7 @@ class ZenithServer
         var world = new World.World(_chunkStorage, serverLogger, terrain);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
-        var gravity = new GravitySystem(world);
+        var gravity = new GravitySystem(world, players);
         gameLoop.Register(new BlockSystem(players, world));
         gameLoop.Register(gravity);
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
