@@ -163,7 +163,7 @@ partial class InGameSessionHandler : ISessionHandler
         // Slash lines never fan-out via ChatSystem (§52).
         if (packet.Message.StartsWith('/'))
         {
-            TryHandleGamemodeLine(session, player, packet.Message);
+            HandleCommandLine(session, player, packet.Message);
             return;
         }
 
@@ -187,26 +187,13 @@ partial class InGameSessionHandler : ISessionHandler
 
         session.Context.Logger.Info($"{player.Username} CommandRequest: {packet.CommandLine}");
 
-        // Bedrock slash channel (§52 adendo). Unknown commands: quiet ignore.
-        TryHandleGamemodeLine(session, player, packet.CommandLine);
+        HandleCommandLine(session, player, packet.CommandLine);
     }
 
-    private static void TryHandleGamemodeLine(NetworkSession session, Player.Player player, string line)
+    private static void HandleCommandLine(NetworkSession session, Player.Player player, string line)
     {
-        if (GameModeConfig.TryParseCommand(line, out var mode, out var badArgs))
-        {
-            session.Context.Logger.Info(
-                $"{player.Username} /gamemode → {mode} (queued for GameModeSystem)");
-            player.SubmitGameMode(mode);
-            return;
-        }
-
-        if (badArgs)
-        {
-            session.Protocol.Ui.SendToast(
-                "Game mode",
-                "Usage: /gamemode survival|creative");
-        }
+        var feedback = session.Context.Commands.Execute(player, line);
+        session.Protocol.Ui.SendToast(feedback.Title, feedback.Message);
     }
 
     private static void HandleRequestAbility(NetworkSession session, ref BinaryStream stream)

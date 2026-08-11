@@ -56,6 +56,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.Inventory.SendCraftingData();
+                session.Protocol.Commands.SendAvailableCommands(
+                    BedrockCommandAdapter.CreateMetadata(session.Context.Commands.Catalog));
                 // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).
                 session.Protocol.World.SendBiomeDefinitionList();
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).

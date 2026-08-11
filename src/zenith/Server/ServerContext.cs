@@ -1,6 +1,7 @@
 using Zenith.Event;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
+using Zenith.Gameplay.Commands;
 using Zenith.Player;
 using Zenith.Raknet.Log;
 using Zenith.World;
@@ -23,6 +24,7 @@ class ServerContext
     public ItemPalette ItemPalette { get; }
     public RecipeRegistry Recipes { get; }
     public CreativeCatalog Creative { get; }
+    public CommandRuntime Commands { get; }
 
     public ServerContext(
         ILogger logger,
@@ -46,5 +48,6 @@ class ServerContext
         ItemPalette = itemPalette;
         Recipes = recipes;
         Creative = creative;
+        Commands = new CommandRuntime(playerManager);
     }
 }
