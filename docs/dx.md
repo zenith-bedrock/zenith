@@ -153,7 +153,7 @@ Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedr
 |--------|------------|----------------|
 | **Dragonfly** | Minimal / “essentials-only” shapes (break timing, session send, world seams) — good default cross-check | Treating DF as a full SMP product checklist |
 | **PocketMine issues + changelogs** | What actually bites operators: tiny wire/DX gaps that look “bobo” but matter (recipe unregister, creative remint, dig edge cases, …) | PM’s “override everything” plugin surface (block/entity/item/tile god-hooks) as Zenith architecture |
-| **PocketMine 5/6 command API** | Study typed `execute*(sender, …)` / arg-binding **ideas** when `/` framework is unfrozen | Shipping a command framework now (still freeze — single `/gamemode` is §52) |
+| **PocketMine 5/6 command API** | Study typed `execute*(sender, …)` / arg-binding **ideas** for future concrete commands | Copying PM's plugin/override surface or exposing public command hooks prematurely |
 | **Serenity / Endstone** | Protocol envelopes, Dimension-ish packaging | ECS/traits stacks or plugin loaders |
 
 Before a product leaf: skim DF for the smallest honest path, then skim **open/closed PM issues** for that feature area so Zenith does not rediscover softcore footguns. Still: decide≠transmit≠serialize; no `Network/` revival; no plugin API until domains force an ADR.

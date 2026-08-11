@@ -56,7 +56,7 @@ Full list of non-goals: [`decisions.md`](decisions.md) § "Explicit non-goals" a
 - Hunger / food / full damage pipeline
 - Redstone
 - Armor, ender chest, hoppers
-- `/` command framework (only `/gamemode` exists, minimally)
+- Full vanilla command catalogue / plugin-facing command framework (Zenith currently has a small protocol-independent command core with Bedrock metadata for representative commands)
 - Plugin API
 - Nether / End dimensions, custom biome authoring
 - Mojang world import (BDS/PM world format)

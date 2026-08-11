@@ -69,7 +69,7 @@ Local clone layout (optional dev setup): [`dx.md`](dx.md) § "Bedrock references
 | ZLDB overlay world model (`c:`/`ov:`/`inv:`/`ct:`/`pd:`) | Endstone/PocketMine **single data directory** Docker pattern |
 | Native terrain gen (§63–§67) | **Not** BDS noise/biome tables, **not** PM plugins |
 
-**Explicit non-goals** (do not assume from comments elsewhere): plugin API, full Mojang `creative_items.json` / `block_state_b64`, in-process BDS world import, ECS/mob AI, `/` command framework — listed in [`decisions.md`](decisions.md) § "Explicit non-goals".
+**Explicit non-goals** (do not assume from comments elsewhere): plugin API, full Mojang `creative_items.json` / `block_state_b64`, in-process BDS world import, ECS, broad mob AI and plugin-facing command registration — listed in [`decisions.md`](decisions.md) § "Explicit non-goals".
 
 ## Reading `ADR §N` in source
 

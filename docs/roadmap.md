@@ -4,7 +4,7 @@
 
 ## Current position
 
-Horizon 0 (`v0.0.1-alpha`) and Horizon 1 are closed. Zenith now has a functional multiplayer alpha: authoritative player runtime, world overlays/generation, inventory/chests/crafting, selected persistence, player replication, floor-item wire, falling blocks, death/respawn and fall damage.
+Horizon 0 (`v0.0.1-alpha`) and Horizon 1 are closed. Zenith now has a functional multiplayer alpha: authoritative player runtime, world overlays/generation, inventory/chests/crafting, selected persistence, player replication, floor-item wire, falling blocks, health/death/respawn, fall damage and a first concrete Zombie actor slice.
 
 The next story is:
 
@@ -23,35 +23,36 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 
 | Phase | Status at audit baseline | Objective |
 |---|---|---|
-| A. Runtime proof | Early / gate final | characterize multiplayer runtime and fan-out |
-| B. Survival state core | Early | make health/damage/death a usable gameplay primitive |
-| C. First actor vertical slice | Not started | learn one real actor lifecycle without generic framework |
+| A. Runtime proof | Characterized / gate final | characterize multiplayer runtime and fan-out |
+| B. Survival state core | Characterized | make health/damage/death a usable gameplay primitive |
+| C. First actor vertical slice | Characterized | learn one real actor lifecycle without generic framework |
 | D. Actor pressure and interest requirements | Not started | collect the evidence needed for an ECS decision |
 | E. ECS decision | Not started | compare models and record an ADR accept/reject |
 | F. Actor scale and behavior | Not started | grow actors, AI and interest management independently |
 | G. Production hardening | Early | move from alpha proof to operable beta evidence |
 
-## NOW — Phase A: Runtime proof
+## CLOSED / CHARACTERIZE — Phase C: First actor vertical slice
 
-**Goal:** close *Runtime Validation & Multiplayer Scale Baseline* without changing application architecture.
+**Goal:** finish the first concrete Zombie slice and record its remaining lifecycle/replication evidence without introducing a generic actor framework.
 
-**Capabilities:** reproducible in-process player load scenarios, current GameLoop ordering, inventory conservation assertion, tick latency/allocations/GC/egress measurements, real-client smoke status.
+**Capabilities:** concrete `Zombie` state/store/system, composed `HealthState`, actor runtime IDs, gameplay-owned tick/lifecycle decisions and Bedrock add/move/remove projection.
 
 **Exit criteria:**
 
-- Load harness is committed, documented and runnable with an explicit command, fixture and player-count matrix.
-- Report records p50/p95/p99/max tick, allocation, GC and egress for steady and chunk-burst scenarios.
-- The report identifies the measured all-online fan-out limitation without presenting it as an ECS result.
-- The defined scenario remains at or below the 50 ms tick budget, or records the saturation point and cause honestly.
-- Relevant conservation/lifecycle tests and available smoke-bot/human smoke pass at the recorded revision.
+- Zombie spawn, tick, targeting, attack handoff, lethal transition, removal and late-join behavior remain covered by tests.
+- A real two-client smoke observes the actor lifecycle and health/movement projection. A
+  protocol-valid real-client `click_air` sequence observes `20 → 16 → 12 → 8 → 4 → 0` and
+  `remove_entity`; the earlier missed-swing-only probe was characterized as a harness limitation.
+- The runtime baseline remains the prerequisite evidence for actor workloads; it is not presented as an ECS result.
+- The direct model remains free of a generic `Entity` hierarchy, component registry or visibility framework.
 
-**Unlocks:** an honest capacity envelope and comparable baseline for future actor work.
+**Unlocks:** a second materially different actor and a representative actor workload.
 
-**Explicitly does not do:** ECS, VisibilitySystem, job scheduler, actor framework, mobs.
+**Explicitly does not do:** ECS, VisibilitySystem, job scheduler, inheritance hierarchy, broad AI or plugin entity API.
 
-## NEXT 1 — Phase B: Survival state core
+## CLOSED — Phase B: Survival state core
 
-**Goal:** turn `Player.Health` from a fall/void-only field into one small, authoritative damage/death primitive.
+**Goal:** turn `Player.Health` into one small, authoritative damage/death primitive.
 
 **Prerequisites:** Phase A complete; existing single-writer and inventory conservation constraints hold.
 
@@ -65,23 +66,6 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 **Unlocks:** a meaningful actor-versus-player interaction vertical slice.
 
 **Deliberately deferred:** hunger, armor, enchantments, broad effects, combat breadth and AI.
-
-## NEXT 2 — Phase C: First actor vertical slice
-
-**Goal:** ship one simple real mob using the smallest direct model that preserves authority and testability.
-
-**Prerequisites:** Phase B damage/death primitive; protocol packet needs cross-checked before implementation.
-
-**Exit criteria:**
-
-- Spawn, runtime ID, active tick, basic behavior/movement, replication, interaction/damage, death/despawn and late join/known-chunk behavior are covered by tests.
-- Two real clients observe spawn, movement/state and removal correctly.
-- Actor state is owned by the GameLoop; network/async work only publishes bounded inputs/results.
-- The implementation avoids both a wide inheritance tree and a pre-spike component registry.
-
-**Unlocks:** a second materially different actor and a representative actor workload.
-
-**Deliberately deferred:** generic Entity hierarchy, navigation framework, broad mob catalogue, ECS, plugin/custom-entity API and VisibilitySystem.
 
 ## LATER — Phase D: Actor pressure and interest requirements
 

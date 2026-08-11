@@ -556,9 +556,11 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 3. `GameModeSystem` on tick: `SetGameMode` (private set; inventory **not** reseeded) → Protocol `SetPlayerGameType` + `SendLocalAbilities` + `SendAdventureSettings`; remint `CreativeContent` on **every** mode change (PocketMine `syncGameMode` → `syncCreative`); Toast feedback via existing `UiProtocol`.
 4. Bad `/gamemode` args → same-session Toast (handler decide + transmit; no world mutation). No Gameplay→Packets.
 
-**Why:** H1-3 LAN need — Survival↔Creative in-session without restart/`zenith.yml`. Modes/abilities already exist (§31/§37). At this historical point, one string parse beat a command framework (`dx.md` freeze). The command-freeze portion is superseded by §99; its narrow implementation rationale remains historical.
+**Why:** H1-3 LAN need — Survival↔Creative in-session without restart/`zenith.yml`. Modes/abilities already exist (§31/§37). At this historical point, one string parse beat a command framework (`dx.md` freeze). The command-freeze portion is superseded by §100; its narrow implementation rationale remains historical.
 
 **Deferred:** Adventure/Spectator; permissions; Bedrock `AvailableCommands` / autocomplete; `/` registry.
+
+**Historical status:** this narrow `/gamemode` decision is superseded for command-surface policy and Bedrock metadata by ADR §100; its original scope and smoke evidence remain historical.
 
 **Smoke:** A in Survival `/gamemode creative` → fly/instant dig + Creative UI; `/gamemode survival` → back; peers do not see the slash text in chat; held/dig follow new mode. No `Unhandled Data Packet: 77`.
 
@@ -596,7 +598,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 1. Platform-health leaves (Online-once, dig/UI on tick, zero-alloc hot pack, DX cleanup, InventoryProtocol split) are tracked in [`robustness-dx-debt.md`](robustness-dx-debt.md), **not** as Horizon‑1 product rows.
 2. Three baskets: **A** = roadmap product (tools, double-chest, …); **B** = cross-thread / fan-out / GC / fat handler; **C** = docs/dead code. Phases address B then C; A stays in [`roadmap.md`](roadmap.md).
-3. Freeze list unchanged at this historical milestone: no Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` command framework, `Network/` revival. The command-framework portion is superseded by §99; the remaining freezes stand.
+3. Freeze list unchanged at this historical milestone: no Scheduler, Actor/ECS, VisibilitySystem, DI, plugin API, `/` command framework, `Network/` revival. The command-framework portion is superseded by §100; the remaining freezes stand.
 4. C# modernization only on measured hot paths (`Span` / `ArrayPool` / reused lists) — no mass primary-ctor / switch rewrite.
 5. One leaf ≈ one ADR adendo (or §54 sub-leaf) + one PR.
 
@@ -1405,6 +1407,8 @@ Also removed the boot-time `PROTOCOL WARNING` in `ZenithServer.cs` that announce
 
 ## First actor vertical slice (Zombie)
 
+### FIRST_ACTOR_FINDINGS
+
 The first living actor is intentionally a concrete `Zombie` plus a small `ZombieStore` while we
 collect evidence for a future actor-runtime decision. The store owns only active authoritative
 state; `ZombieSystem` owns spawn, targeting, movement, damage and lifecycle decisions; `HealthState`
@@ -1435,6 +1439,14 @@ one concrete state file, one tick system, one composition-root registration, one
 the only writer; an accepted melee swing is reach-validated; lethal health removes the actor once;
 late ticks cannot resurrect it. This is a testable behavior slice, not a claim that all future actors
 share this storage shape.
+
+**Real-client observation:** two Bedrock clients independently received `add_entity` for
+`minecraft:zombie` with the same runtime/unique id, then observed actor movement and a health
+attribute update. A protocol-valid `InventoryTransaction` `item_use`/`click_air` probe against a
+real client then produced the authoritative health sequence `20 → 16 → 12 → 8 → 4 → 0`, followed
+by `remove_entity`. The earlier `missed_swing`-only probe was a harness encoding limitation, not a
+server-side damage failure. The two-client probe remains useful for replication observation; the
+single-client click-air probe closes the real-client damage/death path.
 ### 99. ECS is an evidence-gated world-actor decision, not the next architecture step
 
 **Choice:** Do not introduce ECS, a generic `WorldEntity` hierarchy, a VisibilitySystem, or a job scheduler as a response to the completed multiplayer spine. First complete the evidence path recorded in [`roadmap.md`](roadmap.md) and the maturity audit: reproducible runtime baseline; general damage/death; first real mob; a materially different second actor; actor lifecycle/replication and visibility requirements; then measured actor workload.
@@ -1449,7 +1461,7 @@ If a spike is opened, it compares the straightforward actor model against an int
 
 **Status (Aug 2026):** Decision recorded; ECS spike not yet open.
 
-### 99. Command surface may grow before plugins, without becoming gameplay authority
+### 100. Command surface may grow before plugins, without becoming gameplay authority
 
 **Choice:** `/` commands are a permitted product and developer-experience surface, not a frozen architecture subsystem and not an ECS prerequisite. The command core is protocol-independent: definitions, aliases, typed argument/overload selection, validation, permissions, suggestions and result/error feedback do not reference Bedrock packets. A thin Bedrock adapter translates core definitions/suggestions to client metadata/autocomplete and translates wire input back to the core. Command acceptance delegates to a gameplay runtime API or submits an intent under ADR §97; it never grants a session handler direct authority over world, player, inventory or combat state.
 
@@ -1459,9 +1471,9 @@ If a spike is opened, it compares the straightforward actor model against an int
 
 **Non-goals:** a universal command/event framework, plugin command API, `IPluginCommand`, dynamic discovery, DI, public hooks, permission ecosystem clone, or routing gameplay through commands. Start the reusable command layer only when at least two current commands share the need; before then, retain a focused command path such as `/gamemode`.
 
-**Verification:** parser/rejection tests, command metadata/autocomplete tests once emitted, and a real-client completion smoke when autocomplete first ships.
+**Verification:** `CommandCatalogTests`, `BedrockCommandAdapterTests`, and the real-client smoke that decoded `AvailableCommands` and exercised `/gamemode`; future commands must retain the same core/adapter split.
 
-**Status (Aug 2026):** Policy recorded; no command framework implementation authorized by this ADR alone.
+**Status (Aug 2026):** Policy recorded; the first small core/Bedrock slice is implemented and tested. Plugin-facing registration and discovery remain deferred.
 
 ## Explicit non-goals (so far)
 
@@ -1471,7 +1483,8 @@ Recorded so we don't “accidentally” implement them:
 - **Replacing** ZLDB with full Mojang LSM on the default path (Mojang open/import → §61 seam + converter instead)
 - Multi-level LSM compaction **inside** `Zenith.LevelDB` / PInvoke RocksDB as the product store (unless RAM/streaming need is proven — still not “become BDS”)
 - Full creative catalog / `block_state_b64` decode (short CreativeContent list shipped in §31)
-- Generic WorldEntity/ECS before ADR §98's evidence gate; broad mob AI before actor foundation (drop-item wire shipped without a generic entity layer — §32)
+- Generic WorldEntity/ECS before ADR §99's evidence gate; broad mob AI before actor foundation (drop-item wire shipped without a generic entity layer — §32)
+- Plugin-facing command registration/discovery and public permission hooks; the protocol-independent first slice is allowed by ADR §100
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
 - Generated/centralized packet-dispatch table replacing the per-handler `switch` statements (§76 — wire codegen stops at `Encode`/`Decode`/`Id`, dispatch is a separate ADR if ever pursued)
