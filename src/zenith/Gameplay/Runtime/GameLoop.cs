@@ -35,20 +35,7 @@ sealed class GameLoop
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            _clock.Advance();
-            _players.FillOnline(_onlineScratch);
-            foreach (var system in _systems)
-            {
-                try
-                {
-                    system.Tick(_clock, _onlineScratch);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
-                    throw;
-                }
-            }
+            TickOnce();
 
             tickIndex++;
             var deadline = loopStart + interval * tickIndex;
@@ -64,6 +51,28 @@ sealed class GameLoop
                 {
                     break;
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes one complete authoritative gameplay tick. Internal tooling and tests use this
+    /// to exercise the same system ordering as the server without a wall-clock delay.
+    /// </summary>
+    internal void TickOnce()
+    {
+        _clock.Advance();
+        _players.FillOnline(_onlineScratch);
+        foreach (var system in _systems)
+        {
+            try
+            {
+                system.Tick(_clock, _onlineScratch);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
+                throw;
             }
         }
     }

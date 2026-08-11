@@ -194,7 +194,7 @@ That antipattern is how Bedrock stacks become un-upgradable across protocol bump
 
 ## Measured (optional)
 
-Wire/hot-path baseline dated **2026-07-15** (Windows 11 / Ryzen 5 3600). **Worldgen** rows dated **2026-07-21** (Linux Fedora / i7-8650U / .NET 10.0.9) — ShortRun (`-j short -m --join`). Refresh with:
+Wire/hot-path baseline dated **2026-07-15** (Windows 11 / Ryzen 5 3600); the inventory-wire rows were refreshed **2026-08-11** on the same CPU with .NET 10.0.10. **Worldgen** rows dated **2026-07-21** (Linux Fedora / i7-8650U / .NET 10.0.9) — ShortRun (`-j short -m --join`). Refresh with:
 
 ```bash
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
@@ -224,9 +224,9 @@ Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as ord
 | Worldgen | Noise_CaveContextOnly | — | ~132 µs | ~190 KB |
 | Worldgen | Encode_FlatLevelChunk / Encode_NoiseLevelChunk | — | ~135 ns / ~591 ns | ~1.2 KB / ~8.7 KB |
 | Worldgen | Noise_GetRadiusAsync | radius 2 / 4 | ~305 ms / ~1.14 s | ~5.4 MB / ~18 MB |
-| Inventory wire | EncodeInventoryContent36 | — | ~1.1 µs | 1056 B |
-| Inventory wire | EncodeItemStackResponseOk | — | ~161 ns | 88 B |
-| Inventory wire | EncodeItemStackResponseError | — | ~34 ns | 88 B |
+| Inventory wire | EncodeInventoryContent36 | — | ~996 ns | 1056 B |
+| Inventory wire | EncodeItemStackResponseOk | — | ~146 ns | 88 B |
+| Inventory wire | EncodeItemStackResponseError | — | ~28 ns | 88 B |
 | World overlay | SetBlock | overlays 0 / 1k / 10k | ~140 ns / ~7.4 µs / ~15 µs | 0 B |
 | World overlay | GetBlock | overlays 0 / 1k / 10k | ~6–7 ns | 0 B |
 | World overlay | GetOverlaysInColumn | overlays 0 / 1k / 10k | ~44 ns / ~6.2 µs / ~255 µs | 0 / ~33 KB / ~525 KB |
@@ -236,6 +236,8 @@ Hot-path suite (serialize + RAM decide). ShortRun margins are wide; treat as ord
 **Worldgen note (2026-07-21):** `WorldgenColumnBenchmarks` + `WorldgenPreSpawnBenchmarks` lock the §69 join budget. ShortRun on this laptop: **noise column ≈ 30 ms / ~225 KB**; **PreSpawn radius 4 ≈ 1.1 s / ~18 MB** (81 columns, parallel). Encode ≪ gen (~0.6 µs noise LevelChunk). Cave CSR alone ≈ 132 µs — payload fill dominates. Do not baseline against `FlatTerrainProvider.Instance` (cached singleton → ~0 ns); use `ChunkPayloads.BuildFlatOverworld`.
 
 **Join contract note (ADR §70):** blocking PreSpawn uses `spawn-ready-radius` (default **2** → ~25 columns / Measured radius-2 row above). Full view ring streams after `PLAYER_SPAWN` while `IsSpawning`.
+
+**Inventory-wire refresh (2026-08-11):** these numbers cover packet encoding only. They are useful for detecting serialization/allocation regressions after inventory changes, but they do not measure transaction execution, viewer fan-out, or a 10/100/500-player server load. Add a representative gameplay-load benchmark before using this table to make a capacity claim.
 
 **Improvement signals from this run:** ZLIB Deflate on 32-block batches (~6 µs) dwarfs uncompressed encode; `GetOverlaysInColumn` allocated and scaled poorly at 10k overlays (~525 KB / ~255 µs) — addressed for stream path via fill/callback (§54). Palette `Blocks.*` is already a field hit; item name lookup stays cheap.
 

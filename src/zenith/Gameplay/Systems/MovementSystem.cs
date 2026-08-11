@@ -35,6 +35,15 @@ sealed class MovementSystem : IGameSystem
 
         foreach (var player in online)
         {
+            // A disconnected player can still be present in this tick's snapshot. Its last
+            // AuthInput must not move, kill, or otherwise mutate authoritative state.
+            if (!player.IsInGame)
+            {
+                _ = player.TryConsumeMovementInput(out _);
+                _ = player.TryConsumeRespawn();
+                continue;
+            }
+
             if (player.IsDead)
             {
                 // Drain stale AuthInput while on death screen; do not apply pose.

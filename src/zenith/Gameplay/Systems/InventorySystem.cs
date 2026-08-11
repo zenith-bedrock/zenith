@@ -38,6 +38,15 @@ sealed class InventorySystem : IGameSystem
 
         foreach (var player in online)
         {
+            // A disconnect can race with the GameLoop's once-per-tick online snapshot. Do not
+            // let a window request accepted before transport teardown create a new authoritative
+            // container session after that player has left gameplay.
+            if (!player.IsInGame)
+            {
+                while (player.TryConsumeWindowIntent(out _)) { }
+                continue;
+            }
+
             while (player.TryConsumeWindowIntent(out var window))
                 ApplyWindow(player, window, online);
         }
@@ -46,7 +55,10 @@ sealed class InventorySystem : IGameSystem
         {
             while (player.TryConsumeInventoryStack(out var intent))
             {
-                if (player.IsDead) continue;
+                // See the window pass above. A player can have been in the tick snapshot when
+                // the network lifecycle removes it; queued client work is cancelled, never
+                // committed after that boundary.
+                if (!player.IsInGame || player.IsDead) continue;
                 Apply(player, intent, online);
             }
         }

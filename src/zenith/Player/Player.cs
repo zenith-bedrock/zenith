@@ -45,6 +45,11 @@ class Player
     // decoder, which must bind a wire container action to the session it observed.
     private readonly object _containerLock = new();
     private OpenContainerSession? _openContainer;
+    // Connection lifecycle gates are intentionally independent scalars written by the session
+    // boundary and observed by the GameLoop. They are not gameplay authority, but visibility
+    // matters when cancelling a just-disconnected player's pending input.
+    private volatile bool _isInGame;
+    private volatile bool _isSpawning;
 
     public string Username { get; }
     public NetworkSession Session { get; }
@@ -65,14 +70,22 @@ class Player
     /// written by session transitions (ADR §97), not an intent: it gates visibility and protocol
     /// handling but does not itself mutate world, inventory, combat, or movement authority.
     /// </summary>
-    public bool IsInGame { get; set; }
+    public bool IsInGame
+    {
+        get => _isInGame;
+        set => _isInGame = value;
+    }
 
     /// <summary>
     /// True while SpawnResponse (after PLAYER_SPAWN, before InGame). Allows ChunkStream
     /// to fill the view ring during loading (ADR §70). Like <see cref="IsInGame"/>, this is a
     /// direct connection-lifecycle transition rather than gameplay state owned by a simulation.
     /// </summary>
-    public bool IsSpawning { get; set; }
+    public bool IsSpawning
+    {
+        get => _isSpawning;
+        set => _isSpawning = value;
+    }
 
     /// <summary>
     /// Hotbar 0–8; selected slot bounds-checked no handler. Intentional rule-6 exception:

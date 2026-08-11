@@ -161,23 +161,19 @@ partial class InGameSessionHandler
                 }
             }
 
-            var requiresOpenContainer = false;
-            foreach (var action in baked)
+            uint expectedOpenContainerGeneration = 0;
+            if (!TryGetSessionRequirement(baked, out var requiresSession, out var requiredTarget))
             {
-                if (action.From.Area == InventorySlotArea.OpenContainer ||
-                    action.To.Area == InventorySlotArea.OpenContainer)
-                {
-                    requiresOpenContainer = true;
-                    break;
-                }
+                RejectIsr(session, player, request.RequestId);
+                continue;
             }
 
-            uint expectedOpenContainerGeneration = 0;
-            if (requiresOpenContainer)
+            if (requiresSession)
             {
                 // Bind this wire action to the session visible at decode time. The tick owns the
                 // state and rejects the intent if close/reopen changed that generation meanwhile.
-                if (!player.TryGetOpenContainerSession(out var openContainer))
+                if (!player.TryGetOpenContainerSession(out var openContainer) ||
+                    (requiredTarget is { } target && openContainer.Target != target))
                 {
                     RejectIsr(session, player, request.RequestId);
                     continue;
@@ -196,6 +192,74 @@ partial class InGameSessionHandler
                 RejectIsr(session, player, request.RequestId);
             }
         }
+    }
+
+    /// <summary>
+    /// Determines whether an ISR request relies on a currently visible container session. Normal
+    /// player-slot moves intentionally remain valid without one; crafting/output/cursor actions are
+    /// UI state, while an open-container slot is specifically a chest view. A request cannot span a
+    /// chest view and the player crafting UI because Bedrock never exposes both as one active view.
+    /// </summary>
+    private static bool TryGetSessionRequirement(
+        IReadOnlyList<InventoryStackAction> actions,
+        out bool requiresSession,
+        out OpenContainerSession.TargetKind? requiredTarget)
+    {
+        requiresSession = false;
+        requiredTarget = null;
+
+        foreach (var action in actions)
+        {
+            if (action.Kind is InventoryStackActionKind.CraftRecipe or
+                InventoryStackActionKind.CraftCreative or
+                InventoryStackActionKind.Create)
+            {
+                if (!TryRequireTarget(OpenContainerSession.TargetKind.PlayerInventory, ref requiresSession, ref requiredTarget))
+                    return false;
+            }
+
+            if (!TryApplyReferenceRequirement(action.From, ref requiresSession, ref requiredTarget) ||
+                !TryApplyReferenceRequirement(action.To, ref requiresSession, ref requiredTarget))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryApplyReferenceRequirement(
+        in InventorySlotReference reference,
+        ref bool requiresSession,
+        ref OpenContainerSession.TargetKind? requiredTarget)
+    {
+        return reference.Area switch
+        {
+            InventorySlotArea.OpenContainer =>
+                TryRequireTarget(OpenContainerSession.TargetKind.Chest, ref requiresSession, ref requiredTarget),
+            InventorySlotArea.CraftGrid or InventorySlotArea.CraftResult =>
+                TryRequireTarget(OpenContainerSession.TargetKind.PlayerInventory, ref requiresSession, ref requiredTarget),
+            InventorySlotArea.Cursor => TryRequireAnySession(ref requiresSession),
+            _ => true
+        };
+    }
+
+    private static bool TryRequireTarget(
+        OpenContainerSession.TargetKind target,
+        ref bool requiresSession,
+        ref OpenContainerSession.TargetKind? requiredTarget)
+    {
+        requiresSession = true;
+        if (requiredTarget is { } existing && existing != target)
+            return false;
+        requiredTarget = target;
+        return true;
+    }
+
+    private static bool TryRequireAnySession(ref bool requiresSession)
+    {
+        requiresSession = true;
+        return true;
     }
 
     private static void RejectIsr(NetworkSession session, Player.Player player, int requestId)

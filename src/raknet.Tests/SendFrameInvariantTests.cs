@@ -74,6 +74,35 @@ public class SendFrameInvariantTests
         Assert.True(messageIndexes.Count >= 2, $"expected split fragments, got {messageIndexes.Count}");
         Assert.Equal(messageIndexes.Count, messageIndexes.Distinct().Count());
         Assert.Equal(messageIndexes.OrderBy(x => x), messageIndexes); // strictly increasing as assigned
+        Assert.All(server.Captured, datagram => Assert.True(
+            datagram.Length <= 100 - RakNetSession.IP_UDP_HEADER_SIZE));
+    }
+
+    [Fact]
+    public void Queued_frames_never_encode_a_datagram_larger_than_effective_udp_payload()
+    {
+        var server = new RecordingRakNetServer();
+        const ushort mtu = 100;
+        var session = SessionFactory.Create(server, mtu);
+
+        // Each reliable ordered frame fits alone, but the pair exceeds the
+        // negotiated datagram limit once FrameSet and frame headers are included.
+        for (var i = 0; i < 2; i++)
+        {
+            session.SendFrame(new Frame
+            {
+                Reliability = Reliability.ReliableOrdered,
+                OrderChannel = 0,
+                Buffer = new byte[40]
+            }, RakNetSession.Priority.Normal);
+        }
+        session.FlushOutgoing();
+
+        Assert.Equal(2, server.Captured.Count);
+        var maxUdpPayload = mtu - RakNetSession.IP_UDP_HEADER_SIZE;
+        Assert.All(server.Captured, datagram => Assert.True(
+            datagram.Length <= maxUdpPayload,
+            $"encoded datagram length {datagram.Length} exceeded UDP payload limit {maxUdpPayload}"));
     }
 
     [Fact]
