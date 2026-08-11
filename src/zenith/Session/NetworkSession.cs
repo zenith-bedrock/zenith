@@ -73,11 +73,40 @@ class NetworkSession
     /// </summary>
     internal const Reliability GamePacketReliability = Reliability.ReliableOrdered;
 
+    /// <summary>
+    /// Default channel: the join sequence (StartGame + PreSpawn's <c>PublishChunks</c> batch) plus
+    /// every latency-sensitive gameplay packet (moves, Death/Respawn, chat, UI, …). Must stay ordered
+    /// relative to StartGame — see <see cref="GamePacketReliability"/>'s own doc comment.
+    /// </summary>
+    internal const byte DefaultOrderChannel = 0;
+
+    /// <summary>
+    /// Bulk post-spawn world streaming (<c>ChunkStreamSystem</c>'s ring, one <c>LevelChunkPacket</c>
+    /// per column). RakNet's Reliable Ordered guarantee is per-channel, not global — sharing channel 0
+    /// with this meant a single dropped chunk in a multi-column burst held up every later-queued
+    /// gameplay packet (Death/Respawn included) behind it client-side until retransmission filled the
+    /// gap, even though nothing about those packets actually depended on chunk delivery order. Root
+    /// cause of the <c>smoke:respawn</c> timeout (roadmap Yes-next priority 2) — found by confirming
+    /// server-side send genuinely happens (no exception, no logic bug) while the client-side wait
+    /// never resolves. Zenith's own <c>RakNetSession</c> already tracks up to 32 independent ordered
+    /// channels (<c>Frame.MAX_ORDER_CHANNELS</c>) — this was simply never used. No ordering constraint
+    /// requires this stream to share a channel with anything else: by the time it runs, the client
+    /// already has its hash-flag context from PreSpawn's channel-0 batch.
+    /// </summary>
+    internal const byte WorldStreamOrderChannel = 1;
+
     /// <summary>Envelope de envio usado apenas pelos módulos <c>*Protocol</c> nesta assembly.</summary>
     internal void SendDataPacket(params DataPacket[] packets) =>
-        SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, packets);
+        SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, DefaultOrderChannel, packets);
 
-    internal void SendDataPacket(RakNetSession.Priority priority, byte compression, params DataPacket[] packets)
+    internal void SendDataPacket(byte orderChannel, params DataPacket[] packets) =>
+        SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, orderChannel, packets);
+
+    internal void SendDataPacket(RakNetSession.Priority priority, byte compression, params DataPacket[] packets) =>
+        SendDataPacket(priority, compression, DefaultOrderChannel, packets);
+
+    internal void SendDataPacket(
+        RakNetSession.Priority priority, byte compression, byte orderChannel, params DataPacket[] packets)
     {
         var gamePacket = new GamePacket
         {
@@ -89,7 +118,7 @@ class NetworkSession
         var frame = new Frame
         {
             Reliability = GamePacketReliability,
-            OrderChannel = 0,
+            OrderChannel = orderChannel,
             Buffer = gamePacket.EncodeOwned()
         };
 

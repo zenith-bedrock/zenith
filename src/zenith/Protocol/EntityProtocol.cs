@@ -88,6 +88,22 @@ sealed class EntityProtocol
         };
 
     /// <summary>
+    /// Non-player actor move — no <see cref="EntityHitboxes.AbsoluteWireY"/> eye offset (that's a
+    /// player-only wire convention). <paramref name="y"/> is the actor's own base position (ADR §95).
+    /// </summary>
+    public void SendMoveActorAbsoluteRaw(ulong actorRuntimeId, float x, float y, float z, byte flags = 0)
+    {
+        _session.SendDataPacket(new MoveActorAbsolutePacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            Flags = flags,
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z
+        });
+    }
+
+    /// <summary>
     /// Local camera snap — MovePlayer Teleport (ADR §41). Not for peers.
     /// <paramref name="y"/> is domain feet; packet Y is <see cref="EntityHitboxes.AbsoluteWireY"/>.
     /// </summary>
@@ -202,6 +218,21 @@ sealed class EntityProtocol
     public void SendRemoveActor(long actorUniqueId)
     {
         _session.SendDataPacket(new RemoveActorPacket { ActorUniqueId = actorUniqueId });
+    }
+
+    /// <summary>Falling-block actor (ADR §95). <paramref name="y"/> is block-anchored, no eye offset.</summary>
+    public void SendAddFallingBlock(long entityUniqueId, ulong entityRuntimeId, int blockRuntimeId, float x, float y, float z)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId,
+            EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:falling_block",
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            Variant = blockRuntimeId
+        });
     }
 
     /// <summary>Dropped item entity at cell center (ADR §26 wire). Velocity always zero in MVP.</summary>

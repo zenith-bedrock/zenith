@@ -92,9 +92,15 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
-    /// <summary>Domain vitals (ADR §40) — spawn attributes read these; damage pipeline Deferred.</summary>
+    /// <summary>
+    /// Domain vitals (ADR §40) — spawn attributes read these. Fall damage authority shipped
+    /// in §96; hunger/drowning/other damage sources remain Deferred.
+    /// </summary>
     public float Health { get; set; } = 20f;
     public float Hunger { get; set; } = 20f;
+
+    /// <summary>Highest feet Y reached since last on-ground (ADR §96 fall damage). Reset on landing.</summary>
+    public float FallPeakY { get; set; } = Blocks.FlatSpawnY;
 
     /// <summary>True while death screen is up — AuthInput/edits ignored until respawn tick (§40).</summary>
     public bool IsDead { get; private set; }
@@ -572,6 +578,7 @@ class Player
         IsSprinting = false;
         LastReplicatedSneaking = false;
         LastReplicatedSprinting = false;
+        FallPeakY = PositionY;
         lock (_respawnLock)
             _pendingRespawn = false;
     }

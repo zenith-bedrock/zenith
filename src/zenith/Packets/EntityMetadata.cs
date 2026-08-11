@@ -6,6 +6,7 @@ namespace Zenith.Packets;
 static class EntityMetaKey
 {
     public const int Flags = 0;
+    public const int Variant = 2;
     public const int ColorIndex = 3;
     public const int Name = 4;
     public const int EffectColor = 8;
@@ -129,5 +130,28 @@ static class EntityMetadataWriter
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
         WriteEntryType(ref writer, EntityMetaType.Long);
         writer.WriteVarLong(flags);
+    }
+
+    /// <summary>
+    /// FLAGS(gravity, collision) + DATA_VARIANT — how the client picks which block texture to
+    /// render for a falling_block actor (confirmed against PowerNukkitX's
+    /// <c>EntityFallingBlock</c>: <c>setDataProperty(ActorDataTypes.VARIANT, blockState.blockStateHash())</c>
+    /// — ADR §95). Name is falling_block-specific on purpose: the FLAGS bits it writes
+    /// (<see cref="EntityFlag.AffectedByGravity"/> + <see cref="EntityFlag.HasCollision"/>) are
+    /// falling_block's own semantics, not appropriate for every future DATA_VARIANT use — a
+    /// second variant-carrying entity with different flags needs its own writer, not a
+    /// generic-named one that quietly forces gravity on it.
+    /// </summary>
+    public static void WriteFallingBlockMetadata(ref BinaryStream writer, int variant)
+    {
+        writer.WriteUnsignedVarInt(2);
+
+        writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
+        WriteEntryType(ref writer, EntityMetaType.Long);
+        writer.WriteVarLong(EntityFlag.Bit(EntityFlag.AffectedByGravity) | EntityFlag.Bit(EntityFlag.HasCollision));
+
+        writer.WriteUnsignedVarInt(EntityMetaKey.Variant);
+        WriteEntryType(ref writer, EntityMetaType.Int);
+        writer.WriteVarInt(variant);
     }
 }

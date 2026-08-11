@@ -12,8 +12,9 @@ sealed class GravityPendingStore
     internal const int SoftCap = 2048;
 
     /// <summary>
-    /// Max fall steps per GameLoop tick. Dragonfly uses falling_block entities (~1 cell per
-    /// entity per tick); Zenith cell-tick keeps this low so towers do not collapse instantly.
+    /// Max <em>new</em> falls started per GameLoop tick — not a cap on how many falls animate at
+    /// once (that's <see cref="FallingBlockStore.SoftCap"/>). Kept low so a dug-out tower cascades
+    /// gradually, one or two cells per tick, matching vanilla's staggered feel (ADR §57/§95).
     /// </summary>
     public const int MaxStepsPerTick = 2;
 

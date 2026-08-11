@@ -93,10 +93,14 @@ sealed class WorldProtocol
         _session.SendDataPacket(packets);
     }
 
-    /// <summary>Uma coluna LevelChunk (base). Overlays vêm depois via <see cref="SendUpdateBlock"/>.</summary>
+    /// <summary>
+    /// Uma coluna LevelChunk (base) do stream pós-spawn. Overlays vêm depois via
+    /// <see cref="SendUpdateBlock"/>. Canal dedicado (ADR §94) — não bloqueia Death/Respawn/moves
+    /// atrás de uma rajada de colunas no mesmo canal ordenado.
+    /// </summary>
     public void SendLevelChunk(ChunkColumn column)
     {
-        _session.SendDataPacket(new LevelChunkPacket
+        _session.SendDataPacket(NetworkSession.WorldStreamOrderChannel, new LevelChunkPacket
         {
             ChunkX = column.X,
             ChunkZ = column.Z,
