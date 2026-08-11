@@ -255,6 +255,17 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>
+    /// Adapts an authoritative floor-drop stack to the Bedrock item representation before
+    /// transmitting its actor. Gameplay owns whether a drop exists; wire conversion stays here.
+    /// </summary>
+    public void SendFloorDropActor(long entityRuntimeId, StackId stackId, int count, float x, float y, float z)
+    {
+        var item = _session.Protocol.Inventory.DescribeStack(stackId, count);
+        if (item.NetworkId == 0) return; // invalid/air item crashes Bedrock near player
+        SendAddItemActor(entityRuntimeId, item, x, y, z);
+    }
+
     public void SendTakeItemActor(ulong itemEntityRuntimeId, ulong takerEntityRuntimeId)
     {
         _session.SendDataPacket(new TakeItemActorPacket

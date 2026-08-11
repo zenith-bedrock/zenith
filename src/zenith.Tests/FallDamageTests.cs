@@ -33,10 +33,10 @@ public class FallDamageTests
         var system = new MovementSystem(fx.Players);
 
         SubmitAirborne(mover, Blocks.FlatSpawnY + 10f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         SubmitLanding(mover, Blocks.FlatSpawnY + 8f); // 2-block fall, under the 3-block threshold
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, mover.Health);
         Assert.False(mover.IsDead);
@@ -50,10 +50,10 @@ public class FallDamageTests
         var system = new MovementSystem(fx.Players);
 
         SubmitAirborne(mover, Blocks.FlatSpawnY + 10f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         SubmitLanding(mover, Blocks.FlatSpawnY); // 10-block fall: 7 damage past the 3-block safe distance
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(13f, mover.Health);
         Assert.False(mover.IsDead);
@@ -67,10 +67,10 @@ public class FallDamageTests
         var system = new MovementSystem(fx.Players);
 
         SubmitAirborne(mover, Blocks.FlatSpawnY + 30f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         SubmitLanding(mover, Blocks.FlatSpawnY); // 30-block fall: way past lethal
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(mover.IsDead);
         Assert.Equal("fall", mover.DeathCause);
@@ -86,10 +86,10 @@ public class FallDamageTests
         var system = new MovementSystem(fx.Players);
 
         SubmitAirborne(mover, Blocks.FlatSpawnY + 30f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         SubmitLanding(mover, Blocks.FlatSpawnY);
 
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, mover.Health);
         Assert.False(mover.IsDead);
@@ -103,13 +103,13 @@ public class FallDamageTests
         var system = new MovementSystem(fx.Players);
 
         SubmitAirborne(mover, Blocks.FlatSpawnY + 30f);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         SubmitLanding(mover, Blocks.FlatSpawnY);
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Assert.True(mover.IsDead);
 
         mover.SubmitRespawn();
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         Assert.False(mover.IsDead);
         Assert.Equal(20f, mover.Health);
         Assert.Equal(mover.PositionY, mover.FallPeakY);

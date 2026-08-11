@@ -7,62 +7,63 @@ namespace Zenith.Protocol;
 /// Per-session stack network ids for ISR (wire map SSOT:
 /// <see cref="InventoryContainerMap"/>). Callers must not Refresh+Get ad hoc —
 /// use <see cref="InventoryProtocol.DescribeForWire"/> / <see cref="InventoryProtocol.MatchesAdvertisedStackNetId"/>.
-/// Chest array sized for <see cref="ChestStore.DoubleSize"/> (ADR §56).
+/// Keys are domain slot references rather than protocol-derived flat offsets.
 /// </summary>
 sealed class InventoryNetIds
 {
-    private readonly int[] _slotNetIds = new int[PlayerInventory.FullInventorySize];
-    private readonly int[] _chestNetIds = new int[ChestStore.DoubleSize];
-    private readonly int[] _craftNetIds = new int[PlayerCraftUi.GridSize + 1];
-    private readonly Dictionary<int, (StackId Id, int Count)> _stackIdentity = new();
-    private int _cursorNetId;
+    private readonly Dictionary<InventorySlotReference, int> _slotNetIds = new();
+    private readonly Dictionary<InventorySlotReference, (StackId Id, int Count)> _stackIdentity = new();
     private int _nextNetId = 1;
 
     public int Allocate() => _nextNetId++;
 
-    /// <summary>Last advertised id for <paramref name="flat"/> (no remint).</summary>
-    public int Peek(int flat)
-    {
-        if (flat == PlayerInventory.CursorSlot) return _cursorNetId;
-        if (InventoryContainerMap.IsChestFlat(flat))
-            return _chestNetIds[flat - InventoryContainerMap.ChestBase];
-        if (InventoryContainerMap.IsCraftUiFlat(flat))
-            return _craftNetIds[flat - InventoryContainerMap.CraftUiBase];
-        return _slotNetIds[flat];
-    }
+    /// <summary>Last advertised id for <paramref name="reference"/> (no remint).</summary>
+    public int Peek(in InventorySlotReference reference) =>
+        _slotNetIds.GetValueOrDefault(reference);
 
-    public void Set(int flat, int netId)
-    {
-        if (flat == PlayerInventory.CursorSlot)
-            _cursorNetId = netId;
-        else if (InventoryContainerMap.IsChestFlat(flat))
-            _chestNetIds[flat - InventoryContainerMap.ChestBase] = netId;
-        else if (InventoryContainerMap.IsCraftUiFlat(flat))
-            _craftNetIds[flat - InventoryContainerMap.CraftUiBase] = netId;
-        else
-            _slotNetIds[flat] = netId;
-    }
+    public void Set(in InventorySlotReference reference, int netId) =>
+        _slotNetIds[reference] = netId;
 
     /// <summary>
     /// Remint when empty→air or (StackId, count) changes — Protocol-side identity until
     /// domain stacks own ids (DF-style). Deferred: NBT/damage identity.
     /// </summary>
-    public int Refresh(int flat, InventorySlot slot)
+    public int Refresh(in InventorySlotReference reference, InventorySlot slot)
     {
         if (slot.IsEmpty)
         {
-            Set(flat, 0);
-            _stackIdentity.Remove(flat);
+            Set(reference, 0);
+            _stackIdentity.Remove(reference);
             return 0;
         }
 
-        if (_stackIdentity.TryGetValue(flat, out var prev) &&
+        if (_stackIdentity.TryGetValue(reference, out var prev) &&
             prev.Id == slot.Id && prev.Count == slot.Count)
-            return Peek(flat);
+            return Peek(reference);
 
         var id = Allocate();
-        Set(flat, id);
-        _stackIdentity[flat] = (slot.Id, slot.Count);
+        Set(reference, id);
+        _stackIdentity[reference] = (slot.Id, slot.Count);
         return id;
+    }
+
+    /// <summary>
+    /// Drops wire identity for the per-player open-container namespace when its authoritative
+    /// session changes. Player/cursor/craft references deliberately retain their own identities.
+    /// </summary>
+    public void ClearOpenContainer()
+    {
+        var stale = new List<InventorySlotReference>();
+        foreach (var reference in _slotNetIds.Keys)
+        {
+            if (reference.Area == InventorySlotArea.OpenContainer)
+                stale.Add(reference);
+        }
+
+        foreach (var reference in stale)
+        {
+            _slotNetIds.Remove(reference);
+            _stackIdentity.Remove(reference);
+        }
     }
 }

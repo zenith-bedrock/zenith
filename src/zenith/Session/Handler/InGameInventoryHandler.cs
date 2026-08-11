@@ -99,8 +99,8 @@ partial class InGameSessionHandler
                     continue;
                 }
 
-                if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var srcFlat) ||
-                    !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var dstFlat))
+                if (!InventoryContainerMap.TryMap(action.Source.Container.ContainerId, action.Source.Slot, out var sourceReference) ||
+                    !InventoryContainerMap.TryMap(action.Destination.Container.ContainerId, action.Destination.Slot, out var destinationReference))
                 {
                     mapOk = false;
                     break;
@@ -116,9 +116,9 @@ partial class InGameSessionHandler
                     action.Destination.StackNetworkId);
 
                 if (action.ActionType == ItemStackRequestPacket.ActionSwap)
-                    baked.Add(InventoryStackAction.Swap(srcFlat, dstFlat, srcWire, dstWire));
+                    baked.Add(InventoryStackAction.Swap(sourceReference, destinationReference, srcWire, dstWire));
                 else
-                    baked.Add(InventoryStackAction.Transfer(srcFlat, dstFlat, action.Count, srcWire, dstWire));
+                    baked.Add(InventoryStackAction.Transfer(sourceReference, destinationReference, action.Count, srcWire, dstWire));
             }
 
             if (!mapOk || baked.Count == 0)
@@ -161,7 +161,35 @@ partial class InGameSessionHandler
                 }
             }
 
-            var intent = InventoryStackIntent.Create(request.RequestId, baked.ToArray());
+            var requiresOpenContainer = false;
+            foreach (var action in baked)
+            {
+                if (action.From.Area == InventorySlotArea.OpenContainer ||
+                    action.To.Area == InventorySlotArea.OpenContainer)
+                {
+                    requiresOpenContainer = true;
+                    break;
+                }
+            }
+
+            uint expectedOpenContainerGeneration = 0;
+            if (requiresOpenContainer)
+            {
+                // Bind this wire action to the session visible at decode time. The tick owns the
+                // state and rejects the intent if close/reopen changed that generation meanwhile.
+                if (!player.TryGetOpenContainerSession(out var openContainer))
+                {
+                    RejectIsr(session, player, request.RequestId);
+                    continue;
+                }
+
+                expectedOpenContainerGeneration = openContainer.Generation;
+            }
+
+            var intent = InventoryStackIntent.Create(
+                request.RequestId,
+                baked.ToArray(),
+                expectedOpenContainerGeneration);
             if (!player.SubmitInventoryStack(intent))
             {
                 session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
@@ -173,10 +201,7 @@ partial class InGameSessionHandler
     private static void RejectIsr(NetworkSession session, Player.Player player, int requestId)
     {
         session.Protocol.Inventory.SendItemStackResponseError(requestId);
-        session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-        session.Protocol.Inventory.SendUiInventoryContent(player);
-        if (player.OpenChest is { } chest)
-            session.Protocol.Inventory.SendChestContent(session.Context.World.Chests, chest);
+        session.Protocol.Inventory.ResyncActiveInventoryView(player);
     }
 
     private static void HandleMobEquipment(NetworkSession session, ref BinaryStream stream)

@@ -46,7 +46,7 @@ public class PlayerVisibilityJoinTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
         alice.SubmitMovementInput(MovementInputState.From(
             alice.PositionX, alice.PositionY, alice.PositionZ, alice.Pitch, alice.Yaw));
-        system.Tick(fx.Clock);
+        system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
             p.Session.RakSession.Tick();
         Assert.Empty(fx.Transport.Captured);

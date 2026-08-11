@@ -78,9 +78,12 @@ public class ChestPairTests
         fx.World.SetBlock(3, 64, 2, south);
         fx.World.Chests.Ensure(2, 64, 2);
         fx.World.Chests.Ensure(3, 64, 2);
+        player.PositionX = 2.5f;
+        player.PositionY = 64;
+        player.PositionZ = 2.5f;
 
         Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.NotNull(player.OpenChest);
         Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
@@ -95,7 +98,7 @@ public class ChestPairTests
                 new WireSlot(InventoryContainerMap.Hotbar, 0),
                 new WireSlot(InventoryContainerMap.Chest, (byte)ChestStore.SingleSize))
         ])));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(2, player.Inventory.Get(0).Count);
         Assert.Equal(3, fx.World.Chests.Get(3, 64, 2, 0).Count);
@@ -120,7 +123,7 @@ public class ChestPairTests
         Assert.True(fx.World.Chests.TrySet(3, 64, 2, 0, InventorySlot.OfBlock(Blocks.Stone, 2)));
 
         Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 64, 2)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
 
         var need = Blocks.BreakTicks(south);
@@ -131,9 +134,7 @@ public class ChestPairTests
             need > 0
                 ? BlockEditIntent.BreakWithDig(2, 64, 2, player.BreakStartedTick, player.BreakRequiredTicks)
                 : BlockEditIntent.Set(2, 64, 2, Blocks.Air)));
-        if (need > 0)
-            player.ClearBreakTarget();
-        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(2, 64, 2));
         Assert.Equal(south, fx.World.GetBlock(3, 64, 2));

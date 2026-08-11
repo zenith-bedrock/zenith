@@ -85,4 +85,22 @@ public class PlayerChunkTrackerTests
         Assert.True(t.TryAbandon(1, 1, epoch));
         Assert.True(t.TryBegin(1, 1, out _));
     }
+
+    [Fact]
+    public void PreSpawn_request_and_completion_are_bounded_handoffs()
+    {
+        var t = new PlayerChunkTracker();
+        Assert.True(t.TrySubmitPreSpawn(viewRadius: 4));
+        Assert.False(t.TrySubmitPreSpawn(viewRadius: 2));
+        Assert.True(t.TryConsumePreSpawnRequest(out var request));
+        Assert.Equal(4, request.ViewRadius);
+        Assert.False(t.TryConsumePreSpawnRequest(out _));
+
+        var snapshot = new PlayerChunkTracker.PreSpawnSnapshot(4, 2, 0, 0, 0, 64, 0);
+        t.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Failure(snapshot, "storage failed", 12));
+        Assert.True(t.TryConsumePreSpawnCompletion(out var completion));
+        Assert.False(completion.Succeeded);
+        Assert.Equal("storage failed", completion.Error);
+        Assert.False(t.TryConsumePreSpawnCompletion(out _));
+    }
 }

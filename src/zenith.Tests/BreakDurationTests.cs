@@ -179,7 +179,7 @@ public class DigToolIntentTests
         Assert.True(pickNeed < handNeed);
 
         Assert.True(player.SubmitDigStart(2, Blocks.FlatSpawnY, 2, startedTick: 10, pickNeed, StackId.FromItem(pick)));
-        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
         Assert.True(player.IsBreakTarget(2, Blocks.FlatSpawnY, 2));
         Assert.Equal(pickNeed, player.BreakRequiredTicks);
         Assert.Equal(StackId.FromItem(pick), player.DigHeldStackId);
@@ -206,7 +206,7 @@ public class DigToolIntentTests
         fx.Clock.AdvanceBy(woodNeed / 2);
         player.SelectedHotbarSlot = 1;
 
-        new BlockSystem(fx.Players, fx.World).Tick(fx.Clock);
+        new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
 
         var ironNeed = Blocks.BreakTicks(Blocks.Stone, StackId.FromItem(iron));
         Assert.Equal(StackId.FromItem(iron), player.DigHeldStackId);

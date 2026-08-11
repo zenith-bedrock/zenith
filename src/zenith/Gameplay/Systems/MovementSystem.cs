@@ -16,7 +16,6 @@ sealed class MovementSystem : IGameSystem
     public const float VoidRescueMargin = 8f;
 
     private readonly PlayerManager _players;
-    private readonly List<global::Zenith.Player.Player> _onlineScratch = new();
     private readonly List<global::Zenith.Player.Player> _dirtyPose = new();
     private readonly List<global::Zenith.Player.Player> _dirtyFlags = new();
     private readonly List<global::Zenith.Player.Player> _swing = new();
@@ -25,12 +24,6 @@ sealed class MovementSystem : IGameSystem
     public MovementSystem(PlayerManager players) => _players = players;
 
     public static float VoidRescueY => Blocks.FlatMinY - VoidRescueMargin;
-
-    public void Tick(GameClock clock)
-    {
-        _players.FillOnline(_onlineScratch);
-        Tick(clock, _onlineScratch);
-    }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {

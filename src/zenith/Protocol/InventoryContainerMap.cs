@@ -4,13 +4,13 @@ using Zenith.World;
 namespace Zenith.Protocol;
 
 /// <summary>
-/// Wire map inventário: container IDs Bedrock → flat 0–35 / cursor / chest 100+.
+/// Wire map inventário: container IDs Bedrock → domain slot references.
 /// Sem lógica de gameplay — só boundary (SSOT; ADR §54 Phase 5).
 /// </summary>
 static class InventoryContainerMap
 {
     public const byte CombinedHotbarAndInventory = 12;
-    /// <summary>Bedrock crafting input (2×2 / 3×3 UI) — domain flats CraftUiBase+.</summary>
+    /// <summary>Bedrock crafting input (2×2 / 3×3 UI).</summary>
     public const byte CraftingInput = 13;
     /// <summary>Bedrock crafting output preview.</summary>
     public const byte CraftingOutputPreview = 14;
@@ -25,17 +25,18 @@ static class InventoryContainerMap
     public const int WindowInventory = 0;
     public const int WindowChest = 2;
     public const int WindowUI = 124;
+    public const byte WindowTypeChest = 0;
+    public const byte WindowTypeInventory = 0xff;
 
-    /// <summary>Flat domínio para slots do baú aberto (não vive em <see cref="PlayerInventory"/>).</summary>
+    /// <summary>Legacy characterization-test offset for open-container slots; not used by production transactions.</summary>
     public const int ChestBase = 100;
 
     /// <summary>
-    /// Flat domínio craft UI 2×2 (ephemeral, ADR §35).
-    /// Must sit above <see cref="ChestBase"/>+<see cref="ChestStore.DoubleSize"/> (ADR §56).
+    /// Legacy characterization-test offset for the ephemeral craft UI (ADR §35).
     /// </summary>
     public const int CraftUiBase = 200;
 
-    /// <summary>Created output slot (container 60 wire slot 50).</summary>
+    /// <summary>Legacy characterization-test offset for created output (container 60 wire slot 50).</summary>
     public const int CraftResultFlat = CraftUiBase + PlayerCraftUi.GridSize;
 
     public const int CraftingGridWireOffset = 28;
@@ -57,18 +58,18 @@ static class InventoryContainerMap
     public static byte CraftGridWireSlot(int gridIndex) =>
         (byte)(CraftingGridWireOffset + gridIndex);
 
-    public static bool TryMap(byte containerId, byte slot, out int flat)
+    public static bool TryMap(byte containerId, byte slot, out InventorySlotReference reference)
     {
         switch (containerId)
         {
             case Hotbar:
                 if (slot >= PlayerInventory.HotbarSize)
                 {
-                    flat = 0;
+                    reference = default;
                     return false;
                 }
 
-                flat = slot;
+                reference = InventorySlotReference.Player(slot);
                 return true;
 
             case CombinedHotbarAndInventory:
@@ -76,101 +77,100 @@ static class InventoryContainerMap
                 // Containers 12 and 29: slot is absolute bag index 0–35 (not “first inventory = 0”).
                 if (slot >= PlayerInventory.FullInventorySize)
                 {
-                    flat = 0;
+                    reference = default;
                     return false;
                 }
 
-                flat = slot;
+                reference = InventorySlotReference.Player(slot);
                 return true;
 
             case Cursor:
-                flat = PlayerInventory.CursorSlot;
+                reference = InventorySlotReference.Cursor;
                 return true;
 
             case Chest:
                 if (slot >= ChestStore.DoubleSize)
                 {
-                    flat = 0;
+                    reference = default;
                     return false;
                 }
 
-                flat = ChestBase + slot;
+                reference = InventorySlotReference.OpenContainer(slot);
                 return true;
 
             case CraftingInput:
                 if (slot is >= CraftingGridWireOffset and < CraftingGridWireOffset + PlayerCraftUi.GridSize)
                 {
-                    flat = CraftUiBase + (slot - CraftingGridWireOffset);
+                    reference = InventorySlotReference.CraftGrid(slot - CraftingGridWireOffset);
                     return true;
                 }
 
-                flat = 0;
+                reference = default;
                 return false;
 
             case CraftingOutputPreview:
             case CreatedOutput:
                 if (slot == CraftingResultWireSlot)
                 {
-                    flat = CraftResultFlat;
+                    reference = InventorySlotReference.CraftResult;
                     return true;
                 }
 
-                flat = 0;
+                reference = default;
                 return false;
 
             default:
-                flat = 0;
+                reference = default;
                 return false;
         }
     }
 
+    public static bool TryToWire(in InventorySlotReference reference, out byte containerId, out byte wireSlot)
+    {
+        switch (reference.Area)
+        {
+            case InventorySlotArea.Cursor when reference.Index == 0:
+                containerId = Cursor;
+                wireSlot = 0;
+                return true;
+            case InventorySlotArea.OpenContainer when reference.Index is >= 0 and < ChestStore.DoubleSize:
+                containerId = Chest;
+                wireSlot = (byte)reference.Index;
+                return true;
+            case InventorySlotArea.CraftGrid when reference.Index is >= 0 and < PlayerCraftUi.GridSize:
+                containerId = CraftingInput;
+                wireSlot = CraftGridWireSlot(reference.Index);
+                return true;
+            case InventorySlotArea.CraftResult when reference.Index == 0:
+                containerId = CreatedOutput;
+                wireSlot = CraftingResultWireSlot;
+                return true;
+            case InventorySlotArea.PlayerInventory when reference.Index is >= 0 and < PlayerInventory.HotbarSize:
+                containerId = Hotbar;
+                wireSlot = (byte)reference.Index;
+                return true;
+            case InventorySlotArea.PlayerInventory when PlayerInventory.IsValidInventorySlot(reference.Index):
+                // Container 29 slot = absolute bag index (0–35), not hotbar-relative 0–8.
+                containerId = Inventory;
+                wireSlot = (byte)reference.Index;
+                return true;
+            default:
+                containerId = 0;
+                wireSlot = 0;
+                return false;
+        }
+    }
+
+    /// <summary>Compatibility only for flat-index characterization tests.</summary>
     public static bool TryToWire(int flat, out byte containerId, out byte wireSlot)
     {
-        if (flat == PlayerInventory.CursorSlot)
+        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
         {
-            containerId = Cursor;
+            containerId = 0;
             wireSlot = 0;
-            return true;
+            return false;
         }
 
-        if (IsChestFlat(flat))
-        {
-            containerId = Chest;
-            wireSlot = (byte)(flat - ChestBase);
-            return true;
-        }
-
-        if (IsCraftGridFlat(flat))
-        {
-            containerId = CraftingInput;
-            wireSlot = CraftGridWireSlot(flat - CraftUiBase);
-            return true;
-        }
-
-        if (flat == CraftResultFlat)
-        {
-            containerId = CreatedOutput;
-            wireSlot = CraftingResultWireSlot;
-            return true;
-        }
-
-        if (flat is >= 0 and < PlayerInventory.HotbarSize)
-        {
-            containerId = Hotbar;
-            wireSlot = (byte)flat;
-            return true;
-        }
-
-        if (PlayerInventory.IsValidInventorySlot(flat))
-        {
-            // Container 29 slot = absolute bag index (0–35), not hotbar-relative 0–8.
-            containerId = Inventory;
-            wireSlot = (byte)flat;
-            return true;
-        }
-
-        containerId = 0;
-        wireSlot = 0;
-        return false;
+        return TryToWire(reference, out containerId, out wireSlot);
     }
 }

@@ -45,7 +45,7 @@ public class ChestLidTests
         fx.World.Chests.Ensure(4, 64, 4);
 
         Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(player.OpenChest);
         Assert.Equal(OpenChestView.Single(4, 64, 4), player.OpenChest);
         Assert.Equal(1, fx.World.Chests.OpenerCount(4, 64, 4));
@@ -54,7 +54,7 @@ public class ChestLidTests
             InventoryWindowIntent.Close(
                 (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Null(player.OpenChest);
         Assert.Equal(0, fx.World.Chests.OpenerCount(4, 64, 4));
     }
@@ -68,18 +68,18 @@ public class ChestLidTests
         fx.World.Chests.Ensure(2, 70, 2);
 
         Assert.True(a.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 70, 2)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(1, fx.World.Chests.OpenerCount(2, 70, 2));
 
         Assert.True(b.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 70, 2)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(2, fx.World.Chests.OpenerCount(2, 70, 2));
 
         Assert.True(a.SubmitWindowIntent(
             InventoryWindowIntent.Close(
                 (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Null(a.OpenChest);
         Assert.Equal(OpenChestView.Single(2, 70, 2), b.OpenChest);
         Assert.Equal(1, fx.World.Chests.OpenerCount(2, 70, 2));
@@ -88,9 +88,30 @@ public class ChestLidTests
             InventoryWindowIntent.Close(
                 (byte)InventoryContainerMap.WindowChest,
                 ContainerOpenPacket.WindowTypeChest)));
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Null(b.OpenChest);
         Assert.Equal(0, fx.World.Chests.OpenerCount(2, 70, 2));
+    }
+
+    [Fact]
+    public void InventorySystem_releases_disconnected_chest_opener_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-opener");
+        fx.World.Chests.Ensure(6, 64, 6);
+        var inventory = fx.CreateInventorySystem();
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(6, 64, 6)));
+        inventory.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, fx.World.Chests.OpenerCount(6, 64, 6));
+
+        // The network lifecycle removes the player first, then hands world cleanup to the tick.
+        fx.Players.Remove(player);
+        fx.Players.SubmitDisconnectedContainerCleanup(player);
+        inventory.Tick(fx.Clock, Array.Empty<Player.Player>());
+
+        Assert.Null(player.OpenChest);
+        Assert.Equal(0, fx.World.Chests.OpenerCount(6, 64, 6));
     }
 
     [Fact]

@@ -81,4 +81,5 @@ public class BreakTimingTests
         Assert.Equal(20ul, player.BreakStartedTick);
         Assert.Equal(150, player.BreakRequiredTicks);
     }
+
 }

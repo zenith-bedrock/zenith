@@ -171,9 +171,10 @@ class NetworkSession
             if (wasInGame)
                 PlayerVisibility.AnnounceLeave(Player, online);
 
-            // Release chest lid opener before leaving Online (ADR §28 adendo).
+            // The network thread owns transport teardown, not ChestStore mutation. InventorySystem
+            // releases this opener on its next tick against the authoritative world state.
             if (Player.OpenChest.HasValue)
-                ChestLidFanout.ReleaseOpener(online, Context.World, Player);
+                Context.PlayerManager.SubmitDisconnectedContainerCleanup(Player);
 
             // Ephemeral login uuid — skip disk so we do not litter inv:/pd: (ADR §60).
             if (Player.IdentityStable)
@@ -182,6 +183,8 @@ class NetworkSession
                 Context.World.PersistPlayerData(Player);
             }
 
+            // Connection-lifecycle exception: this scalar prevents further peer fan-out while the
+            // session is removed. It grants no authority to mutate gameplay/world state.
             Player.IsInGame = false;
             Context.PlayerManager.Remove(Player);
             Context.EventBus.Publish(new PlayerQuitEvent(Player, wasInGame));

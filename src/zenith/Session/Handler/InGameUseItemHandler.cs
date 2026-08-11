@@ -97,7 +97,7 @@ partial class InGameSessionHandler
         if (!stack.Id.IsBlock) return;
         var runtimeId = stack.Id.Value;
         if (runtimeId == World.World.AirRuntimeId) return;
-        // Facing policy on live place only — BlockSystem / SubmitBlockEdit with raw Blocks.Chest stay as-given.
+        // Facing policy on live place only — BlockEditSystem / SubmitBlockEdit with raw Blocks.Chest stay as-given.
         if (Blocks.IsChest(runtimeId))
             runtimeId = ChestFacing.RuntimeIdFromYaw(player.Yaw);
 

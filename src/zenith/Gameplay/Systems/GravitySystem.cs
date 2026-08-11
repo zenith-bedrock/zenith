@@ -7,7 +7,7 @@ namespace Zenith.Gameplay.Systems;
 /// <summary>
 /// Sand/gravel falls as a real, visible falling_block entity (ADR §95) — replaces §57's instant
 /// column-teleport (block vanished from the top of the column and reappeared at the bottom in the
-/// same tick, with no wire actor at all). Runs after <see cref="BlockSystem"/>.
+/// same tick, with no wire actor at all). Runs after <see cref="BlockEditSystem"/>.
 /// </summary>
 sealed class GravitySystem : IGameSystem
 {

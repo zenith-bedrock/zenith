@@ -39,6 +39,24 @@ public class InventoryStackNetIdTests
     }
 
     [Fact]
+    public void BeginOpenContainerSession_remints_open_container_stack_ids()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("new-view");
+        var inv = player.Session.Protocol.Inventory;
+        var reference = InventorySlotReference.OpenContainer(0);
+        var dirt = InventorySlot.OfBlock(Blocks.Dirt, 1);
+
+        inv.BeginOpenContainerSession(1);
+        var first = inv.DescribeForWire(reference, dirt);
+        inv.BeginOpenContainerSession(2);
+        var second = inv.DescribeForWire(reference, dirt);
+
+        Assert.NotEqual(0, first.StackNetworkId);
+        Assert.NotEqual(first.StackNetworkId, second.StackNetworkId);
+    }
+
+    [Fact]
     public void MatchesAdvertised_skips_non_positive_client_ids()
     {
         var fx = new IntentTestFixture();
@@ -81,7 +99,7 @@ public class InventoryStackNetIdTests
                     new WireSlot(InventoryContainerMap.Inventory, 9, 0))
             ])));
 
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(4, player.Inventory.Get(0).Count);
         Assert.Equal(Blocks.Stone, player.Inventory.Get(0).Id.Value);
@@ -109,7 +127,7 @@ public class InventoryStackNetIdTests
                     new WireSlot(InventoryContainerMap.Inventory, 9, 0))
             ])));
 
-        fx.CreateInventorySystem().Tick(fx.Clock);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(player.Inventory.Get(0).IsEmpty);
         Assert.Equal(4, player.Inventory.Get(9).Count);

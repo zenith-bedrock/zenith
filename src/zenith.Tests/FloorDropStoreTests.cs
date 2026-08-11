@@ -51,6 +51,22 @@ public class FloorDropStoreTests
     }
 
     [Fact]
+    public void TryAddOrMerge_refuses_overflow_without_losing_or_mutating_items()
+    {
+        var store = new FloorDropStore();
+        var dirt = StackId.FromBlock(Blocks.Dirt);
+        Assert.True(store.TryAddOrMerge(2, 64, 2, dirt, 64, entityRuntimeIdIfNew: 1, out _));
+
+        Assert.False(store.TryAddOrMerge(2, 64, 2, dirt, 1, entityRuntimeIdIfNew: 2, out _));
+        Assert.False(store.TryAddOrMerge(3, 64, 2, dirt, 65, entityRuntimeIdIfNew: 3, out _));
+
+        Assert.Equal(1, store.Count);
+        Assert.True(store.TryTake(2, 64, 2, out var id, out var count, out _));
+        Assert.Equal(dirt, id);
+        Assert.Equal(64, count);
+    }
+
+    [Fact]
     public void TryAddOrMerge_new_cell_keeps_allocated_entity_id()
     {
         var store = new FloorDropStore();
