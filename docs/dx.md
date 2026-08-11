@@ -82,7 +82,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 22. **Sparse world IO (ADR §45):** base terrain stays RAM on miss (no identical `c:` Put); disk writes are overlays / dirty blobs / inventory / playerdata. Prefer “IO only when state diverges from gen,” not “materialize every column.”
 23. **CreativeContent wire (ADR §31/§52):** one send at join (all modes); remint on every `/gamemode` change (PM-shaped). Survival join + later Creative switch ⇒ two lifetime sends is normal.
-24. **Yes-next after H1:** see [`roadmap.md`](roadmap.md) — §73–§74 survival drop/dig honesty shipped; optional next is floor-drop despawn TTL or smoke-bot `first10`; §61 Mojang only when import is the goal.
+24. **Current work after H1:** see [`roadmap.md`](roadmap.md) — select from NOW/NEXT gates, beginning with the reproducible runtime baseline. Historical §73–§74 and Cereal work are closed; Mojang import remains opt-in only when import is the goal.
 ```
 
 ### Protocol smoke bot
@@ -166,7 +166,7 @@ Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/
 |--------|-----------------|
 | `ServerIdentity.ProtocolVersion` (**2169**) / `VersionName` (**1.26.50**) | What we announce today (ADR §79) |
 | Docs JSON `x-protocol-version` on `r/26_u4` (**2169** / **1.26.50**) | Current target — matches `ServerIdentity` since the §79 bump |
-| `changelog_2168_07_07_26.md` | What changed to reach 2169 — **~23 packets moved to Cereal serialization, not backwards compatible.** Zenith has **not** re-implemented those yet (§79 tracked debt); everything else on this branch is safe to encode against |
+| `changelog_2168_07_07_26.md` | What changed to reach 2169 — **~23 packets moved to Cereal serialization, not backwards compatible.** Use it as the migration checklist; Zenith closed the tracked shipped-packet debt in ADR §§88–93. |
 | PocketMine `BedrockProtocol` / Endstone BDS headers (older, pre-Cereal era) | Wire cross-check for the ~23 debt packets until they're migrated — these still reflect the pre-Cereal shape Zenith currently encodes |
 
 **Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against `r/26_u4` (2169) — **except** the §79 Cereal-debt list, which stays pre-Cereal shaped until migrated (don't half-migrate one packet's fields to Cereal without doing the tagged-variant/optional-presence-byte encoding correctly — see ADR §79 non-goals).

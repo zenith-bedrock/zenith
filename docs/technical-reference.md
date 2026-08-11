@@ -12,7 +12,7 @@ Comments and ADR tags (`ADR §N`, `§N`) appear in many files. **They are pointe
 | Game version (wire) | **1.26.50** | same |
 | Product / release | **0.0.2-alpha** | same (`ProductVersion` — Docker tags, logs; not on Bedrock wire) |
 
-Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). **Known debt:** ~23 packets Mojang moved to Cereal serialization at 2169 (StartGame, LevelChunk, MovePlayer, PlayerAuthInput, CraftingData, CreativeContent, ItemStackRequest/Response, and more — full list in ADR §79) still encode/decode in this build's pre-Cereal shapes. A real 1.26.50 client will desync on those specific packets until each is migrated. New encode/decode work should match **2169** (branch `r/26_u4`) going forward — except when touching one of the debt packets, where matching the *old* pre-Cereal shape is still correct until that packet's dedicated migration lands. Bump workflow: [`protocol-churn.md`](protocol-churn.md).
+Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). The Cereal migration table opened there is **closed**: ADR §§88–93 migrated and validated the shipped debt packets, with `StartGamePacket` the final closure. New encode/decode work must match **2169** (Mojang branch `r/26_u4`); use [`protocol-churn.md`](protocol-churn.md) for the next bump rather than reviving the old pre-Cereal compatibility shape.
 
 ## Authoritative docs inside this repo
 
@@ -21,7 +21,8 @@ Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). **Known debt:**
 | [`decisions.md`](decisions.md) | **ADR §1 onward** — every `ADR §N` / `§N` in code should resolve here |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer and folder rules, smoke expectations, freeze list |
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
-| [`roadmap.md`](roadmap.md) | H1 closed; **Yes-next** (not PM parity) |
+| [`roadmap.md`](roadmap.md) | Current dependency graph, maturity gates, NOW/NEXT/LATER |
+| [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability maturity assessment and ECS decision evidence |
 | [`../schemas/zenith.schema.json`](../schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
 | [`../deploy/README.md`](../deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
 | [`../deploy/compose/dokploy.md`](../deploy/compose/dokploy.md) | Dokploy — Compose Path `./deploy/compose/docker-compose.dokploy.yml` + File Mount |
