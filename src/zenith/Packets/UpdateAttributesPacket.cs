@@ -46,6 +46,18 @@ sealed class UpdateAttributesPacket : DataPacket
             ]
         };
 
+    /// <summary>
+    /// Focused health replication for an actor already known to the recipient. This is a packet
+    /// convenience, not a generic attribute model.
+    /// </summary>
+    public static UpdateAttributesPacket CreateHealth(ulong actorRuntimeId, float health, float maximum) =>
+        new()
+        {
+            ActorRuntimeId = actorRuntimeId,
+            Tick = 0,
+            Attributes = [Entry("minecraft:health", 0f, maximum, health)]
+        };
+
     private static AttributeEntry Entry(string name, float min, float max, float value) =>
         new(name, min, max, value, min, max, value);
 

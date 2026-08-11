@@ -980,9 +980,11 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 3. **Break** — unchanged: TryAdd into inventory first; surplus → floor (already §26). Multi-id chest dump uses spiral neighbor cells (one StackId per cell).
 4. **Store** — `TryAddOrMerge` refuses overwrite when a cell holds a different id (was silent clobber).
 
-**Clarifies:** §26 Deferred Q-throw; §40 “inventory unchanged on death.”
+**Addendum (ago 2026 — §98):** death loot is now one planned batch. If the complete craft-grid + bag + cursor set cannot fit, no floor drop is committed and no source slot is cleared; the dead player retains all of it for the respawn inventory resync. This replaces the old per-slot "keep the remainder" behavior.
 
-**Non-goals:** Gravity/despawn TTL; LevelDB persist of drops; XP orbs; damage pipeline deaths beyond void; always-floor-on-break (vanilla bag-first stays). SoftCap refuse on death → keep slot (§74).
+**Clarifies:** §26 Deferred Q-throw; supersedes §40's earlier “inventory unchanged on death” behavior for Survival.
+
+**Non-goals:** Gravity/despawn TTL; LevelDB persist of drops; XP orbs; damage pipeline deaths beyond void; always-floor-on-break (vanilla bag-first stays). Death SoftCap refusal retains the complete source set (§98).
 
 **Status (jul 2026):** Shipped — Fanout + TryDrop + death dump + leaf tests.
 
@@ -992,7 +994,7 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 
 1. **Wrong-tool no-drop** — Survival break still removes the cell when dig auth passes. If `DigProfiles.RequiresCorrectToolForDrops` and `!BreakDuration.IsHarvestable(held)`, skip bag/floor for the **broken block rid**. Soft blocks / chest block item still drop with empty hand. Chest **contents** dump unchanged.
 2. **Creative chest contents** — InstantBuild still skips dropping the chest **block**. `RemoveAndDump` contents always go to `FloorDropFanout` (Creative does not TryAdd to bag). Clarifies §31 “clears chest store” ≠ void.
-3. **Death SoftCap** — `DumpOnDeath` clears a slot only after successful floor deposit; SoftCap refuse keeps the stack in bag (Debug). Break SoftCap-after-air remains documented nit (no rollback this ADR).
+3. **Death SoftCap** — superseded by §98's all-or-nothing death-loot plan. Break SoftCap-after-air remains documented nit (no rollback this ADR).
 
 **Clarifies:** §27 Deferred wrong-tool loot; §31 Creative break; §73 SoftCap death void.
 
@@ -1349,6 +1351,8 @@ Also removed the boot-time `PROTOCOL WARNING` in `ZenithServer.cs` that announce
 
 ### 96. Fall damage — first real Health authority, closes the biggest Survival honesty gap
 
+**Superseded in part by §98:** fall-distance policy remains here; authoritative health mutation, death idempotence, peer replication, and atomic death loot now follow §98.
+
 **Choice:** Give `Player.Health` (§40's spawn-attribute field, documented since as "damage pipeline Deferred") its first real write path: fall damage on landing. Before this, the *only* way a player's Health ever changed was void death setting it straight to 0 — there was no damage pipeline of any kind, no `VitalsSystem`, nothing tracking a fall in progress.
 
 1. **`Player.FallPeakY`** — the highest feet Y reached since the player was last on-ground (reset to current Y on every landing and on respawn). Tracked in `MovementSystem.Tick`, using the same `AuthInput.OnGround` (`VerticalCollision`) field the pose-dirty logic already reads — no new wire dependency.
@@ -1379,6 +1383,25 @@ Also removed the boot-time `PROTOCOL WARNING` in `ZenithServer.cs` that announce
 **Verification:** N/A — this is a decision/heuristic ADR, not a shipped code change. Enforcement is documentation-level: `ARCHITECTURE.md`/`AGENTS.md` updated with the invariant/mechanism split and a pre-implementation checklist (this session).
 
 **Status (ago 2026):** Shipped. `ArchitectureBoundaryTests` protects the mechanically verifiable layer boundaries; the feature-level checklist remains a review responsibility.
+
+### 98. Health is a small authoritative composition primitive
+
+**Choice:** Model health as `HealthState`, composed by `Player` today and available for a later actor without introducing `Entity`, `LivingEntity`, ECS, attributes, effects, or a combat framework.
+
+1. **State and cause are explicit.** `HealthState(maximum)` owns current health, fatal state, and the first `DamageSource`. A source currently carries `DamageCause` (`Generic`, `Fall`, `Void`, `Melee`); it has no attacker identity until a real attribution feature needs one. Invalid amounts (zero, negative, NaN, infinity) are rejected without mutation.
+2. **One writer.** `Player.ApplyDamage` is internal and called by the gameplay owner. Handlers, packets, and async continuations do not set health. `DamageResult.Died` is emitted once; later requests are `AlreadyDead`, preserving the first fatal cause.
+3. **Death is two deliberate steps.** Health first accepts the fatal transition, then `Player.TryFinalizeDeath` performs the one-time player lifecycle cleanup. This lets the gameplay caller perform concrete death work without making the health leaf know inventories, worlds, packets, or players.
+4. **Death loot is atomic at the real boundary.** `FloorDropFanout` plans every craft-grid, bag, and cursor stack before committing any floor cell or clearing a source. Refusal keeps the entire inventory. An unexpected post-plan store failure restores the floor snapshot before it escapes. Memory state is authoritative during the session; persistence is requested only after a successful in-memory transfer.
+5. **Replication remains protocol-specific.** The victim receives the existing full local HUD seed. Existing peers receive a focused `minecraft:health` `UpdateAttributes`, and `PlayerVisibility` sends health after `AddPlayer` for late viewers. `UpdateAttributesPacket.CreateHealth` is a packet helper, not an attribute framework.
+6. **Respawn starts the next lifecycle.** The gameplay owner applies pose, restores `HealthState` to its configured maximum, then sends local and peer health updates before the normal inventory/UI resync.
+
+**Why:** Fall and void already proved that direct `Player.Health` writes and a cause string were too weak: a second fatal call could perform drops before discovering death had happened, and death loot could clear only the slots that happened to fit. `HealthState` is the smallest shared domain boundary that makes damage validation, fatal idempotence, and future actor composition testable without moving fall policy out of `MovementSystem` or inventing a global `DamageSystem`.
+
+**Non-goals:** armor; hunger; effects; generic attributes; attackers/kill credit; AI; mobs; melee input handling; a generic combat engine; entity hierarchy; ECS; plugin hooks. A first actor can compose `HealthState` and apply an explicit `DamageSource.Melee`; adding attacker identity or a new damage policy requires evidence from that feature.
+
+**Verification:** leaf `HealthStateTests` covers controlled melee, invalid input, one lethal transition, and respawn reset. Gameplay tests cover fall, void, conservation across bag/cursor/craft UI, capacity refusal with no partial death loot, and peer health fan-out. The external `smoke:respawn` script currently asserts the obsolete "bag intact" policy, so it is not counted as validation for this change; replace that assertion with an observable death-loot policy and add a peer-health scenario before player-versus-actor gameplay lands.
+
+**Status (ago 2026):** Shipped — no new `IGameSystem`; fall/void remain in `MovementSystem`, which already owns their tick ordering.
 
 ## Explicit non-goals (so far)
 

@@ -344,6 +344,12 @@ sealed class EntityProtocol
         _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(actorRuntimeId, health, hunger));
     }
 
+    /// <summary>Replicates only the current health of an already-spawned actor.</summary>
+    public void SendHealth(ulong actorRuntimeId, float health, float maximum)
+    {
+        _session.SendDataPacket(UpdateAttributesPacket.CreateHealth(actorRuntimeId, health, maximum));
+    }
+
     /// <summary>Death screen cause (DeathInfo 0xbd).</summary>
     public void SendDeathInfo(string cause, params string[] messages)
     {

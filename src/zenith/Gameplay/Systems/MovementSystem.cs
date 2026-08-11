@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Protocol;
 using Zenith.Player;
+using Zenith.Session;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
@@ -50,7 +51,7 @@ sealed class MovementSystem : IGameSystem
                 _ = player.TryConsumeMovementInput(out _);
                 if (player.TryConsumeRespawn())
                 {
-                    ApplyRespawn(player);
+                    ApplyRespawn(player, online);
                     if (IsPoseDirty(player))
                         _dirtyPose.Add(player);
                     if (IsFlagsDirty(player))
@@ -191,35 +192,49 @@ sealed class MovementSystem : IGameSystem
     private void BeginVoidDeath(
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online) =>
-        Kill(player, online, "generic");
+        ApplyDamage(player, online, DamageSource.Void, player.MaxHealth);
 
     /// <summary>
-    /// Any lethal Health drop → death screen + Survival death loot (ADR §73/§96). Creative keeps
-    /// inventory. Shared by void fall and fall damage — both end at the same handshake.
+    /// The gameplay owner applies health, then owns the single fatal transition if necessary.
+    /// Survival death loot is all-or-nothing: when the floor cannot accept the complete plan,
+    /// the player still dies but keeps every source slot for the respawn inventory resync.
     /// </summary>
-    private void Kill(
+    private void ApplyDamage(
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online,
-        string cause)
+        DamageSource source,
+        float amount)
     {
-        // Capture before BeginDeath clears OpenChest — release lid opener (§28).
+        var result = player.ApplyDamage(source, amount);
+        if (!result.WasApplied)
+            return;
+
+        var entity = player.Session.Protocol.Entity;
+        var rid = (ulong)player.RuntimeId;
+        if (!result.CausedDeath)
+        {
+            entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+            PlayerVisibility.RelayHealth(player, online);
+            return;
+        }
+
+        // Capture before finalizing death clears OpenChest — release lid opener (§28).
         var world = player.Session.Context.World;
         if (player.OpenChest.HasValue)
             ChestLidFanout.ReleaseOpener(online, world, player);
 
-        // Craft UI dump before BeginDeath clears the grid.
+        if (!player.TryFinalizeDeath())
+            throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");
+
         if (player.GameMode != GameMode.Creative)
-            FloorDropFanout.DumpOnDeath(world, _players, online, player);
+            _ = FloorDropFanout.TryDropDeathLoot(world, _players, online, player);
 
-        if (!player.BeginDeath(cause)) return;
-
-        var entity = player.Session.Protocol.Entity;
-        var rid = (ulong)player.RuntimeId;
         var eyeX = player.PositionX;
         var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
         var eyeZ = player.PositionZ;
 
         entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+        PlayerVisibility.RelayHealth(player, online);
         entity.SendDeathInfo(player.DeathCause);
         entity.SendRespawnSearching(eyeX, eyeY, eyeZ, rid);
     }
@@ -247,14 +262,7 @@ sealed class MovementSystem : IGameSystem
             var damage = MathF.Floor(fallDistance - SafeFallDistance);
             if (damage <= 0) return;
 
-            player.Health = MathF.Max(0f, player.Health - damage);
-            if (player.Health <= 0f)
-            {
-                Kill(player, online, "fall");
-                return;
-            }
-
-            player.Session.Protocol.Entity.SendDefaultAttributes((ulong)player.RuntimeId, player.Health, player.Hunger);
+            ApplyDamage(player, online, DamageSource.Fall, damage);
             return;
         }
 
@@ -264,7 +272,9 @@ sealed class MovementSystem : IGameSystem
             player.FallPeakY = player.PositionY;
     }
 
-    private static void ApplyRespawn(global::Zenith.Player.Player player)
+    private static void ApplyRespawn(
+        global::Zenith.Player.Player player,
+        IReadOnlyList<global::Zenith.Player.Player> online)
     {
         player.PositionX = 0f;
         player.PositionY = player.Session.Context.World.SampleSpawnFeetY(0, 0);
@@ -279,6 +289,7 @@ sealed class MovementSystem : IGameSystem
         var eyeZ = player.PositionZ;
 
         entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+        PlayerVisibility.RelayHealth(player, online);
         entity.SendMovePlayerTeleport(
             entityRuntimeId: rid,
             x: player.PositionX,

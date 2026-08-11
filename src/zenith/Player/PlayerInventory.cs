@@ -59,6 +59,13 @@ sealed class PlayerInventory
 
     public InventorySlot Cursor => _cursor;
 
+    /// <summary>GameLoop-only clear of every bag and cursor location as one domain operation.</summary>
+    public void Clear()
+    {
+        Array.Fill(_slots, InventorySlot.Empty);
+        _cursor = InventorySlot.Empty;
+    }
+
     public static bool IsValidHotbarSlot(int slot) => slot is >= 0 and < HotbarSize;
 
     public static bool IsValidInventorySlot(int slot) => slot is >= 0 and < FullInventorySize;

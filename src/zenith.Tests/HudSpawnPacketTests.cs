@@ -36,6 +36,18 @@ public class HudSpawnPacketTests
     }
 
     [Fact]
+    public void UpdateAttributes_health_update_contains_only_the_authoritative_health_entry()
+    {
+        var packet = UpdateAttributesPacket.CreateHealth(7, health: 9f, maximum: 24f);
+
+        var attribute = Assert.Single(packet.Attributes);
+        Assert.Equal("minecraft:health", attribute.Name);
+        Assert.Equal(0f, attribute.Min);
+        Assert.Equal(24f, attribute.Max);
+        Assert.Equal(9f, attribute.Value);
+    }
+
+    [Fact]
     public void EntityMetadataWriter_visible_name_is_non_empty()
     {
         var writer = new Zenith.Raknet.Stream.BinaryStream();
