@@ -1,3 +1,4 @@
+using Zenith.Gameplay;
 using Zenith.Session;
 using Zenith.World;
 
@@ -14,6 +15,9 @@ class Player
     public const int MaxPendingDig = 4;
     public const int MaxPendingWindowIntents = 4;
     public const int MaxPendingChat = 8;
+
+    /// <summary>Vanilla player maximum for the current first health slice; not an attribute framework.</summary>
+    public const float DefaultMaxHealth = 20f;
 
     /// <summary>Euclidean interact reach (blocks) from eye to target center — Fase 3 simple authority.</summary>
     public const float MaxBlockReach = 6f;
@@ -39,6 +43,8 @@ class Player
     private GameMode? _pendingGameMode;
     private readonly object _respawnLock = new();
     private bool _pendingRespawn;
+    private readonly HealthState _health = new(DefaultMaxHealth);
+    private bool _deathTransitionFinalized;
     private readonly object _spawnReadyLock = new();
     private bool _pendingSpawnReady;
     // The GameLoop is the only writer. This lock is a narrow snapshot handoff for the network
@@ -120,21 +126,26 @@ class Player
     public float Yaw { get; set; }
     public float HeadYaw { get; set; }
 
+    /// <summary>Read-only projection of the GameLoop-owned health state.</summary>
+    public float Health => _health.Current;
+
+    /// <summary>Maximum represented by this player's composed health state.</summary>
+    public float MaxHealth => _health.Maximum;
+
     /// <summary>
-    /// Domain vitals (ADR §40) — spawn attributes read these. Fall damage authority shipped
-    /// in §96; hunger/drowning/other damage sources remain Deferred.
+    /// Domain vitals (ADR §40). Hunger remains a frozen HUD value; health has an explicit
+    /// authoritative mutation path through <see cref="ApplyDamage"/>.
     /// </summary>
-    public float Health { get; set; } = 20f;
     public float Hunger { get; set; } = 20f;
 
     /// <summary>Highest feet Y reached since last on-ground (ADR §96 fall damage). Reset on landing.</summary>
     public float FallPeakY { get; set; } = Blocks.FlatSpawnY;
 
     /// <summary>True while death screen is up — AuthInput/edits ignored until respawn tick (§40).</summary>
-    public bool IsDead { get; private set; }
+    public bool IsDead => _health.IsDead;
 
     /// <summary>Cause string last sent via DeathInfo (tests / Debug).</summary>
-    public string DeathCause { get; private set; } = "";
+    public string DeathCause => _health.FatalSource?.DeathInfoCause ?? "";
 
     /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
     public int LastReplicatedHotbarSlot { get; set; } = -1;
@@ -727,20 +738,24 @@ class Player
     public void SetGameMode(GameMode mode) => GameMode = mode;
 
     /// <summary>
-    /// Marks dead on the GameLoop. No-op if already dead.
-    /// Survival death loot is applied by the caller before this (§73); inventory may already be empty.
+    /// Applies an authoritative damage request on the GameLoop. Network handlers and async work
+    /// must submit intent/results to that owner rather than mutate health directly.
     /// </summary>
-    public bool BeginDeath(string cause = "generic")
+    internal DamageResult ApplyDamage(DamageSource source, float amount) => _health.Apply(source, amount);
+
+    /// <summary>
+    /// Finalizes one already-accepted fatal health transition. This is deliberately separate
+    /// from <see cref="ApplyDamage"/> so the gameplay owner can first prepare all death-side
+    /// effects, including an all-or-nothing survival loot deposit.
+    /// </summary>
+    internal bool TryFinalizeDeath()
     {
-        if (IsDead) return false;
-        IsDead = true;
-        Health = 0f;
-        DeathCause = cause;
+        if (!IsDead || _deathTransitionFinalized) return false;
+        _deathTransitionFinalized = true;
         IsSneaking = false;
         IsSprinting = false;
         AbortBreak();
         _ = TryClearOpenContainer(out _);
-        CraftUi.Clear();
         lock (_respawnLock)
             _pendingRespawn = false;
         return true;
@@ -802,9 +817,8 @@ class Player
     /// <summary>Clears death after GameLoop applied spawn pose + vitals.</summary>
     public void CompleteRespawn()
     {
-        IsDead = false;
-        Health = 20f;
-        DeathCause = "";
+        _health.RestoreFull();
+        _deathTransitionFinalized = false;
         IsSneaking = false;
         IsSprinting = false;
         LastReplicatedSneaking = false;

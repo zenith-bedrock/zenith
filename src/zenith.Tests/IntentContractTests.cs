@@ -29,11 +29,16 @@ file sealed class SilentLogger : ILogger
 internal sealed class RecordingRakNetServer : RakNetServer
 {
     public ConcurrentQueue<byte[]> Captured { get; } = new();
+    public ConcurrentQueue<(IPEndPoint EndPoint, byte[] Datagram)> CapturedByEndpoint { get; } = new();
 
     public RecordingRakNetServer() : base(port: 0) { }
 
-    public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer) =>
-        Captured.Enqueue(buffer.ToArray());
+    public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer)
+    {
+        var datagram = buffer.ToArray();
+        Captured.Enqueue(datagram);
+        CapturedByEndpoint.Enqueue((endPoint, datagram));
+    }
 }
 
 file sealed class StubSessionHandler : ISessionHandler

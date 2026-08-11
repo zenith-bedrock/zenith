@@ -74,7 +74,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 13. Block gravity (ADR §57/§95): sand/gravel only; `GravitySystem` after `BlockEditSystem`; sparse pending cells (`GravityPendingStore`) spawn a real `falling_block` via the generic `AddActorPacket` while airborne (`FallingBlockStore`), resolving to `UpdateBlock` only on landing — no Tile, no instant column-teleport.
 14. **Delivery hygiene:** closing an audit/ADR gap in the working tree without commit+push the same day is a process failure (dirty &gt; remote). See [`robustness-dx-debt.md`](robustness-dx-debt.md) “Critical delivery risks”.
 15. Leaf CI (`dotnet test`) runs on push/PR; Bedrock E2E is still human / beta-hard — do not treat green unit CI as join/place/chest proof.
-16. Protocol smoke bot (ADR §58): separate repo [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + `bedrock-protocol`) — not mixed into the C# tree; offline join first; does not replace Gate A human client.
+16. Protocol smoke bot (ADR §58): separate repo [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (Bun + `bedrock-protocol`) — not mixed into the C# tree; offline join first; does not replace Gate A human client. Keep reference-server compatibility work in a separate harness; never weaken this regression client merely to log into another server.
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62/§71): `World` façade owns default **Overworld `Dimension`** (`ITerrainProvider` + wire id); `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays. Nether/End Dimensions deferred.
@@ -88,6 +88,11 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 ### Protocol smoke bot
 
 See [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (sibling checkout). Requires Bun and a running Zenith with `offline` in `auth.accept`. Keep JS/TS out of the Zenith server repo.
+
+When a mature server is used as a behavioral oracle, use a separate client/harness and preserve
+raw logs plus normalized JSON/JSONL observations. A matching wire ID is not enough: a semantic
+comparison also needs a matching packet schema. Otherwise it is only a connectivity observation,
+never evidence for changing Zenith.
 
 First-wave scripts: `bun run smoke:first10` (join → place → break → inv-hotbar → respawn → chest-open → double-chest → dig-timing → two-client). Persist (`smoke:persist`) needs LevelDB `world.path` and optional `ZENITH_PROJECT` for auto-restart.
 

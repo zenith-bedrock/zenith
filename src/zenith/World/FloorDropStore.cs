@@ -26,7 +26,21 @@ sealed class FloorDropStore
     private readonly ILogger? _logger;
     private int _capWarned;
 
-    readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks = 0);
+    internal readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks = 0);
+
+    /// <summary>
+    /// GameLoop-local copy used only to restore an unexpected failed multi-drop commit. Normal
+    /// planning prevents that path; the snapshot protects the all-or-nothing invariant if a
+    /// store invariant changes between planning and commit.
+    /// </summary>
+    internal sealed class State
+    {
+        private readonly Dictionary<(int X, int Y, int Z), DropSlot> _drops;
+
+        internal State(Dictionary<(int X, int Y, int Z), DropSlot> drops) => _drops = drops;
+
+        internal Dictionary<(int X, int Y, int Z), DropSlot> Drops => _drops;
+    }
 
     /// <summary>Result of a successful deposit (wire fan-out).</summary>
     public readonly record struct DepositResult(
@@ -42,6 +56,16 @@ sealed class FloorDropStore
     public FloorDropStore(ILogger? logger = null) => _logger = logger;
 
     public int Count => _drops.Count;
+
+    internal State CaptureState() => new(new Dictionary<(int X, int Y, int Z), DropSlot>(_drops));
+
+    internal void RestoreState(State snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _drops.Clear();
+        foreach (var (key, slot) in snapshot.Drops)
+            _drops.Add(key, slot);
+    }
 
     /// <summary>Legacy alias — prefer <see cref="TryAddOrMerge"/> when refuse matters.</summary>
     public void AddOrMerge(int x, int y, int z, StackId id, int count, long entityRuntimeIdIfNew) =>

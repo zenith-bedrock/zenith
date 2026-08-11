@@ -5,7 +5,7 @@ Zenith uses two complementary checks. Neither is a replacement for the other.
 | Check | Question answered | Tool |
 | --- | --- | --- |
 | Runtime baseline | Can this Zenith build keep its authoritative tick stable under a defined synthetic workload? | `zenith.Benchmarks --runtime-load` |
-| Differential smoke | Does the same external Bedrock client observe the same semantic result from Zenith and a reference server? | `zenith-smoke-bot` |
+| Behavioral reference | Does a neutral external scenario produce the same semantic outcome on compatible server endpoints? | Dedicated client harnesses + JSONL observations |
 
 The reference server is a behavior oracle, not an architectural target. Packet bytes, runtime IDs,
 batching, and small timing differences are diagnostics. Authoritative outcomes such as spawning,
@@ -72,24 +72,30 @@ then lets completions publish through the gameplay handoff. A short burst may ha
 and a very high tail when several completions serialize in the same tick. That identifies burst
 concentration; it is not evidence that every normal chunk-stream tick costs the reported maximum.
 
-## Differential smoke
+## Behavioral reference runs
 
 The external [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) remains the
-real-client harness. Its neutral first scenario compares join/spawn against two endpoints:
+real-client regression harness for Zenith's curated starter world. It must not acquire
+reference-server workarounds merely to make a comparison pass. Keep a compatibility probe separate
+when another server needs different login or transport details.
 
-```bash
-DIFF_ZENITH_PORT=19135 \
-DIFF_REFERENCE_PORT=19137 \
-DIFF_REFERENCE_PROTOCOL_VERSION=2168 \
-bun run smoke:differential-join
-```
+Before calling any comparison a gameplay result, establish all three conditions:
 
-The output is a normalized observation for each target. Both targets must spawn before the result
-is called equivalent. A protocol/schema or RakNet handshake failure is **inconclusive**, not a
-Zenith gameplay failure. Before changing the server, reproduce the observable difference, classify
-it as semantic or transport/harness-specific, and add a server-side regression test when Zenith is
-actually at fault.
+1. Both endpoints use a matching packet **schema**, not merely a matching wire protocol number.
+2. The scenario prepares its initial state through client-observable actions, rather than relying
+   on a Zenith-specific seed, starter inventory, or internal ID.
+3. The assertion is semantic: spawn, visible peer, block state, inventory quantity, container
+   content, health, or another authoritative outcome. Packet bytes, runtime IDs, batching, and
+   small timing differences are diagnostic only.
+
+An overridden wire ID does not make an older packet schema compatible with a newer server. It can
+still be useful to prove RakNet reachability and a narrow join/spawn lifecycle, but any packet
+decode error or later divergence is **inconclusive**. Do not change Zenith from that result.
+
+Write one normalized JSON or JSONL observation per participant and preserve the raw client log.
+For a confirmed difference, create a minimal reproduction, decide whether it is a Zenith bug,
+reference-specific behavior, intended Zenith policy, or a harness fault, then add a Zenith-side
+regression test before making the smallest justified correction.
 
 The target-specific Zenith smokes remain useful for Zenith's curated starter world. Do not use
-those scenarios as differential tests until their setup is made observable and neutral for both
-servers.
+those scenarios as behavioral reference tests until their setup is neutral for both endpoints.

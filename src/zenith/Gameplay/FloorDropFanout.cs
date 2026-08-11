@@ -59,19 +59,29 @@ static class FloorDropFanout
             return false;
 
         var publications = new List<FloorDropStore.DepositResult>(plan.Count);
-        foreach (var entry in plan)
+        var snapshot = world.FloorDrops.CaptureState();
+        try
         {
-            if (!world.FloorDrops.TryAddOrMerge(
-                    entry.X, entry.Y, entry.Z, entry.Id, entry.Count,
-                    players.AllocateRuntimeId(), out var deposit, pickupDelayTicks) ||
-                deposit is null)
+            foreach (var entry in plan)
             {
-                // The plan and commit both run on the gameplay owner. Reaching this means a
-                // FloorDropStore invariant changed; do not hide it with a partial transaction.
-                throw new InvalidOperationException("Floor-drop batch plan could not commit.");
-            }
+                if (!world.FloorDrops.TryAddOrMerge(
+                        entry.X, entry.Y, entry.Z, entry.Id, entry.Count,
+                        players.AllocateRuntimeId(), out var deposit, pickupDelayTicks) ||
+                    deposit is null)
+                {
+                    // The plan and commit both run on the gameplay owner. Reaching this means a
+                    // FloorDropStore invariant changed; restore every earlier deposit before
+                    // surfacing the violated invariant to the loop owner.
+                    throw new InvalidOperationException("Floor-drop batch plan could not commit.");
+                }
 
-            publications.Add(deposit.Value);
+                publications.Add(deposit.Value);
+            }
+        }
+        catch
+        {
+            world.FloorDrops.RestoreState(snapshot);
+            throw;
         }
 
         foreach (var deposit in publications)
@@ -139,16 +149,17 @@ static class FloorDropFanout
     }
 
     /// <summary>
-    /// Survival death loot: craft UI + bag + cursor → floor near death pose.
-    /// Creative = keepInventory (no-op). SoftCap refuse keeps the slot (§74).
+    /// Survival death loot: craft UI + bag + cursor → floor near death pose. Every source stack
+    /// is planned before any inventory slot is cleared, so a capacity refusal keeps all of the
+    /// player's authoritative inventory instead of producing a partial death drop.
     /// </summary>
-    public static void DumpOnDeath(
+    public static bool TryDropDeathLoot(
         World.World world,
         PlayerManager players,
         IReadOnlyList<Player.Player> online,
         Player.Player player)
     {
-        if (player.GameMode == GameMode.Creative) return;
+        if (player.GameMode == GameMode.Creative) return true;
 
         var ox = (int)MathF.Floor(player.PositionX);
         var oy = (int)MathF.Floor(player.PositionY);
@@ -157,76 +168,45 @@ static class FloorDropFanout
         if (oy < Blocks.FlatMinY)
             oy = (int)MathF.Floor(world.SampleSpawnFeetY(ox, oz));
 
-        DumpCraftUi(world, players, online, player, ox, oy, oz);
-        DumpMainInventory(world, players, online, player, ox, oy, oz);
+        var requests = CollectDeathLoot(player);
+        if (!TryDepositBatch(world, players, online, ox, oy, oz, requests, PlayerThrowPickupDelay))
+        {
+            player.Session.Context.Logger.Debug(
+                $"Death loot refused for {player.Username}: floor-drop capacity could not accept the complete inventory.");
+            return false;
+        }
+
+        player.CraftUi.Clear();
+        player.Inventory.Clear();
         world.PersistInventory(player);
+        return true;
     }
 
-    private static void DumpCraftUi(
-        World.World world,
-        PlayerManager players,
-        IReadOnlyList<Player.Player> online,
-        Player.Player player,
-        int ox,
-        int oy,
-        int oz)
+    private static List<DepositRequest> CollectDeathLoot(Player.Player player)
     {
+        var requests = new List<DepositRequest>(PlayerCraftUi.GridSize + PlayerInventory.FullInventorySize + 2);
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
             var slot = player.CraftUi.GetGrid(g);
-            if (slot.IsEmpty) continue;
-            if (!TryDepositDeath(world, players, online, player, ox, oy, oz, slot.Id, slot.Count))
-                continue;
-            _ = player.CraftUi.TrySetGrid(g, InventorySlot.Empty);
+            if (!slot.IsEmpty)
+                requests.Add(new DepositRequest(slot.Id, slot.Count));
         }
 
         var result = player.CraftUi.Result;
-        if (!result.IsEmpty &&
-            TryDepositDeath(world, players, online, player, ox, oy, oz, result.Id, result.Count))
-            _ = player.CraftUi.TrySetResult(InventorySlot.Empty);
-    }
+        if (!result.IsEmpty)
+            requests.Add(new DepositRequest(result.Id, result.Count));
 
-    private static void DumpMainInventory(
-        World.World world,
-        PlayerManager players,
-        IReadOnlyList<Player.Player> online,
-        Player.Player player,
-        int ox,
-        int oy,
-        int oz)
-    {
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
         {
             var slot = player.Inventory.Get(i);
-            if (slot.IsEmpty) continue;
-            if (!TryDepositDeath(world, players, online, player, ox, oy, oz, slot.Id, slot.Count))
-                continue;
-            _ = player.Inventory.TrySet(i, StackId.FromBlock(Blocks.Air), 0);
+            if (!slot.IsEmpty)
+                requests.Add(new DepositRequest(slot.Id, slot.Count));
         }
 
         var cursor = player.Inventory.Cursor;
-        if (!cursor.IsEmpty &&
-            TryDepositDeath(world, players, online, player, ox, oy, oz, cursor.Id, cursor.Count))
-            _ = player.Inventory.TrySet(PlayerInventory.CursorSlot, StackId.FromBlock(Blocks.Air), 0);
-    }
-
-    private static bool TryDepositDeath(
-        World.World world,
-        PlayerManager players,
-        IReadOnlyList<Player.Player> online,
-        Player.Player player,
-        int ox,
-        int oy,
-        int oz,
-        StackId id,
-        int count)
-    {
-        if (TryDeposit(world, players, online, ox, oy, oz, id, count, PlayerThrowPickupDelay))
-            return true;
-
-        player.Session.Context.Logger.Debug(
-            $"Death loot SoftCap keep for {player.Username}: {id} x{count}");
-        return false;
+        if (!cursor.IsEmpty)
+            requests.Add(new DepositRequest(cursor.Id, cursor.Count));
+        return requests;
     }
 
     public static void Publish(

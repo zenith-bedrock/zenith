@@ -115,6 +115,23 @@ static class PlayerVisibility
         }
     }
 
+    /// <summary>
+    /// Replicates a player's already-decided health state to existing peers. The subject's own
+    /// HUD uses the complete local attribute seed; a late viewer receives the same health in
+    /// <see cref="SendAddPlayer"/>.
+    /// </summary>
+    public static void RelayHealth(
+        Player.Player subject,
+        IReadOnlyList<Player.Player> online)
+    {
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendHealth(rid, subject.Health, subject.MaxHealth);
+        }
+    }
+
     private static void SendPlayerListAdd(Player.Player recipient, Player.Player subject)
     {
         var profile = subject.Session.Profile;
@@ -167,5 +184,9 @@ static class PlayerVisibility
             subject.Yaw,
             subject.HeadYaw,
             flags: MoveActorAbsolutePacket.FLAG_ON_GROUND);
+        recipient.Session.Protocol.Entity.SendHealth(
+            (ulong)subject.RuntimeId,
+            subject.Health,
+            subject.MaxHealth);
     }
 }
