@@ -11,6 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +21,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Test
-        run: dotnet test zenith.sln -c Release --nologo
+        run: dotnet test zenith.sln -c Release --nologo -m:1 -p:NodeReuse=false -p:BuildInParallel=false
 
       - name: Publish linux-x64
         run: |

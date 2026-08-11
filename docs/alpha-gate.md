@@ -17,7 +17,7 @@ Tag only when this checklist is green. Checkboxes are **human smoke / compose / 
 ## CI / local proofs
 
 ```bash
-dotnet test zenith.sln -c Release
+dotnet test zenith.sln -c Release -m:1 -p:NodeReuse=false -p:BuildInParallel=false
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 ```
 

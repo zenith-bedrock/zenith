@@ -39,7 +39,7 @@ Persistent **`$ZENITH_DATA`** volume holds config + worlds. Deploy contract: [de
 ### Tests / benchmarks
 
 ```bash
-dotnet test zenith.sln
+dotnet test zenith.sln -c Release -m:1 -p:NodeReuse=false -p:BuildInParallel=false
 dotnet run -c Release --project src/zenith.Benchmarks -- -f * -j short -m --join
 # Production GameLoop ordering without wall-clock sleep (10 / 100 / 500 player baseline)
 dotnet run --project src/zenith.Benchmarks -- --runtime-load
