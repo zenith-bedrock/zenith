@@ -14,7 +14,7 @@ These are **harder** than the soft LAN-alpha grade. Do not sand them down in the
 | **Overlay / store grief** | Warn-only unbounded `_blockOverrides` / chests = RAM+disk DoS under place/dig grief. SoftCap deferred “because dig→air” was too kind to attackers. | **Shipped (jul 2026):** overlay SoftCap + compact-to-base; chest SoftCap on new cells (§36 adendo). Eviction/compaction redesign still open for true production. |
 | **No Bedrock E2E in CI** | ~leaf tests without automated client smoke puts the entire join/place/chest/dig gate on one human. Bus factor × missing E2E = beta blocker. | **Shipped:** leaf `dotnet test` on every push/PR to `develop`/`main` (`.github/workflows/ci.yml`). **Still open (beta-hard):** automated Bedrock client / protocol harness — tag gates stay human smoke until that exists. Spike: [`zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) (ADR §58). |
 
-**Bus factor** remains high (dominant author). Skills/docs help agents; they do **not** replace peer review of dig/ISR or Bedrock smoke.
+**Bus factor** remains high (dominant author). Documentation and optional automation checks help contributors, but do **not** replace peer review of dig/ISR or Bedrock smoke.
 
 **Feature pressure:** skipping ADR → smoke → tag while chasing gravity/`players/` recreates “declare done before the last 20%.”
 

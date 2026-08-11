@@ -81,5 +81,8 @@ docker-compose.override.yml
 artifacts/
 BenchmarkDotNet.Artifacts/
 **/zenith.Benchmarks-*/
+# Local investigation notes; durable conclusions belong in ADRs and contributor docs.
+docs/audit/
+docs/plans/
 tmp-nbt-dump.csx
 tools/protocol-import/.cache/

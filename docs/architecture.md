@@ -58,13 +58,15 @@ RakNet thread
   → Protocol → RakNet
 ```
 
-The network thread **must not** mutate authoritative gameplay state (final position, inventory, world). Mutation happens on the tick so behavior stays deterministic and debuggable.
+The network thread **must not** mutate authoritative gameplay state (final position, inventory, world). It publishes input; the gameplay owner validates and applies it. Async I/O follows the same rule: it returns a result to the owner, which revalidates it before applying it.
 
 ## GameLoop
 
 - Target **20 TPS**; advances `GameClock`; invokes `IGameSystem` in **registration order**.
-- Exception in one system is logged; the loop continues (same isolation idea as EventBus listeners).
+- A system exception stops the authoritative loop and starts coordinated server shutdown. Continuing after a partially applied gameplay transition would hide corruption.
 - **Single-threaded** until a concrete feature forces parallelism — no Scheduler / Actor / ECS “for cleanliness.”
+
+Gameplay authority normally has one writer: the `GameLoop`. Networking, storage, compression and logging may run concurrently, but they do not acquire authority over `Player`, `World`, inventory or equivalent gameplay state. Keep synchronization at handoff boundaries; do not hold a lock across I/O, `await`, protocol sends or callbacks.
 
 ## Persistence model (world)
 

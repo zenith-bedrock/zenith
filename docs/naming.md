@@ -1,8 +1,6 @@
 # Naming conventions
 
-Zenith names should make **layer** and **outcome** obvious. This is the SSOT for verbs; folder roles stay in [`ARCHITECTURE.md`](../ARCHITECTURE.md) / [`AGENTS.md`](../AGENTS.md).
-
-Agents: also [`.cursor/rules/naming.mdc`](../.cursor/rules/naming.mdc).
+Zenith names should make **layer** and **outcome** obvious. This is the SSOT for verbs; folder roles stay in [`ARCHITECTURE.md`](../ARCHITECTURE.md). Coding-agent integrations may additionally use the mirrored naming rule under `.cursor/rules/`.
 
 ---
 

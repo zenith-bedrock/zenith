@@ -33,7 +33,7 @@ Console.CancelKeyPress += (_, e) =>
 using var sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => RequestShutdown());
 using var sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => RequestShutdown());
 
-var runTask = server.StartAsync();
+var runTask = server.RunAsync();
 await Task.WhenAny(runTask, shutdownTcs.Task);
 await server.ShutdownAsync();
 try

@@ -19,10 +19,16 @@ namespace Zenith.Server;
 class ZenithServer
 {
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly object _lifecycleGate = new();
     private readonly IChunkStorage _chunkStorage;
     private readonly ILogger _logger;
     private readonly ZenithSessionListener _sessionListener;
     private readonly GravitySystem _gravity;
+    private Task? _runTask;
+    private Task? _shutdownTask;
+    private Task? _gameLoopTask;
+    private Task? _raknetTask;
+    private LifecycleState _lifecycleState;
 
     public RakNetServer RakNetServer { get; }
     public ServerContext Context { get; }
@@ -59,12 +65,11 @@ class ZenithServer
         var players = new PlayerManager();
         var clock = new GameClock();
         var gameLoop = new GameLoop(clock, players, serverLogger);
-        gameLoop.Register(new TimeSyncSystem(players));
+        gameLoop.Register(new TimeSyncSystem());
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
         gameLoop.Register(new MovementSystem(players));
-        gameLoop.Register(new EquipmentSystem(players));
-        gameLoop.Register(new ChatSystem(players));
-        gameLoop.Register(new GameModeSystem(players));
+        gameLoop.Register(new ChatSystem());
+        gameLoop.Register(new GameModeSystem());
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
@@ -96,10 +101,14 @@ class ZenithServer
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world, players);
-        gameLoop.Register(new BlockSystem(players, world));
+        gameLoop.Register(new BlockDigSystem(world));
+        gameLoop.Register(new BlockEditSystem(players, world));
         gameLoop.Register(gravity);
+        gameLoop.Register(new FloorDropSystem(world));
         gameLoop.Register(new InventorySystem(players, world, recipes, creative));
-        gameLoop.Register(new ChunkStreamSystem(players, world));
+        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
+        gameLoop.Register(new EquipmentSystem());
+        gameLoop.Register(new ChunkStreamSystem(world));
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative);
@@ -264,49 +273,130 @@ class ZenithServer
         }
     }
 
-    public async Task StartAsync()
+    /// <summary>
+    /// Runs both critical loops. Repeated calls return the same lifetime task.
+    /// An instance is single-use: a shutdown requested before its first run makes a later start invalid.
+    /// An unexpected termination of either critical loop initiates coordinated shutdown.
+    /// </summary>
+    public Task RunAsync()
     {
-        var token = _lifetime.Token;
-        var gameLoopTask = GameLoop.RunAsync(token);
-        var raknetTask = RakNetServer.StartAsync();
-        await Task.WhenAll(gameLoopTask, raknetTask);
+        lock (_lifecycleGate)
+        {
+            if (_runTask is not null)
+                return _runTask;
+
+            if (_lifecycleState is LifecycleState.Stopping or LifecycleState.Stopped)
+            {
+                return Task.FromException(new InvalidOperationException(
+                    "A stopped ZenithServer instance cannot be started. Create a new server instance."));
+            }
+
+            _lifecycleState = LifecycleState.Running;
+            return _runTask = RunCoreAsync();
+        }
     }
 
-    public async Task ShutdownAsync()
+    private async Task RunCoreAsync()
     {
-        _lifetime.Cancel();
-
-        // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose enqueues inv Puts.
-        _logger.Info("Disconnecting sessions...");
-        _sessionListener.DisconnectAll("Server closed");
-
-        // Settle in-flight sand/gravel into overlays before LevelDB flush (ADR §57).
+        var gameLoopTask = _gameLoopTask = GameLoop.RunAsync(_lifetime.Token);
+        var raknetTask = _raknetTask = RakNetServer.StartAsync();
+        var completed = await Task.WhenAny(gameLoopTask, raknetTask).ConfigureAwait(false);
         try
         {
-            _gravity.SettleAllPending();
+            await completed.ConfigureAwait(false);
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.Warning($"Gravity settle failed during shutdown: {ex.Message}");
+            await ShutdownAsync().ConfigureAwait(false);
         }
+    }
 
+    /// <summary>
+    /// Idempotent coordinated shutdown. Repeated calls return the same cleanup task and it completes
+    /// only after critical loops, authoritative settle, and persistence cleanup stop.
+    /// </summary>
+    public Task ShutdownAsync()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_shutdownTask is not null)
+                return _shutdownTask;
+
+            _lifecycleState = LifecycleState.Stopping;
+            return _shutdownTask = ShutdownCoreAsync();
+        }
+    }
+
+    private async Task ShutdownCoreAsync()
+    {
         try
         {
-            using var flushCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await Context.World.FlushPersistenceAsync(flushCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Warning("Persistence flush timed out after 5s during shutdown; some writes may be incomplete.");
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning($"Persistence flush failed during shutdown: {ex.Message}");
-        }
+            _lifetime.Cancel();
+            _sessionListener.StopAccepting();
 
-        if (_chunkStorage is IDisposable disposable)
-            disposable.Dispose();
+            // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose enqueues inv Puts.
+            _logger.Info("Disconnecting sessions...");
+            _sessionListener.DisconnectAll("Server closed");
 
-        await RakNetServer.ShutdownAsync().ConfigureAwait(false);
+            await RakNetServer.ShutdownAsync().ConfigureAwait(false);
+
+            Task? gameLoop;
+            lock (_lifecycleGate)
+                gameLoop = _gameLoopTask;
+            if (gameLoop is not null)
+            {
+                try { await gameLoop.ConfigureAwait(false); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    // RunAsync preserves the original failure for its caller; shutdown must still settle/flush.
+                    _logger.Error($"GameLoop stopped with an error during shutdown: {ex}");
+                }
+            }
+
+            // Settle in-flight sand/gravel into overlays before LevelDB flush (ADR §57).
+            try
+            {
+                _gravity.SettleAllPending();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Gravity settle failed during shutdown: {ex.Message}");
+            }
+
+            try
+            {
+                using var flushCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await Context.World.FlushPersistenceAsync(flushCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.Warning("Persistence flush timed out after 5s during shutdown; some writes may be incomplete.");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Persistence flush failed during shutdown: {ex.Message}");
+            }
+
+            if (_chunkStorage is IDisposable disposable)
+                disposable.Dispose();
+        }
+        finally
+        {
+            lock (_lifecycleGate)
+                _lifecycleState = LifecycleState.Stopped;
+        }
+    }
+
+    /// <summary>
+    /// Scheduling state only. A critical-loop fault remains observable through <see cref="RunAsync"/>'s
+    /// returned task; after cleanup the server is terminally stopped rather than restartable.
+    /// </summary>
+    private enum LifecycleState
+    {
+        Created,
+        Running,
+        Stopping,
+        Stopped
     }
 }
