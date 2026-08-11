@@ -154,4 +154,19 @@ static class EntityMetadataWriter
         WriteEntryType(ref writer, EntityMetaType.Int);
         writer.WriteVarInt(variant);
     }
+
+    /// <summary>Minimal metadata required for a client-rendered zombie actor.</summary>
+    public static void WriteZombieMetadata(ref BinaryStream writer)
+    {
+        writer.WriteUnsignedVarInt(3);
+        writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
+        WriteEntryType(ref writer, EntityMetaType.Long);
+        writer.WriteVarLong(BuildSpawnFlags());
+        writer.WriteUnsignedVarInt(EntityMetaKey.Width);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(0.6f, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(EntityMetaKey.Height);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(1.95f, BinaryStream.Endianess.Little);
+    }
 }

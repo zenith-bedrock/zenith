@@ -23,6 +23,8 @@ class Player
     public const float MaxBlockReach = 6f;
 
     private readonly object _movementInputLock = new();
+    private readonly object _attackIntentLock = new();
+    private bool _pendingAttackIntent;
     private MovementInputState _movementInput;
     private readonly object _blockEditLock = new();
     private readonly Queue<BlockEditIntent> _blockEdits = new();
@@ -775,6 +777,23 @@ class Player
         {
             if (!_pendingRespawn) return false;
             _pendingRespawn = false;
+            return true;
+        }
+    }
+
+    /// <summary>Network-to-gameplay handoff for one attack swing; reach is validated on the tick.</summary>
+    internal void SubmitAttackIntent()
+    {
+        lock (_attackIntentLock)
+            _pendingAttackIntent = true;
+    }
+
+    internal bool TryConsumeAttackIntent()
+    {
+        lock (_attackIntentLock)
+        {
+            if (!_pendingAttackIntent) return false;
+            _pendingAttackIntent = false;
             return true;
         }
     }

@@ -27,6 +27,7 @@ sealed class AddActorPacket : DataPacket
 
     /// <summary>DATA_VARIANT metadata (e.g. falling_block's block runtime id) — null omits the entry.</summary>
     public int? Variant { get; set; }
+    public bool ZombieMetadata { get; set; }
 
     public override Span<byte> Encode()
     {
@@ -46,7 +47,9 @@ sealed class AddActorPacket : DataPacket
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
         writer.WriteFloat(BodyYaw, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(0); // Attributes — empty (Zenith sends none for falling_block)
-        if (Variant is { } variant)
+        if (ZombieMetadata)
+            EntityMetadataWriter.WriteZombieMetadata(ref writer);
+        else if (Variant is { } variant)
             EntityMetadataWriter.WriteFallingBlockMetadata(ref writer, variant);
         else
             writer.WriteUnsignedVarInt(0); // EntityMetadata — empty

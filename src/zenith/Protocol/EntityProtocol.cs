@@ -255,6 +255,23 @@ sealed class EntityProtocol
         });
     }
 
+    public void SendAddZombie(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId,
+            EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:zombie",
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            Yaw = yaw,
+            HeadYaw = yaw,
+            BodyYaw = yaw,
+            ZombieMetadata = true
+        });
+    }
+
     /// <summary>
     /// Adapts an authoritative floor-drop stack to the Bedrock item representation before
     /// transmitting its actor. Gameplay owns whether a drop exists; wire conversion stays here.

@@ -98,9 +98,11 @@ class ZenithServer
         var terrain = TerrainProviders.Create(config.World.Terrain, config.World.Seed);
         serverLogger.Info($"world.terrain={config.World.Terrain} seed={config.World.Seed}");
         var world = new World.World(_chunkStorage, serverLogger, terrain);
+        var zombies = new ZombieStore();
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world, players);
+        gameLoop.Register(new ZombieSystem(world, players, zombies));
         gameLoop.Register(new BlockDigSystem(world));
         gameLoop.Register(new BlockEditSystem(players, world));
         gameLoop.Register(gravity);

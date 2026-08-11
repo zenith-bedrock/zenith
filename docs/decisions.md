@@ -1397,11 +1397,44 @@ Also removed the boot-time `PROTOCOL WARNING` in `ZenithServer.cs` that announce
 
 **Why:** Fall and void already proved that direct `Player.Health` writes and a cause string were too weak: a second fatal call could perform drops before discovering death had happened, and death loot could clear only the slots that happened to fit. `HealthState` is the smallest shared domain boundary that makes damage validation, fatal idempotence, and future actor composition testable without moving fall policy out of `MovementSystem` or inventing a global `DamageSystem`.
 
-**Non-goals:** armor; hunger; effects; generic attributes; attackers/kill credit; AI; mobs; melee input handling; a generic combat engine; entity hierarchy; ECS; plugin hooks. A first actor can compose `HealthState` and apply an explicit `DamageSource.Melee`; adding attacker identity or a new damage policy requires evidence from that feature.
+**Non-goals:** armor; hunger; effects; generic attributes; attackers/kill credit; AI; a generic combat engine; entity hierarchy; ECS; plugin hooks. A first actor can compose `HealthState` and apply an explicit `DamageSource.Melee`; adding attacker identity or a new damage policy requires evidence from that feature.
 
 **Verification:** leaf `HealthStateTests` covers controlled melee, invalid input, one lethal transition, and respawn reset. Gameplay tests cover fall, void, conservation across bag/cursor/craft UI, capacity refusal with no partial death loot, and peer health fan-out. The external `smoke:respawn` script currently asserts the obsolete "bag intact" policy, so it is not counted as validation for this change; replace that assertion with an observable death-loot policy and add a peer-health scenario before player-versus-actor gameplay lands.
 
 **Status (ago 2026):** Shipped — no new `IGameSystem`; fall/void remain in `MovementSystem`, which already owns their tick ordering.
+
+## First actor vertical slice (Zombie)
+
+The first living actor is intentionally a concrete `Zombie` plus a small `ZombieStore` while we
+collect evidence for a future actor-runtime decision. The store owns only active authoritative
+state; `ZombieSystem` owns spawn, targeting, movement, damage and lifecycle decisions; `HealthState`
+owns health transitions; `EntityProtocol` owns Bedrock projection. The store is scaffolding, not a
+template for a permanent `SkeletonStore`/`CowStore` family.
+
+| Concern | FallingBlock | FloorDrop | Zombie | Classification |
+|---|---|---|---|---|
+| Runtime identity | entity/runtime id | item actor id | entity/runtime id | shared lifecycle candidate |
+| Position | continuous fall position | cell position | continuous XZ + yaw | similar, not yet generalized |
+| Velocity | gravity-specific | none | chase step only | actor-specific |
+| Health | none | none | composed `HealthState` | actor-specific |
+| Lifetime | short-lived settle/void | delay/age/despawn | active/dead/remove once | similar |
+| Active tick | `GravitySystem` | `FloorDropSystem` | `ZombieSystem` | shared execution shape |
+| Spawn/remove | gameplay + `EntityProtocol` | gameplay + `EntityProtocol` | gameplay + `EntityProtocol` | repeated plumbing |
+| Replication | add/move/remove | add/remove/take | add/health/move/remove | similar, wire-specific |
+| Late join | chunk emission | `ColumnSend` | tick-owned viewer catch-up | similar |
+| Visibility | known chunk / online | known chunk / online | online viewer set | unknown future boundary |
+| World interaction | block support | pickup reach | simple player proximity | actor-specific |
+
+The repeated fields/operations are recorded as evidence only. No `EntityStore`, registry, hierarchy,
+ECS, or generic visibility abstraction is introduced until a materially different second actor shows
+which parts are actually common. The current vertical slice also records the DX cost explicitly:
+one concrete state file, one tick system, one composition-root registration, one attack handoff in
+`Player`/handlers, and one actor projection in `EntityProtocol`/`AddActorPacket`.
+
+**Lifecycle invariant:** the bootstrap slice creates at most one actor; the gameplay owner is
+the only writer; an accepted melee swing is reach-validated; lethal health removes the actor once;
+late ticks cannot resurrect it. This is a testable behavior slice, not a claim that all future actors
+share this storage shape.
 
 ## Explicit non-goals (so far)
 
