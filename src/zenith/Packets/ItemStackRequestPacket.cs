@@ -68,11 +68,9 @@ readonly struct DecodedItemStackRequest
 /// Consume/Create are supported no-ops so craft UI requests are not rejected wholesale.
 /// CraftResultsDeprecated skipado como supported (no-op); restantes unsupported.
 ///
-/// Action type numbers and per-action field widths verified against minecraft-data 1.26.40's
-/// live protocol.json (ADR §90) — <c>PlaceInContainer</c>/<c>TakeOutContainer</c> never existed
-/// in the real enum (a prior invention shifted every action from LabTableCombine onward by two),
-/// and every action carries a <c>legacy_type_id</c> byte right after <c>type_id</c> that Zenith
-/// never read.
+/// Action type numbers and per-action field widths follow the protocol-import Mojang cache for
+/// 2169. Cereal actions have one <c>uint8 Action type</c>; they do not carry the pre-Cereal
+/// <c>legacy_type_id</c> byte.
 /// </summary>
 sealed class ItemStackRequestPacket : DataPacket
 {
@@ -115,7 +113,8 @@ sealed class ItemStackRequestPacket : DataPacket
 
     private static DecodedItemStackRequest ReadEntry(ref BinaryStream stream)
     {
-        var requestId = stream.ReadVarInt();
+        // Cereal RequestData.Client Request Id is an li32, not the legacy zigzag varint.
+        var requestId = stream.ReadInt(BinaryStream.Endianess.Little);
         var actionCount = stream.ReadUnsignedVarInt();
         var actions = new DecodedStackRequestAction[actionCount];
         var allSupported = true;
@@ -142,8 +141,7 @@ sealed class ItemStackRequestPacket : DataPacket
 
     private static DecodedStackRequestAction ReadAction(ref BinaryStream stream)
     {
-        var type = (byte)stream.ReadUnsignedVarInt();
-        _ = stream.ReadByte(); // legacy_type_id — always present, unused
+        var type = stream.ReadByte();
 
         switch (type)
         {

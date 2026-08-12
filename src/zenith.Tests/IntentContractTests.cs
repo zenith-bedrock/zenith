@@ -163,10 +163,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteVarInt(requestId);
+        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1); // action count
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
-        writer.WriteByte(0); // legacy type id
         writer.WriteUnsignedVarInt(checked((int)recipeNetId));
         writer.WriteByte(1); // craft times
         writer.WriteUnsignedVarInt(0); // filter strings
@@ -184,10 +183,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteVarInt(requestId);
+        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1); // action count
         writer.WriteByte(ItemStackRequestPacket.ActionDrop);
-        writer.WriteByte(0); // legacy type id
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, containerId, slot);
         writer.WriteBool(false); // randomly
@@ -198,15 +196,13 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteVarInt(requestId);
+        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(2); // action count
         writer.WriteByte(ItemStackRequestPacket.ActionPlace);
-        writer.WriteByte(0); // legacy type id
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
         WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
-        writer.WriteByte(0); // legacy type id
         writer.WriteUnsignedVarInt(checked((int)recipeNetId));
         writer.WriteByte(1); // craft times
         SubmitItemStackRequest(player, writer);
@@ -216,10 +212,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteVarInt(requestId);
+        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1); // action count
         writer.WriteByte(ItemStackRequestPacket.ActionPlace);
-        writer.WriteByte(0); // legacy type id
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
         WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);

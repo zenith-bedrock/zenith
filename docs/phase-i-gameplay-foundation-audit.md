@@ -81,13 +81,20 @@ The audit changed the implementation direction rather than opening a new item ru
   Skeleton loot, delayed pickup into inventory, and refusal of a lethal transition at the
   `FloorDropStore` SoftCap. The tested conservation rule is: a full store leaves the mob health and
   active state unchanged rather than producing a death without its loot.
+- The ItemStack request/response wire has been reconciled with the imported 2169 Cereal definition:
+  request ids are little-endian `int32`, action discriminators are one `uint8` (not a legacy
+  discriminator pair), and response required/optional markers are emitted at both levels. The
+  byte-level packet tests cover this shape, preventing the external client from being rejected
+  before gameplay can own an inventory intent.
 - The two-client Zombie Bedrock smoke now waits for an `add_item_entity` near the observed death
-  position as well as health and remove events. This keeps the external proof at the protocol
-  boundary without teaching gameplay about packets.
-- The smoke bot's repository-wide TypeScript check currently has pre-existing strict-type failures
-  in `bedrockUuid.ts`, `client.ts`, `debugCapture.ts`, `join.ts` and `skin.ts`; the modified Zombie
-  script parses and reaches its normal connection attempt. A live smoke run still requires a Zenith
-  server at `127.0.0.1:19132`.
+  position as well as health and remove events; live `smoke:zombie`, `smoke:inv-hotbar`, and
+  `smoke:chest-open` runs passed against the local server. This keeps the external proof at the
+  protocol boundary without teaching gameplay about packets.
+- A new two-client floor-pickup harness reached real drop creation after the Cereal correction but
+  does not yet observe `take_item_entity` reliably in its synthetic full-bag scenario. It is not
+  treated as proof of a runtime fault: existing multiplayer/unit tests cover the authoritative
+  competing-player pickup path. Keep the harness as a follow-up until it can assert the complete
+  external animation without synthetic inventory assumptions.
 
 ## Deferred
 
