@@ -125,7 +125,7 @@ partial class InGameSessionHandler
         if (Blocks.IsChest(runtimeId))
             runtimeId = ChestPairing.AlignFacingWithNeighbor(world, tx, ty, tz, runtimeId);
 
-        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot);
+        var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot, stack.Id);
         if (!intent.IsInWorldBounds())
         {
             session.Context.Logger.Debug($"Rejected place OOB from {player.Username}");

@@ -979,7 +979,7 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 
 1. **Q-throw / ISR Drop** — `InventorySystem.TryDrop` deposits into `FloorDropStore` + `AddItemActor` fan-out (`FloorDropFanout`) at the player feet cell; pickup delay **40** ticks (~2s) so the thrower does not instantly re-collect. SoftCap refuse → ISR rollback (item stays in bag).
 2. **Death loot** — Survival void death dumps craft UI + bag + cursor to floor near death XZ (Y clamped to surface when below `FlatMinY` so void loot is recoverable). Creative = keepInventory. SoftCap may void remainder (Debug).
-3. **Break** — unchanged: TryAdd into inventory first; surplus → floor (already §26). Multi-id chest dump uses spiral neighbor cells (one StackId per cell).
+3. **Break** — inventory first; surplus → floor (already §26). A break now plans the concrete destination before it removes its source: ordinary block loot must fit the bag or a floor cell, and chest contents plus the chest item are planned together. Capacity refusal leaves the block/chest and inventory unchanged.
 4. **Store** — `TryAddOrMerge` refuses overwrite when a cell holds a different id (was silent clobber).
 
 **Addendum (ago 2026 — §98):** death loot is now one planned batch. If the complete craft-grid + bag + cursor set cannot fit, no floor drop is committed and no source slot is cleared; the dead player retains all of it for the respawn inventory resync. This replaces the old per-slot "keep the remainder" behavior.
@@ -996,13 +996,13 @@ Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 
 1. **Wrong-tool no-drop** — Survival break still removes the cell when dig auth passes. If `DigProfiles.RequiresCorrectToolForDrops` and `!BreakDuration.IsHarvestable(held)`, skip bag/floor for the **broken block rid**. Soft blocks / chest block item still drop with empty hand. Chest **contents** dump unchanged.
 2. **Creative chest contents** — InstantBuild still skips dropping the chest **block**. `RemoveAndDump` contents always go to `FloorDropFanout` (Creative does not TryAdd to bag). Clarifies §31 “clears chest store” ≠ void.
-3. **Death SoftCap** — superseded by §98's all-or-nothing death-loot plan. Break SoftCap-after-air remains documented nit (no rollback this ADR).
+3. **Destination SoftCaps** — death loot remains §98's all-or-nothing plan. Phase II applies the same concrete preflight principle to ordinary block drops and chest contents: inventory/floor refusal rejects before the world mutation, so no accepted break can silently lose its decided loot.
 
 **Clarifies:** §27 Deferred wrong-tool loot; §31 Creative break; §73 SoftCap death void.
 
-**Non-goals:** Vanilla loot tables (cobble from stone); tool durability; Creative Destroy ISR; floor despawn TTL; break SoftCap world rollback.
+**Non-goals:** Vanilla loot tables (cobble from stone); tool durability; Creative Destroy ISR; floor despawn TTL; generic transaction or loot framework.
 
-**Status (jul 2026):** Shipped — loot gate + Creative chest dump + death SoftCap keep + leaf tests.
+**Status (ago 2026):** Shipped — loot gate, Creative chest dump, bounded-destination preflight for break/chest, and leaf tests.
 
 ### 75. Cave context alloc — ThreadStatic scratch + ArrayPool
 

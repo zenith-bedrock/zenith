@@ -93,6 +93,9 @@ sealed class BlockEditSystem : IGameSystem
 
         var creative = player.GameMode == GameMode.Creative;
         var inventoryChanged = false;
+        var consumedPlacementStack = false;
+        InventorySnapshot placementSnapshot = default;
+        List<FloorDropFanout.DepositRequest>? floorDropRequests = null;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
             if (!Blocks.IsPlaceable(edit.BlockRuntimeId))
@@ -126,21 +129,27 @@ sealed class BlockEditSystem : IGameSystem
             if (!creative)
             {
                 var slot = edit.HotbarSlot;
-                if (!PlayerInventory.IsValidHotbarSlot(slot) || !player.Inventory.TryConsumeOne(slot))
+                if (!PlayerInventory.IsValidHotbarSlot(slot) ||
+                    (edit.HasExpectedPlacementStackId &&
+                     player.Inventory.Get(slot).Id != edit.ExpectedPlacementStackId))
                 {
                     ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                     return false;
                 }
-                inventoryChanged = true;
+
+                placementSnapshot = player.Inventory.CaptureSnapshot();
+                if (!player.Inventory.TryConsumeOne(slot))
+                {
+                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+                    return false;
+                }
+                consumedPlacementStack = true;
             }
 
             if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
             {
-                if (!creative && PlayerInventory.IsValidHotbarSlot(edit.HotbarSlot))
-                {
-                    player.Inventory.TryAddUpTo(
-                        StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(edit.BlockRuntimeId)), 1);
-                }
+                if (consumedPlacementStack)
+                    player.Inventory.RestoreSnapshot(placementSnapshot);
 
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
@@ -151,11 +160,8 @@ sealed class BlockEditSystem : IGameSystem
                 if (!_world.Chests.TryEnsure(edit.X, edit.Y, edit.Z))
                 {
                     _ = _world.TrySetBlock(edit.X, edit.Y, edit.Z, World.World.AirRuntimeId);
-                    if (!creative && PlayerInventory.IsValidHotbarSlot(edit.HotbarSlot))
-                    {
-                        player.Inventory.TryAddUpTo(
-                            StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(edit.BlockRuntimeId)), 1);
-                    }
+                    if (consumedPlacementStack)
+                        player.Inventory.RestoreSnapshot(placementSnapshot);
 
                     ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                     return false;
@@ -163,6 +169,8 @@ sealed class BlockEditSystem : IGameSystem
 
                 _world.PersistChest(edit.X, edit.Y, edit.Z);
             }
+
+            inventoryChanged = consumedPlacementStack;
 
             BlockSoundFanout.Place(
                 online, player.Session, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
@@ -217,6 +225,66 @@ sealed class BlockEditSystem : IGameSystem
             if (wasChest)
                 pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
 
+            // A bounded floor store is part of the authoritative destination for a concrete
+            // block drop. Refuse before removing the source when neither the bag nor the floor
+            // can receive it; otherwise an accepted break could silently destroy its loot.
+            var shouldDrop = !creative && ShouldDropBrokenBlock(previous, player);
+            var dropId = default(StackId);
+            var inventoryCanReceiveDrop = false;
+            if (wasChest)
+            {
+                floorDropRequests = [];
+                var snapshot = player.Inventory.CaptureSnapshot();
+                if (_world.Chests.TryGetSlots(edit.X, edit.Y, edit.Z, out var chestSlots))
+                {
+                    foreach (var stack in chestSlots)
+                    {
+                        if (stack.IsEmpty) continue;
+                        var id = stack.Id.IsBlock
+                            ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stack.Id.Value))
+                            : stack.Id;
+                        var added = creative ? 0 : player.Inventory.TryAddUpTo(id, stack.Count);
+                        if (stack.Count > added)
+                            floorDropRequests.Add(new FloorDropFanout.DepositRequest(id, stack.Count - added));
+                    }
+                }
+
+                if (shouldDrop)
+                {
+                    dropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
+                    var added = player.Inventory.TryAddUpTo(dropId, 1);
+                    if (added < 1)
+                        floorDropRequests.Add(new FloorDropFanout.DepositRequest(dropId, 1));
+                }
+                player.Inventory.RestoreSnapshot(snapshot);
+
+                if (floorDropRequests.Count > 0 &&
+                    !FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, floorDropRequests))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break refused (no chest-loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
+                    return false;
+                }
+                floorDropRequests.Clear();
+            }
+            else if (shouldDrop)
+            {
+                dropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(previous));
+                var snapshot = player.Inventory.CaptureSnapshot();
+                inventoryCanReceiveDrop = player.Inventory.TryAdd(dropId);
+                player.Inventory.RestoreSnapshot(snapshot);
+
+                if (!inventoryCanReceiveDrop &&
+                    !FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, 1))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
+                    return false;
+                }
+            }
+
             if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
                 !_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
             {
@@ -263,7 +331,7 @@ sealed class BlockEditSystem : IGameSystem
                         : stackId;
                     if (creative)
                     {
-                        DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, count);
+                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(id, count));
                         continue;
                     }
 
@@ -272,24 +340,44 @@ sealed class BlockEditSystem : IGameSystem
                         inventoryChanged = true;
                     var surplus = count - added;
                     if (surplus > 0)
-                        DepositFloorDrop(online, edit.X, edit.Y, edit.Z, id, surplus);
+                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(id, surplus));
                 }
             }
 
-            if (!creative && ShouldDropBrokenBlock(previous, player))
+            if (shouldDrop)
             {
-                // Oriented chest → item form (south) so stacks merge.
-                var dropRid = Blocks.NormalizeMergeRuntimeId(wasChest ? Blocks.Chest : previous);
-                var dropId = StackId.FromBlock(dropRid);
-                var added = player.Inventory.TryAddUpTo(dropId, 1);
-                if (added > 0)
-                    inventoryChanged = true;
-                if (added < 1 && DepositFloorDrop(online, edit.X, edit.Y, edit.Z, dropId, 1))
+                if (wasChest)
                 {
-                    player.Session.Context.Logger.Debug(
-                        $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    var chestDropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
+                    var added = player.Inventory.TryAddUpTo(chestDropId, 1);
+                    if (added > 0)
+                        inventoryChanged = true;
+                    if (added < 1)
+                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(chestDropId, 1));
+                }
+                else if (inventoryCanReceiveDrop)
+                {
+                    if (!player.Inventory.TryAdd(dropId))
+                        throw new InvalidOperationException("Prevalidated block-drop inventory commit failed.");
+                    inventoryChanged = true;
+                }
+                else
+                {
+                    floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, 1)];
                 }
             }
+        }
+
+        if (floorDropRequests is { Count: > 0 })
+        {
+            if (!FloorDropFanout.TryDepositBatch(_world, _players, online,
+                    edit.X, edit.Y, edit.Z, floorDropRequests))
+            {
+                throw new InvalidOperationException("Prevalidated block-drop floor commit failed.");
+            }
+
+            player.Session.Context.Logger.Debug(
+                $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
         }
 
         if (inventoryChanged)
@@ -357,15 +445,6 @@ sealed class BlockEditSystem : IGameSystem
         var tool = held.Id.IsItem ? Tools.AsTool(held.Id.Value) : ToolInfo.None;
         return BreakDuration.IsHarvestable(profile, tool);
     }
-
-    private bool DepositFloorDrop(
-        IReadOnlyList<global::Zenith.Player.Player> online,
-        int x,
-        int y,
-        int z,
-        StackId id,
-        int count) =>
-        FloorDropFanout.TryDeposit(_world, _players, online, x, y, z, id, count);
 
     /// <summary>
     /// True when the place cell intersects the placer or another InGame player's standing BB

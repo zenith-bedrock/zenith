@@ -54,6 +54,19 @@ static class FloorDropFanout
         TryPlanDeposits(world.FloorDrops, x, y, z, [new DepositRequest(id, count)], searchRadius, out _);
 
     /// <summary>
+    /// Checks a concrete sequence of drops as one operation without changing world state. Callers
+    /// use it before removing a source whose contents may need several nearby floor cells.
+    /// </summary>
+    public static bool CanDepositBatch(
+        World.World world,
+        int x,
+        int y,
+        int z,
+        IReadOnlyList<DepositRequest> requests,
+        int searchRadius = 3) =>
+        TryPlanDeposits(world.FloorDrops, x, y, z, requests, searchRadius, out _);
+
+    /// <summary>
     /// Plans every deposit before mutating or publishing any of them. This keeps an inventory
     /// transaction that drops several stacks atomic: a full/blocked floor-drop area rejects the
     /// whole operation rather than leaving an earlier visible drop behind.

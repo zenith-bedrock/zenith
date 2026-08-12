@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using Zenith.Diagnostics;
 using Zenith.Event;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
@@ -26,6 +27,13 @@ internal static class RuntimeLoadHarness
     public static int Run(string[] args)
     {
         var options = LoadOptions.Parse(args);
+        if (options.WorldInteraction)
+        {
+            foreach (var playerCount in options.PlayerCounts)
+                Print(RunWorldInteraction(playerCount, options.Ticks));
+            return 0;
+        }
+
         foreach (var playerCount in options.PlayerCounts)
         {
             var steady = RunSteady(playerCount, options.Ticks);
@@ -93,6 +101,45 @@ internal static class RuntimeLoadHarness
             host.Transport.Datagrams, host.Transport.Bytes);
     }
 
+    /// <summary>
+    /// Ten-or-more isolated players repeatedly place then authoritatively break one stone cell.
+    /// Every twentieth tick a concrete dirt floor drop is also created at each player's feet and
+    /// later collected through the production pickup system. This measures gameplay ownership,
+    /// projection and wire egress together; it is not a client-protocol benchmark.
+    /// </summary>
+    private static LoadResult RunWorldInteraction(int playerCount, int ticks)
+    {
+        var host = new RuntimeHost(playerCount, streamChunks: false, includeWorldInteractionDiagnostics: true);
+        host.PrepareWorldInteraction();
+        for (var warmup = 0; warmup < 20; warmup++)
+        {
+            host.SubmitWorldInteraction(warmup);
+            host.Tick();
+        }
+        host.Transport.Reset();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 20; tick < ticks + 20; tick++)
+        {
+            host.SubmitWorldInteraction(tick);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick - 20] = Stopwatch.GetTimestamp() - started;
+        }
+        host.ValidateWorldInteraction();
+        host.PrintWorldInteractionTimings();
+
+        return LoadResult.Create("world-loop", playerCount, ticks, elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams, host.Transport.Bytes);
+    }
+
     private static LoadResult RunActorChurn(int playerCount, int actorCount, int ticks, bool useChunkInterest)
     {
         var host = new RuntimeHost(playerCount, streamChunks: false, includeProjectileSystem: true);
@@ -136,12 +183,19 @@ internal static class RuntimeLoadHarness
     private sealed class RuntimeHost
     {
         private readonly List<Player.Player> _players = [];
+        private readonly PlayerManager _playerManager;
 
         public RecordingRakNetServer Transport { get; } = new();
         public GameLoop Loop { get; }
         public ProjectileSystem? Projectiles { get; }
+        public World.World World { get; }
+        private WorldInteractionDiagnostics? WorldDiagnostics { get; }
 
-        public RuntimeHost(int playerCount, bool streamChunks, bool includeProjectileSystem = false)
+        public RuntimeHost(
+            int playerCount,
+            bool streamChunks,
+            bool includeProjectileSystem = false,
+            bool includeWorldInteractionDiagnostics = false)
         {
             if (playerCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(playerCount));
@@ -149,14 +203,22 @@ internal static class RuntimeLoadHarness
             Blocks.EnsureLoaded();
             var logger = new SilentLogger();
             var players = new PlayerManager();
+            _playerManager = players;
             var clock = new GameClock();
             var world = new World.World(new InMemoryChunkStorage(), logger);
+            World = world;
+            WorldDiagnostics = includeWorldInteractionDiagnostics ? new WorldInteractionDiagnostics() : null;
             var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
             var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
             var context = new ServerContext(logger, players, new EventBus(logger), clock, world,
                 new ServerConfig(), blockPalette, itemPalette, RecipeRegistry.CreateDefault(), CreativeCatalog.CreateDefault());
 
-            Loop = new GameLoop(clock, players, logger);
+            Loop = new GameLoop(
+                clock,
+                players,
+                logger,
+                WorldDiagnostics?.Runtime,
+                WorldDiagnostics?.Tick ?? default);
             Loop.Register(new TimeSyncSystem());
             Loop.Register(new MovementSystem(players));
             Loop.Register(new ChatSystem());
@@ -168,10 +230,19 @@ internal static class RuntimeLoadHarness
                 Loop.Register(Projectiles);
             }
             Loop.Register(new BlockDigSystem(world));
-            Loop.Register(new BlockEditSystem(players, world));
+            if (WorldDiagnostics is { } timings)
+                Loop.Register(new BlockEditSystem(players, world), timings.BlockEdit);
+            else
+                Loop.Register(new BlockEditSystem(players, world));
             Loop.Register(new GravitySystem(world, players));
-            Loop.Register(new FloorDropSystem(world));
-            Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative));
+            if (WorldDiagnostics is { } floorTimings)
+                Loop.Register(new FloorDropSystem(world), floorTimings.FloorDrop);
+            else
+                Loop.Register(new FloorDropSystem(world));
+            if (WorldDiagnostics is { } inventoryTimings)
+                Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative), inventoryTimings.Inventory);
+            else
+                Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative));
             Loop.Register(new EquipmentSystem());
             Loop.Register(new ChunkStreamSystem(world));
 
@@ -293,6 +364,107 @@ internal static class RuntimeLoadHarness
 
         public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
 
+        public void PrepareWorldInteraction()
+        {
+            Tools.EnsureLoaded();
+            for (var i = 0; i < _players.Count; i++)
+            {
+                var player = _players[i];
+                player.PositionX = i * 8f;
+                player.PositionY = 90f;
+                player.PositionZ = 0f;
+                for (var slot = 0; slot < PlayerInventory.FullInventorySize; slot++)
+                    player.Inventory.TrySetBlock(slot, Blocks.Air, 0);
+                player.Inventory.TrySetBlock(0, Blocks.Stone, PlayerInventory.MaxStack);
+                player.Inventory.TrySetItem(1, Tools.Require("minecraft:wooden_pickaxe"), 1);
+                player.Inventory.TrySetBlock(2, Blocks.Dirt, PlayerInventory.MaxStack - 1);
+            }
+        }
+
+        public void SubmitWorldInteraction(int tick)
+        {
+            for (var i = 0; i < _players.Count; i++)
+            {
+                var player = _players[i];
+                var x = i * 8 + 2;
+                const int y = 90;
+                if ((tick & 1) == 0)
+                {
+                    player.SelectedHotbarSlot = 0;
+                    if (!player.SubmitBlockEdit(BlockEditIntent.Set(x, y, 0, Blocks.Stone, hotbarSlot: 0)))
+                        throw new InvalidOperationException("World-loop placement queue refused.");
+                }
+                else
+                {
+                    player.SelectedHotbarSlot = 1;
+                    var need = Blocks.BreakTicks(Blocks.Stone, player.Inventory.GetStackId(1));
+                    var started = Loop.Clock.CurrentTick > (ulong)Math.Max(need, 0)
+                        ? Loop.Clock.CurrentTick - (ulong)Math.Max(need, 0)
+                        : 0;
+                    if (!player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, 0, started, need)))
+                        throw new InvalidOperationException("World-loop break queue refused.");
+                }
+
+                if (tick % 20 == 0 && !FloorDropFanout.TryDeposit(
+                        World, _playerManager, _players, (int)player.PositionX, y, 0,
+                        StackId.FromBlock(Blocks.Dirt), 1))
+                {
+                    throw new InvalidOperationException("World-loop pickup seed could not commit.");
+                }
+            }
+        }
+
+        public void ValidateWorldInteraction()
+        {
+            foreach (var player in _players)
+            {
+                var stone = 0;
+                var dirt = 0;
+                for (var slot = 0; slot < PlayerInventory.FullInventorySize; slot++)
+                {
+                    var stack = player.Inventory.Get(slot);
+                    if (stack.Id == StackId.FromBlock(Blocks.Stone)) stone += stack.Count;
+                    if (stack.Id == StackId.FromBlock(Blocks.Dirt)) dirt += stack.Count;
+                }
+
+                if (stone != PlayerInventory.MaxStack || dirt < PlayerInventory.MaxStack)
+                    throw new InvalidOperationException($"World-loop conservation failed for {player.Username}: stone={stone}, dirt={dirt}.");
+            }
+        }
+
+        public void PrintWorldInteractionTimings() => WorldDiagnostics?.Print();
+
+    }
+
+    /// <summary>Fixed diagnostics layout for the world-loop probe; recording remains outside gameplay decisions.</summary>
+    private sealed class WorldInteractionDiagnostics
+    {
+        public DiagnosticsRuntime Runtime { get; }
+        public TimingMetric Tick { get; }
+        public TimingMetric BlockEdit { get; }
+        public TimingMetric FloorDrop { get; }
+        public TimingMetric Inventory { get; }
+
+        public WorldInteractionDiagnostics()
+        {
+            var builder = new DiagnosticsBuilder();
+            Tick = builder.Timing("tick");
+            BlockEdit = builder.Timing("tick.system.block-edit", "tick");
+            FloorDrop = builder.Timing("tick.system.floor-drop", "tick");
+            Inventory = builder.Timing("tick.system.inventory", "tick");
+            Runtime = builder.Build();
+        }
+
+        public void Print()
+        {
+            var snapshot = Runtime.CaptureSnapshot();
+            var parts = snapshot.Metrics
+                .Where(metric => metric.Count > 0)
+                .Select(metric =>
+                    $"{metric.Name}={metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count:F3}ms avg")
+                .ToArray();
+            Console.WriteLine($"world-loop timings {string.Join(" ", parts)}");
+        }
     }
 
     private sealed class RecordingRakNetServer : RakNetServer
@@ -352,7 +524,14 @@ internal static class RuntimeLoadHarness
             new(after.Gen0 - before.Gen0, after.Gen1 - before.Gen1, after.Gen2 - before.Gen2);
     }
 
-    private readonly record struct LoadOptions(int[] PlayerCounts, int Ticks, int ChunkTicks, int[] ActorCounts, int ActorPlayers, int ActorTicks)
+    private readonly record struct LoadOptions(
+        int[] PlayerCounts,
+        int Ticks,
+        int ChunkTicks,
+        int[] ActorCounts,
+        int ActorPlayers,
+        int ActorTicks,
+        bool WorldInteraction)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -360,6 +539,7 @@ internal static class RuntimeLoadHarness
             var ticks = DefaultTicks;
             var actorCounts = new[] { 100, 1_000 };
             var actorPlayers = 10;
+            var worldInteraction = false;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -370,11 +550,13 @@ internal static class RuntimeLoadHarness
                     actorCounts = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray();
                 else if (args[i] == "--actor-players" && i + 1 < args.Length)
                     actorPlayers = int.Parse(args[++i]);
+                else if (args[i] == "--world-interaction")
+                    worldInteraction = true;
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction);
         }
     }
 }
