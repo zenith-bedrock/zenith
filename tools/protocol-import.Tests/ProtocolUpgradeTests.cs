@@ -22,4 +22,33 @@ public sealed class ProtocolUpgradeTests
         Assert.Single(summary.Red);
         Assert.Contains("Review manual packet TierBPacket.", summary.RecommendedActions);
     }
+
+    [Fact]
+    public void Upgrade_report_persists_snapshots_decisions_and_manual_actions()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"protocol-upgrade-{Guid.NewGuid():N}.md");
+        try
+        {
+            var summary = new UpgradeSummary([], [], ["TierBPacket"], [], [],
+                [new SchemaChange("TierBPacket", "Changed wire shape: Value", DiffSeverity.Red)],
+                ["Review manual packet TierBPacket."]);
+            UpgradeReportWriter.Write(path,
+                new CacheManifest("mojang", "r/26_u3", "before", DateTimeOffset.UnixEpoch, []),
+                new CacheManifest("mojang", "r/26_u4", "after", DateTimeOffset.UnixEpoch, []),
+                summary,
+                new SchemaCoverage(0, [new UnsupportedConstruct("TierBPacket", "Value", "union") ]));
+
+            var report = File.ReadAllText(path);
+            Assert.Contains("r/26_u3", report);
+            Assert.Contains("r/26_u4", report);
+            Assert.Contains("Changed packets", report);
+            Assert.Contains("Decisions", report);
+            Assert.Contains("Manual actions", report);
+            Assert.Contains("union", report);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

@@ -13,7 +13,7 @@ internal static class ExistingPacketReader
 {
     private static readonly string[] WireAttributeNames =
     [
-        "Wire", "WireVar", "WireString", "WireByteArray", "WireUuid", "WireNested", "WireNestedArray"
+        "Wire", "WireVar", "WireString", "WireByteArray", "WireUuid", "WireUuidArray", "WireNested", "WireNestedArray"
     ];
 
     public static IReadOnlyList<string> ReadWirePropertyNames(string filePath)

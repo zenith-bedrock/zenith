@@ -106,6 +106,14 @@ internal static class SchemaCache
         catch (JsonException) { return null; }
     }
 
+    public static CacheManifest? ReadSnapshotManifest(string snapshotRoot)
+    {
+        var path = Path.Combine(snapshotRoot, "manifest.json");
+        if (!File.Exists(path)) return null;
+        try { return JsonSerializer.Deserialize<CacheManifest>(File.ReadAllText(path)); }
+        catch (JsonException) { return null; }
+    }
+
     public static IReadOnlyList<string> Validate(string cacheDir, string source)
     {
         var manifest = ReadCurrentManifest(cacheDir, source);
