@@ -1532,6 +1532,24 @@ named interest rule exceeds confirmed chunk knowledge.
 **Verification:** focused actor-interest/reconciliation tests plus
 [`phase-f-entity-interest.md`](phase-f-entity-interest.md)'s reproducible real-runtime benchmark.
 
+### 104. Runtime health is emitted as bounded server telemetry, not a metrics platform
+
+**Choice:** the server periodically logs one bounded runtime snapshot: tick duration and
+over-budget count, connected players, concrete actor count, RakNet sessions and packet bytes,
+GC state, and the last graceful persistence-flush duration. RakNet counters are atomic transport
+facts; GameLoop only reports elapsed tick duration after the authoritative tick has completed.
+
+**Why:** Phase G needs enough evidence to diagnose beta operation and relate capacity runs to a
+50-ms tick budget. This is deliberately cheaper and more honest than inventing an HTTP exporter,
+metric registry, event pipeline or new runtime ownership model.
+
+**Boundary:** telemetry neither changes gameplay nor packets, and it does not hold locks across
+protocol send, I/O or callbacks. Persistence flush remains shutdown-owned. The reproducible
+capacity and recovery limits are recorded in [`phase-g-beta-readiness.md`](phase-g-beta-readiness.md).
+
+**Non-goals:** Prometheus/OpenTelemetry endpoint, dashboard, polling API, generic metric names or
+alerting framework. Add an external integration only when an operational consumer requires it.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

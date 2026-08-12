@@ -51,6 +51,18 @@ public class SessionHygieneTests
         Assert.Equal(1, server.ConnectionCount);
     }
 
+    [Fact]
+    public void Tick_staleSession_disconnectsAndRemovesTransportSession()
+    {
+        var server = CreateServer();
+        var session = AddGhost(server, "10.0.0.7", 4000);
+        session.LastSeen = DateTimeOffset.UtcNow.AddSeconds(-16).ToUnixTimeMilliseconds();
+
+        session.Tick();
+
+        Assert.Equal(0, server.ConnectionCount);
+    }
+
     private static RakNetServer CreateServer(uint maxPerAddress = 3) =>
         new(0)
         {

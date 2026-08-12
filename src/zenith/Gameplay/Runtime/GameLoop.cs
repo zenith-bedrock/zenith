@@ -1,5 +1,6 @@
 using Zenith.Player;
 using Zenith.Raknet.Log;
+using System.Diagnostics;
 
 namespace Zenith.Gameplay.Runtime;
 
@@ -14,6 +15,7 @@ sealed class GameLoop
     private readonly PlayerManager _players;
     private readonly List<IGameSystem> _systems = new();
     private readonly List<Player.Player> _onlineScratch = new();
+    private Action<TimeSpan>? _tickObserver;
 
     public GameClock Clock => _clock;
 
@@ -26,6 +28,9 @@ sealed class GameLoop
 
     /// <summary>Ordem de registro = ordem de execução.</summary>
     public void Register(IGameSystem system) => _systems.Add(system);
+
+    /// <summary>Composition-root-only operational hook; it observes completed ticks and owns no gameplay state.</summary>
+    internal void SetTickObserver(Action<TimeSpan> observer) => _tickObserver = observer;
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -61,19 +66,24 @@ sealed class GameLoop
     /// </summary>
     internal void TickOnce()
     {
-        _clock.Advance();
-        _players.FillOnline(_onlineScratch);
-        foreach (var system in _systems)
+        var started = Stopwatch.GetTimestamp();
+        try
         {
-            try
+            _clock.Advance();
+            _players.FillOnline(_onlineScratch);
+            foreach (var system in _systems)
             {
-                system.Tick(_clock, _onlineScratch);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
-                throw;
+                try
+                {
+                    system.Tick(_clock, _onlineScratch);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
+                    throw;
+                }
             }
         }
+        finally { _tickObserver?.Invoke(Stopwatch.GetElapsedTime(started)); }
     }
 }

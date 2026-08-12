@@ -1,4 +1,5 @@
 using Zenith.Event;
+using System.Diagnostics;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
@@ -24,6 +25,7 @@ class ZenithServer
     private readonly ILogger _logger;
     private readonly ZenithSessionListener _sessionListener;
     private readonly GravitySystem _gravity;
+    private readonly RuntimeTelemetry _telemetry;
     private Task? _runTask;
     private Task? _shutdownTask;
     private Task? _gameLoopTask;
@@ -64,6 +66,8 @@ class ZenithServer
         }
         var players = new PlayerManager();
         var clock = new GameClock();
+        var zombies = new ZombieStore();
+        var projectiles = new ProjectileStore();
         var gameLoop = new GameLoop(clock, players, serverLogger);
         gameLoop.Register(new TimeSyncSystem());
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
@@ -98,8 +102,6 @@ class ZenithServer
         var terrain = TerrainProviders.Create(config.World.Terrain, config.World.Seed);
         serverLogger.Info($"world.terrain={config.World.Terrain} seed={config.World.Seed}");
         var world = new World.World(_chunkStorage, serverLogger, terrain);
-        var zombies = new ZombieStore();
-        var projectiles = new ProjectileStore();
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world, players);
@@ -140,6 +142,10 @@ class ZenithServer
             OnlinePlayerCount = () => Context.PlayerManager.Count,
             OnListening = _ => serverLogger.Info("Server ready.")
         };
+        _telemetry = new RuntimeTelemetry(serverLogger);
+        gameLoop.SetTickObserver(elapsed => _telemetry.RecordTick(elapsed, players.Count,
+            zombies.Active.Count + projectiles.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count,
+            RakNetServer));
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>
@@ -371,8 +377,10 @@ class ZenithServer
 
             try
             {
+                var flushStarted = Stopwatch.GetTimestamp();
                 using var flushCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await Context.World.FlushPersistenceAsync(flushCts.Token).ConfigureAwait(false);
+                _telemetry.RecordFlush(Stopwatch.GetElapsedTime(flushStarted));
             }
             catch (OperationCanceledException)
             {

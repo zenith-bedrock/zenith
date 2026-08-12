@@ -32,6 +32,10 @@ public class RakNetServer
 
     private int _tickCount = 0;
     private int _nextSessionId = -1;
+    private long _sentDatagrams;
+    private long _sentBytes;
+    private long _receivedDatagrams;
+    private long _receivedBytes;
 
     public ulong Guid { get; init; }
     public IPEndPoint RemoteEndPoint { get; init; }
@@ -40,6 +44,10 @@ public class RakNetServer
     public List<RakNetSession> Connections => _sessions.Values.ToList();
 
     public int ConnectionCount => _sessions.Count;
+    public long SentDatagrams => Interlocked.Read(ref _sentDatagrams);
+    public long SentBytes => Interlocked.Read(ref _sentBytes);
+    public long ReceivedDatagrams => Interlocked.Read(ref _receivedDatagrams);
+    public long ReceivedBytes => Interlocked.Read(ref _receivedBytes);
 
     public uint MaxConnections { get; init; } = 20;
 
@@ -245,6 +253,8 @@ public class RakNetServer
             {
                 var result = await _listener.ReceiveAsync(token);
                 var buffer = result.Buffer;
+                Interlocked.Increment(ref _receivedDatagrams);
+                Interlocked.Add(ref _receivedBytes, buffer.Length);
 
                 if (buffer.Length < 1)
                 {
@@ -349,5 +359,7 @@ public class RakNetServer
     public virtual void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer)
     {
         _listener.Client.SendTo(buffer, SocketFlags.None, endPoint);
+        Interlocked.Increment(ref _sentDatagrams);
+        Interlocked.Add(ref _sentBytes, buffer.Length);
     }
 }
