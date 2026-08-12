@@ -69,6 +69,20 @@ simulation and wire work: compare observers to expose fan-out pressure, but do n
 is a visibility solution. The full 2026-08-11 results and cost decomposition are in
 [`phase-d-actor-pressure.md`](phase-d-actor-pressure.md).
 
+### Phase-F actor-interest comparison
+
+The same 1,000-projectile / ten-observer / 200-tick churn workload now emits both a controlled
+global baseline and a chunk-knowledge variant in one invocation:
+
+```bash
+dotnet run --no-build --project src/zenith.Benchmarks -- --runtime-load --players 1 --actors 1000 --actor-players 10 --ticks 200
+```
+
+It reports datagrams, bytes, spawn/move/remove fan-out, tick distribution and allocation for both
+variants. The actor state and `GameLoop` are identical; only confirmed observer columns differ.
+Read the result as an interest/replication measurement, never as ECS evidence. Current evidence
+and the policy boundary are in [`phase-f-entity-interest.md`](phase-f-entity-interest.md).
+
 Do not compare these timings directly with another implementation. They are a reproducible
 baseline for Zenith itself. In particular, the current architecture deliberately fans dirty
 movement to all in-game peers; a 500-player global-movement run measures that known O(players²)
