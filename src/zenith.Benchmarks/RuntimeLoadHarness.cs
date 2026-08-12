@@ -33,6 +33,15 @@ internal static class RuntimeLoadHarness
                 Print(RunWorldInteraction(playerCount, options.Ticks));
             return 0;
         }
+        if (options.ZombieBehavior)
+        {
+            foreach (var actorCount in options.ActorCounts)
+            {
+                foreach (var mode in new[] { ZombieWorkloadMode.Idle, ZombieWorkloadMode.Direct, ZombieWorkloadMode.Obstacle })
+                    Print(RunZombieBehavior(options.ActorPlayers, actorCount, options.ActorTicks, mode));
+            }
+            return 0;
+        }
 
         foreach (var playerCount in options.PlayerCounts)
         {
@@ -170,6 +179,40 @@ internal static class RuntimeLoadHarness
             host.Projectiles.ReplicatedRemovalCount);
     }
 
+    private static LoadResult RunZombieBehavior(int playerCount, int actorCount, int ticks, ZombieWorkloadMode mode)
+    {
+        var host = new RuntimeHost(
+            playerCount,
+            streamChunks: false,
+            includeZombieSystem: true,
+            includeWorldInteractionDiagnostics: true);
+        host.ConfigureActorInterest(enabled: true);
+        host.SeedZombies(actorCount, mode);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+        }
+        host.ValidateZombieCount(actorCount);
+        host.PrintZombieTimings(mode);
+
+        return LoadResult.Create($"zombie-{mode.ToString().ToLowerInvariant()}", playerCount, ticks, elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams, host.Transport.Bytes,
+            actorCount, host.Zombies!.Zombies.Active.Count,
+            host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
+            host.Zombies.ReplicatedRemovalCount);
+    }
+
     private static void Print(LoadResult result) =>
         Console.WriteLine(
             $"{result.Scenario,-11} players={result.PlayerCount,3} ticks={result.TickCount,3} " +
@@ -188,6 +231,7 @@ internal static class RuntimeLoadHarness
         public RecordingRakNetServer Transport { get; } = new();
         public GameLoop Loop { get; }
         public ProjectileSystem? Projectiles { get; }
+        public ZombieSystem? Zombies { get; }
         public World.World World { get; }
         private WorldInteractionDiagnostics? WorldDiagnostics { get; }
 
@@ -195,6 +239,7 @@ internal static class RuntimeLoadHarness
             int playerCount,
             bool streamChunks,
             bool includeProjectileSystem = false,
+            bool includeZombieSystem = false,
             bool includeWorldInteractionDiagnostics = false)
         {
             if (playerCount <= 0)
@@ -223,10 +268,23 @@ internal static class RuntimeLoadHarness
             Loop.Register(new MovementSystem(players));
             Loop.Register(new ChatSystem());
             Loop.Register(new GameModeSystem());
-            if (includeProjectileSystem)
+            ZombieSystem? zombieSystem = null;
+            if (includeZombieSystem || includeProjectileSystem)
             {
                 var zombies = new ZombieStore();
-                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), new ZombieSystem(world, players, zombies, itemPalette));
+                zombieSystem = new ZombieSystem(world, players, zombies, itemPalette);
+                Zombies = zombieSystem;
+                if (includeZombieSystem)
+                {
+                    if (WorldDiagnostics is { } zombieTimings)
+                        Loop.Register(zombieSystem, zombieTimings.Zombie);
+                    else
+                        Loop.Register(zombieSystem);
+                }
+            }
+            if (includeProjectileSystem)
+            {
+                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), zombieSystem!);
                 Loop.Register(Projectiles);
             }
             Loop.Register(new BlockDigSystem(world));
@@ -364,6 +422,40 @@ internal static class RuntimeLoadHarness
 
         public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
 
+        public void SeedZombies(int targetCount, ZombieWorkloadMode mode)
+        {
+            if (Zombies is null) throw new InvalidOperationException("Zombie workload requires ZombieSystem.");
+            for (var i = 0; i < targetCount; i++)
+            {
+                var x = mode == ZombieWorkloadMode.Idle
+                    ? 100f + (i % 32) * 1.25f
+                    : 4f + (i % 16) * 0.35f;
+                var z = mode == ZombieWorkloadMode.Idle
+                    ? 100f + (i / 32) * 1.25f
+                    : (i / 16) * 0.35f;
+                var id = _playerManager.AllocateRuntimeId();
+                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
+                    throw new InvalidOperationException("Zombie workload seed refused.");
+            }
+
+            if (mode == ZombieWorkloadMode.Obstacle)
+            {
+                for (var x = 1; x <= 3; x++)
+                {
+                    World.SetBlock(x, Blocks.FlatSpawnY, 0, Blocks.Stone);
+                    World.SetBlock(x, Blocks.FlatSpawnY + 1, 0, Blocks.Stone);
+                }
+            }
+        }
+
+        public void ValidateZombieCount(int expected)
+        {
+            if (Zombies is null || Zombies.Zombies.Active.Count != expected)
+                throw new InvalidOperationException($"Zombie workload lifecycle changed actor count: expected {expected}.");
+        }
+
+        public void PrintZombieTimings(ZombieWorkloadMode mode) => WorldDiagnostics?.PrintZombie(mode);
+
         public void PrepareWorldInteraction()
         {
             Tools.EnsureLoaded();
@@ -444,6 +536,7 @@ internal static class RuntimeLoadHarness
         public TimingMetric BlockEdit { get; }
         public TimingMetric FloorDrop { get; }
         public TimingMetric Inventory { get; }
+        public TimingMetric Zombie { get; }
 
         public WorldInteractionDiagnostics()
         {
@@ -452,6 +545,7 @@ internal static class RuntimeLoadHarness
             BlockEdit = builder.Timing("tick.system.block-edit", "tick");
             FloorDrop = builder.Timing("tick.system.floor-drop", "tick");
             Inventory = builder.Timing("tick.system.inventory", "tick");
+            Zombie = builder.Timing("tick.system.zombie", "tick");
             Runtime = builder.Build();
         }
 
@@ -464,6 +558,14 @@ internal static class RuntimeLoadHarness
                     $"{metric.Name}={metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count:F3}ms avg")
                 .ToArray();
             Console.WriteLine($"world-loop timings {string.Join(" ", parts)}");
+        }
+
+        public void PrintZombie(ZombieWorkloadMode mode)
+        {
+            var snapshot = Runtime.CaptureSnapshot();
+            var metric = snapshot.Metrics.First(m => m.Name == "tick.system.zombie");
+            var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
+            Console.WriteLine($"zombie timings mode={mode.ToString().ToLowerInvariant()} avg={average:F3}ms");
         }
     }
 
@@ -524,6 +626,13 @@ internal static class RuntimeLoadHarness
             new(after.Gen0 - before.Gen0, after.Gen1 - before.Gen1, after.Gen2 - before.Gen2);
     }
 
+    private enum ZombieWorkloadMode : byte
+    {
+        Idle,
+        Direct,
+        Obstacle
+    }
+
     private readonly record struct LoadOptions(
         int[] PlayerCounts,
         int Ticks,
@@ -531,7 +640,8 @@ internal static class RuntimeLoadHarness
         int[] ActorCounts,
         int ActorPlayers,
         int ActorTicks,
-        bool WorldInteraction)
+        bool WorldInteraction,
+        bool ZombieBehavior)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -540,6 +650,7 @@ internal static class RuntimeLoadHarness
             var actorCounts = new[] { 100, 1_000 };
             var actorPlayers = 10;
             var worldInteraction = false;
+            var zombieBehavior = false;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -552,11 +663,13 @@ internal static class RuntimeLoadHarness
                     actorPlayers = int.Parse(args[++i]);
                 else if (args[i] == "--world-interaction")
                     worldInteraction = true;
+                else if (args[i] == "--zombie-behavior")
+                    zombieBehavior = true;
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior);
         }
     }
 }
