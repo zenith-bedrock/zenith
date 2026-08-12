@@ -17,6 +17,16 @@ readonly struct AbsoluteActorPose
     public bool OnGround { get; init; }
 }
 
+/// <summary>Raw non-player actor pose; the domain Y is already the actor base position.</summary>
+readonly struct RawActorPose
+{
+    public ulong ActorRuntimeId { get; init; }
+    public float X { get; init; }
+    public float Y { get; init; }
+    public float Z { get; init; }
+    public byte Flags { get; init; }
+}
+
 /// <summary>Transmite intenções de entidade. Sem lógica de gameplay.</summary>
 sealed class EntityProtocol
 {
@@ -280,6 +290,33 @@ sealed class EntityProtocol
             EntityType = "minecraft:skeleton", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
         });
+    }
+
+    /// <summary>One transport submission for several raw non-player actor movements.</summary>
+    public void SendMoveActorAbsoluteRaws(IReadOnlyList<RawActorPose> poses)
+    {
+        if (poses.Count == 0) return;
+        if (poses.Count == 1)
+        {
+            var p = poses[0];
+            SendMoveActorAbsoluteRaw(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Flags);
+            return;
+        }
+
+        var packets = new MoveActorAbsolutePacket[poses.Count];
+        for (var i = 0; i < poses.Count; i++)
+        {
+            var p = poses[i];
+            packets[i] = new MoveActorAbsolutePacket
+            {
+                ActorRuntimeId = p.ActorRuntimeId,
+                Flags = p.Flags,
+                PositionX = p.X,
+                PositionY = p.Y,
+                PositionZ = p.Z
+            };
+        }
+        _session.SendDataPacket(packets);
     }
 
     /// <summary>Short-lived snowball projection for the concrete ProjectileSystem slice.</summary>

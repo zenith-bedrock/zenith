@@ -1,5 +1,6 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Protocol;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
@@ -21,6 +22,7 @@ sealed class ZombieSystem : IGameSystem
     private readonly StackId _lootItem;
     private readonly HashSet<(long ZombieId, long PlayerId)> _replicated = new();
     private readonly Dictionary<(long ZombieId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly List<RawActorPose> _moveBatch = [];
     private bool _bootstrapSpawned;
     private readonly Dictionary<long, ulong> _nextAttackTick = [];
 
@@ -56,12 +58,12 @@ sealed class ZombieSystem : IGameSystem
                 AdvanceTowardTarget(zombie, target);
             TryAttackPlayer(zombie, target, clock, online);
             ReconcileViewers(zombie, online);
-            ReplicateMove(zombie, online);
         }
         _replicated.RemoveWhere(pair => !_zombies.Active.Any(z => z.EntityId == pair.ZombieId) ||
                                         !online.Any(p => p.RuntimeId == pair.PlayerId));
         foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
             _lastProjected.Remove(key);
+        ReplicateMoves(online);
     }
 
     private void EnsureBootstrapZombie(IReadOnlyList<Player.Player> online)
@@ -243,22 +245,32 @@ sealed class ZombieSystem : IGameSystem
         return true;
     }
 
-    private void ReplicateMove(Zombie zombie, IReadOnlyList<Player.Player> online)
+    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
     {
         foreach (var peer in online)
         {
-            var key = (zombie.EntityId, peer.RuntimeId);
-            if (!_replicated.Contains(key)) continue;
-            var current = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
-            if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+            _moveBatch.Clear();
+            foreach (var zombie in _zombies.Active)
             {
-                ReplicatedMoveSkippedCount++;
-                continue;
+                var key = (zombie.EntityId, peer.RuntimeId);
+                if (!_replicated.Contains(key)) continue;
+                var current = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
+                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+                {
+                    ReplicatedMoveSkippedCount++;
+                    continue;
+                }
+                _moveBatch.Add(new RawActorPose
+                {
+                    ActorRuntimeId = zombie.RuntimeId,
+                    X = zombie.PositionX,
+                    Y = zombie.PositionY,
+                    Z = zombie.PositionZ
+                });
+                _lastProjected[key] = current;
+                ReplicatedMoveCount++;
             }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
-                zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ);
-            _lastProjected[key] = current;
-            ReplicatedMoveCount++;
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
         }
     }
 

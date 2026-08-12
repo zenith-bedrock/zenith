@@ -224,9 +224,11 @@ internal static class RuntimeLoadHarness
 
     private static LoadResult RunInterestScaling(int observerCount, int actorCount, int ticks, InterestLayout layout)
     {
-        var host = new RuntimeHost(observerCount, streamChunks: false, includeProjectileSystem: true);
-        host.SeedInterestProjectiles(actorCount, layout);
+        var host = new RuntimeHost(observerCount, streamChunks: false, includeChunkStream: false, includeZombieSystem: true,
+            includeWorldInteractionDiagnostics: true);
+        host.SeedInterestZombies(actorCount, layout);
         host.ConfigureInterestLayout(layout);
+        host.DisableInterestTargets();
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
@@ -242,14 +244,15 @@ internal static class RuntimeLoadHarness
             host.Tick();
             elapsed[tick] = Stopwatch.GetTimestamp() - started;
         }
+        host.PrintInterestZombieTimings(layout);
 
         return LoadResult.Create($"interest-{layout.ToString().ToLowerInvariant()}", observerCount, ticks, elapsed,
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes,
-            actorCount, host.Projectiles!.Projectiles.Active.Count,
-            host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount,
-            host.Projectiles.ReplicatedRemovalCount, host.Projectiles.ReplicatedMoveSkippedCount);
+            actorCount, host.Zombies!.Zombies.Active.Count,
+            host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
+            host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
     }
 
     private static void Print(LoadResult result) =>
@@ -277,6 +280,7 @@ internal static class RuntimeLoadHarness
         public RuntimeHost(
             int playerCount,
             bool streamChunks,
+            bool includeChunkStream = true,
             bool includeProjectileSystem = false,
             bool includeZombieSystem = false,
             bool includeWorldInteractionDiagnostics = false)
@@ -341,7 +345,8 @@ internal static class RuntimeLoadHarness
             else
                 Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative));
             Loop.Register(new EquipmentSystem());
-            Loop.Register(new ChunkStreamSystem(world));
+            if (includeChunkStream)
+                Loop.Register(new ChunkStreamSystem(world));
 
             for (var i = 0; i < playerCount; i++)
             {
@@ -461,16 +466,25 @@ internal static class RuntimeLoadHarness
 
         public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
 
-        public void SeedInterestProjectiles(int targetCount, InterestLayout layout)
+        public void SeedInterestZombies(int targetCount, InterestLayout layout)
         {
-            if (Projectiles is null) throw new InvalidOperationException("Interest workload requires ProjectileSystem.");
+            if (Zombies is null) throw new InvalidOperationException("Interest workload requires ZombieSystem.");
             for (var i = 0; i < targetCount; i++)
             {
-                var x = layout == InterestLayout.Clustered ? 0.25f + (i % 16) * 0.35f : (i % 64) * 16f + 0.25f;
-                var z = layout == InterestLayout.Clustered ? 0.25f + (i / 16) * 0.35f : (i / 64) * 16f + 0.25f;
+                var x = layout == InterestLayout.Clustered ? 0.25f + (i % 32) * 0.02f : (i % 64) * 16f + 0.25f;
+                var z = layout == InterestLayout.Clustered ? 0.25f + (i / 32) * 0.02f : (i / 64) * 16f + 0.25f;
                 var id = 2_000_000L + i;
-                if (!Projectiles.Projectiles.TryAdd(new Projectile(id, (ulong)id, _players[0].RuntimeId, x, 100f, z, 0f, 0f, 0f)))
+                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
                     throw new InvalidOperationException("Interest workload seed refused.");
+            }
+        }
+
+        public void DisableInterestTargets()
+        {
+            foreach (var player in _players)
+            {
+                player.PositionX = 100_000f;
+                player.PositionZ = 100_000f;
             }
         }
 
@@ -497,8 +511,6 @@ internal static class RuntimeLoadHarness
             foreach (var entry in known) player.Chunks.Forget(entry.X, entry.Z);
             player.Chunks.Radius = 1;
             var x = farObserver ? 100 + observerIndex : chunk;
-            player.PositionX = x * 16f;
-            player.PositionZ = 0f;
             var radius = farObserver ? 0 : 1;
             for (var dx = -radius; dx <= radius; dx++)
                 for (var dz = -radius; dz <= radius; dz++)
@@ -538,6 +550,8 @@ internal static class RuntimeLoadHarness
         }
 
         public void PrintZombieTimings(ZombieWorkloadMode mode) => WorldDiagnostics?.PrintZombie(mode);
+
+        public void PrintInterestZombieTimings(InterestLayout layout) => WorldDiagnostics?.PrintInterestZombie(layout);
 
         public void PrepareWorldInteraction()
         {
@@ -649,6 +663,14 @@ internal static class RuntimeLoadHarness
             var metric = snapshot.Metrics.First(m => m.Name == "tick.system.zombie");
             var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
             Console.WriteLine($"zombie timings mode={mode.ToString().ToLowerInvariant()} avg={average:F3}ms");
+        }
+
+        public void PrintInterestZombie(InterestLayout layout)
+        {
+            var snapshot = Runtime.CaptureSnapshot();
+            var metric = snapshot.Metrics.First(m => m.Name == "tick.system.zombie");
+            var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
+            Console.WriteLine($"interest timings layout={layout.ToString().ToLowerInvariant()} zombie={average:F3}ms");
         }
     }
 
