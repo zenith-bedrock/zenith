@@ -20,6 +20,7 @@ sealed class ZombieSystem : IGameSystem
     private readonly ZombieStore _zombies;
     private readonly StackId _lootItem;
     private readonly HashSet<(long ZombieId, long PlayerId)> _replicated = new();
+    private readonly Dictionary<(long ZombieId, long PlayerId), ProjectedPosition> _lastProjected = new();
     private bool _bootstrapSpawned;
     private readonly Dictionary<long, ulong> _nextAttackTick = [];
 
@@ -34,6 +35,7 @@ sealed class ZombieSystem : IGameSystem
     public ZombieStore Zombies => _zombies;
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
+    internal long ReplicatedMoveSkippedCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
@@ -58,6 +60,8 @@ sealed class ZombieSystem : IGameSystem
         }
         _replicated.RemoveWhere(pair => !_zombies.Active.Any(z => z.EntityId == pair.ZombieId) ||
                                         !online.Any(p => p.RuntimeId == pair.PlayerId));
+        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
+            _lastProjected.Remove(key);
     }
 
     private void EnsureBootstrapZombie(IReadOnlyList<Player.Player> online)
@@ -82,6 +86,7 @@ sealed class ZombieSystem : IGameSystem
             {
                 if (_replicated.Remove(key))
                 {
+                    _lastProjected.Remove(key);
                     peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
                     ReplicatedRemovalCount++;
                 }
@@ -91,6 +96,7 @@ sealed class ZombieSystem : IGameSystem
             peer.Session.Protocol.Entity.SendAddZombie(
                 zombie.EntityId, zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ, zombie.Yaw);
             peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
+            _lastProjected[key] = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
             ReplicatedSpawnCount++;
         }
     }
@@ -143,6 +149,7 @@ sealed class ZombieSystem : IGameSystem
         foreach (var peer in online)
             if (_replicated.Remove((zombie.EntityId, peer.RuntimeId)))
             {
+                _lastProjected.Remove((zombie.EntityId, peer.RuntimeId));
                 peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
                 ReplicatedRemovalCount++;
             }
@@ -240,10 +247,31 @@ sealed class ZombieSystem : IGameSystem
     {
         foreach (var peer in online)
         {
-            if (!_replicated.Contains((zombie.EntityId, peer.RuntimeId))) continue;
+            var key = (zombie.EntityId, peer.RuntimeId);
+            if (!_replicated.Contains(key)) continue;
+            var current = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
+            if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+            {
+                ReplicatedMoveSkippedCount++;
+                continue;
+            }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
                 zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ);
+            _lastProjected[key] = current;
             ReplicatedMoveCount++;
+        }
+    }
+
+    private readonly record struct ProjectedPosition(float X, float Y, float Z)
+    {
+        private const float PositionEpsilonSquared = 0.0001f;
+
+        public bool MeaningfullyChanged(ProjectedPosition previous)
+        {
+            var dx = X - previous.X;
+            var dy = Y - previous.Y;
+            var dz = Z - previous.Z;
+            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

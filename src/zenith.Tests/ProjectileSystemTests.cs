@@ -87,6 +87,25 @@ public sealed class ProjectileSystemTests
     }
 
     [Fact]
+    public void Projectile_skips_projection_when_authoritative_position_is_unchanged()
+    {
+        var fx = new IntentTestFixture();
+        var observer = fx.AddInGamePlayer("observer");
+        observer.Chunks.Radius = -1;
+        var system = CreateSystem(fx, out _, out var projectiles);
+        var projectile = new Projectile(
+            fx.Players.AllocateRuntimeId(), 101, 999,
+            0.4f, -57f, 0f, 0f, 0f, 0f);
+        Assert.True(projectiles.TryAdd(projectile));
+
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(0, system.ReplicatedMoveCount);
+        Assert.True(system.ReplicatedMoveSkippedCount > 0);
+        Assert.True(projectile.IsActive);
+    }
+
+    [Fact]
     public void LateJoinReceivesExistingProjectileState()
     {
         var fx = new IntentTestFixture();
@@ -160,7 +179,7 @@ public sealed class ProjectileSystemTests
 
         Assert.Equal(2, system.ReplicatedSpawnCount);
         Assert.Equal(1, system.ReplicatedRemovalCount);
-        Assert.Equal(1, system.ReplicatedMoveCount);
+        Assert.Equal(0, system.ReplicatedMoveCount);
     }
 
     private static ProjectileSystem CreateSystem(IntentTestFixture fx, out ZombieStore zombies, out ProjectileStore projectiles)

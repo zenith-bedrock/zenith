@@ -72,6 +72,24 @@ public sealed class ZombieSystemTests
     }
 
     [Fact]
+    public void Zombie_skips_projection_when_authoritative_position_is_unchanged()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stationary-target");
+        player.Chunks.Radius = -1;
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 1, player.PositionY, 0);
+        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        system.Tick(fx.Clock, fx.Players.Online); // spawn and initial projection state
+        system.Tick(fx.Clock, fx.Players.Online); // attack range: no movement to project
+
+        Assert.Equal(0, system.ReplicatedMoveCount);
+        Assert.True(system.ReplicatedMoveSkippedCount > 0);
+    }
+
+    [Fact]
     public void Zombie_chooses_bounded_local_side_step_around_solid_obstacle()
     {
         var fx = new IntentTestFixture();
