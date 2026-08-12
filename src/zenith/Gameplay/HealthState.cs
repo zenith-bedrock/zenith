@@ -9,7 +9,8 @@ enum DamageCause
     Generic,
     Fall,
     Void,
-    Melee
+    Melee,
+    Projectile
 }
 
 /// <summary>
@@ -17,12 +18,14 @@ enum DamageCause
 /// a concrete feature needs attribution; a cause is enough for validation, death messaging, and
 /// the first melee-capable actor.
 /// </summary>
-readonly record struct DamageSource(DamageCause Cause)
+readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = null)
 {
     public static DamageSource Generic => new(DamageCause.Generic);
     public static DamageSource Fall => new(DamageCause.Fall);
     public static DamageSource Void => new(DamageCause.Void);
     public static DamageSource Melee => new(DamageCause.Melee);
+    /// <summary>Concrete first attribution case; the id is not an actor abstraction.</summary>
+    public static DamageSource Projectile(long ownerRuntimeId) => new(DamageCause.Projectile, ownerRuntimeId);
 
     /// <summary>Bedrock's currently supported DeathInfo vocabulary.</summary>
     public string DeathInfoCause => Cause == DamageCause.Fall ? "fall" : "generic";

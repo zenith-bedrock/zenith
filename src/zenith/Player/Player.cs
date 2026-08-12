@@ -25,6 +25,8 @@ class Player
     private readonly object _movementInputLock = new();
     private readonly object _attackIntentLock = new();
     private bool _pendingAttackIntent;
+    private readonly object _projectileIntentLock = new();
+    private bool _pendingProjectileIntent;
     private MovementInputState _movementInput;
     private readonly object _blockEditLock = new();
     private readonly Queue<BlockEditIntent> _blockEdits = new();
@@ -794,6 +796,23 @@ class Player
         {
             if (!_pendingAttackIntent) return false;
             _pendingAttackIntent = false;
+            return true;
+        }
+    }
+
+    /// <summary>Network-to-gameplay handoff for the first short-lived projectile slice.</summary>
+    internal void SubmitProjectileIntent()
+    {
+        lock (_projectileIntentLock)
+            _pendingProjectileIntent = true;
+    }
+
+    internal bool TryConsumeProjectileIntent()
+    {
+        lock (_projectileIntentLock)
+        {
+            if (!_pendingProjectileIntent) return false;
+            _pendingProjectileIntent = false;
             return true;
         }
     }

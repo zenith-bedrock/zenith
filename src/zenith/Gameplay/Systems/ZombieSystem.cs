@@ -80,20 +80,27 @@ sealed class ZombieSystem : IGameSystem
             var dx = zombie.PositionX - player.PositionX;
             var dz = zombie.PositionZ - player.PositionZ;
             if (dx * dx + dz * dz > AttackDistance * AttackDistance) continue;
-            var result = zombie.ApplyDamage(DamageSource.Melee, AttackDamage);
-            if (!result.WasApplied) continue;
-            foreach (var peer in online)
-            {
-                if (!peer.IsInGame || peer.IsDead) continue;
-                peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
-            }
-            if (!result.CausedDeath) continue;
-            foreach (var peer in online)
-                if (peer.IsInGame) peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
-            zombie.Remove();
-            _zombies.Remove(zombie);
-            break;
+            if (TryApplyDamage(zombie, DamageSource.Melee, AttackDamage, online)) break;
         }
+    }
+
+    /// <summary>Concrete Zombie health/removal operation shared by the Projectile vertical slice.</summary>
+    public bool TryApplyDamage(Zombie zombie, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
+    {
+        if (!zombie.IsActive) return false;
+        var result = zombie.ApplyDamage(source, amount);
+        if (!result.WasApplied) return false;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || peer.IsDead) continue;
+            peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
+        }
+        if (!result.CausedDeath) return true;
+        foreach (var peer in online)
+            if (peer.IsInGame) peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
+        zombie.Remove();
+        _zombies.Remove(zombie);
+        return true;
     }
 
     private static void AdvanceTowardNearestPlayer(Zombie zombie, IReadOnlyList<Player.Player> online)

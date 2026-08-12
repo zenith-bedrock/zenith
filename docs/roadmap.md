@@ -4,7 +4,7 @@
 
 ## Current position
 
-Horizon 0 (`v0.0.1-alpha`) and Horizon 1 are closed. Zenith now has a functional multiplayer alpha: authoritative player runtime, world overlays/generation, inventory/chests/crafting, selected persistence, player replication, floor-item wire, falling blocks, health/death/respawn, fall damage and a first concrete Zombie actor slice.
+Horizon 0 (`v0.0.1-alpha`) and Horizon 1 are closed. Zenith now has a functional multiplayer alpha: authoritative player runtime, world overlays/generation, inventory/chests/crafting, selected persistence, player replication, floor-item wire, falling blocks, health/death/respawn, fall damage, a concrete Zombie and a short-lived Projectile actor slice.
 
 The next story is:
 
@@ -26,8 +26,8 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 | A. Runtime proof | Characterized / gate final | characterize multiplayer runtime and fan-out |
 | B. Survival state core | Characterized | make health/damage/death a usable gameplay primitive |
 | C. First actor vertical slice | Characterized | learn one real actor lifecycle without generic framework |
-| D. Actor pressure and interest requirements | Not started | collect the evidence needed for an ECS decision |
-| E. ECS decision | Not started | compare models and record an ADR accept/reject |
+| D. Actor pressure and interest requirements | Characterized | direct-model actor churn, fan-out, runtime/DX and visibility evidence are recorded |
+| E. ECS decision | Ready for spike | compare models and record an ADR accept/reject; no runtime rewrite is authorized |
 | F. Actor scale and behavior | Not started | grow actors, AI and interest management independently |
 | G. Production hardening | Early | move from alpha proof to operable beta evidence |
 
@@ -67,24 +67,27 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 
 **Deliberately deferred:** hunger, armor, enchantments, broad effects, combat breadth and AI.
 
-## LATER — Phase D: Actor pressure and interest requirements
+## CLOSED / CHARACTERIZED — Phase D: Actor pressure and interest requirements
 
 **Goal:** create evidence, not an architecture, from a projectile or equivalent second actor and actor workloads.
 
 **Exit criteria:**
 
-- A second actor has materially different lifecycle/access patterns from the mob (prefer projectile: movement, collision, despawn, observer updates).
-- The direct model exposes or disproves repeated position/velocity/age/identity/dirty/lifecycle patterns across at least three actor paths, including falling blocks or drops.
-- Actor benchmarks report simulation and replication/observer costs at increasing populations; results include p50/p95/p99/max, allocation/GC, memory and churn.
-- Tracking/activation/visibility requirements are written down and global fan-out is measured separately from simulation cost.
+- A concrete snowball has materially different lifecycle/access patterns from the Zombie: velocity, owner/source, collision, impact/lifetime removal and rapid churn.
+- Falling block, Zombie and Projectile now expose repeated identity/position/lifetime/tick/remove/replication pressure; FloorDrop is recorded as related but cell/merge-specific evidence.
+- Actor-churn measures the real `ProjectileSystem` at 100 and 1,000 actors with one and ten observers, recording p50/p95/p99/max, allocation/GC, churn, fan-out and RakNet egress.
+- Visibility/activation requirements and the distinction between simulation, interest and replication are documented. Global fan-out is measured; no visibility implementation is inferred.
 
-**Decision unlocked:** `Entity Runtime & ECS Feasibility Spike`.
+**Decision unlocked:** `Entity Runtime & ECS Feasibility Spike`. See exact commands, results and
+cost decomposition in [`phase-d-actor-pressure.md`](phase-d-actor-pressure.md).
 
 **Deliberately deferred:** solving visibility by assuming ECS, parallel jobs, public extension API.
 
 ## DECISION GATE — Phase E: Entity Runtime & ECS feasibility spike
 
-Open only when all Phase A–D gates hold and the checklist in the [maturity audit](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md#ecs-decision-gate) is green.
+Open only when all Phase A–D gates hold. Phase D is characterized; its evidence is
+[`phase-d-actor-pressure.md`](phase-d-actor-pressure.md), alongside the
+[maturity audit](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md#ecs-decision-gate).
 
 The spike compares the actual straightforward actor model with an internal archetype/SoA design under Zenith workloads. It must measure tail tick times, CPU, allocation/GC, retained memory, iteration/query throughput, creation/destruction, structural changes and replication fan-out. Start single-threaded.
 

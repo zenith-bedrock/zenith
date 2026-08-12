@@ -34,6 +34,9 @@ internal static class RuntimeLoadHarness
             Print(chunkBurst);
         }
 
+        foreach (var actorCount in options.ActorCounts)
+            Print(RunActorChurn(options.ActorPlayers, actorCount, options.ActorTicks));
+
         return 0;
     }
 
@@ -87,13 +90,42 @@ internal static class RuntimeLoadHarness
             host.Transport.Datagrams, host.Transport.Bytes);
     }
 
+    private static LoadResult RunActorChurn(int playerCount, int actorCount, int ticks)
+    {
+        var host = new RuntimeHost(playerCount, streamChunks: false, includeProjectileSystem: true);
+        host.SeedProjectiles(actorCount);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            host.ReplenishProjectiles(actorCount);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+        }
+
+        return LoadResult.Create("actor-churn", playerCount, ticks, elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams, host.Transport.Bytes,
+            actorCount, host.Projectiles!.Projectiles.Active.Count,
+            host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount);
+    }
+
     private static void Print(LoadResult result) =>
         Console.WriteLine(
             $"{result.Scenario,-11} players={result.PlayerCount,3} ticks={result.TickCount,3} " +
             $"avg={result.AverageMs:F3}ms p50={result.P50Ms:F3}ms p95={result.P95Ms:F3}ms p99={result.P99Ms:F3}ms max={result.MaxMs:F3}ms " +
             $"alloc={result.AllocatedBytes / (double)result.TickCount:F0}B/tick " +
             $"gc={result.GcCounts.Gen0}/{result.GcCounts.Gen1}/{result.GcCounts.Gen2} " +
-            $"egress={result.Datagrams} datagrams/{result.Bytes}B");
+            $"egress={result.Datagrams} datagrams/{result.Bytes}B" +
+            (result.TargetActorCount == 0 ? "" :
+                $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} removed={result.RemovedActors}"));
 
     private sealed class RuntimeHost
     {
@@ -101,8 +133,9 @@ internal static class RuntimeLoadHarness
 
         public RecordingRakNetServer Transport { get; } = new();
         public GameLoop Loop { get; }
+        public ProjectileSystem? Projectiles { get; }
 
-        public RuntimeHost(int playerCount, bool streamChunks)
+        public RuntimeHost(int playerCount, bool streamChunks, bool includeProjectileSystem = false)
         {
             if (playerCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(playerCount));
@@ -122,6 +155,12 @@ internal static class RuntimeLoadHarness
             Loop.Register(new MovementSystem(players));
             Loop.Register(new ChatSystem());
             Loop.Register(new GameModeSystem());
+            if (includeProjectileSystem)
+            {
+                var zombies = new ZombieStore();
+                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), new ZombieSystem(world, players, zombies));
+                Loop.Register(Projectiles);
+            }
             Loop.Register(new BlockDigSystem(world));
             Loop.Register(new BlockEditSystem(players, world));
             Loop.Register(new GravitySystem(world, players));
@@ -209,6 +248,24 @@ internal static class RuntimeLoadHarness
             }
         }
 
+        public void SeedProjectiles(int targetCount)
+        {
+            if (Projectiles is null) throw new InvalidOperationException("Actor churn requires ProjectileSystem.");
+            var owner = _players[0];
+            var start = Projectiles.Projectiles.Active.Count;
+            for (var i = start; i < targetCount; i++)
+            {
+                var entityId = 1_000_000L + i + (long)Loop.Clock.CurrentTick * 10_000L;
+                var projectile = new Projectile(
+                    entityId, (ulong)entityId, owner.RuntimeId,
+                    (i % 100) * 2f, 100f, (i / 100) * 2f,
+                    0.05f, 0f, 0f);
+                if (!Projectiles.Projectiles.TryAdd(projectile)) break;
+            }
+        }
+
+        public void ReplenishProjectiles(int targetCount) => SeedProjectiles(targetCount);
+
     }
 
     private sealed class RecordingRakNetServer : RakNetServer
@@ -243,16 +300,19 @@ internal static class RuntimeLoadHarness
 
     private readonly record struct LoadResult(
         string Scenario, int PlayerCount, int TickCount, double AverageMs, double P50Ms, double P95Ms, double P99Ms,
-        double MaxMs, long AllocatedBytes, GcCounts GcCounts, long Datagrams, long Bytes)
+        double MaxMs, long AllocatedBytes, GcCounts GcCounts, long Datagrams, long Bytes,
+        int TargetActorCount = 0, int ActiveActorCount = 0, long SpawnFanout = 0, long RemovedActors = 0, long MoveFanout = 0)
     {
         public static LoadResult Create(string scenario, int playerCount, int ticks, long[] elapsed, long allocatedBytes,
-            GcCounts gcCounts, long datagrams, long bytes)
+            GcCounts gcCounts, long datagrams, long bytes,
+            int targetActorCount = 0, int activeActorCount = 0, long spawnFanout = 0, long removedActors = 0, long moveFanout = 0)
         {
             var sorted = elapsed.Order().ToArray();
             static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
             return new LoadResult(scenario, playerCount, ticks,
                 elapsed.Average(Ms), Ms(sorted[(int)Math.Ceiling(ticks * .50) - 1]), Ms(sorted[(int)Math.Ceiling(ticks * .95) - 1]),
-                Ms(sorted[(int)Math.Ceiling(ticks * .99) - 1]), Ms(sorted[^1]), allocatedBytes, gcCounts, datagrams, bytes);
+                Ms(sorted[(int)Math.Ceiling(ticks * .99) - 1]), Ms(sorted[^1]), allocatedBytes, gcCounts, datagrams, bytes,
+                targetActorCount, activeActorCount, spawnFanout, removedActors, moveFanout);
         }
     }
 
@@ -263,23 +323,29 @@ internal static class RuntimeLoadHarness
             new(after.Gen0 - before.Gen0, after.Gen1 - before.Gen1, after.Gen2 - before.Gen2);
     }
 
-    private readonly record struct LoadOptions(int[] PlayerCounts, int Ticks, int ChunkTicks)
+    private readonly record struct LoadOptions(int[] PlayerCounts, int Ticks, int ChunkTicks, int[] ActorCounts, int ActorPlayers, int ActorTicks)
     {
         public static LoadOptions Parse(string[] args)
         {
             var counts = new[] { 10, 100, 500 };
             var ticks = DefaultTicks;
+            var actorCounts = new[] { 100, 1_000 };
+            var actorPlayers = 10;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
                     counts = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray();
                 else if (args[i] == "--ticks" && i + 1 < args.Length)
                     ticks = int.Parse(args[++i]);
+                else if (args[i] == "--actors" && i + 1 < args.Length)
+                    actorCounts = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray();
+                else if (args[i] == "--actor-players" && i + 1 < args.Length)
+                    actorPlayers = int.Parse(args[++i]);
             }
 
-            if (counts.Any(count => count <= 0) || ticks <= 0)
+            if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5));
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks);
         }
     }
 }

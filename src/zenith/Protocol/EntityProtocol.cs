@@ -272,6 +272,25 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>Short-lived snowball projection for the concrete ProjectileSystem slice.</summary>
+    public void SendAddProjectile(
+        long entityUniqueId, ulong entityRuntimeId,
+        float x, float y, float z, float velocityX, float velocityY, float velocityZ)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId,
+            EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:snowball",
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            VelocityX = velocityX,
+            VelocityY = velocityY,
+            VelocityZ = velocityZ
+        });
+    }
+
     /// <summary>
     /// Adapts an authoritative floor-drop stack to the Bedrock item representation before
     /// transmitting its actor. Gameplay owns whether a drop exists; wire conversion stays here.
