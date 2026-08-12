@@ -5,10 +5,11 @@ namespace Zenith.World;
 /// <summary>Entrada de <c>item_palette.json</c>.</summary>
 readonly record struct ItemPaletteEntry(string Name, short NetworkId, int Version, bool ComponentBased);
 
-/// <summary>Mapa name → network item id (palette completa do cliente).</summary>
+/// <summary>Mapa bidirecional da palette completa do cliente.</summary>
 sealed class ItemPalette
 {
     private readonly Dictionary<string, short> _byName;
+    private readonly Dictionary<short, string> _byNetworkId;
     private readonly ItemPaletteEntry[] _entries;
 
     public ItemPalette(IReadOnlyList<ItemPaletteEntry> entries)
@@ -16,14 +17,28 @@ sealed class ItemPalette
         ArgumentNullException.ThrowIfNull(entries);
         _entries = entries.ToArray();
         _byName = new Dictionary<string, short>(entries.Count, StringComparer.Ordinal);
+        _byNetworkId = new Dictionary<short, string>(entries.Count);
         foreach (var e in _entries)
+        {
             _byName[e.Name] = e.NetworkId;
+            _byNetworkId[e.NetworkId] = e.Name;
+        }
     }
 
     public int Count => _entries.Length;
     public IReadOnlyList<ItemPaletteEntry> Entries => _entries;
 
     public bool TryGet(string name, out short networkId) => _byName.TryGetValue(name, out networkId);
+
+    /// <summary>Confirms that a domain item network id is part of this client palette.</summary>
+    public bool TryGetName(int networkId, out string name)
+    {
+        if (networkId is >= short.MinValue and <= short.MaxValue &&
+            _byNetworkId.TryGetValue((short)networkId, out name!))
+            return true;
+        name = string.Empty;
+        return false;
+    }
 
     public short Require(string name) =>
         TryGet(name, out var id)

@@ -17,6 +17,8 @@ sealed class Skeleton
     public HealthState Health { get; }
     public bool IsActive { get; private set; } = true;
     public void Remove() => IsActive = false;
+
+    public DamageResult ApplyDamage(DamageSource source, float amount) => Health.Apply(source, amount);
 }
 
 sealed class SkeletonStore

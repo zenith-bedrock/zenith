@@ -110,11 +110,11 @@ class ZenithServer
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world, players);
-        var zombieSystem = new ZombieSystem(world, players, zombies);
+        var zombieSystem = new ZombieSystem(world, players, zombies, itemPalette);
         gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
         var projectileSystem = new ProjectileSystem(world, players, projectiles, zombieSystem);
         gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
-        gameLoop.Register(new SkeletonSystem(players, skeletons, projectileSystem), diagnostics.System("skeleton"));
+        gameLoop.Register(new SkeletonSystem(world, players, skeletons, projectileSystem, itemPalette), diagnostics.System("skeleton"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
         gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
         gameLoop.Register(gravity, diagnostics.System("gravity"));

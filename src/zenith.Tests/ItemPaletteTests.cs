@@ -16,6 +16,17 @@ public class ItemPaletteTests
     }
 
     [Fact]
+    public void Palette_reverse_lookup_confirms_non_tool_item_identity()
+    {
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var bone = palette.Require("minecraft:bone");
+
+        Assert.True(palette.TryGetName(bone, out var name));
+        Assert.Equal("minecraft:bone", name);
+        Assert.False(palette.TryGetName(short.MaxValue + 1, out _));
+    }
+
+    [Fact]
     public void Blocks_TryGetName_round_trips_loaded_ids()
     {
         Blocks.ResetForTests();
