@@ -41,7 +41,6 @@ jobs:
         working-directory: zenith-smoke-bot
         run: |
           bun install --frozen-lockfile
-          bun pm trust raknet-native
 
       - name: Start Zenith and run protocol lifecycle smokes
         env:
