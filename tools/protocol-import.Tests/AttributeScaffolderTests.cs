@@ -80,7 +80,7 @@ public class AttributeScaffolderTests
     }
 
     [Fact]
-    public void Primitive_array_emits_todo_not_WireNestedArray()
+    public void Uuid_array_scaffolds_a_generic_uuid_array_codec()
     {
         var packet = new PacketSchema(1, "SomePacket",
         [
@@ -91,8 +91,9 @@ public class AttributeScaffolderTests
         var result = scaffolder.Scaffold(packet);
 
         Assert.DoesNotContain("[WireNestedArray(", result.SourceText);
-        Assert.Contains("// TODO: primitive-element array", result.SourceText);
-        Assert.Single(result.Notes);
+        Assert.Contains("[WireUuidArray]", result.SourceText);
+        Assert.Contains("public Guid[] Ids { get; set; } = [];", result.SourceText);
+        Assert.Empty(result.Notes);
     }
 
     [Fact]

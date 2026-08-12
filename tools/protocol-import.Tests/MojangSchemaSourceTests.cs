@@ -219,5 +219,25 @@ public class MojangSchemaSourceTests : IDisposable
 
         Assert.NotNull(field.RepeatPrefix);
         Assert.Equal("mce::uuid", field.Type);
+        Assert.Equal(SchemaConstruct.Array, field.Construct);
+        Assert.Equal("./mce__UUID.json", field.Reference);
+    }
+
+    [Fact]
+    public void Union_is_preserved_with_an_explicit_unsupported_reason()
+    {
+        WriteFile("Pkt", """{"$ref": "./PktPayload.json", "$metaProperties": {"[cereal:packet]": 1}}""");
+        WriteFile("PktPayload", """
+            { "type": "object", "properties": {
+                "Entry": {"oneOf": [{"$ref": "./Add.json"}, {"$ref": "./Remove.json"}], "x-ordinal-index": 0}
+            }, "required": ["Entry"] }
+            """);
+
+        var field = _source.ReadPacket(_cacheDir, "Pkt")!.Fields.Single();
+
+        Assert.Equal(SchemaConstruct.Union, field.Construct);
+        Assert.True(field.IsComplexType);
+        Assert.Equal("union discriminator not supported", field.UnsupportedReason);
+        Assert.Equal("", field.Type);
     }
 }

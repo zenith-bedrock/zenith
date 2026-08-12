@@ -36,7 +36,9 @@ internal sealed class PullCommand : AsyncCommand<PullSettings>
 
         await AnsiConsole.Status().StartAsync("Downloading...", async ctx =>
         {
-            await source.PullAsync(settings.Cache, @ref, CancellationToken.None);
+            var manifest = await source.PullAsync(settings.Cache, @ref, CancellationToken.None);
+            AnsiConsole.MarkupLine($"[grey]Resolved SHA:[/] {manifest.ResolvedSha}");
+            AnsiConsole.MarkupLine($"[grey]Manifest:[/] {manifest.Files.Count} files, {manifest.PulledAtUtc:O}");
         });
 
         var count = source.ListCachedPackets(settings.Cache).Count;

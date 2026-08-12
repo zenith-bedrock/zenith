@@ -105,6 +105,9 @@ internal static class GeneratorTestHelper
             public sealed class WireUuidAttribute : System.Attribute;
 
             [System.AttributeUsage(System.AttributeTargets.Property)]
+            public sealed class WireUuidArrayAttribute : System.Attribute;
+
+            [System.AttributeUsage(System.AttributeTargets.Property)]
             public sealed class WireNestedAttribute : System.Attribute;
 
             public enum CountEncoding { UnsignedVarInt, FixedByte, FixedUShort, FixedUInt }

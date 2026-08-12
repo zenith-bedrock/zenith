@@ -137,6 +137,13 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
 
         if (elementEmission.Kind != WireEmissionKind.Unknown)
         {
+            if (elementEmission.Kind == WireEmissionKind.Uuid)
+            {
+                properties.AppendLine("    [WireUuidArray]");
+                properties.AppendLine($"    public Guid[] {propertyName} {{ get; set; }} = [];");
+                properties.AppendLine();
+                return;
+            }
             notes.Add($"Field '{field.Name}': array of primitive '{field.Type}' - [WireNestedArray] requires named-type elements with Read/Write (see ADR §76 EmoteListPacket note). Left as TODO.");
             properties.AppendLine($"    // TODO: primitive-element array (type '{field.Type}'), not covered by [WireNestedArray] v1 - see ADR §76 EmoteListPacket note");
             properties.AppendLine($"    // public {elementEmission.ClrType}[] {propertyName} {{ get; set; }} = [];");

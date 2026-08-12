@@ -54,6 +54,10 @@ public sealed class WireByteArrayAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class WireUuidAttribute : Attribute;
 
+/// <summary>Varint-count-prefixed Guid[]; each element uses Bedrock UUID wire layout.</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class WireUuidArrayAttribute : Attribute;
+
 /// <summary>
 /// Nested sub-object. Resolved by the generator via symbol lookup: prefers
 /// <c>static T Read(ref BinaryStream)</c> + instance <c>void Write(ref BinaryStream)</c>
