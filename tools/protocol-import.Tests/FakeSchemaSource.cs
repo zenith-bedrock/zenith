@@ -11,7 +11,8 @@ internal sealed class FakeSchemaSource : ISchemaSource
     public string Name => "fake";
     public string DefaultRef => "fake-ref";
 
-    public Task PullAsync(string cacheDir, string @ref, CancellationToken ct) => Task.CompletedTask;
+    public Task<CacheManifest> PullAsync(string cacheDir, string @ref, CancellationToken ct) =>
+        Task.FromResult(new CacheManifest(Name, @ref, "fake", DateTimeOffset.UnixEpoch, []));
 
     public PacketSchema? ReadPacket(string cacheDir, string packetName) =>
         Packets.GetValueOrDefault(packetName);

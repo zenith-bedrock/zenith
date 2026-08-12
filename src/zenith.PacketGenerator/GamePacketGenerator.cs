@@ -115,7 +115,7 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
 
             var baseAttrs = attrs.Where(a => a.AttributeClass?.Name is
                 "WireAttribute" or "WireVarAttribute" or "WireStringAttribute" or
-                "WireByteArrayAttribute" or "WireUuidAttribute" or "WireNestedAttribute" or
+                "WireByteArrayAttribute" or "WireUuidAttribute" or "WireUuidArrayAttribute" or "WireNestedAttribute" or
                 "WireNestedArrayAttribute").ToList();
 
             if (baseAttrs.Count == 0)
@@ -208,6 +208,7 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
             "WireStringAttribute" => WireKind.WireString,
             "WireByteArrayAttribute" => WireKind.WireByteArray,
             "WireUuidAttribute" => WireKind.WireUuid,
+            "WireUuidArrayAttribute" => WireKind.WireUuidArray,
             "WireNestedAttribute" => WireKind.WireNested,
             "WireNestedArrayAttribute" => WireKind.WireNestedArray,
             _ => throw new InvalidOperationException()
@@ -311,6 +312,15 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
                 {
                     result.Diagnostics.Add(Diagnostic.Create(Diagnostics.UnsupportedType,
                         location, classDisplayName, member.Name, member.Type.ToDisplayString()));
+                    return null;
+                }
+                break;
+            }
+            case WireKind.WireUuidArray:
+            {
+                if (propertyType is not IArrayTypeSymbol { ElementType.Name: "Guid" })
+                {
+                    result.Diagnostics.Add(Diagnostic.Create(Diagnostics.UnsupportedType, location, classDisplayName, member.Name, member.Type.ToDisplayString()));
                     return null;
                 }
                 break;
@@ -523,6 +533,10 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
         {
             stmt = BuildNestedArrayDecode(f);
         }
+        else if (f.Kind == WireKind.WireUuidArray)
+        {
+            stmt = $"{{\n    var __count = stream.ReadUnsignedVarInt();\n    var __arr = new Guid[__count];\n    for (var __i = 0; __i < __count; __i++) __arr[__i] = stream.ReadUuid();\n    {f.PropertyName} = __arr;\n}}";
+        }
         else if (f.IsOptional)
         {
             var valueExpr = BuildDecodeValueExpr(f);
@@ -606,6 +620,8 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
                 return $"writer.WriteByteArray({valueExpr});";
             case WireKind.WireUuid:
                 return $"writer.WriteUuid({valueExpr});";
+            case WireKind.WireUuidArray:
+                return $"writer.WriteUnsignedVarInt({f.PropertyName}.Length);\nforeach (var __item in {f.PropertyName})\n{{\n    writer.WriteUuid(__item);\n}}";
             case WireKind.WireNested:
                 return $"{valueExpr}.Write(ref writer);";
             case WireKind.WireNestedArray:

@@ -7,7 +7,7 @@ app.Configure(config =>
     config.SetApplicationName("protocol-import");
 
     config.AddCommand<PullCommand>("pull")
-        .WithDescription("Download packets/types/enums JSON from EndstoneMC/protocol-docs into a local cache.");
+        .WithDescription("Download one verified schema snapshot into the local cache.");
 
     config.AddCommand<ScaffoldCommand>("scaffold")
         .WithDescription("Scaffold a [GamePacket]-attributed class from a cached packet schema.");
@@ -17,6 +17,12 @@ app.Configure(config =>
 
     config.AddCommand<ListCommand>("list")
         .WithDescription("Show which packets are cached and/or migrated.");
+
+    config.AddCommand<ReportCommand>("report")
+        .WithDescription("Show cache provenance, codegen coverage, and unsupported schema constructs.");
+
+    config.AddCommand<UpgradeCommand>("upgrade")
+        .WithDescription("Produce a read-only migration plan between two verified snapshots.");
 });
 
 return app.Run(args);

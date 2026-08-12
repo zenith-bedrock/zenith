@@ -20,23 +20,25 @@ internal sealed class EndstoneSchemaSource : ISchemaSource, IDisposable
     /// <summary>Cache root for this source, namespaced under the shared --cache dir so
     /// filenames that collide across providers (both have "AnimatePacket.json") don't clobber
     /// each other.</summary>
-    private static string Root(string cacheDir) => Path.Combine(cacheDir, "endstone");
+    private static string Root(string cacheDir) => SchemaCache.GetReadRoot(cacheDir, "endstone");
 
-    public async Task PullAsync(string cacheDir, string @ref, CancellationToken ct)
+    public async Task<CacheManifest> PullAsync(string cacheDir, string @ref, CancellationToken ct)
     {
-        foreach (var folder in new[] { "packets", "types", "enums" })
+        var sha = await _client.ResolveCommitShaAsync(@ref, ct);
+        var folders = new[] { "packets", "types", "enums" };
+        var listings = new Dictionary<string, IReadOnlyList<GitHubContentClient.GitHubEntry>>();
+        foreach (var folder in folders) listings[folder] = await _client.ListFilesAsync(folder, sha, ct);
+        return await SchemaCache.PublishAsync(cacheDir, Name, @ref, sha, async (staging, token) =>
         {
-            var destDir = Path.Combine(Root(cacheDir), folder);
-            Directory.CreateDirectory(destDir);
-
-            var listing = await _client.ListFilesAsync(folder, @ref, ct);
-
-            foreach (var entry in listing.Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+            foreach (var folder in folders)
+            foreach (var entry in listings[folder].Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
             {
-                var content = await _client.FetchRawAsync(folder, entry.Name, @ref, ct);
-                await File.WriteAllTextAsync(Path.Combine(destDir, entry.Name), content, ct);
+                var content = await _client.FetchRawAsync(folder, entry.Name, sha, token);
+                var destDir = Path.Combine(staging, folder);
+                Directory.CreateDirectory(destDir);
+                await File.WriteAllTextAsync(Path.Combine(destDir, entry.Name), content, token);
             }
-        }
+        }, ct);
     }
 
     public PacketSchema? ReadPacket(string cacheDir, string packetName)
@@ -126,7 +128,11 @@ internal sealed class EndstoneSchemaSource : ISchemaSource, IDisposable
                 repeatPrefix = p.GetString();
             }
 
-            result.Add(new FieldSchema(name, type, enumName, optional, repeatPrefix, isConstantLiteral, isComplexType));
+            var construct = isConstantLiteral ? SchemaConstruct.Constant : isComplexType ? SchemaConstruct.Union :
+                repeatPrefix is not null ? SchemaConstruct.Array : SchemaConstruct.Scalar;
+            var reason = isComplexType ? "discriminated union not supported" : null;
+            result.Add(new FieldSchema(name, type, enumName, optional, repeatPrefix, isConstantLiteral, isComplexType,
+                construct, enumName, reason));
         }
 
         return result;

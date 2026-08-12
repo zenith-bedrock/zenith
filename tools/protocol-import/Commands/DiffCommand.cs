@@ -8,7 +8,7 @@ namespace Zenith.ProtocolImport.Commands;
 
 internal sealed class DiffSettings : CommandSettings
 {
-    [CommandArgument(0, "<PACKET_NAME>")]
+    [CommandArgument(0, "[PACKET_NAME]")]
     public string PacketName { get; set; } = "";
 
     [CommandOption("--source <NAME>")]
@@ -21,6 +21,15 @@ internal sealed class DiffSettings : CommandSettings
 
     [CommandOption("--cache <DIR>")]
     public string Cache { get; set; } = ".cache";
+
+    [CommandOption("--from <REF_OR_SHA>")]
+    public string? From { get; set; }
+
+    [CommandOption("--to <REF_OR_SHA>")]
+    public string? To { get; set; }
+
+    [CommandOption("--packets-dir <DIR>")]
+    public string? PacketsDir { get; set; }
 }
 
 /// <summary>
@@ -32,6 +41,9 @@ internal sealed class DiffCommand : Command<DiffSettings>
 {
     public override int Execute(CommandContext context, DiffSettings settings)
     {
+        if (settings.From is not null || settings.To is not null)
+            return DiffSnapshots(settings);
+
         if (string.IsNullOrEmpty(settings.File) || !System.IO.File.Exists(settings.File))
         {
             AnsiConsole.MarkupLine($"[red]--file '{settings.File}' not found.[/]");
@@ -77,5 +89,41 @@ internal sealed class DiffCommand : Command<DiffSettings>
         }
 
         return 1;
+    }
+
+    private static int DiffSnapshots(DiffSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.From) || string.IsNullOrWhiteSpace(settings.To))
+        {
+            AnsiConsole.MarkupLine("[red]Snapshot diff requires both --from and --to.[/]");
+            return 1;
+        }
+        using var source = SchemaSourceFactory.Create(settings.Source);
+        var fromRoot = SchemaCache.FindSnapshot(settings.Cache, source.Name, settings.From);
+        var toRoot = SchemaCache.FindSnapshot(settings.Cache, source.Name, settings.To);
+        if (fromRoot is null || toRoot is null)
+        {
+            AnsiConsole.MarkupLine("[red]Snapshot not found. Pull both refs first; use their requested ref or resolved SHA.[/]");
+            return 1;
+        }
+        var from = source.ListCachedPackets(fromRoot).Select(name => source.ReadPacket(fromRoot, name)!).ToList();
+        var to = source.ListCachedPackets(toRoot).Select(name => source.ReadPacket(toRoot, name)!).ToList();
+        var packetsDir = settings.PacketsDir;
+        if (packetsDir is null && RepoLocator.FindRoot(Directory.GetCurrentDirectory()) is { } repoRoot)
+            packetsDir = Path.Combine(repoRoot, "src", "zenith", "Packets");
+        var generated = packetsDir is not null && Directory.Exists(packetsDir)
+            ? Directory.GetFiles(packetsDir, "*.cs").Where(path => File.ReadAllText(path).Contains("[GamePacket("))
+                .Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal) : [];
+        var localPackets = packetsDir is not null && Directory.Exists(packetsDir)
+            ? Directory.GetFiles(packetsDir, "*.cs").Select(Path.GetFileNameWithoutExtension).ToHashSet(StringComparer.Ordinal) : [];
+        var diff = SchemaDiffAnalyzer.Analyze(from, to, packet => localPackets.Contains(packet) && !generated.Contains(packet));
+        foreach (var packet in diff.AddedPackets) AnsiConsole.MarkupLine($"[green]Added packet:[/] {packet.EscapeMarkup()}");
+        foreach (var packet in diff.RemovedPackets) AnsiConsole.MarkupLine($"[yellow]Removed packet:[/] {packet.EscapeMarkup()}");
+        foreach (var change in diff.Changes)
+        {
+            var color = change.Severity switch { DiffSeverity.Green => "green", DiffSeverity.Yellow => "yellow", _ => "red" };
+            AnsiConsole.MarkupLine($"[{color}]{change.Severity.ToString().ToUpperInvariant()}[/] {change.Packet.EscapeMarkup()}: {change.Description.EscapeMarkup()}");
+        }
+        return diff.Changes.Any(c => c.Severity == DiffSeverity.Red) ? 1 : 0;
     }
 }

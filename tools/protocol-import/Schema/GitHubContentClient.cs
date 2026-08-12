@@ -35,6 +35,13 @@ internal sealed class GitHubContentClient : IDisposable
         return listing ?? [];
     }
 
+    public async Task<string> ResolveCommitShaAsync(string @ref, CancellationToken ct)
+    {
+        var commit = await _http.GetFromJsonAsync<GitHubCommit>(
+            $"repos/{_owner}/{_repo}/commits/{Uri.EscapeDataString(@ref)}", ct);
+        return commit?.Sha ?? throw new InvalidOperationException($"GitHub did not resolve ref '{@ref}'.");
+    }
+
     public async Task<string> FetchRawAsync(string folder, string fileName, string @ref, CancellationToken ct)
     {
         var rawUrl = $"https://raw.githubusercontent.com/{_owner}/{_repo}/{@ref}/{folder}/{fileName}";
@@ -48,4 +55,6 @@ internal sealed class GitHubContentClient : IDisposable
         public string Name { get; set; } = "";
         public string Type { get; set; } = "";
     }
+
+    private sealed class GitHubCommit { public string Sha { get; set; } = ""; }
 }

@@ -25,20 +25,20 @@ internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
     /// <summary>Cache root for this source, namespaced under the shared --cache dir so
     /// filenames that collide across providers (both have "AnimatePacket.json") don't clobber
     /// each other.</summary>
-    private static string Root(string cacheDir) => Path.Combine(cacheDir, "mojang");
+    private static string Root(string cacheDir) => SchemaCache.GetReadRoot(cacheDir, "mojang");
 
-    public async Task PullAsync(string cacheDir, string @ref, CancellationToken ct)
+    public async Task<CacheManifest> PullAsync(string cacheDir, string @ref, CancellationToken ct)
     {
-        var destDir = Root(cacheDir);
-        Directory.CreateDirectory(destDir);
-
-        var listing = await _client.ListFilesAsync(JsonDir, @ref, ct);
-
-        foreach (var entry in listing.Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+        var sha = await _client.ResolveCommitShaAsync(@ref, ct);
+        var listing = await _client.ListFilesAsync(JsonDir, sha, ct);
+        return await SchemaCache.PublishAsync(cacheDir, Name, @ref, sha, async (staging, token) =>
         {
-            var content = await _client.FetchRawAsync(JsonDir, entry.Name, @ref, ct);
-            await File.WriteAllTextAsync(Path.Combine(destDir, entry.Name), content, ct);
-        }
+            foreach (var entry in listing.Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+            {
+                var content = await _client.FetchRawAsync(JsonDir, entry.Name, sha, token);
+                await File.WriteAllTextAsync(Path.Combine(staging, entry.Name), content, token);
+            }
+        }, ct);
     }
 
     public PacketSchema? ReadPacket(string cacheDir, string packetName)
@@ -168,6 +168,10 @@ internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
 
     private FieldSchema ResolveField(string name, JsonElement value, string cacheDir, bool optional)
     {
+        if (value.TryGetProperty("oneOf", out _) || value.TryGetProperty("anyOf", out _))
+            return new FieldSchema(name, "", null, optional, null, IsComplexType: true,
+                Construct: SchemaConstruct.Union, UnsupportedReason: "union discriminator not supported");
+
         if (value.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String &&
             typeEl.GetString() == "array")
         {
@@ -178,10 +182,18 @@ internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
             // Mojang's schema has no count-encoding equivalent to Endstone's "repeat.prefix" -
             // RepeatPrefix carries a non-null sentinel just to signal "this is an array" to the
             // scaffolder; the actual encoding falls back to UnsignedVarInt there, with a note.
-            return new FieldSchema(name, elementType, null, optional, RepeatPrefix: "<unspecified>");
+            return new FieldSchema(name, elementType, null, optional, RepeatPrefix: "<unspecified>",
+                Construct: SchemaConstruct.Array,
+                Reference: itemsEl.ValueKind == JsonValueKind.Object && itemsEl.TryGetProperty("$ref", out var itemRef) ? itemRef.GetString() : null,
+                UnsupportedReason: "array count encoding is not represented by the Mojang schema");
         }
 
-        return new FieldSchema(name, ResolveScalarOrRefTypeName(value, cacheDir), null, optional, null);
+        if (!value.TryGetProperty("type", out _) && !value.TryGetProperty("$ref", out _))
+            return new FieldSchema(name, "", null, optional, null, Construct: SchemaConstruct.Unknown,
+                UnsupportedReason: "schema field has no scalar type or reference");
+
+        return new FieldSchema(name, ResolveScalarOrRefTypeName(value, cacheDir), null, optional, null,
+            Reference: value.TryGetProperty("$ref", out var reference) ? reference.GetString() : null);
     }
 
     /// <summary>Max $ref hops ResolveScalarOrRefTypeName will chase through single-scalar

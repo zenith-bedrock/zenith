@@ -7,6 +7,7 @@ internal enum WireKind
     WireString,
     WireByteArray,
     WireUuid,
+    WireUuidArray,
     WireNested,
     WireNestedArray
 }

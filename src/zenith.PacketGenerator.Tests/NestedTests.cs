@@ -5,6 +5,25 @@ namespace Zenith.PacketGenerator.Tests;
 public class NestedTests
 {
     [Fact]
+    public void Uuid_array_generates_count_prefixed_uuid_loop()
+    {
+        const string source = """
+            using System;
+            using Zenith.Packets.Generation;
+            using Zenith.Raknet.Stream;
+            namespace Zenith.Packets;
+            [GamePacket(2)] sealed partial class ArrayPacket : DataPacket
+            { [WireUuidArray] public Guid[] Ids { get; set; } = []; }
+            """;
+        var (generated, diagnostics) = GeneratorTestHelper.Run(source);
+        Assert.Empty(diagnostics);
+        var text = Assert.Single(generated);
+        Assert.Contains("writer.WriteUnsignedVarInt(Ids.Length);", text);
+        Assert.Contains("writer.WriteUuid(__item);", text);
+        Assert.Contains("__arr[__i] = stream.ReadUuid();", text);
+    }
+
+    [Fact]
     public void Nested_single_object_uses_static_read_factory()
     {
         const string source = """

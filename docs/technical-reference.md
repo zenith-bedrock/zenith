@@ -22,6 +22,7 @@ Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). The Cereal migr
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer and folder rules, smoke expectations, freeze list |
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
 | [`roadmap.md`](roadmap.md) | Current dependency graph, maturity gates, NOW/NEXT/LATER |
+| [`protocol-import.md`](protocol-import.md) | Deterministic schema cache, coverage report, and Tier A/B codegen boundary |
 | [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability maturity assessment and ECS decision evidence |
 | [`../schemas/zenith.schema.json`](../schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
 | [`../deploy/README.md`](../deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
