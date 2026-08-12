@@ -22,6 +22,7 @@ sealed class ProjectileSystem : IGameSystem
     private readonly ProjectileStore _projectiles;
     private readonly ZombieSystem _zombies;
     private readonly HashSet<(long ProjectileId, long PlayerId)> _replicated = [];
+    private readonly Dictionary<(long ProjectileId, long PlayerId), ProjectedPosition> _lastProjected = [];
 
     public ProjectileSystem(World.World world, PlayerManager players, ProjectileStore projectiles, ZombieSystem zombies)
     {
@@ -34,6 +35,7 @@ sealed class ProjectileSystem : IGameSystem
     public ProjectileStore Projectiles => _projectiles;
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
+    internal long ReplicatedMoveSkippedCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
     internal long RemovalCount { get; private set; }
 
@@ -61,6 +63,8 @@ sealed class ProjectileSystem : IGameSystem
 
         _replicated.RemoveWhere(pair => !_projectiles.Active.Any(p => p.EntityId == pair.ProjectileId) ||
                                         !online.Any(p => p.RuntimeId == pair.PlayerId));
+        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
+            _lastProjected.Remove(key);
     }
 
     private void SpawnFromPlayerInputs(IReadOnlyList<Player.Player> online)
@@ -111,9 +115,17 @@ sealed class ProjectileSystem : IGameSystem
         ReconcileViewers(projectile, online);
         foreach (var peer in online)
         {
-            if (!_replicated.Contains((projectile.EntityId, peer.RuntimeId))) continue;
+            var key = (projectile.EntityId, peer.RuntimeId);
+            if (!_replicated.Contains(key)) continue;
+            var current = new ProjectedPosition(projectile.PositionX, projectile.PositionY, projectile.PositionZ);
+            if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+            {
+                ReplicatedMoveSkippedCount++;
+                continue;
+            }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
                 projectile.RuntimeId, projectile.PositionX, projectile.PositionY, projectile.PositionZ);
+            _lastProjected[key] = current;
             ReplicatedMoveCount++;
         }
     }
@@ -163,6 +175,7 @@ sealed class ProjectileSystem : IGameSystem
             {
                 if (_replicated.Remove(key))
                 {
+                    _lastProjected.Remove(key);
                     peer.Session.Protocol.Entity.SendRemoveActor(projectile.EntityId);
                     ReplicatedRemovalCount++;
                 }
@@ -172,6 +185,7 @@ sealed class ProjectileSystem : IGameSystem
             peer.Session.Protocol.Entity.SendAddProjectile(
                 projectile.EntityId, projectile.RuntimeId, projectile.PositionX, projectile.PositionY, projectile.PositionZ,
                 projectile.VelocityX, projectile.VelocityY, projectile.VelocityZ);
+            _lastProjected[key] = new ProjectedPosition(projectile.PositionX, projectile.PositionY, projectile.PositionZ);
             ReplicatedSpawnCount++;
         }
     }
@@ -186,9 +200,23 @@ sealed class ProjectileSystem : IGameSystem
         {
             if (_replicated.Remove((projectile.EntityId, peer.RuntimeId)))
             {
+                _lastProjected.Remove((projectile.EntityId, peer.RuntimeId));
                 peer.Session.Protocol.Entity.SendRemoveActor(projectile.EntityId);
                 ReplicatedRemovalCount++;
             }
+        }
+    }
+
+    private readonly record struct ProjectedPosition(float X, float Y, float Z)
+    {
+        private const float PositionEpsilonSquared = 0.0001f;
+
+        public bool MeaningfullyChanged(ProjectedPosition previous)
+        {
+            var dx = X - previous.X;
+            var dy = Y - previous.Y;
+            var dz = Z - previous.Z;
+            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

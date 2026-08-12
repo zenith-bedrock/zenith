@@ -176,7 +176,7 @@ internal static class RuntimeLoadHarness
             host.Transport.Datagrams, host.Transport.Bytes,
             actorCount, host.Projectiles!.Projectiles.Active.Count,
             host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount,
-            host.Projectiles.ReplicatedRemovalCount);
+            host.Projectiles.ReplicatedRemovalCount, host.Projectiles.ReplicatedMoveSkippedCount);
     }
 
     private static LoadResult RunZombieBehavior(int playerCount, int actorCount, int ticks, ZombieWorkloadMode mode)
@@ -210,7 +210,7 @@ internal static class RuntimeLoadHarness
             host.Transport.Datagrams, host.Transport.Bytes,
             actorCount, host.Zombies!.Zombies.Active.Count,
             host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
-            host.Zombies.ReplicatedRemovalCount);
+            host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
     }
 
     private static void Print(LoadResult result) =>
@@ -221,7 +221,7 @@ internal static class RuntimeLoadHarness
             $"gc={result.GcCounts.Gen0}/{result.GcCounts.Gen1}/{result.GcCounts.Gen2} " +
             $"egress={result.Datagrams} datagrams/{result.Bytes}B" +
             (result.TargetActorCount == 0 ? "" :
-                $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} actorRemoved={result.RemovedActors} removeFanout={result.RemoveFanout}"));
+                $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} moveSkipped={result.MoveSkippedFanout} actorRemoved={result.RemovedActors} removeFanout={result.RemoveFanout}"));
 
     private sealed class RuntimeHost
     {
@@ -603,19 +603,19 @@ internal static class RuntimeLoadHarness
         string Scenario, int PlayerCount, int TickCount, double AverageMs, double P50Ms, double P95Ms, double P99Ms,
         double MaxMs, long AllocatedBytes, GcCounts GcCounts, long Datagrams, long Bytes,
         int TargetActorCount = 0, int ActiveActorCount = 0, long SpawnFanout = 0, long RemovedActors = 0, long MoveFanout = 0,
-        long RemoveFanout = 0)
+        long RemoveFanout = 0, long MoveSkippedFanout = 0)
     {
         public static LoadResult Create(string scenario, int playerCount, int ticks, long[] elapsed, long allocatedBytes,
             GcCounts gcCounts, long datagrams, long bytes,
             int targetActorCount = 0, int activeActorCount = 0, long spawnFanout = 0, long removedActors = 0, long moveFanout = 0,
-            long removeFanout = 0)
+            long removeFanout = 0, long moveSkippedFanout = 0)
         {
             var sorted = elapsed.Order().ToArray();
             static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
             return new LoadResult(scenario, playerCount, ticks,
                 elapsed.Average(Ms), Ms(sorted[(int)Math.Ceiling(ticks * .50) - 1]), Ms(sorted[(int)Math.Ceiling(ticks * .95) - 1]),
                 Ms(sorted[(int)Math.Ceiling(ticks * .99) - 1]), Ms(sorted[^1]), allocatedBytes, gcCounts, datagrams, bytes,
-                targetActorCount, activeActorCount, spawnFanout, removedActors, moveFanout, removeFanout);
+                targetActorCount, activeActorCount, spawnFanout, removedActors, moveFanout, removeFanout, moveSkippedFanout);
         }
     }
 
