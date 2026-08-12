@@ -51,6 +51,16 @@ internal static class RuntimeLoadHarness
             }
             return 0;
         }
+        if (options.ActivationPressure)
+        {
+            foreach (var actorCount in options.ActorCounts)
+                foreach (var scenario in Enum.GetValues<ActivationScenario>())
+                {
+                    Print(RunActivationPressure(options.ActorPlayers, actorCount, options.ActorTicks, scenario, useProjectiles: false));
+                    Print(RunActivationPressure(options.ActorPlayers, actorCount, options.ActorTicks, scenario, useProjectiles: true));
+                }
+            return 0;
+        }
 
         foreach (var playerCount in options.PlayerCounts)
         {
@@ -255,6 +265,39 @@ internal static class RuntimeLoadHarness
             host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
     }
 
+    private static LoadResult RunActivationPressure(int observerCount, int actorCount, int ticks,
+        ActivationScenario scenario, bool useProjectiles)
+    {
+        var host = new RuntimeHost(observerCount, streamChunks: false,
+            includeProjectileSystem: useProjectiles,
+            includeZombieSystem: !useProjectiles,
+            includeWorldInteractionDiagnostics: true);
+        host.ConfigureActivationScenario(scenario);
+        if (useProjectiles)
+            host.SeedProjectiles(actorCount, clustered: true);
+        else
+            host.SeedActivationZombies(actorCount);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+        }
+        host.PrintActivationTimings(scenario, useProjectiles);
+        var active = useProjectiles ? host.Projectiles!.Projectiles.Active.Count : host.Zombies!.Zombies.Active.Count;
+        return LoadResult.Create($"activation-{(useProjectiles ? "projectile" : "zombie")}-{scenario.ToString().ToLowerInvariant()}",
+            observerCount, ticks, elapsed, GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore, host.Transport.Datagrams, host.Transport.Bytes,
+            actorCount, active);
+    }
+
     private static void Print(LoadResult result) =>
         Console.WriteLine(
             $"{result.Scenario,-11} players={result.PlayerCount,3} ticks={result.TickCount,3} " +
@@ -328,7 +371,10 @@ internal static class RuntimeLoadHarness
             if (includeProjectileSystem)
             {
                 Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), zombieSystem!);
-                Loop.Register(Projectiles);
+                if (WorldDiagnostics is { } projectileTimings)
+                    Loop.Register(Projectiles, projectileTimings.Projectile);
+                else
+                    Loop.Register(Projectiles);
             }
             Loop.Register(new BlockDigSystem(world));
             if (WorldDiagnostics is { } timings)
@@ -488,6 +534,41 @@ internal static class RuntimeLoadHarness
             }
         }
 
+        public void ConfigureActivationScenario(ActivationScenario scenario)
+        {
+            for (var index = 0; index < _players.Count; index++)
+            {
+                var player = _players[index];
+                player.Chunks.Radius = 1;
+                var known = new List<(int X, int Z)>();
+                player.Chunks.CopyKnown(known);
+                foreach (var entry in known)
+                    player.Chunks.Forget(entry.X, entry.Z);
+                var observed = scenario == ActivationScenario.Observed && index == 0;
+                var active = scenario != ActivationScenario.NoObservers;
+                player.IsInGame = active;
+                player.PositionX = observed ? 0 : 100_000;
+                player.PositionZ = observed ? 0 : 100_000;
+                if (observed)
+                    player.Chunks.RememberMany([(0, 0), (-1, 0), (0, -1), (1, 0), (0, 1)]);
+                else
+                    player.Chunks.RememberMany([(6_250, 6_250)]);
+            }
+        }
+
+        public void SeedActivationZombies(int targetCount)
+        {
+            if (Zombies is null) throw new InvalidOperationException("Activation workload requires ZombieSystem.");
+            for (var i = 0; i < targetCount; i++)
+            {
+                var id = _playerManager.AllocateRuntimeId();
+                var x = (i % 100) * 0.25f;
+                var z = (i / 100) * 0.25f;
+                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
+                    throw new InvalidOperationException("Activation zombie seed refused.");
+            }
+        }
+
         public void ConfigureInterestLayout(InterestLayout layout)
         {
             for (var i = 0; i < _players.Count; i++)
@@ -552,6 +633,9 @@ internal static class RuntimeLoadHarness
         public void PrintZombieTimings(ZombieWorkloadMode mode) => WorldDiagnostics?.PrintZombie(mode);
 
         public void PrintInterestZombieTimings(InterestLayout layout) => WorldDiagnostics?.PrintInterestZombie(layout);
+
+        public void PrintActivationTimings(ActivationScenario scenario, bool projectiles) =>
+            WorldDiagnostics?.PrintActivation(scenario, projectiles);
 
         public void PrepareWorldInteraction()
         {
@@ -634,6 +718,7 @@ internal static class RuntimeLoadHarness
         public TimingMetric FloorDrop { get; }
         public TimingMetric Inventory { get; }
         public TimingMetric Zombie { get; }
+        public TimingMetric Projectile { get; }
 
         public WorldInteractionDiagnostics()
         {
@@ -643,6 +728,7 @@ internal static class RuntimeLoadHarness
             FloorDrop = builder.Timing("tick.system.floor-drop", "tick");
             Inventory = builder.Timing("tick.system.inventory", "tick");
             Zombie = builder.Timing("tick.system.zombie", "tick");
+            Projectile = builder.Timing("tick.system.projectile", "tick");
             Runtime = builder.Build();
         }
 
@@ -671,6 +757,15 @@ internal static class RuntimeLoadHarness
             var metric = snapshot.Metrics.First(m => m.Name == "tick.system.zombie");
             var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
             Console.WriteLine($"interest timings layout={layout.ToString().ToLowerInvariant()} zombie={average:F3}ms");
+        }
+
+        public void PrintActivation(ActivationScenario scenario, bool projectiles)
+        {
+            var snapshot = Runtime.CaptureSnapshot();
+            var name = projectiles ? "tick.system.projectile" : "tick.system.zombie";
+            var metric = snapshot.Metrics.First(m => m.Name == name);
+            var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
+            Console.WriteLine($"activation timings actor={(projectiles ? "projectile" : "zombie")} scenario={scenario.ToString().ToLowerInvariant()} avg={average:F3}ms");
         }
     }
 
@@ -747,7 +842,8 @@ internal static class RuntimeLoadHarness
         int ActorTicks,
         bool WorldInteraction,
         bool ZombieBehavior,
-        bool InterestScaling)
+        bool InterestScaling,
+        bool ActivationPressure)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -758,6 +854,7 @@ internal static class RuntimeLoadHarness
             var worldInteraction = false;
             var zombieBehavior = false;
             var interestScaling = false;
+            var activationPressure = false;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -774,11 +871,13 @@ internal static class RuntimeLoadHarness
                     zombieBehavior = true;
                 else if (args[i] == "--interest-scaling")
                     interestScaling = true;
+                else if (args[i] == "--activation-pressure")
+                    activationPressure = true;
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure);
         }
     }
 
@@ -787,5 +886,12 @@ internal static class RuntimeLoadHarness
         Clustered,
         Distributed,
         MovingObservers
+    }
+
+    private enum ActivationScenario : byte
+    {
+        Observed,
+        NoObservers,
+        FarObservers
     }
 }
