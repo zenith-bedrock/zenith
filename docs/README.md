@@ -21,6 +21,7 @@ Task-oriented — you have a specific thing to do.
 | [Alpha gate](alpha-gate.md) | `v0.0.1-alpha` tag checklist (compose / test / non-goals) |
 | [Protocol churn](protocol-churn.md) | Checklist for bumping to a new Bedrock client protocol (ADR §22) |
 | [Runtime and behavioral validation](runtime-validation.md) | Load baseline and real-client differential-smoke workflow |
+| [Runtime diagnostics](diagnostics.md) | Diagnostics library, snapshots, instrumentation and overhead checks |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
 | [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
 

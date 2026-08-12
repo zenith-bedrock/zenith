@@ -1,4 +1,7 @@
 using Zenith.Player;
+using Zenith.Diagnostics;
+using System.Globalization;
+using System.Diagnostics;
 
 namespace Zenith.Gameplay.Commands;
 
@@ -6,11 +9,13 @@ namespace Zenith.Gameplay.Commands;
 sealed class CommandRuntime
 {
     private readonly PlayerManager _players;
+    private readonly DiagnosticsInvestigation? _diagnostics;
     private readonly CommandCatalog _catalog = new();
 
-    public CommandRuntime(PlayerManager players)
+    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null)
     {
         _players = players;
+        _diagnostics = diagnostics;
         var modes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["survival"] = GameMode.Survival, ["s"] = GameMode.Survival, ["0"] = GameMode.Survival,
@@ -22,6 +27,12 @@ sealed class CommandRuntime
             new CommandOverload(), new CommandOverload(new StringCommandArgument("command"))));
         _catalog.Register(new CommandDefinition("sample", "Show a bounded runtime sample request", CommandPermission.Any,
             new CommandOverload(), new CommandOverload(new IntegerCommandArgument("ticks", 1, 20))));
+        var diagnosticsActions = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["snapshot"] = "snapshot", ["compare"] = "compare", ["tick"] = "tick", ["incident"] = "incident"
+        };
+        _catalog.Register(new CommandDefinition("diagnostics", "Capture and compare runtime diagnostics", CommandPermission.Any,
+            new CommandOverload(new EnumCommandArgument("action", diagnosticsActions))));
     }
 
     public IReadOnlyList<string> Suggest(string prefix) => _catalog.Suggest(prefix);
@@ -45,9 +56,51 @@ sealed class CommandRuntime
                 return new("Commands", string.Join(", ", _catalog.Suggest("")));
             case "sample":
                 return new("Command", arguments.TryGetValue("ticks", out var ticks) ? $"Sample request: {ticks} ticks." : "Sample request: default.");
+            case "diagnostics":
+                return ExecuteDiagnostics((string)arguments["action"]);
             default:
                 return new("Command", "Unknown command.");
         }
+    }
+
+    private CommandFeedback ExecuteDiagnostics(string action)
+    {
+        if (_diagnostics is null) return new("Diagnostics", "Diagnostics are unavailable.");
+        return action switch
+        {
+            "snapshot" => new("Diagnostics", DescribeSnapshot(_diagnostics.CaptureBaseline())),
+            "compare" => _diagnostics.TryCompareBaseline(out var comparison)
+                ? new("Diagnostics", comparison.ToConsole())
+                : new("Diagnostics", "Capture a baseline first: /diagnostics snapshot"),
+            "tick" => new("Diagnostics", DescribeTimings(_diagnostics.CaptureTopTimings())),
+            "incident" => new("Diagnostics", DescribeLatestIncident(_diagnostics.CaptureRecentIncidents())),
+            _ => new("Diagnostics", "Unknown diagnostics action.")
+        };
+    }
+
+    private static string DescribeSnapshot(DiagnosticsSnapshot snapshot)
+    {
+        var tick = snapshot.Metrics.FirstOrDefault(metric => metric.Name == "tick");
+        var milliseconds = tick.Count == 0 ? 0d : tick.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / tick.Count;
+        return $"Baseline captured. tick.avg={milliseconds.ToString("F3", CultureInfo.InvariantCulture)}ms.";
+    }
+
+    private static string DescribeTimings(IReadOnlyList<DiagnosticsMetricSnapshot> timings) =>
+        timings.Count == 0 ? "No timing samples yet." : string.Join(", ", timings.Select(timing =>
+            $"{timing.Name}={timing.Value * 1000d / Stopwatch.Frequency:F3}ms"));
+
+    private static string DescribeLatestIncident(IReadOnlyList<DiagnosticsSnapshot> incidents)
+    {
+        if (incidents.Count == 0) return "No incident snapshots captured yet.";
+        var snapshot = incidents[^1];
+        var tick = snapshot.Metrics.FirstOrDefault(metric => metric.Name == "tick");
+        var actors = snapshot.Metrics.FirstOrDefault(metric => metric.Name == "gameplay.actors");
+        var bytes = snapshot.Metrics.FirstOrDefault(metric => metric.Name == "network.packet-bytes.sent");
+        var top = snapshot.Metrics.Where(metric => metric.Kind == DiagnosticMetricKind.Timing && metric.Parent == "tick")
+            .OrderByDescending(metric => metric.Value).FirstOrDefault();
+        var tickMs = tick.Value * 1000d / snapshot.StopwatchFrequency;
+        var topMs = top.Value * 1000d / snapshot.StopwatchFrequency;
+        return $"Incident samples={incidents.Count}; tick.last={tickMs:F3}ms; top={top.Name ?? "none"} {topMs:F3}ms; actors={actors.Value}; packetBytes.out={bytes.Value}.";
     }
 }
 

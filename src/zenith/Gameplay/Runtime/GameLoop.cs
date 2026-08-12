@@ -1,5 +1,6 @@
 using Zenith.Player;
 using Zenith.Raknet.Log;
+using Zenith.Diagnostics;
 using System.Diagnostics;
 
 namespace Zenith.Gameplay.Runtime;
@@ -14,20 +15,35 @@ sealed class GameLoop
     private readonly ILogger _logger;
     private readonly PlayerManager _players;
     private readonly List<IGameSystem> _systems = new();
+    private readonly List<TimingMetric?> _systemTimings = new();
     private readonly List<Player.Player> _onlineScratch = new();
+    private readonly DiagnosticsRuntime? _diagnostics;
+    private readonly TimingMetric _tickTiming;
     private Action<TimeSpan>? _tickObserver;
 
     public GameClock Clock => _clock;
 
-    public GameLoop(GameClock clock, PlayerManager players, ILogger logger)
+    public GameLoop(GameClock clock, PlayerManager players, ILogger logger, DiagnosticsRuntime? diagnostics = null, TimingMetric tickTiming = default)
     {
         _clock = clock;
         _players = players;
         _logger = logger;
+        _diagnostics = diagnostics;
+        _tickTiming = tickTiming;
     }
 
     /// <summary>Ordem de registro = ordem de execução.</summary>
-    public void Register(IGameSystem system) => _systems.Add(system);
+    public void Register(IGameSystem system)
+    {
+        _systems.Add(system);
+        _systemTimings.Add(null);
+    }
+
+    public void Register(IGameSystem system, TimingMetric timing)
+    {
+        _systems.Add(system);
+        _systemTimings.Add(timing);
+    }
 
     /// <summary>Composition-root-only operational hook; it observes completed ticks and owns no gameplay state.</summary>
     internal void SetTickObserver(Action<TimeSpan> observer) => _tickObserver = observer;
@@ -67,12 +83,17 @@ sealed class GameLoop
     internal void TickOnce()
     {
         var started = Stopwatch.GetTimestamp();
+        var tickScope = _diagnostics is null ? default : _diagnostics.Begin(_tickTiming);
         try
         {
             _clock.Advance();
             _players.FillOnline(_onlineScratch);
-            foreach (var system in _systems)
+            for (var index = 0; index < _systems.Count; index++)
             {
+                var system = _systems[index];
+                var systemScope = _systemTimings[index] is { } timing && _diagnostics is not null
+                    ? _diagnostics.Begin(timing)
+                    : default;
                 try
                 {
                     system.Tick(_clock, _onlineScratch);
@@ -82,8 +103,13 @@ sealed class GameLoop
                     _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
                     throw;
                 }
+                finally { systemScope.Dispose(); }
             }
         }
-        finally { _tickObserver?.Invoke(Stopwatch.GetElapsedTime(started)); }
+        finally
+        {
+            tickScope.Dispose();
+            _tickObserver?.Invoke(Stopwatch.GetElapsedTime(started));
+        }
     }
 }

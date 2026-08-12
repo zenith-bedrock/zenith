@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Diagnostics;
 using System.Diagnostics;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
@@ -37,6 +38,8 @@ class ZenithServer
     public GameLoop GameLoop { get; }
     public ServerConfig Config { get; }
     public string ConfigPath { get; }
+    /// <summary>Read-only diagnostics entry point; callers may capture console or JSON snapshots.</summary>
+    public DiagnosticsRuntime Diagnostics => Context.Diagnostics.Runtime;
 
     public ZenithServer(ServerConfig config, string configPath)
     {
@@ -69,12 +72,13 @@ class ZenithServer
         var zombies = new ZombieStore();
         var projectiles = new ProjectileStore();
         var skeletons = new SkeletonStore();
-        var gameLoop = new GameLoop(clock, players, serverLogger);
-        gameLoop.Register(new TimeSyncSystem());
+        var diagnostics = new ServerRuntimeDiagnostics();
+        var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
+        gameLoop.Register(new TimeSyncSystem(), diagnostics.System("time-sync"));
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
-        gameLoop.Register(new MovementSystem(players));
-        gameLoop.Register(new ChatSystem());
-        gameLoop.Register(new GameModeSystem());
+        gameLoop.Register(new MovementSystem(players), diagnostics.System("movement"));
+        gameLoop.Register(new ChatSystem(), diagnostics.System("chat"));
+        gameLoop.Register(new GameModeSystem(), diagnostics.System("game-mode"));
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
@@ -107,21 +111,21 @@ class ZenithServer
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = new GravitySystem(world, players);
         var zombieSystem = new ZombieSystem(world, players, zombies);
-        gameLoop.Register(zombieSystem);
+        gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
         var projectileSystem = new ProjectileSystem(world, players, projectiles, zombieSystem);
-        gameLoop.Register(projectileSystem);
-        gameLoop.Register(new SkeletonSystem(players, skeletons, projectileSystem));
-        gameLoop.Register(new BlockDigSystem(world));
-        gameLoop.Register(new BlockEditSystem(players, world));
-        gameLoop.Register(gravity);
-        gameLoop.Register(new FloorDropSystem(world));
-        gameLoop.Register(new InventorySystem(players, world, recipes, creative));
+        gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
+        gameLoop.Register(new SkeletonSystem(players, skeletons, projectileSystem), diagnostics.System("skeleton"));
+        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
+        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
+        gameLoop.Register(gravity, diagnostics.System("gravity"));
+        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
+        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
         // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
-        gameLoop.Register(new EquipmentSystem());
-        gameLoop.Register(new ChunkStreamSystem(world));
+        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
+        gameLoop.Register(new ChunkStreamSystem(world), diagnostics.System("chunk-stream"));
 
         var eventBus = new EventBus(serverLogger);
-        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative);
+        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative, diagnostics);
         GameLoop = gameLoop;
         _gravity = gravity;
 
@@ -146,9 +150,14 @@ class ZenithServer
             OnListening = _ => serverLogger.Info("Server ready.")
         };
         _telemetry = new RuntimeTelemetry(serverLogger);
-        gameLoop.SetTickObserver(elapsed => _telemetry.RecordTick(elapsed, players.Count,
-            zombies.Active.Count + skeletons.Active.Count + projectiles.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count,
-            RakNetServer));
+        gameLoop.SetTickObserver(elapsed =>
+        {
+            var actors = zombies.Active.Count + skeletons.Active.Count + projectiles.Active.Count +
+                         world.FallingBlocks.Active.Count + world.FloorDrops.Count;
+            diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
+                diagnostics.Systems.Count, RakNetServer);
+            _telemetry.RecordTick(elapsed, players.Count, actors, RakNetServer);
+        });
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>

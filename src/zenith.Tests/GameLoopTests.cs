@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Runtime;
+using Zenith.Diagnostics;
 using Zenith.Player;
 using Zenith.Raknet.Log;
 using Xunit;
@@ -37,6 +38,24 @@ public sealed class GameLoopTests
         Assert.Equal(0, following.TickCount);
         Assert.Single(logger.Errors);
         Assert.Contains("Fatal game system failure", logger.Errors[0]);
+    }
+
+    [Fact]
+    public void TickOnce_recordsWholeTickAndRegisteredSystemTiming()
+    {
+        var builder = new DiagnosticsBuilder();
+        var tick = builder.Timing("tick");
+        var system = builder.Timing("tick.system.test", "tick");
+        var diagnostics = builder.Build();
+        var loop = new GameLoop(new GameClock(), new PlayerManager(), new RecordingLogger(), diagnostics, tick);
+        loop.Register(new CountingSystem(), system);
+
+        loop.TickOnce();
+
+        var snapshot = diagnostics.CaptureSnapshot();
+        Assert.Equal(1, snapshot.Metrics[0].Count);
+        Assert.Equal(1, snapshot.Metrics[1].Count);
+        Assert.Equal("tick", snapshot.Metrics[1].Parent);
     }
 
     private sealed class ThrowingSystem : IGameSystem
