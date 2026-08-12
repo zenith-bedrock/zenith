@@ -90,6 +90,10 @@ The audit changed the implementation direction rather than opening a new item ru
   position as well as health and remove events; live `smoke:zombie`, `smoke:inv-hotbar`, and
   `smoke:chest-open` runs passed against the local server. This keeps the external proof at the
   protocol boundary without teaching gameplay about packets.
+- The LevelDB `smoke:persist` place/restart/verify sequence passed: it retained the placed overlay,
+  the authoritative inventory count (`63` stone after placement), and the 27-slot chest view after
+  the server restart. This is the applicable persistence boundary; world-floor drops intentionally
+  remain RAM-only.
 - A new two-client floor-pickup harness reached real drop creation after the Cereal correction but
   does not yet observe `take_item_entity` reliably in its synthetic full-bag scenario. It is not
   treated as proof of a runtime fault: existing multiplayer/unit tests cover the authoritative
