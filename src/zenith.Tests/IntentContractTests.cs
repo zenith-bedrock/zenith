@@ -571,6 +571,26 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void BlockSystem_rejects_place_when_queued_stack_identity_is_stale()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stale-place");
+        StandForPlace(player, 5, 70, 6);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 5));
+
+        // The network handler had observed stone, but an accepted inventory operation replaced
+        // the same hotbar slot before the GameLoop reached this queued world mutation.
+        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(
+            5, 70, 6, Blocks.Stone, hotbarSlot: 0, expectedPlacementStackId: StackId.FromBlock(Blocks.Stone))));
+
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 70, 6));
+        Assert.Equal(Blocks.Dirt, player.Inventory.Get(0).Id.Value);
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
     public void BlockSystem_rejects_place_into_own_body_cell_without_consuming()
     {
         var fx = new IntentTestFixture();
@@ -731,6 +751,64 @@ public class IntentContractTests
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(1, fx.World.FloorDrops.Count);
+    }
+
+    [Fact]
+    public void BlockSystem_break_refuses_before_mutation_when_no_loot_destination_exists()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("no-loot-destination");
+        StandNear(player, 0, 90, 0);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySetBlock(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        EquipWoodenPickaxe(player, slot: 0);
+
+        // A full bounded store cannot create or merge a stone drop. The source block must remain
+        // authoritative rather than becoming air with silently lost loot.
+        for (var i = 0; i < FloorDropStore.SoftCap; i++)
+        {
+            Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+                10_000 + i, 90, 0, StackId.FromBlock(Blocks.Dirt), 1,
+                fx.Players.AllocateRuntimeId(), out _));
+        }
+
+        fx.World.SetBlock(0, 90, 0, Blocks.Stone);
+        QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
+        Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
+        Assert.DoesNotContain(player.Inventory.SnapshotMainInventory(), slot =>
+            !slot.IsEmpty && slot.Id == StackId.FromBlock(Blocks.Stone));
+    }
+
+    [Fact]
+    public void BlockSystem_chest_break_refuses_before_mutation_when_its_contents_cannot_be_preserved()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("no-chest-loot-destination");
+        StandNear(player, 1, 90, 0);
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(player.Inventory.TrySetBlock(i, Blocks.GrassBlock, PlayerInventory.MaxStack));
+        EquipWoodenPickaxe(player, slot: 0);
+
+        for (var i = 0; i < FloorDropStore.SoftCap; i++)
+        {
+            Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+                20_000 + i, 90, 0, StackId.FromBlock(Blocks.Dirt), 1,
+                fx.Players.AllocateRuntimeId(), out _));
+        }
+
+        fx.World.SetBlock(1, 90, 0, Blocks.Chest);
+        Assert.True(fx.World.Chests.TryEnsure(1, 90, 0));
+        Assert.True(fx.World.Chests.TrySet(1, 90, 0, 0, InventorySlot.OfBlock(Blocks.Stone, 1)));
+        QueueReadyBreak(fx.Clock, fx.World, player, 1, 90, 0);
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Chest, fx.World.GetBlock(1, 90, 0));
+        Assert.Equal(Blocks.Stone, fx.World.Chests.Get(1, 90, 0, 0).Id.Value);
+        Assert.Equal(1, fx.World.Chests.Get(1, 90, 0, 0).Count);
+        Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 
     [Fact]

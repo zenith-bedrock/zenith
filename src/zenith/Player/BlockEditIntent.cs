@@ -1,3 +1,5 @@
+using Zenith.World;
+
 namespace Zenith.Player;
 
 /// <summary>Intenção de bloco pendente — escrita só no handler; mutação no BlockEditSystem.</summary>
@@ -13,6 +15,16 @@ readonly struct BlockEditIntent
     public int HotbarSlot { get; init; }
 
     /// <summary>
+    /// Exact stack identity observed by the inbound placement handler. The gameplay tick rechecks
+    /// it before it consumes the slot, so a queued inventory rearrangement cannot turn one block
+    /// request into a placement paid for by another stack.
+    /// </summary>
+    public StackId ExpectedPlacementStackId { get; init; }
+
+    /// <summary>Whether <see cref="ExpectedPlacementStackId"/> was supplied by an ingress handler.</summary>
+    public bool HasExpectedPlacementStackId { get; init; }
+
+    /// <summary>
     /// Survival dig auth snapshotted at queue time (§27). When true, timing uses
     /// <see cref="DigStartedTick"/> / <see cref="DigRequiredTicks"/> — not live <c>HasBreakTarget</c>.
     /// </summary>
@@ -20,14 +32,22 @@ readonly struct BlockEditIntent
     public ulong DigStartedTick { get; init; }
     public int DigRequiredTicks { get; init; }
 
-    public static BlockEditIntent Set(int x, int y, int z, int blockRuntimeId, int hotbarSlot = -1) => new()
+    public static BlockEditIntent Set(
+        int x,
+        int y,
+        int z,
+        int blockRuntimeId,
+        int hotbarSlot = -1,
+        StackId expectedPlacementStackId = default) => new()
     {
         HasValue = true,
         X = x,
         Y = y,
         Z = z,
         BlockRuntimeId = blockRuntimeId,
-        HotbarSlot = hotbarSlot
+        HotbarSlot = hotbarSlot,
+        ExpectedPlacementStackId = expectedPlacementStackId,
+        HasExpectedPlacementStackId = !expectedPlacementStackId.IsEmpty
     };
 
     /// <summary>Survival break with dig progress frozen into the intent (receive-thread retarget-safe).</summary>
