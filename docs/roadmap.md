@@ -28,7 +28,7 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 | C. First actor vertical slice | Characterized | learn one real actor lifecycle without generic framework |
 | D. Actor pressure and interest requirements | Characterized | direct-model actor churn, fan-out, runtime/DX and visibility evidence are recorded |
 | E. ECS decision | Deferred with evidence | first isolated comparison found no material gain; retain the direct model pending named missing evidence |
-| F. Actor scale and behavior | Not started | grow actors, AI and interest management independently |
+| F. Entity interest foundation | Characterized | chunk knowledge proves actor replication can exclude irrelevant observers without a visibility framework |
 | G. Production hardening | Early | move from alpha proof to operable beta evidence |
 
 ## CLOSED / CHARACTERIZE — Phase C: First actor vertical slice
@@ -97,9 +97,26 @@ runtime direct until that evidence exists; no runtime rewrite is authorized.
 **Outcome:** ADR §102 defers ECS for *world actors only*. ECS does not imply visibility
 implementation or parallel scheduling.
 
-## LATER — Phase F: Actor scale and behavior
+## CHARACTERIZED — Phase F: Entity interest foundation
 
-After the Phase E ADR, evolve these independently as pressure proves each one necessary:
+Phase F proves the smallest interest decision needed by the current actor paths. `ActorInterest`
+is a Gameplay-owned policy seam that answers only whether a player has confirmed knowledge of an
+actor's chunk. Zombie and Projectile reconcile their existing per-observer replicated sets:
+entering known columns sends the actor add; leaving sends remove; moves and health updates go only
+to known observers. It creates no packets, mutates no actor state and owns no lifecycle.
+
+The 1,000-projectile / 10-observer / 200-tick controlled comparison reduces movement fan-out from
+1,980,000 to 198,000 and egress from 68.85 MB to 6.98 MB; see
+[`phase-f-entity-interest.md`](phase-f-entity-interest.md). The result is evidence for chunk
+knowledge, not an ECS, visibility, spatial-index or networking abstraction decision.
+
+**Exit criteria:** relevant/irrelevant observer, enter/leave reconciliation and late join are
+covered for the concrete actor paths; the same Phase-D workload records before/after fan-out,
+datagrams, bytes, tick time and allocation; the policy boundary is recorded in ADR §103.
+
+## LATER — Actor scale and behavior
+
+After this foundation, evolve these independently as pressure proves each one necessary:
 
 - actor composition and additional mobs;
 - navigation/pathfinding and AI scheduling;

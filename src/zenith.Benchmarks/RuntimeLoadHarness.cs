@@ -35,7 +35,10 @@ internal static class RuntimeLoadHarness
         }
 
         foreach (var actorCount in options.ActorCounts)
-            Print(RunActorChurn(options.ActorPlayers, actorCount, options.ActorTicks));
+        {
+            Print(RunActorChurn(options.ActorPlayers, actorCount, options.ActorTicks, useChunkInterest: false));
+            Print(RunActorChurn(options.ActorPlayers, actorCount, options.ActorTicks, useChunkInterest: true));
+        }
 
         return 0;
     }
@@ -90,10 +93,12 @@ internal static class RuntimeLoadHarness
             host.Transport.Datagrams, host.Transport.Bytes);
     }
 
-    private static LoadResult RunActorChurn(int playerCount, int actorCount, int ticks)
+    private static LoadResult RunActorChurn(int playerCount, int actorCount, int ticks, bool useChunkInterest)
     {
         var host = new RuntimeHost(playerCount, streamChunks: false, includeProjectileSystem: true);
-        host.SeedProjectiles(actorCount);
+        host.ConfigureActorInterest(useChunkInterest);
+        // Both variants use the same actor state. Only the observer knowledge differs.
+        host.SeedProjectiles(actorCount, clustered: true);
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
@@ -103,18 +108,19 @@ internal static class RuntimeLoadHarness
         var elapsed = new long[ticks];
         for (var tick = 0; tick < ticks; tick++)
         {
-            host.ReplenishProjectiles(actorCount);
+            host.ReplenishProjectiles(actorCount, clustered: true);
             var started = Stopwatch.GetTimestamp();
             host.Tick();
             elapsed[tick] = Stopwatch.GetTimestamp() - started;
         }
 
-        return LoadResult.Create("actor-churn", playerCount, ticks, elapsed,
+        return LoadResult.Create(useChunkInterest ? "actor-interest" : "actor-global", playerCount, ticks, elapsed,
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes,
             actorCount, host.Projectiles!.Projectiles.Active.Count,
-            host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount);
+            host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount,
+            host.Projectiles.ReplicatedRemovalCount);
     }
 
     private static void Print(LoadResult result) =>
@@ -125,7 +131,7 @@ internal static class RuntimeLoadHarness
             $"gc={result.GcCounts.Gen0}/{result.GcCounts.Gen1}/{result.GcCounts.Gen2} " +
             $"egress={result.Datagrams} datagrams/{result.Bytes}B" +
             (result.TargetActorCount == 0 ? "" :
-                $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} removed={result.RemovedActors}"));
+                $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} actorRemoved={result.RemovedActors} removeFanout={result.RemoveFanout}"));
 
     private sealed class RuntimeHost
     {
@@ -248,7 +254,26 @@ internal static class RuntimeLoadHarness
             }
         }
 
-        public void SeedProjectiles(int targetCount)
+        public void ConfigureActorInterest(bool enabled)
+        {
+            if (!enabled) return;
+            for (var i = 0; i < _players.Count; i++)
+            {
+                var player = _players[i];
+                player.Chunks.Radius = 1;
+                if (i != 0)
+                {
+                    // Keep the other synthetic observers' normal chunk stream far from the
+                    // actor cluster. This changes only their confirmed columns, never actor
+                    // simulation or the GameLoop ordering.
+                    player.PositionX = (100 + i) * 16f;
+                    player.PositionZ = (100 + i) * 16f;
+                }
+                player.Chunks.RememberMany([i == 0 ? (0, 0) : (100 + i, 100 + i)]);
+            }
+        }
+
+        public void SeedProjectiles(int targetCount, bool clustered)
         {
             if (Projectiles is null) throw new InvalidOperationException("Actor churn requires ProjectileSystem.");
             var owner = _players[0];
@@ -258,13 +283,15 @@ internal static class RuntimeLoadHarness
                 var entityId = 1_000_000L + i + (long)Loop.Clock.CurrentTick * 10_000L;
                 var projectile = new Projectile(
                     entityId, (ulong)entityId, owner.RuntimeId,
-                    (i % 100) * 2f, 100f, (i / 100) * 2f,
+                    clustered ? (i % 16) + 0.25f : (i % 100) * 2f,
+                    100f,
+                    clustered ? ((i / 16) % 16) + 0.25f : (i / 100) * 2f,
                     0.05f, 0f, 0f);
                 if (!Projectiles.Projectiles.TryAdd(projectile)) break;
             }
         }
 
-        public void ReplenishProjectiles(int targetCount) => SeedProjectiles(targetCount);
+        public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
 
     }
 
@@ -301,18 +328,20 @@ internal static class RuntimeLoadHarness
     private readonly record struct LoadResult(
         string Scenario, int PlayerCount, int TickCount, double AverageMs, double P50Ms, double P95Ms, double P99Ms,
         double MaxMs, long AllocatedBytes, GcCounts GcCounts, long Datagrams, long Bytes,
-        int TargetActorCount = 0, int ActiveActorCount = 0, long SpawnFanout = 0, long RemovedActors = 0, long MoveFanout = 0)
+        int TargetActorCount = 0, int ActiveActorCount = 0, long SpawnFanout = 0, long RemovedActors = 0, long MoveFanout = 0,
+        long RemoveFanout = 0)
     {
         public static LoadResult Create(string scenario, int playerCount, int ticks, long[] elapsed, long allocatedBytes,
             GcCounts gcCounts, long datagrams, long bytes,
-            int targetActorCount = 0, int activeActorCount = 0, long spawnFanout = 0, long removedActors = 0, long moveFanout = 0)
+            int targetActorCount = 0, int activeActorCount = 0, long spawnFanout = 0, long removedActors = 0, long moveFanout = 0,
+            long removeFanout = 0)
         {
             var sorted = elapsed.Order().ToArray();
             static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
             return new LoadResult(scenario, playerCount, ticks,
                 elapsed.Average(Ms), Ms(sorted[(int)Math.Ceiling(ticks * .50) - 1]), Ms(sorted[(int)Math.Ceiling(ticks * .95) - 1]),
                 Ms(sorted[(int)Math.Ceiling(ticks * .99) - 1]), Ms(sorted[^1]), allocatedBytes, gcCounts, datagrams, bytes,
-                targetActorCount, activeActorCount, spawnFanout, removedActors, moveFanout);
+                targetActorCount, activeActorCount, spawnFanout, removedActors, moveFanout, removeFanout);
         }
     }
 

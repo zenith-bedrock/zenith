@@ -34,6 +34,7 @@ sealed class ProjectileSystem : IGameSystem
     public ProjectileStore Projectiles => _projectiles;
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
+    internal long ReplicatedRemovalCount { get; private set; }
     internal long RemovalCount { get; private set; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
@@ -43,7 +44,7 @@ sealed class ProjectileSystem : IGameSystem
         foreach (var projectile in _projectiles.Active.ToArray())
         {
             if (!projectile.IsActive) continue;
-            ReplicateNewViewers(projectile, online);
+            ReconcileViewers(projectile, online);
             Advance(projectile, online);
         }
 
@@ -65,7 +66,7 @@ sealed class ProjectileSystem : IGameSystem
                 player.PositionX, player.PositionY + 1.2f, player.PositionZ,
                 velocityX, LaunchUpwardVelocity, velocityZ);
             if (!_projectiles.TryAdd(projectile)) continue;
-            ReplicateNewViewers(projectile, online);
+            ReconcileViewers(projectile, online);
         }
     }
 
@@ -93,9 +94,10 @@ sealed class ProjectileSystem : IGameSystem
         projectile.PositionY = nextY;
         projectile.PositionZ = nextZ;
         projectile.VelocityY -= GravityPerTick;
+        ReconcileViewers(projectile, online);
         foreach (var peer in online)
         {
-            if (!peer.IsInGame || peer.IsDead || !_replicated.Contains((projectile.EntityId, peer.RuntimeId))) continue;
+            if (!_replicated.Contains((projectile.EntityId, peer.RuntimeId))) continue;
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
                 projectile.RuntimeId, projectile.PositionX, projectile.PositionY, projectile.PositionZ);
             ReplicatedMoveCount++;
@@ -117,11 +119,21 @@ sealed class ProjectileSystem : IGameSystem
     private bool HitsWorld(float x, float y, float z) =>
         _world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z)) != World.World.AirRuntimeId;
 
-    private void ReplicateNewViewers(Projectile projectile, IReadOnlyList<Player.Player> online)
+    private void ReconcileViewers(Projectile projectile, IReadOnlyList<Player.Player> online)
     {
         foreach (var peer in online)
         {
-            if (!peer.IsInGame || peer.IsDead || !_replicated.Add((projectile.EntityId, peer.RuntimeId))) continue;
+            var key = (projectile.EntityId, peer.RuntimeId);
+            if (!ActorInterest.Includes(peer, projectile.PositionX, projectile.PositionZ))
+            {
+                if (_replicated.Remove(key))
+                {
+                    peer.Session.Protocol.Entity.SendRemoveActor(projectile.EntityId);
+                    ReplicatedRemovalCount++;
+                }
+                continue;
+            }
+            if (!_replicated.Add(key)) continue;
             peer.Session.Protocol.Entity.SendAddProjectile(
                 projectile.EntityId, projectile.RuntimeId, projectile.PositionX, projectile.PositionY, projectile.PositionZ,
                 projectile.VelocityX, projectile.VelocityY, projectile.VelocityZ);
@@ -137,8 +149,11 @@ sealed class ProjectileSystem : IGameSystem
         RemovalCount++;
         foreach (var peer in online)
         {
-            if (peer.IsInGame && _replicated.Contains((projectile.EntityId, peer.RuntimeId)))
+            if (_replicated.Remove((projectile.EntityId, peer.RuntimeId)))
+            {
                 peer.Session.Protocol.Entity.SendRemoveActor(projectile.EntityId);
+                ReplicatedRemovalCount++;
+            }
         }
     }
 }

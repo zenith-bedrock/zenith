@@ -79,11 +79,15 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
+        first.Chunks.Radius = 1;
+        first.Chunks.RememberMany([(0, 0)]);
         var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore());
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 
         var second = fx.AddInGamePlayer("second");
+        second.Chunks.Radius = 1;
+        second.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var player in fx.Players.Online)
             player.Session.RakSession.Tick();

@@ -74,6 +74,9 @@ public sealed class ProjectileSystemTests
     {
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
+        first.PositionY = 100f;
+        first.Chunks.Radius = 1;
+        first.Chunks.RememberMany([(0, 0)]);
         first.Yaw = -90f;
         var system = CreateSystem(fx, out _, out _);
         first.SubmitProjectileIntent();
@@ -81,12 +84,65 @@ public sealed class ProjectileSystemTests
         Assert.Single(system.Projectiles.Active);
         var before = fx.Transport.Captured.Count;
 
-        _ = fx.AddInGamePlayer("late");
+        var late = fx.AddInGamePlayer("late");
+        late.Chunks.Radius = 1;
+        late.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var player in fx.Players.Online)
             player.Session.RakSession.Tick();
 
         Assert.True(fx.Transport.Captured.Count > before);
+    }
+
+    [Fact]
+    public void ChunkInterest_reconcilesSpawnAndRemovalForRelevantObserversOnly()
+    {
+        var fx = new IntentTestFixture();
+        var owner = fx.AddInGamePlayer("owner");
+        var distant = fx.AddInGamePlayer("distant");
+        owner.PositionY = distant.PositionY = 100f;
+        owner.PositionZ = distant.PositionZ = 0.5f;
+        owner.Chunks.Radius = distant.Chunks.Radius = 1;
+        owner.Chunks.RememberMany([(0, 0)]);
+        distant.Chunks.RememberMany([(8, 8)]);
+        owner.Yaw = -90f;
+        var system = CreateSystem(fx, out _, out _);
+
+        owner.SubmitProjectileIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, system.ReplicatedSpawnCount);
+
+        distant.Chunks.RememberMany([(0, 0)]);
+        Assert.Single(system.Projectiles.Active);
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Single(system.Projectiles.Active);
+        Assert.Equal(2, system.ReplicatedSpawnCount);
+
+        distant.Chunks.Forget(0, 0);
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, system.ReplicatedRemovalCount);
+    }
+
+    [Fact]
+    public void ChunkInterest_reconcilesWhenProjectileCrossesIntoAnotherKnownColumn()
+    {
+        var fx = new IntentTestFixture();
+        var west = fx.AddInGamePlayer("west");
+        var east = fx.AddInGamePlayer("east");
+        west.Chunks.Radius = east.Chunks.Radius = 1;
+        west.Chunks.RememberMany([(0, 0)]);
+        east.Chunks.RememberMany([(1, 0)]);
+        var system = CreateSystem(fx, out _, out var projectiles);
+        var projectile = new Projectile(
+            fx.Players.AllocateRuntimeId(), 301, west.RuntimeId,
+            15.8f, 100f, 0.5f, 0.5f, 0f, 0f);
+        Assert.True(projectiles.TryAdd(projectile));
+
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(2, system.ReplicatedSpawnCount);
+        Assert.Equal(1, system.ReplicatedRemovalCount);
+        Assert.Equal(1, system.ReplicatedMoveCount);
     }
 
     private static ProjectileSystem CreateSystem(IntentTestFixture fx, out ZombieStore zombies, out ProjectileStore projectiles)

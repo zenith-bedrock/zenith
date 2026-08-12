@@ -37,10 +37,11 @@ sealed class ZombieSystem : IGameSystem
         foreach (var zombie in _zombies.Active.ToArray())
         {
             if (!zombie.IsActive) continue;
-            ReplicateNewViewers(zombie, online);
+            ReconcileViewers(zombie, online);
             ApplyPlayerAttacks(zombie, online);
             if (!zombie.IsActive) continue;
             AdvanceTowardNearestPlayer(zombie, online);
+            ReconcileViewers(zombie, online);
             ReplicateMove(zombie, online);
         }
         _replicated.RemoveWhere(pair => !_zombies.Active.Any(z => z.EntityId == pair.ZombieId) ||
@@ -60,12 +61,17 @@ sealed class ZombieSystem : IGameSystem
             _bootstrapSpawned = true;
     }
 
-    private void ReplicateNewViewers(Zombie zombie, IReadOnlyList<Player.Player> online)
+    private void ReconcileViewers(Zombie zombie, IReadOnlyList<Player.Player> online)
     {
         foreach (var peer in online)
         {
-            if (!peer.IsInGame || peer.IsDead) continue;
-            if (!_replicated.Add((zombie.EntityId, peer.RuntimeId))) continue;
+            var key = (zombie.EntityId, peer.RuntimeId);
+            if (!ActorInterest.Includes(peer, zombie.PositionX, zombie.PositionZ))
+            {
+                if (_replicated.Remove(key)) peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
+                continue;
+            }
+            if (!_replicated.Add(key)) continue;
             peer.Session.Protocol.Entity.SendAddZombie(
                 zombie.EntityId, zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ, zombie.Yaw);
             peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
@@ -92,12 +98,12 @@ sealed class ZombieSystem : IGameSystem
         if (!result.WasApplied) return false;
         foreach (var peer in online)
         {
-            if (!peer.IsInGame || peer.IsDead) continue;
+            if (!_replicated.Contains((zombie.EntityId, peer.RuntimeId))) continue;
             peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
         }
         if (!result.CausedDeath) return true;
         foreach (var peer in online)
-            if (peer.IsInGame) peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
+            if (_replicated.Remove((zombie.EntityId, peer.RuntimeId))) peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
         zombie.Remove();
         _zombies.Remove(zombie);
         return true;
@@ -130,7 +136,7 @@ sealed class ZombieSystem : IGameSystem
     {
         foreach (var peer in online)
         {
-            if (!peer.IsInGame || peer.IsDead || !_replicated.Contains((zombie.EntityId, peer.RuntimeId))) continue;
+            if (!_replicated.Contains((zombie.EntityId, peer.RuntimeId))) continue;
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
                 zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ);
         }
