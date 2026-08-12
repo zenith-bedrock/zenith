@@ -75,6 +75,30 @@ public sealed class ZombieSystemTests
     }
 
     [Fact]
+    public void ZombieInReach_damagesPlayerOncePerCooldown()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("target");
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
+        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, store);
+
+        fx.Clock.Advance();
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(16f, player.Health);
+        for (var i = 0; i < 19; i++)
+        {
+            fx.Clock.Advance();
+            system.Tick(fx.Clock, fx.Players.Online);
+        }
+        Assert.Equal(16f, player.Health);
+        fx.Clock.Advance();
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(12f, player.Health);
+    }
+
+    [Fact]
     public void NewInGamePlayerReceivesExistingZombieReplication()
     {
         var fx = new IntentTestFixture();

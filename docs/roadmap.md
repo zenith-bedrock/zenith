@@ -114,6 +114,27 @@ knowledge, not an ECS, visibility, spatial-index or networking abstraction decis
 covered for the concrete actor paths; the same Phase-D workload records before/after fan-out,
 datagrams, bytes, tick time and allocation; the policy boundary is recorded in ADR §103.
 
+## CHARACTERIZED — Phase H: Gameplay vertical-slice foundation
+
+Zombie now proves a complete concrete melee loop: acquire/chase a Player, respect a cooldown,
+apply authoritative damage, and preserve the existing Player health/death/respawn transition.
+Skeleton is deliberately a separate ranged loop: distance selection, target rotation and a
+cooldown request to the existing Projectile lifecycle owner. A projectile from a non-player actor
+can damage a Player; the established player snowball behavior remains Zombie-only.
+
+`PlayerDamage` is the one extraction justified by both existing movement damage and concrete mob
+damage. It centralizes the already-established Player-only death transition and client feedback;
+it is not a generic combat system. Gameplay still decides every target, cooldown, damage amount,
+spawn and removal; `EntityProtocol` only projects those outcomes.
+
+Focused unit tests and two-client Bedrock smokes cover Zombie health/removal, Projectile
+movement/removal and reconnect. The 100/500/1,000 actor interest benchmark remains a Projectile
+churn baseline, and continues to identify observer fan-out rather than simulation representation
+as the scale cost. See [`phase-h-gameplay-findings.md`](phase-h-gameplay-findings.md).
+
+**Non-goals:** generic mob/actor hierarchy, AI/behavior tree/navigation framework, combat
+attributes/effects/armor, ECS, VisibilitySystem, plugin API and scheduler.
+
 ## LATER — Actor scale and behavior
 
 After this foundation, evolve these independently as pressure proves each one necessary:

@@ -37,6 +37,17 @@ sealed class ProjectileSystem : IGameSystem
     internal long ReplicatedRemovalCount { get; private set; }
     internal long RemovalCount { get; private set; }
 
+    /// <summary>Concrete gameplay spawn used by a ranged actor; this system remains the projectile lifecycle owner.</summary>
+    public bool TrySpawnFromActor(long ownerRuntimeId, float x, float y, float z, float velocityX, float velocityY, float velocityZ,
+        IReadOnlyList<Player.Player> online)
+    {
+        var entityId = _players.AllocateRuntimeId();
+        var projectile = new Projectile(entityId, (ulong)entityId, ownerRuntimeId, x, y, z, velocityX, velocityY, velocityZ);
+        if (!_projectiles.TryAdd(projectile)) return false;
+        ReconcileViewers(projectile, online);
+        return true;
+    }
+
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         _ = clock;
@@ -60,13 +71,8 @@ sealed class ProjectileSystem : IGameSystem
             var radians = player.Yaw * (MathF.PI / 180f);
             var velocityX = -MathF.Sin(radians) * LaunchSpeed;
             var velocityZ = MathF.Cos(radians) * LaunchSpeed;
-            var entityId = _players.AllocateRuntimeId();
-            var projectile = new Projectile(
-                entityId, (ulong)entityId, player.RuntimeId,
-                player.PositionX, player.PositionY + 1.2f, player.PositionZ,
-                velocityX, LaunchUpwardVelocity, velocityZ);
-            if (!_projectiles.TryAdd(projectile)) continue;
-            ReconcileViewers(projectile, online);
+            _ = TrySpawnFromActor(player.RuntimeId, player.PositionX, player.PositionY + 1.2f, player.PositionZ,
+                velocityX, LaunchUpwardVelocity, velocityZ, online);
         }
     }
 
@@ -80,6 +86,14 @@ sealed class ProjectileSystem : IGameSystem
         if (zombie is not null)
         {
             _zombies.TryApplyDamage(zombie, DamageSource.Projectile(projectile.OwnerRuntimeId), Damage, online);
+            Remove(projectile, online);
+            return;
+        }
+
+        var player = FindHitPlayer(projectile, nextX, nextY, nextZ, online);
+        if (player is not null)
+        {
+            PlayerDamage.Apply(player, _players, online, DamageSource.Projectile(projectile.OwnerRuntimeId), Damage);
             Remove(projectile, online);
             return;
         }
@@ -112,6 +126,27 @@ sealed class ProjectileSystem : IGameSystem
             if (MathF.Abs(zombie.PositionX - x) > HitRadius || MathF.Abs(zombie.PositionZ - z) > HitRadius) continue;
             if (y < zombie.PositionY || y > zombie.PositionY + 2f) continue;
             return zombie;
+        }
+        return null;
+    }
+
+    private static Player.Player? FindHitPlayer(Projectile projectile, float x, float y, float z,
+        IReadOnlyList<Player.Player> online)
+    {
+        foreach (var player in online)
+        {
+            // The existing player snowball slice only targets Zombies. Concrete ranged actors use
+            // an id not owned by an online player, which lets their projectile affect players
+            // without silently introducing player-vs-player combat in this phase.
+            if (player.RuntimeId == projectile.OwnerRuntimeId) return null;
+        }
+
+        foreach (var player in online)
+        {
+            if (!player.IsInGame || player.IsDead || player.RuntimeId == projectile.OwnerRuntimeId) continue;
+            if (MathF.Abs(player.PositionX - x) > HitRadius || MathF.Abs(player.PositionZ - z) > HitRadius) continue;
+            if (y < player.PositionY || y > player.PositionY + 2f) continue;
+            return player;
         }
         return null;
     }

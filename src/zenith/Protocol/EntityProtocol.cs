@@ -272,6 +272,16 @@ sealed class EntityProtocol
         });
     }
 
+    public void SendAddSkeleton(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:skeleton", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
     /// <summary>Short-lived snowball projection for the concrete ProjectileSystem slice.</summary>
     public void SendAddProjectile(
         long entityUniqueId, ulong entityRuntimeId,
