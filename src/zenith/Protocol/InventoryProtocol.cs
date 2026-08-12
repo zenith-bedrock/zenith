@@ -315,9 +315,9 @@ sealed class InventoryProtocol
         var palette = _session.Context.ItemPalette;
         if (slot.Id.IsItem)
         {
-            if (Tools.TryGetName(slot.Id.Value, out var toolName) && palette.TryGet(toolName, out var toolNetId))
-                return new NetworkItemStack(toolNetId, (ushort)slot.Count, BlockRuntimeId: 0, StackNetworkId: stackNetworkId);
-            WarnUnknownBlockOnce(slot.Id.Value);
+            if (palette.TryGetName(slot.Id.Value, out _))
+                return new NetworkItemStack((short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, StackNetworkId: stackNetworkId);
+            WarnUnknownStackOnce(slot.Id.Value);
             var airId = palette.Require("minecraft:air");
             return new NetworkItemStack(airId, 0, Blocks.Air);
         }
@@ -325,12 +325,12 @@ sealed class InventoryProtocol
         if (Blocks.TryGetName(slot.Id.Value, out var blockName) && palette.TryGet(blockName, out var blockNetId))
             return new NetworkItemStack(blockNetId, (ushort)slot.Count, slot.Id.Value, StackNetworkId: stackNetworkId);
 
-        WarnUnknownBlockOnce(slot.Id.Value);
+        WarnUnknownStackOnce(slot.Id.Value);
         var air = palette.Require("minecraft:air");
         return new NetworkItemStack(air, 0, Blocks.Air);
     }
 
-    private void WarnUnknownBlockOnce(int runtimeId)
+    private void WarnUnknownStackOnce(int runtimeId)
     {
         if (_warnedUnknownBlocks.Count >= MaxUnknownBlockWarns)
             return;

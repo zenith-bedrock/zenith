@@ -39,6 +39,21 @@ static class FloorDropFanout
     }
 
     /// <summary>
+    /// Checks whether a concrete drop can be committed without mutating state. A lethal gameplay
+    /// transition may use this before it removes its source so a bounded floor store cannot turn
+    /// an otherwise valid loot decision into silent item loss.
+    /// </summary>
+    public static bool CanDeposit(
+        World.World world,
+        int x,
+        int y,
+        int z,
+        StackId id,
+        int count,
+        int searchRadius = 3) =>
+        TryPlanDeposits(world.FloorDrops, x, y, z, [new DepositRequest(id, count)], searchRadius, out _);
+
+    /// <summary>
     /// Plans every deposit before mutating or publishing any of them. This keeps an inventory
     /// transaction that drops several stacks atomic: a full/blocked floor-drop area rejects the
     /// whole operation rather than leaving an earlier visible drop behind.

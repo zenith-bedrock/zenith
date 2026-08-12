@@ -164,7 +164,7 @@ internal static class RuntimeLoadHarness
             if (includeProjectileSystem)
             {
                 var zombies = new ZombieStore();
-                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), new ZombieSystem(world, players, zombies));
+                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), new ZombieSystem(world, players, zombies, itemPalette));
                 Loop.Register(Projectiles);
             }
             Loop.Register(new BlockDigSystem(world));

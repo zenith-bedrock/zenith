@@ -167,6 +167,6 @@ public sealed class ProjectileSystemTests
     {
         zombies = new ZombieStore();
         projectiles = new ProjectileStore();
-        return new ProjectileSystem(fx.World, fx.Players, projectiles, new ZombieSystem(fx.World, fx.Players, zombies));
+        return new ProjectileSystem(fx.World, fx.Players, projectiles, new ZombieSystem(fx.World, fx.Players, zombies, fx.Context.ItemPalette));
     }
 }

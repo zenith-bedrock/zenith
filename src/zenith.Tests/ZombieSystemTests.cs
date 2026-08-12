@@ -1,6 +1,7 @@
 using Zenith.Gameplay;
 using Zenith.Gameplay.Systems;
 using Zenith.Player;
+using Zenith.World;
 using Xunit;
 
 namespace Zenith.Tests;
@@ -14,7 +15,7 @@ public sealed class ZombieSystemTests
         var player = fx.AddInGamePlayer("target");
         player.PositionX = 0;
         player.PositionZ = 0;
-        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore());
+        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore(), fx.Context.ItemPalette);
 
         system.Tick(fx.Clock, fx.Players.Online);
 
@@ -36,7 +37,7 @@ public sealed class ZombieSystemTests
         var store = new ZombieStore();
         var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
         Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store);
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
@@ -51,6 +52,10 @@ public sealed class ZombieSystemTests
         Assert.Empty(store.Active);
         Assert.False(zombie.IsActive);
         Assert.True(zombie.Health.IsDead);
+        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
+        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:rotten_flesh"), loot.Id.Value);
+        Assert.True(loot.Id.IsItem);
+        Assert.Equal(1, loot.Count);
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Empty(store.Active);
@@ -65,13 +70,35 @@ public sealed class ZombieSystemTests
         var store = new ZombieStore();
         var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 10, player.PositionY, player.PositionZ);
         Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store);
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(zombie.Health.Maximum, zombie.Health.Current);
         Assert.Single(store.Active);
+    }
+
+    [Fact]
+    public void LethalDamage_refusesTransitionWhenLootCannotBeStored()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("attacker");
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
+        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        // A full store cannot accept a new rotten-flesh cell. The source must therefore remain
+        // authoritative rather than becoming a death with silently lost loot.
+        for (var i = 0; i < FloorDropStore.SoftCap; i++)
+            Assert.True(fx.World.FloorDrops.TryAddOrMerge(i + 100, (int)player.PositionY, 0,
+                StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
+
+        Assert.False(system.TryApplyDamage(zombie, DamageSource.Melee, zombie.Health.Maximum, fx.Players.Online));
+        Assert.True(zombie.IsActive);
+        Assert.Equal(zombie.Health.Maximum, zombie.Health.Current);
+        Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 
     [Fact]
@@ -82,7 +109,7 @@ public sealed class ZombieSystemTests
         var store = new ZombieStore();
         var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
         Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store);
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
@@ -105,7 +132,7 @@ public sealed class ZombieSystemTests
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
-        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore());
+        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore(), fx.Context.ItemPalette);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 

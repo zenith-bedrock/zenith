@@ -39,6 +39,22 @@ public class InventoryStackNetIdTests
     }
 
     [Fact]
+    public void DescribeForWire_projects_palette_item_that_is_not_a_tool()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("bone-wire");
+        var bone = fx.Context.ItemPalette.Require("minecraft:bone");
+        Assert.True(player.Inventory.TrySetItem(0, bone, 3));
+
+        var wire = player.Session.Protocol.Inventory.DescribeForWire(0, player.Inventory.Get(0));
+
+        Assert.Equal(bone, wire.NetworkId);
+        Assert.Equal((ushort)3, wire.Count);
+        Assert.Equal(0, wire.BlockRuntimeId);
+        Assert.NotEqual(0, wire.StackNetworkId);
+    }
+
+    [Fact]
     public void BeginOpenContainerSession_remints_open_container_stack_ids()
     {
         var fx = new IntentTestFixture();
