@@ -131,6 +131,34 @@ public sealed class ProjectileSystemTests
     }
 
     [Fact]
+    public void Interest_reconciles_late_join_and_reconnect_without_stale_actor_state()
+    {
+        var fx = new IntentTestFixture();
+        var first = fx.AddInGamePlayer("first");
+        first.Chunks.Radius = -1;
+        var system = CreateSystem(fx, out _, out var projectiles);
+        var projectile = new Projectile(
+            fx.Players.AllocateRuntimeId(), 401, first.RuntimeId,
+            0.5f, -57f, 0.5f, 0f, 0f, 0f);
+        Assert.True(projectiles.TryAdd(projectile));
+
+        system.Tick(fx.Clock, fx.Players.Online);
+        var late = fx.AddInGamePlayer("late");
+        late.Chunks.Radius = -1;
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(2, system.ReplicatedSpawnCount);
+
+        late.IsInGame = false;
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, system.ReplicatedRemovalCount);
+
+        late.IsInGame = true;
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(3, system.ReplicatedSpawnCount);
+        Assert.True(projectile.IsActive);
+    }
+
+    [Fact]
     public void ChunkInterest_reconcilesSpawnAndRemovalForRelevantObserversOnly()
     {
         var fx = new IntentTestFixture();

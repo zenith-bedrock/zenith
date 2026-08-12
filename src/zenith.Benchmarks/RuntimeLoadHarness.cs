@@ -42,6 +42,15 @@ internal static class RuntimeLoadHarness
             }
             return 0;
         }
+        if (options.InterestScaling)
+        {
+            foreach (var actorCount in options.ActorCounts)
+            {
+                foreach (var layout in new[] { InterestLayout.Clustered, InterestLayout.Distributed, InterestLayout.MovingObservers })
+                    Print(RunInterestScaling(options.ActorPlayers, actorCount, options.ActorTicks, layout));
+            }
+            return 0;
+        }
 
         foreach (var playerCount in options.PlayerCounts)
         {
@@ -211,6 +220,36 @@ internal static class RuntimeLoadHarness
             actorCount, host.Zombies!.Zombies.Active.Count,
             host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
             host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
+    }
+
+    private static LoadResult RunInterestScaling(int observerCount, int actorCount, int ticks, InterestLayout layout)
+    {
+        var host = new RuntimeHost(observerCount, streamChunks: false, includeProjectileSystem: true);
+        host.SeedInterestProjectiles(actorCount, layout);
+        host.ConfigureInterestLayout(layout);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            if (layout == InterestLayout.MovingObservers)
+                host.AdvanceInterestObservers(tick, actorCount);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+        }
+
+        return LoadResult.Create($"interest-{layout.ToString().ToLowerInvariant()}", observerCount, ticks, elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams, host.Transport.Bytes,
+            actorCount, host.Projectiles!.Projectiles.Active.Count,
+            host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount,
+            host.Projectiles.ReplicatedRemovalCount, host.Projectiles.ReplicatedMoveSkippedCount);
     }
 
     private static void Print(LoadResult result) =>
@@ -421,6 +460,50 @@ internal static class RuntimeLoadHarness
         }
 
         public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
+
+        public void SeedInterestProjectiles(int targetCount, InterestLayout layout)
+        {
+            if (Projectiles is null) throw new InvalidOperationException("Interest workload requires ProjectileSystem.");
+            for (var i = 0; i < targetCount; i++)
+            {
+                var x = layout == InterestLayout.Clustered ? 0.25f + (i % 16) * 0.35f : (i % 64) * 16f + 0.25f;
+                var z = layout == InterestLayout.Clustered ? 0.25f + (i / 16) * 0.35f : (i / 64) * 16f + 0.25f;
+                var id = 2_000_000L + i;
+                if (!Projectiles.Projectiles.TryAdd(new Projectile(id, (ulong)id, _players[0].RuntimeId, x, 100f, z, 0f, 0f, 0f)))
+                    throw new InvalidOperationException("Interest workload seed refused.");
+            }
+        }
+
+        public void ConfigureInterestLayout(InterestLayout layout)
+        {
+            for (var i = 0; i < _players.Count; i++)
+            {
+                var chunk = layout == InterestLayout.Clustered ? (i == 0 ? 0 : 100 + i) : i * 4;
+                ConfigureObserverKnowledge(i, chunk, layout == InterestLayout.Clustered && i != 0);
+            }
+        }
+
+        public void AdvanceInterestObservers(int tick, int actorCount)
+        {
+            for (var i = 0; i < _players.Count; i++)
+                ConfigureObserverKnowledge(i, (tick / 5 + i) % Math.Max(1, (actorCount + 63) / 64), false);
+        }
+
+        private void ConfigureObserverKnowledge(int observerIndex, int chunk, bool farObserver)
+        {
+            var player = _players[observerIndex];
+            var known = new List<(int X, int Z)>();
+            player.Chunks.CopyKnown(known);
+            foreach (var entry in known) player.Chunks.Forget(entry.X, entry.Z);
+            player.Chunks.Radius = 1;
+            var x = farObserver ? 100 + observerIndex : chunk;
+            player.PositionX = x * 16f;
+            player.PositionZ = 0f;
+            var radius = farObserver ? 0 : 1;
+            for (var dx = -radius; dx <= radius; dx++)
+                for (var dz = -radius; dz <= radius; dz++)
+                    player.Chunks.RememberMany([(x + dx, dz)]);
+        }
 
         public void SeedZombies(int targetCount, ZombieWorkloadMode mode)
         {
@@ -641,7 +724,8 @@ internal static class RuntimeLoadHarness
         int ActorPlayers,
         int ActorTicks,
         bool WorldInteraction,
-        bool ZombieBehavior)
+        bool ZombieBehavior,
+        bool InterestScaling)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -651,6 +735,7 @@ internal static class RuntimeLoadHarness
             var actorPlayers = 10;
             var worldInteraction = false;
             var zombieBehavior = false;
+            var interestScaling = false;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -665,11 +750,20 @@ internal static class RuntimeLoadHarness
                     worldInteraction = true;
                 else if (args[i] == "--zombie-behavior")
                     zombieBehavior = true;
+                else if (args[i] == "--interest-scaling")
+                    interestScaling = true;
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling);
         }
+    }
+
+    private enum InterestLayout : byte
+    {
+        Clustered,
+        Distributed,
+        MovingObservers
     }
 }
