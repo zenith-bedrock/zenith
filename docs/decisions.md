@@ -1604,8 +1604,8 @@ data, queue chest-opener release for the GameLoop and publish `PlayerQuitEvent(W
 After `InGameSessionHandler` enters gameplay, the same path first removes peer visibility and
 publishes `PlayerQuitEvent(WasInGame=true)`. UDP/network loss is observed as RakNet timeout;
 there is no separate socket-failure callback to model. RakNet's close hook is at-most-once, and
-`ZenithSessionListener` removes the session before calling `HandleClose`, preserving exactly-once
-game cleanup even if close is requested from more than one context.
+`ZenithSessionListener` removes the session under its gate before calling `HandleClose`, preserving
+exactly-once game cleanup even if close is requested from more than one context.
 
 **Compatibility:** `PlayerQuitEvent` historically sounded like a completed-gameplay quit, but
 its actual established contract is identity-bound teardown; consumers must not infer `InGame`

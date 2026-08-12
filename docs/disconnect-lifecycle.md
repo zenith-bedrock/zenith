@@ -5,10 +5,10 @@ there is no generic lifecycle-event family.
 
 ## Ownership and terminal path
 
-`RakNetSession.Close` is idempotent and calls `ZenithSessionListener.OnSessionClose` at most once.
-The listener removes the `NetworkSession` from its locked map before calling
-`NetworkSession.HandleClose`. Therefore a timeout, client disconnect, server disconnect/kick,
-pre-spawn failure or shutdown all converge on one teardown invocation.
+`RakNetSession` treats close as idempotent. The listener is the cleanup backstop: it removes the
+`NetworkSession` from its locked map before calling `NetworkSession.HandleClose`, so a duplicate
+close attempt cannot run game cleanup twice. Therefore a timeout, client disconnect, server
+disconnect/kick, pre-spawn failure or shutdown all converge on one teardown invocation.
 
 `HandleClose` is a Session-lifecycle boundary. For a bound Player, it performs this ordering:
 
