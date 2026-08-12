@@ -30,6 +30,72 @@ public sealed class ZombieSystemTests
     }
 
     [Fact]
+    public void Zombie_retargets_when_retained_player_becomes_invalid()
+    {
+        var fx = new IntentTestFixture();
+        var first = fx.AddInGamePlayer("first-target");
+        var second = fx.AddInGamePlayer("second-target");
+        first.PositionX = 0;
+        second.PositionX = 10;
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 4, first.PositionY, 0);
+        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(first.RuntimeId, zombie.TargetPlayerRuntimeId);
+
+        first.IsInGame = false;
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(second.RuntimeId, zombie.TargetPlayerRuntimeId);
+        first.IsInGame = true;
+    }
+
+    [Fact]
+    public void Zombie_drops_target_when_no_valid_player_remains()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-target");
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 4, player.PositionY, 0);
+        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(player.RuntimeId, zombie.TargetPlayerRuntimeId);
+        player.IsInGame = false;
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Null(zombie.TargetPlayerRuntimeId);
+        Assert.True(zombie.IsActive);
+    }
+
+    [Fact]
+    public void Zombie_chooses_bounded_local_side_step_around_solid_obstacle()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("blocked-target");
+        player.PositionX = -2;
+        player.PositionZ = 0;
+        var store = new ZombieStore();
+        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 2.5f, player.PositionY, 0);
+        Assert.True(store.TryAdd(zombie));
+        // A full-height obstacle blocks the direct X route while the neighbouring Z cells remain
+        // supported by the flat floor.
+        fx.World.SetBlock(1, (int)player.PositionY, 0, Blocks.Stone);
+        fx.World.SetBlock(1, (int)player.PositionY + 1, 0, Blocks.Stone);
+        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        for (var i = 0; i < 20; i++)
+            system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.NotEqual(0f, zombie.PositionZ);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(
+            (int)MathF.Floor(zombie.PositionX), (int)MathF.Floor(zombie.PositionY), (int)MathF.Floor(zombie.PositionZ)));
+    }
+
+    [Fact]
     public void AttackIsValidatedByGameplayOwnerAndDeathRemovesExactlyOnce()
     {
         var fx = new IntentTestFixture();

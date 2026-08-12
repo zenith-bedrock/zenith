@@ -19,6 +19,8 @@ sealed class Zombie
     public float PositionY { get; set; }
     public float PositionZ { get; set; }
     public float Yaw { get; set; }
+    /// <summary>Concrete target identity retained by ZombieSystem while the player remains valid.</summary>
+    public long? TargetPlayerRuntimeId { get; internal set; }
     public HealthState Health { get; }
     public bool IsActive { get; private set; } = true;
 
