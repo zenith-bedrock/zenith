@@ -10,10 +10,10 @@ app.Configure(config =>
         .WithDescription("Download one verified schema snapshot into the local cache.");
 
     config.AddCommand<ScaffoldCommand>("scaffold")
-        .WithDescription("Scaffold a [GamePacket]-attributed class from a cached packet schema.");
+        .WithDescription("Scaffold a GamePacket-attributed class from a cached packet schema.");
 
     config.AddCommand<DiffCommand>("diff")
-        .WithDescription("Compare an already-migrated packet's attributes against a freshly cached schema.");
+        .WithDescription("Compare an already-migrated generated packet against a freshly cached schema.");
 
     config.AddCommand<ListCommand>("list")
         .WithDescription("Show which packets are cached and/or migrated.");
@@ -21,8 +21,17 @@ app.Configure(config =>
     config.AddCommand<ReportCommand>("report")
         .WithDescription("Show cache provenance, codegen coverage, and unsupported schema constructs.");
 
+    config.AddCommand<CoverageCommand>("coverage")
+        .WithDescription("Show cached schema coverage, generated/manual packets, and unsupported reasons.");
+
+    config.AddCommand<CompatibilityCommand>("compatibility")
+        .WithDescription("Report protocol compatibility evidence; use --json in CI.");
+
+    config.AddCommand<ValidateCommand>("validate")
+        .WithDescription("Fail when the verified snapshot or generated packet contract is stale.");
+
     config.AddCommand<UpgradeCommand>("upgrade")
-        .WithDescription("Produce a read-only migration plan between two verified snapshots.");
+        .WithDescription("Produce a migration plan and optionally apply guarded GREEN additions.");
 });
 
 return app.Run(args);

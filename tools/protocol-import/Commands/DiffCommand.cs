@@ -16,7 +16,7 @@ internal sealed class DiffSettings : CommandSettings
     public string Source { get; set; } = SchemaSourceFactory.Endstone;
 
     [CommandOption("--file <PATH>")]
-    [Description("Path to the already-migrated [GamePacket] .cs file to compare against.")]
+    [Description("Path to the already-migrated generated packet .cs file to compare against.")]
     public string File { get; set; } = "";
 
     [CommandOption("--cache <DIR>")]
