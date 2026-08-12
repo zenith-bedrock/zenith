@@ -1,0 +1,73 @@
+name: Bedrock E2E
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build Zenith
+        run: dotnet build zenith.sln -c Release --nologo -m:1 -p:NodeReuse=false -p:BuildInParallel=false
+
+      # ADR §58 keeps the real Bedrock client in its own Bun repository. Pin by commit when
+      # beta release governance requires a bot revision; main is intentionally used while the
+      # bot and this protocol pin are still advancing together.
+      - name: Checkout Bedrock smoke bot
+        uses: actions/checkout@v4
+        with:
+          repository: zenith-bedrock/zenith-smoke-bot
+          path: zenith-smoke-bot
+
+      - name: Install smoke bot
+        working-directory: zenith-smoke-bot
+        run: |
+          bun install --frozen-lockfile
+          bun pm trust raknet-native
+
+      - name: Start Zenith and run protocol lifecycle smokes
+        env:
+          ZENITH_DATA: ${{ runner.temp }}/zenith-e2e-data
+          ZENITH_PROJECT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ZENITH_DATA"
+          dotnet run -c Release --no-build --project src/zenith/zenith.csproj > zenith-e2e.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+            cat zenith-e2e.log || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if grep -q "Server ready\." zenith-e2e.log; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat zenith-e2e.log; exit 1; fi
+            sleep 1
+          done
+          grep -q "Server ready\." zenith-e2e.log
+
+          cd zenith-smoke-bot
+          bun run smoke:first10
+          bun run smoke:zombie
+          bun run smoke:projectile
+          bun run smoke:reconnect-pose

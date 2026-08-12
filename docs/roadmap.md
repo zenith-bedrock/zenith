@@ -29,7 +29,7 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 | D. Actor pressure and interest requirements | Characterized | direct-model actor churn, fan-out, runtime/DX and visibility evidence are recorded |
 | E. ECS decision | Deferred with evidence | first isolated comparison found no material gain; retain the direct model pending named missing evidence |
 | F. Entity interest foundation | Characterized | chunk knowledge proves actor replication can exclude irrelevant observers without a visibility framework |
-| G. Production hardening | Early | move from alpha proof to operable beta evidence |
+| G. Production hardening | Functional | automated Bedrock smoke, runtime health logs and measured capacity baseline are established; recovery matrix remains in progress |
 
 ## CLOSED / CHARACTERIZE — Phase C: First actor vertical slice
 
@@ -140,6 +140,8 @@ Commands are not a prerequisite for ECS and must not delay Phases A–D, but the
 **Goal:** establish beta-grade operational evidence, independently of feature breadth.
 
 Required gates include automated Bedrock E2E in CI, reproducible release smoke, capacity envelope/SLOs, backup/restore and recovery exercises, public auth/exposure hardening, metrics/logging sufficient to diagnose production failure, and documented upgrade/rollback behavior.
+
+Current beta-foundation evidence is in [`phase-g-beta-readiness.md`](phase-g-beta-readiness.md).
 
 ## Intentionally deferred
 
