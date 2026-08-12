@@ -184,10 +184,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteVarInt(1); // request id
+        writer.WriteInt(1, BinaryStream.Endianess.Little); // Cereal request id (li32)
         writer.WriteUnsignedVarInt(1); // action count
         writer.WriteByte(ItemStackRequestPacket.ActionPlace);
-        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(1); // count
         // source FullContainerName + slot + net id (stack_id is li32, ADR §90)
         writer.WriteByte(7);
@@ -216,10 +215,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteVarInt(3);
+        writer.WriteInt(3, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
-        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteUnsignedVarInt(1); // recipe net id
         writer.WriteByte(1); // times
         writer.WriteUnsignedVarInt(0);
@@ -239,10 +237,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteVarInt(4);
+        writer.WriteInt(4, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
-        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(5); // times — shift-click multi-craft
         writer.WriteUnsignedVarInt(0);
@@ -260,10 +257,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteVarInt(2);
+        writer.WriteInt(2, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionDrop);
-        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(1); // count
         writer.WriteByte(28);
         writer.WriteBool(false);
@@ -295,6 +291,36 @@ public class InventoryPacketEncodeTests
                 ]
             }
         ]).Encode().Length > 1);
+    }
+
+    [Fact]
+    public void ItemStackResponse_writes_Cereal_required_and_optional_markers()
+    {
+        var bytes = ItemStackResponsePacket.Ok(42, [
+            new StackResponseContainerInfo
+            {
+                Container = new FullContainerName { ContainerId = InventoryContainerMap.CombinedHotbarAndInventory },
+                SlotInfo = [new StackResponseSlotInfo { Slot = 3, HotbarSlot = 3, Count = 5, StackNetworkId = 9 }]
+            }
+        ]).Encode().ToArray();
+        var stream = new BinaryStream(bytes);
+
+        Assert.Equal((int)ProtocolInfo.ITEM_STACK_RESPONSE_PACKET, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(ItemStackResponseEntry.StatusOk, stream.ReadByte());
+        Assert.Equal(42, stream.ReadInt(BinaryStream.Endianess.Little));
+        Assert.True(stream.ReadBool()); // Cereal required marker
+        Assert.True(stream.ReadBool()); // containers present
+        Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(InventoryContainerMap.CombinedHotbarAndInventory, stream.ReadByte());
+        Assert.False(stream.ReadBool()); // no dynamic container id
+        Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(3, stream.ReadByte());
+        Assert.Equal(3, stream.ReadByte());
+        Assert.Equal(5, stream.ReadByte());
+        Assert.True(stream.ReadBool()); // Cereal required marker
+        Assert.True(stream.ReadBool()); // stack id present
+        Assert.Equal(9, stream.ReadVarInt());
     }
 
     [Fact]

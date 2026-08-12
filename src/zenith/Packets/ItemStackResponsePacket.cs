@@ -10,9 +10,8 @@ readonly struct StackResponseSlotInfo
     public int StackNetworkId { get; init; }
 
     /// <summary>
-    /// item_stack_id is a genuine optional (ADR §90): a decorative presence bool followed by
-    /// the option's own bool, then the zigzag32 payload if present — Zenith previously wrote a
-    /// bare unconditional varint with neither marker.
+    /// Cereal writes a required <c>true</c> marker followed by the optional stack-net-id's
+    /// presence bit and, when present, its zigzag32 payload.
     /// </summary>
     public void Write(ref BinaryStream writer)
     {
@@ -20,7 +19,7 @@ readonly struct StackResponseSlotInfo
         writer.WriteByte(HotbarSlot);
         writer.WriteByte(Count);
         var hasStackId = StackNetworkId != 0;
-        writer.WriteBool(hasStackId); // item_stack_id_presence (decorative)
+        writer.WriteBool(true); // required marker in ItemStackResponseSlotInfo
         writer.WriteBool(hasStackId); // item_stack_id option
         if (hasStackId)
             writer.WriteVarInt(StackNetworkId);
@@ -54,16 +53,14 @@ readonly struct ItemStackResponseEntry
     public StackResponseContainerInfo[] ContainerInfo { get; init; }
 
     /// <summary>
-    /// containers is unconditional in the struct (not gated by Status, ADR §90) — a decorative
-    /// presence bool then the option's own bool, then the array if present. Zenith previously
-    /// skipped both markers entirely on error and wrote a bare count on success.
+    /// Cereal writes a required <c>true</c> marker then the optional container-array presence bit.
     /// </summary>
     public void Write(ref BinaryStream writer)
     {
         writer.WriteByte(Status);
-        writer.WriteVarInt(RequestId);
+        writer.WriteInt(RequestId, BinaryStream.Endianess.Little);
         var hasContainers = Status == StatusOk && ContainerInfo.Length > 0;
-        writer.WriteBool(hasContainers); // containers_presence (decorative)
+        writer.WriteBool(true); // required marker in ItemStackResponseInfo
         writer.WriteBool(hasContainers); // containers option
         if (hasContainers)
         {

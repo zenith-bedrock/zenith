@@ -89,10 +89,9 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteVarInt(7);
+        writer.WriteInt(7, BinaryStream.Endianess.Little); // Cereal request id (li32)
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(ItemStackRequestPacket.ActionPlace);
-        writer.WriteByte(0); // legacy_type_id (unused)
         writer.WriteByte(3); // count
         writer.WriteByte(28); // hotbar container
         writer.WriteBool(false);
