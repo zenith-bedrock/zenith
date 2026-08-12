@@ -4,6 +4,7 @@
     <ProjectReference Include="..\raknet\raknet.csproj" />
     <ProjectReference Include="..\..\libs\nbt\nbt.csproj" />
     <ProjectReference Include="..\..\libs\leveldb\leveldb.csproj" />
+    <ProjectReference Include="..\..\libs\diagnostics\diagnostics.csproj" />
     <ProjectReference Include="..\zenith.PacketGenerator\zenith.PacketGenerator.csproj"
                        OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

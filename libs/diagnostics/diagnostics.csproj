@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Zenith.Diagnostics</RootNamespace>
+    <AssemblyName>Zenith.Diagnostics</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="diagnostics.Tests" />
+  </ItemGroup>
+
+</Project>

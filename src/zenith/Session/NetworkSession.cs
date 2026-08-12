@@ -122,6 +122,7 @@ class NetworkSession
             Buffer = gamePacket.EncodeOwned()
         };
 
+        Context.Diagnostics.RecordPacketSent(packets.Length, frame.Buffer.Length);
         RakSession.SendFrame(frame, priority);
     }
 
@@ -288,6 +289,7 @@ class NetworkSession
 
     private void HandleDataPacket(byte[] buffer)
     {
+        Context.Diagnostics.RecordPacketReceived(buffer.Length);
         var stream = new BinaryStream(buffer);
 
         var header = new DataPacket.HeaderInfo();

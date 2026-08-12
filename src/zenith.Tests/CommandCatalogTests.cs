@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Commands;
+using Zenith.Diagnostics;
 using Zenith.Player;
 using Xunit;
 
@@ -44,6 +45,36 @@ public sealed class CommandCatalogTests
         var catalog = CreateCatalog();
 
         Assert.Equal(["gamemode", "gm"], catalog.Suggest("g"));
+    }
+
+    [Fact]
+    public void Diagnostics_command_is_exposed_as_a_concrete_command()
+    {
+        var runtime = new CommandRuntime(new PlayerManager(), CreateDiagnostics());
+
+        Assert.Equal(CommandParseStatus.Success, runtime.Catalog.Parse("/diagnostics snapshot", CommandPermission.Any).Status);
+        Assert.Equal(CommandParseStatus.Invalid, runtime.Catalog.Parse("/diagnostics missing", CommandPermission.Any).Status);
+    }
+
+    [Fact]
+    public void Diagnostics_command_capturesBaselineAndComparesWithoutGameplayMutation()
+    {
+        var fixture = new IntentTestFixture();
+        var player = fixture.AddInGamePlayer("operator");
+
+        var snapshot = fixture.Context.Commands.Execute(player, "/diagnostics snapshot");
+        var comparison = fixture.Context.Commands.Execute(player, "/diagnostics compare");
+
+        Assert.Contains("Baseline captured", snapshot.Message);
+        Assert.Contains("diagnostics compare", comparison.Message);
+        Assert.True(player.IsInGame);
+    }
+
+    private static DiagnosticsInvestigation CreateDiagnostics()
+    {
+        var builder = new DiagnosticsBuilder();
+        var runtime = builder.Build();
+        return new DiagnosticsInvestigation(runtime, new DiagnosticsIncidentBuffer(runtime));
     }
 
     private static CommandCatalog CreateCatalog()

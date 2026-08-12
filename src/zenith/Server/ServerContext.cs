@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Diagnostics;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Commands;
@@ -25,6 +26,7 @@ class ServerContext
     public RecipeRegistry Recipes { get; }
     public CreativeCatalog Creative { get; }
     public CommandRuntime Commands { get; }
+    public ServerRuntimeDiagnostics Diagnostics { get; }
 
     public ServerContext(
         ILogger logger,
@@ -36,7 +38,8 @@ class ServerContext
         BlockPalette blockPalette,
         ItemPalette itemPalette,
         RecipeRegistry recipes,
-        CreativeCatalog creative)
+        CreativeCatalog creative,
+        ServerRuntimeDiagnostics? diagnostics = null)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -48,6 +51,7 @@ class ServerContext
         ItemPalette = itemPalette;
         Recipes = recipes;
         Creative = creative;
-        Commands = new CommandRuntime(playerManager);
+        Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
+        Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents));
     }
 }
