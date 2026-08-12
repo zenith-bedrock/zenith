@@ -27,7 +27,7 @@ Use these rather than speculative percentages: **Not started**, **Early**, **Fun
 | B. Survival state core | Characterized | make health/damage/death a usable gameplay primitive |
 | C. First actor vertical slice | Characterized | learn one real actor lifecycle without generic framework |
 | D. Actor pressure and interest requirements | Characterized | direct-model actor churn, fan-out, runtime/DX and visibility evidence are recorded |
-| E. ECS decision | Ready for spike | compare models and record an ADR accept/reject; no runtime rewrite is authorized |
+| E. ECS decision | Deferred with evidence | first isolated comparison found no material gain; retain the direct model pending named missing evidence |
 | F. Actor scale and behavior | Not started | grow actors, AI and interest management independently |
 | G. Production hardening | Early | move from alpha proof to operable beta evidence |
 
@@ -83,15 +83,19 @@ cost decomposition in [`phase-d-actor-pressure.md`](phase-d-actor-pressure.md).
 
 **Deliberately deferred:** solving visibility by assuming ECS, parallel jobs, public extension API.
 
-## DECISION GATE — Phase E: Entity Runtime & ECS feasibility spike
+## CHARACTERIZED / DEFERRED — Phase E: Entity Runtime & ECS feasibility spike
 
 Open only when all Phase A–D gates hold. Phase D is characterized; its evidence is
 [`phase-d-actor-pressure.md`](phase-d-actor-pressure.md), alongside the
 [maturity audit](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md#ecs-decision-gate).
 
-The spike compares the actual straightforward actor model with an internal archetype/SoA design under Zenith workloads. It must measure tail tick times, CPU, allocation/GC, retained memory, iteration/query throughput, creation/destruction, structural changes and replication fan-out. Start single-threaded.
+The first isolated direct-list versus contiguous-SoA comparison did not establish a material gain
+over the direct model. Its explicit missing evidence and reopen conditions are in
+[`PHASE_E_ECS_FEASIBILITY_FINDINGS.md`](audit/PHASE_E_ECS_FEASIBILITY_FINDINGS.md). Keep actor
+runtime direct until that evidence exists; no runtime rewrite is authorized.
 
-**Outcome:** ADR explicitly accepts or rejects ECS for *world actors only*. A rejected hypothesis is a successful result when the simpler model meets the target. ECS does not imply visibility implementation or parallel scheduling.
+**Outcome:** ADR §102 defers ECS for *world actors only*. ECS does not imply visibility
+implementation or parallel scheduling.
 
 ## LATER — Phase F: Actor scale and behavior
 
