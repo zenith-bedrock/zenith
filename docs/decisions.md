@@ -1579,6 +1579,46 @@ only after capture. A fixed-size raw incident ring retains periodic and over-bud
 allocating on record; command-driven snapshot/compare/top-timing reads remain concrete
 development tooling, not a plugin command framework or monitoring endpoint.
 
+### 104b. Keep PlayerQuitEvent identity-bound; WasInGame is a gameplay-entry predicate
+
+**Choice:** retain one `PlayerQuitEvent` for the teardown of a `Player` whose identity was
+accepted and registered in `PlayerManager`. It is published exactly once from
+`NetworkSession.HandleClose`, after Session-owned peer removal/persistence handoff and after the
+player is removed from `PlayerManager`. `WasInGame` remains the captured fact that the player
+completed the spawn transition before that teardown. `PlayerQuitEvent` is not published for a
+transport session that fails before a `Player` exists. Do not add `PlayerDisconnectedEvent` now.
+
+**Why:** the two facts are not two independent lifecycle owners or cleanup paths. A transport
+close can happen in every login phase; once a Player is bound, all causes (client disconnect,
+server kick, timeout, gameplay pre-spawn failure and coordinated shutdown) converge in the same
+idempotent RakNet close → listener removal → `HandleClose` path. `WasInGame` answers the single
+consumer question that exists today: whether the player was ever made visible to peers, so a
+leave chat line is valid. Cleanup/persistence must stay direct and ordered at the Session
+boundary, not become event listeners. There is no current second consumer of a disconnection
+event that would justify another event type or a lifecycle-event framework.
+
+**Lifecycle audit:** before identity acceptance, authentication/protocol/login rejection leaves
+no Player and emits neither event nor persistence. After registration but before spawn, graceful
+disconnect, timeout, kick, pre-spawn load failure and shutdown persist stable inventory/player
+data, queue chest-opener release for the GameLoop and publish `PlayerQuitEvent(WasInGame=false)`.
+After `InGameSessionHandler` enters gameplay, the same path first removes peer visibility and
+publishes `PlayerQuitEvent(WasInGame=true)`. UDP/network loss is observed as RakNet timeout;
+there is no separate socket-failure callback to model. RakNet's close hook is at-most-once, and
+`ZenithSessionListener` removes the session before calling `HandleClose`, preserving exactly-once
+game cleanup even if close is requested from more than one context.
+
+**Compatibility:** `PlayerQuitEvent` historically sounded like a completed-gameplay quit, but
+its actual established contract is identity-bound teardown; consumers must not infer `InGame`
+without checking `WasInGame`. `PlayerLoginEvent` is similarly acceptance/registration-time, not
+a spawn-complete event. A future concrete consumer that needs every identity-bound transport
+close may add `PlayerDisconnectedEvent` only with that consumer and explicit ordering relative
+to this direct cleanup; it must not be used for raw pre-login connections because no `Player`
+identity exists.
+
+**Non-goals:** lifecycle hierarchy/base event, generic disconnect reason bus, moving visibility,
+chest release or persistence into EventBus listeners, changing PlayerManager ownership, or making
+network loss a Gameplay decision.
+
 ### 105. Keep two concrete mob behaviors; extract only the Player death transition
 
 **Choice:** retain `ZombieSystem` and `SkeletonSystem` as separate, tick-owned gameplay systems.

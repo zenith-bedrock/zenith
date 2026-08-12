@@ -9,18 +9,19 @@ class PlayerLoginEvent
 }
 
 /// <summary>
-/// Publicado quando a sessão de transporte de um player conectado é encerrada (disconnect,
-/// kick ou timeout). Não é disparado se a conexão cair antes do login terminar - nesse caso
-/// nunca chegou a existir um Player pra remover.
+/// Publicado quando a sessão com identidade aceita e já registrada no PlayerManager é encerrada
+/// (disconnect, kick ou timeout). Não é disparado se a conexão cair antes do login terminar —
+/// nesse caso nunca chegou a existir um Player pra remover. Isto não significa, por si só, que
+/// o spawn/entrada no gameplay terminou; veja WasInGame.
 /// </summary>
 class PlayerQuitEvent
 {
     public Player.Player Player { get; }
 
     /// <summary>
-    /// True se o player chegou a ficar InGame (spawn completo) antes de sair — false pra quem
-    /// caiu durante login/resource-pack/spawn. Consumidores que anunciam "saiu" pros outros
-    /// jogadores devem checar isto; senão anunciam a saída de alguém que ninguém viu entrar.
+    /// True se o player chegou a ficar InGame (spawn completo) antes de sair — false para
+    /// quem caiu durante resource-pack/pre-spawn/spawn. Este é um predicado histórico da
+    /// transição de gameplay, não uma segunda causa de fechamento de transporte.
     /// </summary>
     public bool WasInGame { get; }
 
