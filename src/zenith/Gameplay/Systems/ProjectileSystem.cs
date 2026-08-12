@@ -1,5 +1,6 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Protocol;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
@@ -23,6 +24,7 @@ sealed class ProjectileSystem : IGameSystem
     private readonly ZombieSystem _zombies;
     private readonly HashSet<(long ProjectileId, long PlayerId)> _replicated = [];
     private readonly Dictionary<(long ProjectileId, long PlayerId), ProjectedPosition> _lastProjected = [];
+    private readonly List<RawActorPose> _moveBatch = [];
 
     public ProjectileSystem(World.World world, PlayerManager players, ProjectileStore projectiles, ZombieSystem zombies)
     {
@@ -65,6 +67,7 @@ sealed class ProjectileSystem : IGameSystem
                                         !online.Any(p => p.RuntimeId == pair.PlayerId));
         foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
             _lastProjected.Remove(key);
+        ReplicateMoves(online);
     }
 
     private void SpawnFromPlayerInputs(IReadOnlyList<Player.Player> online)
@@ -113,20 +116,34 @@ sealed class ProjectileSystem : IGameSystem
         projectile.PositionZ = nextZ;
         projectile.VelocityY -= GravityPerTick;
         ReconcileViewers(projectile, online);
+    }
+
+    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
+    {
         foreach (var peer in online)
         {
-            var key = (projectile.EntityId, peer.RuntimeId);
-            if (!_replicated.Contains(key)) continue;
-            var current = new ProjectedPosition(projectile.PositionX, projectile.PositionY, projectile.PositionZ);
-            if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+            _moveBatch.Clear();
+            foreach (var projectile in _projectiles.Active)
             {
-                ReplicatedMoveSkippedCount++;
-                continue;
+                var key = (projectile.EntityId, peer.RuntimeId);
+                if (!_replicated.Contains(key)) continue;
+                var current = new ProjectedPosition(projectile.PositionX, projectile.PositionY, projectile.PositionZ);
+                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
+                {
+                    ReplicatedMoveSkippedCount++;
+                    continue;
+                }
+                _moveBatch.Add(new RawActorPose
+                {
+                    ActorRuntimeId = projectile.RuntimeId,
+                    X = projectile.PositionX,
+                    Y = projectile.PositionY,
+                    Z = projectile.PositionZ
+                });
+                _lastProjected[key] = current;
+                ReplicatedMoveCount++;
             }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
-                projectile.RuntimeId, projectile.PositionX, projectile.PositionY, projectile.PositionZ);
-            _lastProjected[key] = current;
-            ReplicatedMoveCount++;
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
         }
     }
 

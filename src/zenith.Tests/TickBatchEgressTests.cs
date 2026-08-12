@@ -83,6 +83,24 @@ public class TickBatchEgressTests
         Assert.Single(fx.Transport.Captured);
     }
 
+    [Fact]
+    public void SendMoveActorAbsoluteRaws_two_actors_one_frame()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("solo");
+        Flush(fx);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        player.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(
+        [
+            new RawActorPose { ActorRuntimeId = 1, X = 0, Y = 100, Z = 0 },
+            new RawActorPose { ActorRuntimeId = 2, X = 1, Y = 100, Z = 1 }
+        ]);
+        Flush(fx);
+
+        Assert.Single(fx.Transport.Captured);
+    }
+
     private static void Flush(IntentTestFixture fx)
     {
         foreach (var p in fx.Players.Online)
