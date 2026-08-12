@@ -48,6 +48,27 @@ dotnet run --project src/zenith.Benchmarks -- --runtime-load --players 10,100 --
 dotnet run --project src/zenith.Benchmarks -- --runtime-load --players 500 --ticks 10
 ```
 
+### Actor churn baseline (Phase D)
+
+`actor-churn` is the corresponding dynamic-world-actor baseline. It uses the real
+`ProjectileSystem`/`ProjectileStore`, production `GameLoop` order, protocol encoders and recording
+RakNet transport; it is deliberately not a synthetic component/ECS benchmark. The default actor
+scales are 100 and 1,000 projectiles, with ten in-game observers and 200 ticks. Projectiles use
+their actual 80-tick lifetime, so a 200-tick sample contains removal and replenishment rather than
+a one-time seeded population.
+
+```bash
+# Phase-D reproducible one- and ten-observer comparison.
+dotnet run --no-build --project src/zenith.Benchmarks -- --runtime-load --actors 100,1000 --actor-players 10 --ticks 200
+dotnet run --no-build --project src/zenith.Benchmarks -- --runtime-load --players 1 --actors 100,1000 --actor-players 1 --ticks 200
+```
+
+It reports the normal tick distribution, allocation and GC counters together with active/target
+actors, spawn/move fan-out, removes, RakNet datagrams and bytes. The results intentionally combine
+simulation and wire work: compare observers to expose fan-out pressure, but do not infer that ECS
+is a visibility solution. The full 2026-08-11 results and cost decomposition are in
+[`phase-d-actor-pressure.md`](phase-d-actor-pressure.md).
+
 Do not compare these timings directly with another implementation. They are a reproducible
 baseline for Zenith itself. In particular, the current architecture deliberately fans dirty
 movement to all in-game peers; a 500-player global-movement run measures that known O(players²)

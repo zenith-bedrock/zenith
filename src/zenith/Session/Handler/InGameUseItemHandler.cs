@@ -54,8 +54,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        if (useActionType is InventoryTransactionPacket.UseClickAir
-            or InventoryTransactionPacket.UseAsAttack)
+        if (useActionType == InventoryTransactionPacket.UseClickAir)
         {
             player.SubmitAttackIntent();
             // Air punch / attack-style use — peer arm swing (§53). MissedSwing AuthInput also covers this.
@@ -63,6 +62,19 @@ partial class InGameSessionHandler
                 player,
                 session.Context.PlayerManager.SnapshotOnline(),
                 swingSource: "attack");
+            return;
+        }
+
+        // The first projectile vertical slice intentionally uses the distinct Bedrock
+        // attack-style item-use action. It is a bounded input only; ProjectileSystem owns
+        // creation, movement, collision, damage and removal on the gameplay tick.
+        if (useActionType == InventoryTransactionPacket.UseAsAttack)
+        {
+            player.SubmitProjectileIntent();
+            PlayerVisibility.RelaySwingArm(
+                player,
+                session.Context.PlayerManager.SnapshotOnline(),
+                swingSource: "projectile");
             return;
         }
 
