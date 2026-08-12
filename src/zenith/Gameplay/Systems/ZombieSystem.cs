@@ -11,12 +11,14 @@ sealed class ZombieSystem : IGameSystem
     private const float AttackDistance = 2.25f;
     private const float MovePerTick = 0.08f;
     private const float AttackDamage = 4f;
+    private const int AttackCooldownTicks = 20;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly ZombieStore _zombies;
     private readonly HashSet<(long ZombieId, long PlayerId)> _replicated = new();
     private bool _bootstrapSpawned;
+    private readonly Dictionary<long, ulong> _nextAttackTick = [];
 
     public ZombieSystem(World.World world, PlayerManager players, ZombieStore zombies)
     {
@@ -41,6 +43,7 @@ sealed class ZombieSystem : IGameSystem
             ApplyPlayerAttacks(zombie, online);
             if (!zombie.IsActive) continue;
             AdvanceTowardNearestPlayer(zombie, online);
+            TryAttackPlayer(zombie, clock, online);
             ReconcileViewers(zombie, online);
             ReplicateMove(zombie, online);
         }
@@ -88,6 +91,17 @@ sealed class ZombieSystem : IGameSystem
             if (dx * dx + dz * dz > AttackDistance * AttackDistance) continue;
             if (TryApplyDamage(zombie, DamageSource.Melee, AttackDamage, online)) break;
         }
+    }
+
+    private void TryAttackPlayer(Zombie zombie, GameClock clock, IReadOnlyList<Player.Player> online)
+    {
+        if (_nextAttackTick.GetValueOrDefault(zombie.EntityId) > clock.CurrentTick) return;
+        var target = online.FirstOrDefault(player => player.IsInGame && !player.IsDead &&
+            (player.PositionX - zombie.PositionX) * (player.PositionX - zombie.PositionX) +
+            (player.PositionZ - zombie.PositionZ) * (player.PositionZ - zombie.PositionZ) <= AttackDistance * AttackDistance);
+        if (target is null) return;
+        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(zombie.EntityId), AttackDamage))
+            _nextAttackTick[zombie.EntityId] = clock.CurrentTick + AttackCooldownTicks;
     }
 
     /// <summary>Concrete Zombie health/removal operation shared by the Projectile vertical slice.</summary>

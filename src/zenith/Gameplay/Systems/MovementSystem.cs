@@ -203,41 +203,8 @@ sealed class MovementSystem : IGameSystem
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online,
         DamageSource source,
-        float amount)
-    {
-        var result = player.ApplyDamage(source, amount);
-        if (!result.WasApplied)
-            return;
-
-        var entity = player.Session.Protocol.Entity;
-        var rid = (ulong)player.RuntimeId;
-        if (!result.CausedDeath)
-        {
-            entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
-            PlayerVisibility.RelayHealth(player, online);
-            return;
-        }
-
-        // Capture before finalizing death clears OpenChest — release lid opener (§28).
-        var world = player.Session.Context.World;
-        if (player.OpenChest.HasValue)
-            ChestLidFanout.ReleaseOpener(online, world, player);
-
-        if (!player.TryFinalizeDeath())
-            throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");
-
-        if (player.GameMode != GameMode.Creative)
-            _ = FloorDropFanout.TryDropDeathLoot(world, _players, online, player);
-
-        var eyeX = player.PositionX;
-        var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
-        var eyeZ = player.PositionZ;
-
-        entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
-        PlayerVisibility.RelayHealth(player, online);
-        entity.SendDeathInfo(player.DeathCause);
-        entity.SendRespawnSearching(eyeX, eyeY, eyeZ, rid);
-    }
+        float amount) =>
+        _ = PlayerDamage.Apply(player, _players, online, source, amount);
 
     /// <summary>
     /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per block beyond

@@ -1550,6 +1550,27 @@ capacity and recovery limits are recorded in [`phase-g-beta-readiness.md`](phase
 **Non-goals:** Prometheus/OpenTelemetry endpoint, dashboard, polling API, generic metric names or
 alerting framework. Add an external integration only when an operational consumer requires it.
 
+### 105. Keep two concrete mob behaviors; extract only the Player death transition
+
+**Choice:** retain `ZombieSystem` and `SkeletonSystem` as separate, tick-owned gameplay systems.
+Zombie owns target/chase/melee/cooldown decisions; Skeleton owns ranged distance/aim/cooldown
+decisions and requests a concrete Projectile from `ProjectileSystem`, which remains the sole
+projectile lifecycle owner. `PlayerDamage` reuses the existing Player health, feedback, death-loot
+and respawn transition for concrete non-player damage sources.
+
+**Why:** the two behaviors repeat identity, position, target lookup, cooldown and projection
+bookkeeping, but their decision state and attack effects remain materially different. The only
+duplicated behavior already shared with movement was Player damage/death finalization; extracting
+that path prevents a second copy without claiming an entity or combat framework. The Phase-H
+benchmark still identifies observer fan-out as the dominant scale cost, not mob simulation.
+
+**Boundary:** Gameplay decides target, damage and lifecycle. `EntityProtocol` transmits add/move/
+health/remove outcomes. Packets serialize; RakNet transports. `PlayerDamage` contains no packet
+serialization, target selection, actor storage or replication policy.
+
+**Non-goals:** `LivingEntity`/generic actor hierarchy, generic AI/navigation/behavior trees,
+combat attributes/effects/armor, ECS, VisibilitySystem, public actor/plugin API or scheduler.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

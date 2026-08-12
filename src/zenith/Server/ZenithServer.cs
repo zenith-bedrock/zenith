@@ -68,6 +68,7 @@ class ZenithServer
         var clock = new GameClock();
         var zombies = new ZombieStore();
         var projectiles = new ProjectileStore();
+        var skeletons = new SkeletonStore();
         var gameLoop = new GameLoop(clock, players, serverLogger);
         gameLoop.Register(new TimeSyncSystem());
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
@@ -107,7 +108,9 @@ class ZenithServer
         var gravity = new GravitySystem(world, players);
         var zombieSystem = new ZombieSystem(world, players, zombies);
         gameLoop.Register(zombieSystem);
-        gameLoop.Register(new ProjectileSystem(world, players, projectiles, zombieSystem));
+        var projectileSystem = new ProjectileSystem(world, players, projectiles, zombieSystem);
+        gameLoop.Register(projectileSystem);
+        gameLoop.Register(new SkeletonSystem(players, skeletons, projectileSystem));
         gameLoop.Register(new BlockDigSystem(world));
         gameLoop.Register(new BlockEditSystem(players, world));
         gameLoop.Register(gravity);
@@ -144,7 +147,7 @@ class ZenithServer
         };
         _telemetry = new RuntimeTelemetry(serverLogger);
         gameLoop.SetTickObserver(elapsed => _telemetry.RecordTick(elapsed, players.Count,
-            zombies.Active.Count + projectiles.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count,
+            zombies.Active.Count + skeletons.Active.Count + projectiles.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count,
             RakNetServer));
     }
 

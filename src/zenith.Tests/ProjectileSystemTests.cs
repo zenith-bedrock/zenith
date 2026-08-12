@@ -50,6 +50,23 @@ public sealed class ProjectileSystemTests
     }
 
     [Fact]
+    public void ActorProjectileImpactDamagesAnotherPlayerAndRemovesOnce()
+    {
+        var fx = new IntentTestFixture();
+        var target = fx.AddInGamePlayer("target");
+        var system = CreateSystem(fx, out _, out var projectiles);
+        var projectile = new Projectile(
+            fx.Players.AllocateRuntimeId(), 102, 999,
+            0.4f, target.PositionY + 1f, target.PositionZ, -0.1f, 0f, 0f);
+        Assert.True(projectiles.TryAdd(projectile));
+
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Empty(projectiles.Active);
+        Assert.Equal(14f, target.Health);
+    }
+
+    [Fact]
     public void WorldImpactRemovesProjectileAndNeverMutatesZombieState()
     {
         var fx = new IntentTestFixture();
@@ -101,7 +118,8 @@ public sealed class ProjectileSystemTests
         var owner = fx.AddInGamePlayer("owner");
         var distant = fx.AddInGamePlayer("distant");
         owner.PositionY = distant.PositionY = 100f;
-        owner.PositionZ = distant.PositionZ = 0.5f;
+        owner.PositionZ = 0.5f;
+        distant.PositionX = distant.PositionZ = 128f;
         owner.Chunks.Radius = distant.Chunks.Radius = 1;
         owner.Chunks.RememberMany([(0, 0)]);
         distant.Chunks.RememberMany([(8, 8)]);

@@ -24,6 +24,7 @@ readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = nu
     public static DamageSource Fall => new(DamageCause.Fall);
     public static DamageSource Void => new(DamageCause.Void);
     public static DamageSource Melee => new(DamageCause.Melee);
+    public static DamageSource MeleeFrom(long ownerRuntimeId) => new(DamageCause.Melee, ownerRuntimeId);
     /// <summary>Concrete first attribution case; the id is not an actor abstraction.</summary>
     public static DamageSource Projectile(long ownerRuntimeId) => new(DamageCause.Projectile, ownerRuntimeId);
 
