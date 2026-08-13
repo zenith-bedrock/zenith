@@ -160,9 +160,11 @@ class LoginSessionHandler : ISessionHandler
             loaded
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
                 : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
+        session.Context.World.TryLoadArmor(player.Uuid, player.Inventory);
 
         if (session.Context.World.TryLoadPlayerData(
-                player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode))
+                player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode,
+                out var savedLevel, out var savedPoints))
         {
             player.PositionX = px;
             player.PositionY = py;
@@ -171,8 +173,9 @@ class LoginSessionHandler : ISessionHandler
             player.Pitch = pitch;
             player.HeadYaw = yaw;
             player.SetGameMode(savedMode);
+            player.SetExperience(savedLevel, savedPoints);
             session.Context.Logger.Info(
-                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode}");
+                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode} xp={savedLevel}/{savedPoints}");
 
             // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
             if (session.Context.World.TryHealSpawnFeet(player))

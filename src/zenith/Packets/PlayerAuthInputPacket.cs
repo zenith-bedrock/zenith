@@ -22,6 +22,10 @@ readonly struct AuthItemInteraction
     public int BlockZ { get; init; }
     public int Face { get; init; }
     public int HotbarSlot { get; init; }
+    /// <summary>Client's runtime-id precondition for the clicked block.</summary>
+    public int ClickedBlockRuntimeId { get; init; }
+    /// <summary>Client-held ItemV4 descriptor; Session validates it against the authoritative hotbar slot.</summary>
+    public DecodedTransactionItem HeldItem { get; init; }
 }
 
 /// <summary>
@@ -59,6 +63,8 @@ class PlayerAuthInputPacket : DataPacket
     public float PositionZ { get; set; }
     public PlayerBlockAction[] BlockActions { get; set; } = [];
     public AuthItemInteraction? ItemInteraction { get; set; }
+    /// <summary>Optional ItemStackRequest carried by PlayerAuthInput (no outer request count).</summary>
+    public DecodedItemStackRequest? ItemStackRequest { get; set; }
 
     /// <summary>Continuous sneak level (input-data flag 8) — §53.</summary>
     public bool InputSneaking { get; set; }
@@ -124,8 +130,9 @@ class PlayerAuthInputPacket : DataPacket
         ItemInteraction = stream.ReadBool() ? ReadTransaction(ref stream) : null;
 
         _ = stream.ReadBool(); // item_stack_request_presence (decorative)
-        if (stream.ReadBool())
-            ItemStackRequestPacket.SkipEmbeddedRequest(ref stream);
+        ItemStackRequest = stream.ReadBool()
+            ? ItemStackRequestPacket.ReadEmbeddedRequest(ref stream)
+            : null;
 
         _ = stream.ReadBool(); // block_action_presence (decorative)
         InputPerformBlockActions = stream.ReadBool();
@@ -191,10 +198,14 @@ class PlayerAuthInputPacket : DataPacket
         if (stream.ReadBool()) // legacy_transactions option
         {
             var containerCount = stream.ReadUnsignedVarInt();
+            if (containerCount > InventoryTransactionPacket.MaxLegacySetItemContainers)
+                throw new InvalidDataException($"AuthInput has {containerCount} legacy containers (max {InventoryTransactionPacket.MaxLegacySetItemContainers}).");
             for (var i = 0; i < containerCount; i++)
             {
                 _ = stream.ReadByte(); // container_id
                 var slotCount = stream.ReadUnsignedVarInt();
+                if (slotCount > InventoryTransactionPacket.MaxLegacySetItemSlotsPerContainer)
+                    throw new InvalidDataException($"AuthInput legacy container has {slotCount} slots (max {InventoryTransactionPacket.MaxLegacySetItemSlotsPerContainer}).");
                 for (var j = 0; j < slotCount; j++)
                     _ = stream.ReadByte(); // slot_id
             }
@@ -204,6 +215,8 @@ class PlayerAuthInputPacket : DataPacket
         if (stream.ReadBool()) // actions option
         {
             var actionCount = stream.ReadUnsignedVarInt();
+            if (actionCount > InventoryTransactionPacket.MaxActions)
+                throw new InvalidDataException($"AuthInput has {actionCount} legacy actions (max {InventoryTransactionPacket.MaxActions}).");
             for (var i = 0; i < actionCount; i++)
                 SkipLegacyTransactionAction(ref stream);
         }
@@ -216,14 +229,14 @@ class PlayerAuthInputPacket : DataPacket
         var blockZ = stream.ReadVarInt();
         var face = stream.ReadByte(); // u8, not varint
         var hotbar = stream.ReadVarInt();
-        SkipNetworkItemStackDescriptor(ref stream); // held_item (ItemV4)
+        var heldItem = ReadNetworkItemStackDescriptor(ref stream); // held_item (ItemV4)
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // player_pos
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // click_pos
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
-        _ = stream.ReadUnsignedVarInt(); // block_runtime_id
+        var clickedBlockRuntimeId = stream.ReadUnsignedVarInt(); // block_runtime_id
         _ = stream.ReadByte(); // client_prediction
         _ = stream.ReadByte(); // client_cooldown_state
 
@@ -234,7 +247,9 @@ class PlayerAuthInputPacket : DataPacket
             BlockY = blockY,
             BlockZ = blockZ,
             Face = face,
-            HotbarSlot = hotbar
+            HotbarSlot = hotbar,
+            ClickedBlockRuntimeId = clickedBlockRuntimeId,
+            HeldItem = heldItem
         };
     }
 
@@ -246,8 +261,8 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadBool(); // flag_presence (decorative)
         if (stream.ReadBool()) _ = stream.ReadUnsignedVarInt(); // flags option
         _ = stream.ReadUnsignedVarInt(); // slot
-        SkipNetworkItemStackDescriptor(ref stream); // old_item
-        SkipNetworkItemStackDescriptor(ref stream); // new_item
+            _ = ReadNetworkItemStackDescriptor(ref stream); // old_item
+            _ = ReadNetworkItemStackDescriptor(ref stream); // new_item
     }
 
     /// <summary>
@@ -255,16 +270,24 @@ class PlayerAuthInputPacket : DataPacket
     /// field-for-field): i16 LE network id, u16 count, varint meta, bool has-stack-id + bare
     /// zigzag32 if present (no tag byte, ADR §87), varint block runtime id, varint-length extra blob.
     /// </summary>
-    private static void SkipNetworkItemStackDescriptor(ref BinaryStream stream)
+    private static DecodedTransactionItem ReadNetworkItemStackDescriptor(ref BinaryStream stream)
     {
-        _ = stream.ReadShort(BinaryStream.Endianess.Little); // network_id
-        _ = stream.ReadUShort(BinaryStream.Endianess.Little); // count
-        _ = stream.ReadUnsignedVarInt(); // metadata
-        if (stream.ReadBool()) // has_stack_id
-            _ = stream.ReadVarInt(); // stack_id
-        _ = stream.ReadUnsignedVarInt(); // block_runtime_id
+        var networkId = stream.ReadShort(BinaryStream.Endianess.Little);
+        var count = stream.ReadUShort(BinaryStream.Endianess.Little);
+        var meta = stream.ReadUnsignedVarInt();
+        var stackNetworkId = stream.ReadBool() ? stream.ReadVarInt() : 0;
+        var blockRuntimeId = stream.ReadUnsignedVarInt();
         var extraLen = stream.ReadUnsignedVarInt();
         if (extraLen > 0)
             stream.ReadSpan(extraLen);
+
+        return new DecodedTransactionItem
+        {
+            NetworkId = networkId,
+            Count = count,
+            Meta = meta,
+            StackNetworkId = stackNetworkId,
+            BlockRuntimeId = blockRuntimeId
+        };
     }
 }

@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Protocol;
@@ -5,7 +6,16 @@ using Zenith.World;
 
 namespace Zenith.Gameplay.Systems;
 
-/// <summary>First living-actor vertical slice; deliberately one concrete behavior.</summary>
+/// <summary>
+/// Phase XXI — first ECS-authoritative actor. Position/Health/Velocity/ActorIdentity/
+/// DespawnTracking live in <see cref="EntityRuntime"/>'s shared component stores; only
+/// <see cref="ZombieState"/> (retained target, attack cooldown) is feature-specific and owned
+/// here. The old <c>Zombie</c> object and <c>ZombieStore</c> are gone — there is exactly one
+/// authoritative copy of this data now, not a concrete object mirroring what the components
+/// already hold. Combat/loot/XP bookkeeping moved to <see cref="DamageableActorCombat"/> (the
+/// ECS-native sibling of <see cref="GroundMobCombat"/>, which still serves every unmigrated
+/// mob). See docs/history/phases/phase-xxi-ecs-foundation-findings.md.
+/// </summary>
 sealed class ZombieSystem : IGameSystem
 {
     private const float SpawnDistance = 4f;
@@ -15,165 +25,279 @@ sealed class ZombieSystem : IGameSystem
     private const float AttackDamage = 4f;
     private const int AttackCooldownTicks = 20;
     private const string LootItemName = "minecraft:rotten_flesh";
+    /// <summary>Vanilla-parity hostile-mob kill reward (Phase XI.4).</summary>
+    private const int KillExperience = 5;
+    // Phase XVI — knockback: a movement consequence of combat, deliberately not part of
+    // GroundMobCombat/DamageableActorCombat (which never touch position) or a shared primitive
+    // (single mob so far).
+    private const float KnockbackImpulse = 0.3f;
+    private const float KnockbackDecayPerTick = 0.5f;
+    private const float KnockbackNegligible = 0.001f;
+    // Phase XVI — world lifecycle: despawn if unseen. Larger than DetectionDistance so an actively
+    // chasing zombie is never mid-engagement when this fires.
+    private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
-    private readonly ZombieStore _zombies;
+    private readonly EntityRuntime _stores;
+    private readonly ComponentStore<ZombieState> _zombies;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long ZombieId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long ZombieId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
+    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPosition> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
+    // Phase XXI addendum 2: reused every tick instead of a fresh `new EntityId[]` snapshot —
+    // structural mutation (despawn/death) during iteration still needs a stable list to walk, but
+    // it doesn't need a new allocation to provide one.
+    private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
-    private readonly Dictionary<long, ulong> _nextAttackTick = [];
 
-    public ZombieSystem(World.World world, PlayerManager players, ZombieStore zombies, ItemPalette itemPalette)
+    public ZombieSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
-        _zombies = zombies;
+        _stores = stores;
+        _zombies = new ComponentStore<ZombieState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
-    public ZombieStore Zombies => _zombies;
+    internal IReadOnlyList<EntityId> Zombies => _zombies.Entities;
+    internal EntityRuntime Stores => _stores;
+    internal ComponentStore<ZombieState> ZombieStates => _zombies;
+
+    /// <summary>Cross-species dispatch seam (Phase XXI, Projectile's generalized hit query) — "is this ECS entity a zombie," nothing more.</summary>
+    internal bool Owns(EntityId id) => _zombies.Has(id);
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
     internal long ReplicatedMoveSkippedCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
+    internal long DespawnCount { get; private set; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _ = clock;
         if (online.Count == 0) return;
-        if (_zombies.Active.Count != 0)
+        if (_zombies.Count != 0)
             _bootstrapSpawned = true;
         EnsureBootstrapZombie(online);
-        foreach (var zombie in _zombies.Active.ToArray())
+
+        _tickScratch.Clear();
+        _tickScratch.AddRange(_zombies.Entities);
+
+        foreach (var id in _tickScratch)
         {
-            if (!zombie.IsActive) continue;
-            ReconcileViewers(zombie, online);
-            ApplyPlayerAttacks(zombie, online);
-            if (!zombie.IsActive) continue;
-            var target = FindOrAcquireTarget(zombie, online);
+            if (!_stores.Entities.IsAlive(id)) continue;
+            if (TryDespawn(id, clock, online)) continue;
+            ReconcileViewers(id, online);
+            ApplyPlayerAttacks(id, online);
+            if (!_stores.Entities.IsAlive(id)) continue;
+            ApplyKnockbackMotion(id);
+            var target = FindOrAcquireTarget(id, online);
             if (target is not null)
-                AdvanceTowardTarget(zombie, target);
-            TryAttackPlayer(zombie, target, clock, online);
-            ReconcileViewers(zombie, online);
+                AdvanceTowardTarget(id, target);
+            TryAttackPlayer(id, target, clock, online);
+            ReconcileViewers(id, online);
         }
-        _replicated.RemoveWhere(pair => !_zombies.Active.Any(z => z.EntityId == pair.ZombieId) ||
-                                        !online.Any(p => p.RuntimeId == pair.PlayerId));
+
+        _replicated.RemoveWhere(pair => !IsKnownAliveZombieId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
         foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
             _lastProjected.Remove(key);
         ReplicateMoves(online);
     }
 
+    private bool IsKnownAliveZombieId(long actorUniqueId)
+    {
+        foreach (var id in _zombies.Entities)
+            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
+                return true;
+        return false;
+    }
+
     private void EnsureBootstrapZombie(IReadOnlyList<Player.Player> online)
     {
-        if (_bootstrapSpawned || _zombies.Active.Count != 0) return;
+        if (_bootstrapSpawned || _zombies.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;
         var x = player.PositionX + SpawnDistance;
         var z = player.PositionZ;
         var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
-        var entityId = _players.AllocateRuntimeId();
-        if (_zombies.TryAdd(new Zombie(entityId, (ulong)entityId, x, y, z)))
-            _bootstrapSpawned = true;
+        SpawnZombie(x, y, z);
+        _bootstrapSpawned = true;
     }
 
-    private void ReconcileViewers(Zombie zombie, IReadOnlyList<Player.Player> online)
+    /// <summary>
+    /// The feature-specific composition step every migrated actor needs on top of
+    /// <see cref="EntityRuntime.CreateActor"/>: this is where "what makes it a zombie" gets
+    /// attached, in one obvious place, instead of a scattered list of store registrations at every
+    /// call site.
+    /// </summary>
+    internal EntityId SpawnZombie(float x, float y, float z)
     {
+        var actorUniqueId = _players.AllocateRuntimeId();
+        // CreateActor only returns null if AllocateRuntimeId ever produced a runtime id already in
+        // use, which it never does by construction — see EntityRuntimeTests for the rollback path
+        // this guards, proven in isolation rather than trusted here.
+        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
+                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Zombie.");
+        _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) });
+        _stores.Velocities.Set(id, new Velocity());
+        _stores.Despawn.Set(id, new DespawnTracking());
+        _zombies.Set(id, new ZombieState());
+        return id;
+    }
+
+    /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        ref var tracking = ref _stores.Despawn.GetRef(id);
+        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
+            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
+        tracking.LastSeenNearPlayerTick = lastSeen;
+        if (!shouldDespawn) return false;
+
+        if (!_stores.Identities.TryGet(id, out var identity)) return false;
         foreach (var peer in online)
-        {
-            var key = (zombie.EntityId, peer.RuntimeId);
-            if (!ActorInterest.Includes(peer, zombie.PositionX, zombie.PositionZ))
+            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
             {
-                if (_replicated.Remove(key))
-                {
-                    _lastProjected.Remove(key);
-                    peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
-                    ReplicatedRemovalCount++;
-                }
-                continue;
-            }
-            if (!_replicated.Add(key)) continue;
-            peer.Session.Protocol.Entity.SendAddZombie(
-                zombie.EntityId, zombie.RuntimeId, zombie.PositionX, zombie.PositionY, zombie.PositionZ, zombie.Yaw);
-            peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
-            _lastProjected[key] = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
-            ReplicatedSpawnCount++;
-        }
-    }
-
-    private void ApplyPlayerAttacks(Zombie zombie, IReadOnlyList<Player.Player> online)
-    {
-        foreach (var player in online)
-        {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = zombie.PositionX - player.PositionX;
-            var dz = zombie.PositionZ - player.PositionZ;
-            if (dx * dx + dz * dz > AttackDistance * AttackDistance) continue;
-            if (!player.TryConsumeAttackIntent()) continue;
-            if (TryApplyDamage(zombie, DamageSource.Melee, AttackDamage, online)) break;
-        }
-    }
-
-    private void TryAttackPlayer(
-        Zombie zombie,
-        Player.Player? target,
-        GameClock clock,
-        IReadOnlyList<Player.Player> online)
-    {
-        if (_nextAttackTick.GetValueOrDefault(zombie.EntityId) > clock.CurrentTick) return;
-        if (target is null) return;
-        if (!IsTargetValid(zombie, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
-            return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(zombie.EntityId), AttackDamage))
-            _nextAttackTick[zombie.EntityId] = clock.CurrentTick + AttackCooldownTicks;
-    }
-
-    /// <summary>Concrete Zombie health/removal operation shared by the Projectile vertical slice.</summary>
-    public bool TryApplyDamage(Zombie zombie, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
-    {
-        if (!zombie.IsActive) return false;
-        if (zombie.Health.Current <= amount && !CanDropLoot(zombie)) return false;
-        var result = zombie.ApplyDamage(source, amount);
-        if (!result.WasApplied) return false;
-        foreach (var peer in online)
-        {
-            if (!_replicated.Contains((zombie.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendHealth(zombie.RuntimeId, zombie.Health.Current, zombie.Health.Maximum);
-        }
-        if (!result.CausedDeath) return true;
-        if (!FloorDropFanout.TryDeposit(
-                _world, _players, online,
-                (int)MathF.Floor(zombie.PositionX), (int)MathF.Floor(zombie.PositionY), (int)MathF.Floor(zombie.PositionZ),
-                _lootItem, 1))
-            throw new InvalidOperationException("A prevalidated Zombie loot drop could not commit.");
-        foreach (var peer in online)
-            if (_replicated.Remove((zombie.EntityId, peer.RuntimeId)))
-            {
-                _lastProjected.Remove((zombie.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(zombie.EntityId);
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             }
-        zombie.Remove();
-        _zombies.Remove(zombie);
+        _stores.DestroyActor(identity.ActorRuntimeId, id);
+        DespawnCount++;
         return true;
     }
 
-    private bool CanDropLoot(Zombie zombie) =>
-        FloorDropFanout.CanDeposit(
-            _world,
-            (int)MathF.Floor(zombie.PositionX), (int)MathF.Floor(zombie.PositionY), (int)MathF.Floor(zombie.PositionZ),
-            _lootItem, 1);
-
-    private Player.Player? FindOrAcquireTarget(Zombie zombie, IReadOnlyList<Player.Player> online)
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
     {
-        if (zombie.TargetPlayerRuntimeId is { } retainedId)
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        var health = healthComponent.State;
+
+        ViewerReconciliation.Sync(
+            identity.ActorUniqueId, online, _replicated,
+            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
+            onEnter: peer =>
+            {
+                peer.Session.Protocol.Entity.SendAddZombie(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPosition(pos.X, pos.Y, pos.Z);
+                ReplicatedSpawnCount++;
+            },
+            onExit: peer =>
+            {
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+                ReplicatedRemovalCount++;
+            });
+    }
+
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, TryApplyDamageAndKnockback);
+
+    /// <summary>
+    /// Wraps the shared kill bookkeeping with a purely local, Zombie-only side effect: a landed hit
+    /// also pushes the zombie back. Neither GroundMobCombat's nor DamageableActorCombat's contract
+    /// needed to grow to support this.
+    /// </summary>
+    private bool TryApplyDamageAndKnockback(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
+    {
+        var applied = TryApplyDamage(id, source, amount, online);
+        if (applied && _stores.Entities.IsAlive(id) && source.OwnerRuntimeId is { } attackerId)
+        {
+            var attacker = online.FirstOrDefault(p => p.RuntimeId == attackerId);
+            if (attacker is not null)
+                ApplyKnockbackImpulse(id, attacker.PositionX, attacker.PositionZ);
+        }
+        return applied;
+    }
+
+    private void ApplyKnockbackImpulse(EntityId id, float fromX, float fromZ)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var dx = pos.X - fromX;
+        var dz = pos.Z - fromZ;
+        var lengthSquared = dx * dx + dz * dz;
+        float nx, nz;
+        if (lengthSquared > 0.0001f)
+        {
+            var length = MathF.Sqrt(lengthSquared);
+            nx = dx / length;
+            nz = dz / length;
+        }
+        else
+        {
+            nx = 0f;
+            nz = 1f;
+        }
+
+        ref var vel = ref _stores.Velocities.GetRef(id);
+        vel.X = nx * KnockbackImpulse;
+        vel.Z = nz * KnockbackImpulse;
+    }
+
+    private void ApplyKnockbackMotion(EntityId id)
+    {
+        if (!_stores.Velocities.TryGet(id, out var vel)) return;
+        if (vel.X == 0f && vel.Z == 0f) return;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+
+        var x = pos.X + vel.X;
+        var z = pos.Z + vel.Z;
+        if (GroundMobMovement.CanStandAt(_world, x, pos.Y, z))
+        {
+            ref var p = ref _stores.Positions.GetRef(id);
+            p.X = x;
+            p.Z = z;
+        }
+
+        ref var v = ref _stores.Velocities.GetRef(id);
+        v.X *= KnockbackDecayPerTick;
+        v.Z *= KnockbackDecayPerTick;
+        if (MathF.Abs(v.X) < KnockbackNegligible) v.X = 0f;
+        if (MathF.Abs(v.Z) < KnockbackNegligible) v.Z = 0f;
+    }
+
+    private void TryAttackPlayer(EntityId id, Player.Player? target, GameClock clock, IReadOnlyList<Player.Player> online)
+    {
+        ref var state = ref _zombies.GetRef(id);
+        if (state.NextAttackTick > clock.CurrentTick) return;
+        if (target is null) return;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!IsTargetValid(pos, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
+            return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage))
+            state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+    }
+
+    /// <summary>Concrete Zombie health/removal operation shared by the Projectile vertical slice.</summary>
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+        DamageableActorCombat.TryApplyDamage(
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Zombie",
+            destroyActor: zid =>
+            {
+                if (_stores.Identities.TryGet(zid, out var identity))
+                    _stores.DestroyActor(identity.ActorRuntimeId, zid);
+            },
+            onDeathReplicatedToPeer: peer =>
+            {
+                if (_stores.Identities.TryGet(id, out var identity))
+                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                ReplicatedRemovalCount++;
+            });
+
+    private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        ref var state = ref _zombies.GetRef(id);
+        if (!_stores.Positions.TryGet(id, out var pos)) return null;
+
+        if (state.TargetPlayerRuntimeId is { } retainedId)
         {
             var retained = online.FirstOrDefault(player => player.RuntimeId == retainedId);
-            if (retained is not null && IsTargetValid(zombie, retained, out _))
+            if (retained is not null && IsTargetValid(pos, retained, out _))
                 return retained;
-            zombie.TargetPlayerRuntimeId = null;
+            state.TargetPlayerRuntimeId = null;
         }
 
         Player.Player? target = null;
@@ -181,67 +305,61 @@ sealed class ZombieSystem : IGameSystem
         foreach (var player in online)
         {
             if (!player.IsInGame || player.IsDead) continue;
-            var dx = player.PositionX - zombie.PositionX;
-            var dz = player.PositionZ - zombie.PositionZ;
+            var dx = player.PositionX - pos.X;
+            var dz = player.PositionZ - pos.Z;
             var distance = dx * dx + dz * dz;
             if (distance >= best) continue;
             best = distance;
             target = player;
         }
 
-        zombie.TargetPlayerRuntimeId = target?.RuntimeId;
+        state.TargetPlayerRuntimeId = target?.RuntimeId;
         return target;
     }
 
-    private static bool IsTargetValid(Zombie zombie, Player.Player target, out float distanceSquared)
+    private static bool IsTargetValid(Position pos, Player.Player target, out float distanceSquared)
     {
-        var dx = target.PositionX - zombie.PositionX;
-        var dz = target.PositionZ - zombie.PositionZ;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         distanceSquared = dx * dx + dz * dz;
         return target.IsInGame && !target.IsDead && distanceSquared <= DetectionDistance * DetectionDistance;
     }
 
-    private void AdvanceTowardTarget(Zombie zombie, Player.Player target)
+    private void AdvanceTowardTarget(EntityId id, Player.Player target)
     {
-        if (!IsTargetValid(zombie, target, out var best) ||
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!IsTargetValid(pos, target, out var best) ||
             best <= AttackDistance * AttackDistance || best <= 0.0001f)
             return;
 
         var length = MathF.Sqrt(best);
-        var dxn = (target.PositionX - zombie.PositionX) / length;
-        var dzn = (target.PositionZ - zombie.PositionZ) / length;
+        var dxn = (target.PositionX - pos.X) / length;
+        var dzn = (target.PositionZ - pos.Z) / length;
         var distance = MathF.Min(MovePerTick, length - AttackDistance);
-        var desiredX = zombie.PositionX + dxn * distance;
-        var desiredZ = zombie.PositionZ + dzn * distance;
+        var desiredX = pos.X + dxn * distance;
+        var desiredZ = pos.Z + dzn * distance;
         var sideX = -dzn * distance;
         var sideZ = dxn * distance;
 
-        if (TryMove(zombie, desiredX, desiredZ) ||
-            TryMove(zombie, desiredX + sideX, desiredZ + sideZ) ||
-            TryMove(zombie, desiredX - sideX, desiredZ - sideZ) ||
-            TryMove(zombie, zombie.PositionX + sideX, zombie.PositionZ + sideZ) ||
-            TryMove(zombie, zombie.PositionX - sideX, zombie.PositionZ - sideZ))
+        if (TryMove(id, desiredX, desiredZ) ||
+            TryMove(id, desiredX + sideX, desiredZ + sideZ) ||
+            TryMove(id, desiredX - sideX, desiredZ - sideZ) ||
+            TryMove(id, pos.X + sideX, pos.Z + sideZ) ||
+            TryMove(id, pos.X - sideX, pos.Z - sideZ))
         {
-            zombie.Yaw = MathF.Atan2(-dxn, dzn) * (180f / MathF.PI);
+            ref var p = ref _stores.Positions.GetRef(id);
+            p.Yaw = MathF.Atan2(-dxn, dzn) * (180f / MathF.PI);
         }
     }
 
-    /// <summary>
-    /// Bounded local movement probe: two empty body cells and one supporting cell. This is a
-    /// concrete Zombie rule, not a reusable navigation or collision framework.
-    /// </summary>
-    private bool TryMove(Zombie zombie, float x, float z)
+    /// <summary>Concrete Zombie rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>, Phase XV).</summary>
+    private bool TryMove(EntityId id, float x, float z)
     {
-        var blockX = (int)MathF.Floor(x);
-        var blockY = (int)MathF.Floor(zombie.PositionY);
-        var blockZ = (int)MathF.Floor(z);
-        if (_world.GetBlock(blockX, blockY, blockZ) != World.World.AirRuntimeId ||
-            _world.GetBlock(blockX, blockY + 1, blockZ) != World.World.AirRuntimeId ||
-            _world.GetBlock(blockX, blockY - 1, blockZ) == World.World.AirRuntimeId)
-            return false;
-
-        zombie.PositionX = x;
-        zombie.PositionZ = z;
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        if (!GroundMobMovement.CanStandAt(_world, x, pos.Y, z)) return false;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.X = x;
+        p.Z = z;
         return true;
     }
 
@@ -250,11 +368,13 @@ sealed class ZombieSystem : IGameSystem
         foreach (var peer in online)
         {
             _moveBatch.Clear();
-            foreach (var zombie in _zombies.Active)
+            foreach (var id in _zombies.Entities)
             {
-                var key = (zombie.EntityId, peer.RuntimeId);
+                if (!_stores.Identities.TryGet(id, out var identity)) continue;
+                var key = (identity.ActorUniqueId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPosition(zombie.PositionX, zombie.PositionY, zombie.PositionZ);
+                if (!_stores.Positions.TryGet(id, out var pos)) continue;
+                var current = new ProjectedPosition(pos.X, pos.Y, pos.Z);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -262,10 +382,10 @@ sealed class ZombieSystem : IGameSystem
                 }
                 _moveBatch.Add(new RawActorPose
                 {
-                    ActorRuntimeId = zombie.RuntimeId,
-                    X = zombie.PositionX,
-                    Y = zombie.PositionY,
-                    Z = zombie.PositionZ
+                    ActorRuntimeId = identity.ActorRuntimeId,
+                    X = pos.X,
+                    Y = pos.Y,
+                    Z = pos.Z
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;

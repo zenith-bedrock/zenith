@@ -42,6 +42,9 @@ interface IChunkStorage
     ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default);
 
+    ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
+    ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default);
+
     ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default);
 
@@ -58,6 +61,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, ChunkColumnData> _chunks = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), byte[]> _chests = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _armor = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
 
     /// <summary>Column Put count — tests for ADR §45 sparse flat.</summary>
@@ -113,6 +117,18 @@ sealed class InMemoryChunkStorage : IChunkStorage
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         _inventories.TryGetValue(uuid, out var blob);
+        return ValueTask.FromResult<byte[]?>(blob);
+    }
+
+    public ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _armor[uuid] = blob;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        _armor.TryGetValue(uuid, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
     }
 

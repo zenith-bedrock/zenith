@@ -77,7 +77,7 @@ public class TerrainProviderTests
         var col = flat.GetBaseColumn(0, 0);
         Assert.True(col.SubChunkCount > 0);
         Assert.True(col.Payload.Length >= 3);
-        Assert.Equal(8, col.Payload[0]);
+        Assert.Equal(ChunkPayloads.SubChunkVersion, col.Payload[0]);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public class TerrainProviderTests
         var col = noise.GetBaseColumn(0, 0);
         // Surface ~64 ⇒ several sections above Y -64.
         Assert.True(col.SubChunkCount >= 6);
-        Assert.Equal(8, col.Payload[0]);
+        Assert.Equal(ChunkPayloads.SubChunkVersion, col.Payload[0]);
         var other = noise.GetBaseColumn(3, -2);
         Assert.NotEqual(col.Payload, other.Payload);
     }

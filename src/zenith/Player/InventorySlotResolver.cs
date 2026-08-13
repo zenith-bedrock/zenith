@@ -38,6 +38,9 @@ static class InventorySlotResolver
                     ? player.Inventory.Get(reference.Index)
                     : InventorySlot.Empty;
 
+            case InventorySlotArea.Armor:
+                return player.Inventory.GetArmor(reference.Index);
+
             default:
                 return InventorySlot.Empty;
         }
@@ -68,6 +71,12 @@ static class InventorySlotResolver
 
             case InventorySlotArea.PlayerInventory:
                 return PlayerInventory.IsValidInventorySlot(reference.Index) && player.Inventory.TrySet(
+                    reference.Index,
+                    value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id,
+                    value.IsEmpty ? 0 : value.Count);
+
+            case InventorySlotArea.Armor:
+                return player.Inventory.TrySetArmor(
                     reference.Index,
                     value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id,
                     value.IsEmpty ? 0 : value.Count);

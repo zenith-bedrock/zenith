@@ -11,6 +11,7 @@ static class EntityMetaKey
     public const int Name = 4;
     public const int EffectColor = 8;
     public const int EffectAmbience = 9;
+    public const int Scale = 38;
     public const int Width = 53;
     public const int Height = 54;
     public const int AlwaysShowNameTag = 81;
@@ -88,7 +89,7 @@ static class EntityMetadataWriter
     {
         var flags = BuildSpawnFlags(sneaking, sprinting);
 
-        writer.WriteUnsignedVarInt(8);
+        writer.WriteUnsignedVarInt(9);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
         WriteEntryType(ref writer, EntityMetaType.Long);
@@ -109,6 +110,10 @@ static class EntityMetadataWriter
         writer.WriteUnsignedVarInt(EntityMetaKey.EffectAmbience);
         WriteEntryType(ref writer, EntityMetaType.Byte);
         writer.WriteByte(0);
+
+        writer.WriteUnsignedVarInt(EntityMetaKey.Scale);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(1f, BinaryStream.Endianess.Little);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Width);
         WriteEntryType(ref writer, EntityMetaType.Float);
@@ -144,11 +149,15 @@ static class EntityMetadataWriter
     /// </summary>
     public static void WriteFallingBlockMetadata(ref BinaryStream writer, int variant)
     {
-        writer.WriteUnsignedVarInt(2);
+        writer.WriteUnsignedVarInt(3);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
         WriteEntryType(ref writer, EntityMetaType.Long);
         writer.WriteVarLong(EntityFlag.Bit(EntityFlag.AffectedByGravity) | EntityFlag.Bit(EntityFlag.HasCollision));
+
+        writer.WriteUnsignedVarInt(EntityMetaKey.Scale);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(1f, BinaryStream.Endianess.Little);
 
         writer.WriteUnsignedVarInt(EntityMetaKey.Variant);
         WriteEntryType(ref writer, EntityMetaType.Int);
@@ -158,15 +167,27 @@ static class EntityMetadataWriter
     /// <summary>Minimal metadata required for a client-rendered zombie actor.</summary>
     public static void WriteZombieMetadata(ref BinaryStream writer)
     {
-        writer.WriteUnsignedVarInt(3);
+        writer.WriteUnsignedVarInt(4);
         writer.WriteUnsignedVarInt(EntityMetaKey.Flags);
         WriteEntryType(ref writer, EntityMetaType.Long);
         writer.WriteVarLong(BuildSpawnFlags());
+        writer.WriteUnsignedVarInt(EntityMetaKey.Scale);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(1f, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(EntityMetaKey.Width);
         WriteEntryType(ref writer, EntityMetaType.Float);
         writer.WriteFloat(0.6f, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(EntityMetaKey.Height);
         WriteEntryType(ref writer, EntityMetaType.Float);
         writer.WriteFloat(1.95f, BinaryStream.Endianess.Little);
+    }
+
+    /// <summary>Minimal metadata for renderable actors without a type-specific data shape.</summary>
+    public static void WriteScaleMetadata(ref BinaryStream writer)
+    {
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteUnsignedVarInt(EntityMetaKey.Scale);
+        WriteEntryType(ref writer, EntityMetaType.Float);
+        writer.WriteFloat(1f, BinaryStream.Endianess.Little);
     }
 }

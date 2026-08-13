@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using Zenith.Ecs;
 using Zenith.Event;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
@@ -18,93 +19,8 @@ using Xunit;
 
 namespace Zenith.Tests;
 
-file sealed class SilentLogger : ILogger
-{
-    public void Debug(string message) { }
-    public void Info(string message) { }
-    public void Warning(string message) { }
-    public void Error(string message) { }
-}
-
-internal sealed class RecordingRakNetServer : RakNetServer
-{
-    public ConcurrentQueue<byte[]> Captured { get; } = new();
-    public ConcurrentQueue<(IPEndPoint EndPoint, byte[] Datagram)> CapturedByEndpoint { get; } = new();
-
-    public RecordingRakNetServer() : base(port: 0) { }
-
-    public override void Send(IPEndPoint endPoint, ReadOnlySpan<byte> buffer)
-    {
-        var datagram = buffer.ToArray();
-        Captured.Enqueue(datagram);
-        CapturedByEndpoint.Enqueue((endPoint, datagram));
-    }
-}
-
-file sealed class StubSessionHandler : ISessionHandler
-{
-    public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream) =>
-        false;
-}
-
-/// <summary>Monta Player + NetworkSession + world sem boot completo do ZenithServer.</summary>
-internal sealed class IntentTestFixture
-{
-    public PlayerManager Players { get; }
-    public World.World World { get; }
-    public GameClock Clock { get; } = new();
-    public RecordingRakNetServer Transport { get; } = new();
-    public ServerContext Context { get; }
-
-    private int _nextPort = 20000;
-
-    public IntentTestFixture()
-    {
-        Blocks.EnsureLoaded();
-        var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
-        var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
-        Players = new PlayerManager();
-        World = new World.World(new InMemoryChunkStorage());
-        Context = new ServerContext(
-            new SilentLogger(),
-            Players,
-            new EventBus(new SilentLogger()),
-            Clock,
-            World,
-            new ServerConfig(),
-            blockPalette,
-            itemPalette,
-            RecipeRegistry.CreateDefault(),
-            CreativeCatalog.CreateDefault());
-    }
-
-    public InventorySystem CreateInventorySystem() =>
-        new(Players, World, Context.Recipes, Context.Creative);
-
-    public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival) =>
-        AddPlayer(name, gameMode, isInGame: true);
-
-    /// <summary>Registered in <see cref="Players"/> but not yet spawned — mirrors the window between
-    /// login accept and <c>InGameSessionHandler</c> setting <c>IsInGame</c> (e.g. mid resource-pack).</summary>
-    public Player.Player AddPlayer(string name, GameMode gameMode = GameMode.Survival, bool isInGame = false)
-    {
-        var rak = new RakNetSession
-        {
-            EndPoint = new IPEndPoint(IPAddress.Loopback, _nextPort++),
-            Id = _nextPort,
-            Server = Transport,
-            MTU = 1400
-        };
-        var session = new NetworkSession(rak, new StubSessionHandler(), Context);
-        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode)
-        {
-            IsInGame = isInGame
-        };
-        session.Player = player;
-        Assert.True(Players.TryAdd(player));
-        return player;
-    }
-}
+// Shared test harness (IntentTestFixture, RecordingRakNetServer, SilentLogger, StubSessionHandler)
+// lives in IntentTestFixture.cs — this file is one of its ~30 consumers, not its home.
 
 public class IntentContractTests
 {
@@ -163,9 +79,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(requestId);
         writer.WriteUnsignedVarInt(1); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
         writer.WriteUnsignedVarInt(checked((int)recipeNetId));
         writer.WriteByte(1); // craft times
         writer.WriteUnsignedVarInt(0); // filter strings
@@ -183,9 +99,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(requestId);
         writer.WriteUnsignedVarInt(1); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionDrop);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionDrop);
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, containerId, slot);
         writer.WriteBool(false); // randomly
@@ -196,13 +112,13 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(requestId);
         writer.WriteUnsignedVarInt(2); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionPlace);
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
         WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);
-        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
         writer.WriteUnsignedVarInt(checked((int)recipeNetId));
         writer.WriteByte(1); // craft times
         SubmitItemStackRequest(player, writer);
@@ -212,9 +128,9 @@ public class IntentContractTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteInt(requestId, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(requestId);
         writer.WriteUnsignedVarInt(1); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionPlace);
         writer.WriteByte(1); // count
         WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
         WriteSlotInfo(ref writer, InventoryContainerMap.Chest, 0);
@@ -227,6 +143,23 @@ public class IntentContractTests
         writer.WriteBool(false); // dynamic container id
         writer.WriteByte(slot);
         writer.WriteInt(0, BinaryStream.Endianess.Little); // stack network id
+    }
+
+    private static void WriteDynamicSlotInfo(ref BinaryStream writer, byte containerId, byte slot, uint dynamicId)
+    {
+        writer.WriteByte(containerId);
+        writer.WriteBool(true);
+        writer.WriteUInt(dynamicId, BinaryStream.Endianess.Little);
+        writer.WriteByte(slot);
+        writer.WriteInt(0, BinaryStream.Endianess.Little);
+    }
+
+    private static void WriteStackActionHeader(ref BinaryStream writer, byte legacyActionId)
+    {
+        writer.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
+            ? legacyActionId
+            : legacyActionId - 2);
+        writer.WriteByte(legacyActionId);
     }
 
     private static void SubmitItemStackRequest(Player.Player player, BinaryStream writer)
@@ -1573,7 +1506,8 @@ public class IntentContractTests
         writer.WriteShort(1, BinaryStream.Endianess.Little);
         writer.WriteUShort(1, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(0);
-        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteVarInt(47); // stack network id
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarInt(0);
         writer.WriteByte(0); // inventory slot
@@ -1586,6 +1520,613 @@ public class IntentContractTests
         packet.Decode(ref stream);
         Assert.Equal(3, packet.HotbarSlot);
         Assert.Equal(2, packet.ActorRuntimeId);
+        Assert.Equal((short)1, packet.Item.NetworkId);
+        Assert.Equal((ushort)1, packet.Item.Count);
+        Assert.Equal(47, packet.Item.StackNetworkId);
+    }
+
+    [Fact]
+    public void MobEquipment_changes_main_hand_only_when_the_claimed_slot_matches_authority()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("equip-valid");
+        Assert.True(player.Inventory.TrySetBlock(4, Blocks.Air, 0));
+        player.SelectedHotbarSlot = 0;
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarLong(player.RuntimeId);
+        NetworkItemStack.Empty.WriteNetworkItemStackDescriptor(ref writer);
+        writer.WriteByte(4); // inventory slot
+        writer.WriteByte(4); // hotbar slot
+        writer.WriteByte(MobEquipmentPacket.WindowInventory);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.MOB_EQUIPMENT_PACKET },
+            ref stream));
+
+        Assert.Equal(4, player.SelectedHotbarSlot);
+    }
+
+    [Fact]
+    public void MobEquipment_rejects_a_mismatched_held_stack_without_changing_main_hand()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("equip-mismatch");
+        Assert.True(player.Inventory.TrySetBlock(4, Blocks.Stone, 1));
+        player.SelectedHotbarSlot = 0;
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarLong(player.RuntimeId);
+        NetworkItemStack.Empty.WriteNetworkItemStackDescriptor(ref writer); // contradicts stone in slot 4
+        writer.WriteByte(4);
+        writer.WriteByte(4);
+        writer.WriteByte(MobEquipmentPacket.WindowInventory);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.MOB_EQUIPMENT_PACKET },
+            ref stream));
+
+        Assert.Equal(0, player.SelectedHotbarSlot);
+    }
+
+    [Fact]
+    public void InventoryTransaction_actor_attack_submits_gameplay_attack_intent()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("actorattack");
+        Assert.True(player.Inventory.TrySetBlock(4, Blocks.Air, 0));
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0); // legacy request id
+        writer.WriteBool(false); // legacy slots absent
+        writer.WriteBool(true); // transaction type present
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        writer.WriteBool(true); // actions present
+        writer.WriteUnsignedVarInt(0); // no legacy actions
+        writer.WriteUnsignedVarLong(99); // target actor runtime id
+        writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
+        writer.WriteVarInt(4); // hotbar slot
+        WriteNetworkItemAir(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        var handled = new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+        new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream);
+
+        Assert.True(handled);
+        Assert.Equal(4, player.SelectedHotbarSlot);
+        Assert.False(player.TryConsumeAttackIntent(100));
+        Assert.True(player.TryConsumeAttackIntent(99));
+    }
+
+    [Fact]
+    public void InventoryTransaction_actor_attack_damages_the_named_actor_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("actorattack-damage");
+        Assert.True(player.Inventory.TrySetBlock(4, Blocks.Air, 0));
+
+        var zombies = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var zombie = zombies.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
+        Assert.True(zombies.Stores.Identities.TryGet(zombie, out var identity));
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0); // legacy request id
+        writer.WriteBool(false); // legacy slots absent
+        writer.WriteBool(true); // transaction type present
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        writer.WriteBool(true); // actions present
+        writer.WriteUnsignedVarInt(0); // no legacy actions
+        writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
+        writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
+        writer.WriteVarInt(4);
+        WriteNetworkItemAir(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        zombies.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(zombies.Stores.Health.TryGet(zombie, out var health));
+        Assert.Equal(16f, health.State.Current);
+    }
+
+    [Fact]
+    public void InventoryTransaction_actor_attack_damages_the_named_player_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var attacker = fx.AddInGamePlayer("actorattack-player");
+        var target = fx.AddInGamePlayer("actorattack-target");
+        Assert.True(attacker.Inventory.TrySetBlock(4, Blocks.Air, 0));
+        target.PositionX = attacker.PositionX + 1;
+        target.PositionZ = attacker.PositionZ;
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteUnsignedVarLong(target.RuntimeId);
+        writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
+        writer.WriteVarInt(4);
+        WriteNetworkItemAir(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            attacker.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(16f, target.Health);
+    }
+
+    [Fact]
+    public void InventoryTransaction_actor_interact_uses_the_wire_runtime_id_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("actorinteract-runtime");
+        var wheat = fx.Context.ItemPalette.Require("minecraft:wheat");
+        Assert.True(player.Inventory.TrySetItem(0, wheat, 1));
+        player.SelectedHotbarSlot = 0;
+
+        var cows = new CowSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var cow = cows.SpawnCow(player.PositionX + 1, player.PositionY, player.PositionZ);
+        ref var identity = ref cows.Stores.Identities.GetRef(cow);
+        identity.ActorRuntimeId = checked((ulong)(identity.ActorUniqueId + 10_000));
+        ref var cowState = ref cows.CowStates.GetRef(cow);
+        cowState.BreedCooldownUntilTick = 5_000;
+        var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
+        writer.WriteVarInt(InventoryTransactionPacket.ActorInteract);
+        writer.WriteVarInt(0);
+        held.WriteNetworkItemStackDescriptor(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        cows.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(1, cows.FeedCount);
+        Assert.True(player.Inventory.Get(0).IsEmpty);
+    }
+
+    [Fact]
+    public void InventoryTransaction_actor_attack_rejects_a_held_item_mismatch_without_changing_selection()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("actorattack-mismatch");
+        Assert.True(player.Inventory.TrySetBlock(4, Blocks.Stone, 1));
+        player.SelectedHotbarSlot = 0;
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteUnsignedVarLong(99);
+        writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
+        writer.WriteVarInt(4);
+        WriteNetworkItemAir(ref writer); // contradicts the authoritative stone in slot 4
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        Assert.Equal(0, player.SelectedHotbarSlot);
+        Assert.False(player.TryConsumeAttackIntent(99));
+    }
+
+    [Fact]
+    public void InventoryTransaction_release_updates_hotbar_without_creating_a_second_use_intent()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("release-slot");
+        Assert.True(player.Inventory.TrySetBlock(5, Blocks.Air, 0));
+        player.SelectedHotbarSlot = 0;
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteVarInt(0); // release
+        writer.WriteVarInt(5); // hotbar slot
+        WriteNetworkItemAir(ref writer);
+        for (var i = 0; i < 3; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        Assert.Equal(5, player.SelectedHotbarSlot);
+        Assert.False(player.TryConsumeEatIntent());
+        Assert.False(player.TryConsumeProjectileIntent());
+    }
+
+    [Fact]
+    public void InventoryTransaction_unknown_typed_actions_do_not_change_selected_hotbar_slot()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("unknown-transaction-action");
+        Assert.True(player.Inventory.TrySetBlock(5, Blocks.Stone, 1));
+        player.SelectedHotbarSlot = 0;
+        var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 5);
+
+        var use = new BinaryStream();
+        use.WriteVarInt(0);
+        use.WriteBool(false);
+        use.WriteBool(true);
+        use.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
+        use.WriteBool(true);
+        use.WriteUnsignedVarInt(0);
+        use.WriteVarInt(99); // unknown UseItem action
+        use.WriteByte(0);
+        use.WriteVarInt(0);
+        use.WriteVarInt(0);
+        use.WriteVarInt(0);
+        use.WriteByte(0);
+        use.WriteVarInt(5);
+        held.WriteNetworkItemStackDescriptor(ref use);
+        for (var i = 0; i < 6; i++) use.WriteFloat(0, BinaryStream.Endianess.Little);
+        use.WriteUnsignedVarInt(0);
+        use.WriteByte(0);
+        use.WriteByte(0);
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref use));
+        Assert.Equal(0, player.SelectedHotbarSlot);
+
+        var actor = new BinaryStream();
+        actor.WriteVarInt(0);
+        actor.WriteBool(false);
+        actor.WriteBool(true);
+        actor.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
+        actor.WriteBool(true);
+        actor.WriteUnsignedVarInt(0);
+        actor.WriteUnsignedVarLong(99);
+        actor.WriteVarInt(99); // unknown UseItemOnActor action
+        actor.WriteVarInt(5);
+        held.WriteNetworkItemStackDescriptor(ref actor);
+        for (var i = 0; i < 6; i++) actor.WriteFloat(0, BinaryStream.Endianess.Little);
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref actor));
+        Assert.Equal(0, player.SelectedHotbarSlot);
+
+        var release = new BinaryStream();
+        release.WriteVarInt(0);
+        release.WriteBool(false);
+        release.WriteBool(true);
+        release.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
+        release.WriteBool(true);
+        release.WriteUnsignedVarInt(0);
+        release.WriteVarInt(99); // unknown Release action
+        release.WriteVarInt(5);
+        held.WriteNetworkItemStackDescriptor(ref release);
+        for (var i = 0; i < 3; i++) release.WriteFloat(0, BinaryStream.Endianess.Little);
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref release));
+        Assert.Equal(0, player.SelectedHotbarSlot);
+    }
+
+    [Fact]
+    public void InventoryTransaction_use_click_air_relays_animation_without_creating_targetless_melee()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("air-swing");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Air, 0));
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteVarInt(InventoryTransactionPacket.UseClickAir);
+        writer.WriteByte(0);
+        writer.WriteVarInt(0);
+        writer.WriteVarInt(0);
+        writer.WriteVarInt(0);
+        writer.WriteByte(0);
+        writer.WriteVarInt(0);
+        WriteNetworkItemAir(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteByte(0);
+        writer.WriteByte(0);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        Assert.False(player.TryConsumeAttackIntent());
+    }
+
+    [Fact]
+    public void InventoryTransaction_click_block_rejects_a_stale_clicked_runtime_before_placing()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stale-click-block");
+        StandForPlace(player, 10, 64, 10);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 2));
+        var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
+        writer.WriteByte(0);
+        writer.WriteVarInt(9);
+        writer.WriteVarInt(64);
+        writer.WriteVarInt(10);
+        writer.WriteByte(5); // place on the +X face, at 10,64,10
+        writer.WriteVarInt(0);
+        held.WriteNetworkItemStackDescriptor(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(Blocks.Stone); // client predicted stone; server has air
+        writer.WriteByte(0);
+        writer.WriteByte(0);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
+        Assert.Equal(2, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void InventoryTransaction_click_block_accepts_an_unspecified_clicked_runtime()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("unspecified-click-runtime");
+        StandForPlace(player, 10, 64, 10);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 2));
+        var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
+        writer.WriteByte(0);
+        writer.WriteVarInt(9);
+        writer.WriteVarInt(64);
+        writer.WriteVarInt(10);
+        writer.WriteByte(5);
+        writer.WriteVarInt(0);
+        held.WriteNetworkItemStackDescriptor(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(0); // target state omitted by this client
+        writer.WriteByte(0);
+        writer.WriteByte(0);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(10, 64, 10));
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void InventoryTransaction_mismatch_resends_authoritative_inventory_view()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("mismatch");
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+        while (fx.Transport.CapturedByEndpoint.TryDequeue(out _)) { }
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeMismatch);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+        FlushRaknet(fx.Players);
+
+        Assert.NotEmpty(fx.Transport.Captured);
+    }
+
+    [Fact]
+    public void Legacy_normal_transaction_drop_commits_once_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("legacy-drop");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+        var before = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+        var after = before with { Count = 3 };
+        var dropped = before with { Count = 2 };
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(-2); // correlatable legacy request ID
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0); // no requested slot replay entries
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(2);
+        WriteNormalInventoryAction(
+            ref writer,
+            InventoryTransactionPacket.SourceContainer,
+            windowId: 0,
+            slot: 0,
+            before,
+            after);
+        WriteNormalInventoryAction(
+            ref writer,
+            InventoryTransactionPacket.SourceWorld,
+            windowId: null,
+            slot: 0,
+            NetworkItemStack.Empty,
+            dropped);
+
+        var bytes = writer.GetBufferDisposing().ToArray();
+        for (var i = 0; i < 2; i++)
+        {
+            var stream = new BinaryStream(bytes);
+            Assert.True(new InGameSessionHandler().HandleDataPacket(
+                player.Session,
+                new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+                ref stream));
+        }
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(3, player.Inventory.Get(0).Count); // duplicate packet must not remove another two
+        Assert.Equal(2, fx.World.FloorDrops.Snapshot()
+            .Where(drop => drop.Id == StackId.FromBlock(Blocks.Stone))
+            .Sum(drop => drop.Count));
+    }
+
+    [Fact]
+    public void Legacy_normal_transaction_drop_rejects_a_stale_advertised_stack_id()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("legacy-drop-stale");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+        var before = player.Session.Protocol.Inventory.DescribeForWire(
+            InventorySlotReference.Player(0), player.Inventory.Get(0));
+        Assert.True(before.StackNetworkId > 0);
+        var stale = before with { StackNetworkId = before.StackNetworkId + 1 };
+        var after = before with { Count = 3 };
+        var dropped = before with { Count = 2 };
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(-2);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
+        writer.WriteBool(true);
+        writer.WriteUnsignedVarInt(2);
+        WriteNormalInventoryAction(
+            ref writer,
+            InventoryTransactionPacket.SourceContainer,
+            windowId: 0,
+            slot: 0,
+            stale,
+            after);
+        WriteNormalInventoryAction(
+            ref writer,
+            InventoryTransactionPacket.SourceWorld,
+            windowId: null,
+            slot: 0,
+            NetworkItemStack.Empty,
+            dropped);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+        Assert.Empty(fx.World.FloorDrops.Snapshot());
+    }
+
+    private static void WriteNetworkItemAir(ref BinaryStream writer)
+    {
+        writer.WriteShort(0, BinaryStream.Endianess.Little);
+        writer.WriteUShort(0, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteBool(false);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteUnsignedVarInt(0);
+    }
+
+    private static void WriteNormalInventoryAction(
+        ref BinaryStream writer,
+        uint sourceType,
+        byte? windowId,
+        int slot,
+        NetworkItemStack oldItem,
+        NetworkItemStack newItem)
+    {
+        writer.WriteUnsignedVarInt(checked((int)sourceType));
+        writer.WriteBool(true); // required WindowID marker
+        writer.WriteBool(windowId.HasValue);
+        if (windowId is { } window)
+            writer.WriteByte(window);
+        writer.WriteBool(true); // required SourceFlags marker
+        writer.WriteBool(false);
+        writer.WriteUnsignedVarInt(slot);
+        oldItem.WriteNetworkItemStackDescriptor(ref writer);
+        newItem.WriteNetworkItemStackDescriptor(ref writer);
     }
 
     [Fact]
@@ -2126,6 +2667,89 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void ItemStackRequest_after_Interact_open_inventory_commits_on_the_same_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("open-then-creative", GameMode.Creative);
+
+        // The client may send the first creative request before the GameLoop has materialised
+        // the ContainerOpen. Both packets are correctly ordered on the inbound stream.
+        var interact = new BinaryStream();
+        interact.WriteByte(InteractPacket.ActionOpenInventory);
+        interact.WriteUnsignedVarLong(player.RuntimeId);
+        interact.WriteBool(false); // no position
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INTERACT_PACKET },
+            ref interact));
+
+        var request = new BinaryStream();
+        request.WriteUnsignedVarInt(1); // request count
+        request.WriteVarInt(613);
+        request.WriteUnsignedVarInt(1); // action count
+        WriteStackActionHeader(ref request, ItemStackRequestPacket.ActionCraftCreative);
+        request.WriteUnsignedVarInt(checked((int)CreativeCatalog.Stone));
+        request.WriteByte(1); // number of crafts (wire boilerplate)
+        request.WriteUnsignedVarInt(0); // filter strings
+        request.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET },
+            ref request));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.InventoryWindowOpen);
+        Assert.Equal(StackId.FromBlock(Blocks.Stone), player.CraftUi.Result.Id);
+        Assert.Equal(PlayerInventory.MaxStack, player.CraftUi.Result.Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_after_pending_chest_open_commits_on_the_same_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("open-chest-then-transfer");
+        fx.World.SetBlock(2, 64, 2, Blocks.Chest);
+        fx.World.Chests.Ensure(2, 64, 2);
+        StandNear(player, 2, 64, 2);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 2));
+
+        // The block interaction publishes its window request; the immediately following ISR
+        // must bind to that pending chest rather than be rejected for an absent current view.
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 64, 2)));
+        SubmitChestTransferRequest(player, requestId: 614);
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(StackId.FromBlock(Blocks.Dirt), fx.World.Chests.Get(2, 64, 2, 0).Id);
+        Assert.Equal(1, fx.World.Chests.Get(2, 64, 2, 0).Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_a_dynamic_container_id_for_a_static_hotbar_slot()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("dynamic-container");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 2));
+        var slotOneBefore = player.Inventory.Get(1);
+
+        var request = new BinaryStream();
+        request.WriteUnsignedVarInt(1);
+        request.WriteVarInt(615);
+        request.WriteUnsignedVarInt(1);
+        WriteStackActionHeader(ref request, ItemStackRequestPacket.ActionPlace);
+        request.WriteByte(1);
+        WriteDynamicSlotInfo(ref request, InventoryContainerMap.Hotbar, 0, dynamicId: 42);
+        WriteSlotInfo(ref request, InventoryContainerMap.Hotbar, 1);
+        SubmitItemStackRequest(player, request);
+
+        Assert.False(player.TryConsumeInventoryStack(out _));
+        Assert.Equal(2, player.Inventory.Get(0).Count);
+        Assert.Equal(slotOneBefore, player.Inventory.Get(1));
+    }
+
+    [Fact]
     public void ItemStackRequest_crafting_bound_to_closed_player_inventory_ui_does_not_commit()
     {
         var fx = new IntentTestFixture();
@@ -2661,6 +3285,135 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void Interact_open_inventory_is_applied_by_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("open-inventory", GameMode.Creative);
+        var writer = new BinaryStream();
+        writer.WriteByte(InteractPacket.ActionOpenInventory);
+        writer.WriteUnsignedVarLong(player.RuntimeId); // target is self
+        writer.WriteBool(false); // no interaction position
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        var handled = new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INTERACT_PACKET },
+            ref stream);
+
+        Assert.True(handled);
+        Assert.False(player.InventoryWindowOpen); // Session only publishes the intent.
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.InventoryWindowOpen);
+        Assert.True(player.TryGetOpenContainerSession(out var open));
+        Assert.Equal(OpenContainerSession.TargetKind.PlayerInventory, open.Target);
+        Assert.Equal((byte)InventoryContainerMap.WindowInventory, open.WindowId);
+        Assert.Equal(InventoryContainerMap.WindowTypeInventory, open.WindowType);
+    }
+
+    [Fact]
+    public void Repeated_interact_open_inventory_does_not_reopen_the_player_container()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("repeat-open", GameMode.Creative);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var writer = new BinaryStream();
+            writer.WriteByte(InteractPacket.ActionOpenInventory);
+            writer.WriteUnsignedVarLong(player.RuntimeId);
+            writer.WriteBool(false);
+
+            var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+            Assert.True(new InGameSessionHandler().HandleDataPacket(
+                player.Session,
+                new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INTERACT_PACKET },
+                ref stream));
+        }
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.TryGetOpenContainerSession(out var open));
+        Assert.Equal((uint)1, open.Generation);
+    }
+
+    [Fact]
+    public void Interact_open_inventory_rejects_a_non_self_target()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("open-inventory-forged", GameMode.Creative);
+        var writer = new BinaryStream();
+        writer.WriteByte(InteractPacket.ActionOpenInventory);
+        writer.WriteUnsignedVarLong(player.RuntimeId + 1);
+        writer.WriteBool(false);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INTERACT_PACKET },
+            ref stream));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.False(player.InventoryWindowOpen);
+        Assert.False(player.TryGetOpenContainerSession(out _));
+    }
+
+    [Fact]
+    public void Item_stack_request_creative_pick_to_hotbar_commits_through_the_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creative-wire", GameMode.Creative);
+        player.OpenPlayerContainer(
+            (byte)InventoryContainerMap.WindowInventory,
+            InventoryContainerMap.WindowTypeInventory);
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(73); // request id: protocol 2168 VarInt, not fixed little-endian
+        writer.WriteUnsignedVarInt(2); // CraftCreative + Place
+
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftCreative);
+        writer.WriteUnsignedVarInt(checked((int)CreativeCatalog.Stone));
+        writer.WriteByte(1); // NumberOfCrafts (protocol boilerplate)
+
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionPlace);
+        writer.WriteByte(PlayerInventory.MaxStack);
+        WriteSlotInfo(
+            ref writer,
+            InventoryContainerMap.CreatedOutput,
+            InventoryContainerMap.CraftingResultWireSlot);
+        WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
+
+        SubmitItemStackRequest(player, writer);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        var slot = player.Inventory.Get(0);
+        Assert.Equal(Blocks.Stone, slot.Id.Value);
+        Assert.Equal(PlayerInventory.MaxStack, slot.Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void Item_stack_request_with_an_unbounded_wire_count_is_rejected_without_mutating_inventory()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("isr-bounded");
+        var before = player.Inventory.Get(0);
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(ItemStackRequestPacket.MaxRequestsPerPacket + 1);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET },
+            ref stream));
+
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(before, player.Inventory.Get(0));
+    }
+
+    [Fact]
     public void InventorySystem_craft_creative_places_on_cursor()
     {
         var fx = new IntentTestFixture();
@@ -2810,22 +3563,184 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void CreativeContent_empty_icon_is_varint_air_not_item_instance_new()
+    public void InventorySystem_craft_creative_preserves_an_existing_created_output()
     {
-        // Empty ItemStack = single VarInt 0 after group header — not ItemInstanceNew short LE.
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creative-pending-output", GameMode.Creative);
+        Assert.True(player.CraftUi.TrySetResult(InventorySlot.OfBlock(Blocks.Dirt, 3)));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(8, [
+            InventoryStackAction.CraftCreative(CreativeCatalog.Stone)
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        // A rejected pick must not replace or erase a result awaiting its original request.
+        Assert.Equal(Blocks.Dirt, player.CraftUi.Result.Id.Value);
+        Assert.Equal(3, player.CraftUi.Result.Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_creative_destroy_removes_only_the_declared_source_count()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creative-destroy", GameMode.Creative);
+        player.OpenPlayerContainer(
+            (byte)InventoryContainerMap.WindowInventory,
+            InventoryContainerMap.WindowTypeInventory);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(74);
+        writer.WriteUnsignedVarInt(1); // action count
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionDestroy);
+        writer.WriteByte(2);
+        WriteSlotInfo(ref writer, InventoryContainerMap.Hotbar, 0);
+
+        SubmitItemStackRequest(player, writer);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        var remaining = player.Inventory.Get(0);
+        Assert.Equal(Blocks.Stone, remaining.Id.Value);
+        Assert.Equal(3, remaining.Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_destroy_rejects_survival_without_mutating_inventory()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("survival-destroy");
+        player.OpenPlayerContainer(
+            (byte)InventoryContainerMap.WindowInventory,
+            InventoryContainerMap.WindowTypeInventory);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(75, [
+            InventoryStackAction.Destroy(
+                InventorySlotReference.Player(0), 2,
+                new WireSlot(InventoryContainerMap.Hotbar, 0))
+        ])));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(5, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_mine_block_acknowledges_the_authoritative_hotbar_stack()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("mine-stack-request");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1); // request count
+        writer.WriteVarInt(76);
+        writer.WriteUnsignedVarInt(1); // action count
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionMineBlock);
+        writer.WriteVarInt(0); // hotbar slot
+        writer.WriteVarInt(0); // predicted durability: ignored until durability exists
+        writer.WriteInt(0, BinaryStream.Endianess.Little); // no advertised stack id yet
+
+        SubmitItemStackRequest(player, writer);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        var slot = player.Inventory.Get(0);
+        Assert.Equal(Blocks.Stone, slot.Id.Value);
+        Assert.Equal(5, slot.Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_create_for_an_unimplemented_result_slot_without_clearing_output()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("create-result-index");
+        player.OpenPlayerContainer(
+            (byte)InventoryContainerMap.WindowInventory,
+            InventoryContainerMap.WindowTypeInventory);
+        Assert.True(player.CraftUi.TrySetResult(InventorySlot.OfBlock(Blocks.Dirt, 3)));
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteVarInt(77);
+        writer.WriteUnsignedVarInt(1);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCreate);
+        writer.WriteByte(1);
+        SubmitItemStackRequest(player, writer);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.Dirt, player.CraftUi.Result.Id.Value);
+        Assert.Equal(3, player.CraftUi.Result.Count);
+    }
+
+    [Fact]
+    public void ItemStackRequest_rejects_zero_craft_times_without_consuming_the_grid()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("zero-craft-times");
+        player.OpenPlayerContainer(
+            (byte)InventoryContainerMap.WindowInventory,
+            InventoryContainerMap.WindowTypeInventory);
+        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        var writer = new BinaryStream();
+        writer.WriteUnsignedVarInt(1);
+        writer.WriteVarInt(78);
+        writer.WriteUnsignedVarInt(1);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
+        writer.WriteUnsignedVarInt(checked((int)RecipeRegistry.OakLogToPlanks));
+        writer.WriteByte(0);
+        SubmitItemStackRequest(player, writer);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(Blocks.OakLog, player.CraftUi.GetGrid(0).Id.Value);
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+    }
+
+    [Fact]
+    public void CreativeContent_empty_icon_uses_the_short_air_network_item_instance_descriptor()
+    {
+        // CreativeContent uses NetworkItemInstanceDescriptor. An air item (NetworkId 0) still
+        // carries count/meta/block-runtime after its VarInt ID, but the trailing user-data blob
+        // collapses to a single bare zero-length varint — no NBT-length/can-place/can-break
+        // payload at all. Verified against gophertunnel's Writer.Item/itemUserData (protocol
+        // 2168): a non-air item gets the full 10-byte empty-lists blob; NetworkId==0 does not.
+        // The previous version of this test asserted the old, wrong 16-byte shape, which
+        // corrupted every byte after CreativeContentBuilder's Construction-group icon (a real
+        // air icon sent on every join) in the actual wire packet.
         var emptyPk = new CreativeContentPacket
         {
             Groups = [new CreativeGroupEntry(1, "", NetworkItemStack.Empty)],
             Items = []
         };
         var bytes = emptyPk.Encode().ToArray();
-        // packet id UVInt + groups UVInt(1) + category u8 (ADR §85) + name UVInt(0) + Item VarInt(0) + items UVInt(0)
-        Assert.True(bytes.Length < 20);
+        // packet id + groups + category + name + short air item + items
+        Assert.True(bytes.Length > 5);
 
         var writer = new BinaryStream();
         NetworkItemStack.Empty.WriteItemStack(ref writer);
         var air = writer.GetBufferDisposing().ToArray();
-        Assert.Equal(new byte[] { 0 }, air); // VarInt 0
+        Assert.Equal(6, air.Length); // network id + count + meta + block rid + bare zero-length user-data varint
+    }
+
+    [Fact]
+    public void CreativeContent_non_air_icon_still_uses_the_full_empty_lists_descriptor()
+    {
+        // The counterpart to the air-item test above: a real (non-zero NetworkId) item stack
+        // must still get the full NBT-length + can_place/can_break blob, matching
+        // gophertunnel's Writer.Item for the present==true case.
+        var writer = new BinaryStream();
+        new NetworkItemStack(NetworkId: 5, Count: 1, BlockRuntimeId: 0).WriteItemStack(ref writer);
+        var bytes = writer.GetBufferDisposing().ToArray();
+
+        var stream = new BinaryStream(bytes);
+        Assert.Equal(5, stream.ReadVarInt()); // network id
+        Assert.Equal((ushort)1, stream.ReadUShort(BinaryStream.Endianess.Little)); // count
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // meta
+        Assert.Equal(0, stream.ReadVarInt()); // block runtime id
+        Assert.Equal(10, stream.ReadUnsignedVarInt()); // extra-data length — full blob, not the air short-circuit
+        for (var i = 0; i < 10; i++) Assert.Equal(0, stream.ReadByte());
+        Assert.True(stream.IsEndOfFile);
     }
 
     [Fact]
@@ -2845,7 +3760,11 @@ public class IntentContractTests
         Assert.Equal(1, stream.ReadUnsignedVarInt()); // groups count
         Assert.Equal((byte)CreativeContentPacket.CategoryConstruction, stream.ReadByte()); // category — exactly one byte
         Assert.Equal("", stream.ReadVarString());
-        Assert.Equal(0, stream.ReadVarInt()); // empty icon
+        Assert.Equal(0, stream.ReadVarInt()); // empty icon ID
+        Assert.Equal((ushort)0, stream.ReadUShort(BinaryStream.Endianess.Little));
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // metadata
+        Assert.Equal(0, stream.ReadVarInt()); // block runtime ID
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // air item: bare zero-length user-data varint, no NBT/list blob
         Assert.Equal(0, stream.ReadUnsignedVarInt()); // items count
         Assert.True(stream.IsEndOfFile);
     }

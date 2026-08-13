@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Systems;
 using Zenith.Player;
@@ -6,8 +7,33 @@ using Xunit;
 
 namespace Zenith.Tests;
 
+/// <summary>
+/// Phase XXI — Zombie is the first ECS-authoritative actor: Position/Health/Velocity live in
+/// <see cref="EntityRuntime"/>, ZombieState (target, attack cooldown) is feature-specific. Tests
+/// read state through <see cref="ZombieSystem.Stores"/>/<see cref="ZombieSystem.ZombieStates"/>
+/// instead of a concrete <c>Zombie</c> object's properties — see
+/// docs/history/phases/phase-xxi-ecs-foundation-findings.md for the DX comparison this made visible.
+/// </summary>
 public sealed class ZombieSystemTests
 {
+    private static Position Pos(ZombieSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Positions.TryGet(id, out var pos));
+        return pos;
+    }
+
+    private static HealthState Health(ZombieSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Health.TryGet(id, out var health));
+        return health.State;
+    }
+
+    private static long? Target(ZombieSystem system, EntityId id)
+    {
+        Assert.True(system.ZombieStates.TryGet(id, out var state));
+        return state.TargetPlayerRuntimeId;
+    }
+
     [Fact]
     public void BootstrapSpawnsOneConcreteZombieAndMovesTowardPlayer()
     {
@@ -15,18 +41,16 @@ public sealed class ZombieSystemTests
         var player = fx.AddInGamePlayer("target");
         player.PositionX = 0;
         player.PositionZ = 0;
-        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore(), fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
 
         system.Tick(fx.Clock, fx.Players.Online);
 
-        var zombie = Assert.Single(system.Zombies.Active);
-        var initialDistance = MathF.Abs(zombie.PositionX - player.PositionX);
+        var id = Assert.Single(system.Zombies);
+        var initialDistance = MathF.Abs(Pos(system, id).X - player.PositionX);
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.True(zombie.IsActive);
-        Assert.True(MathF.Abs(zombie.PositionX - player.PositionX) < initialDistance);
-        Assert.NotEqual(0, zombie.EntityId);
-        Assert.Equal((ulong)zombie.EntityId, zombie.RuntimeId);
+        Assert.True(system.Stores.Entities.IsAlive(id));
+        Assert.True(MathF.Abs(Pos(system, id).X - player.PositionX) < initialDistance);
     }
 
     [Fact]
@@ -37,18 +61,16 @@ public sealed class ZombieSystemTests
         var second = fx.AddInGamePlayer("second-target");
         first.PositionX = 0;
         second.PositionX = 10;
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 4, first.PositionY, 0);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(4, first.PositionY, 0);
 
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(first.RuntimeId, zombie.TargetPlayerRuntimeId);
+        Assert.Equal(first.RuntimeId, Target(system, id));
 
         first.IsInGame = false;
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(second.RuntimeId, zombie.TargetPlayerRuntimeId);
+        Assert.Equal(second.RuntimeId, Target(system, id));
         first.IsInGame = true;
     }
 
@@ -57,18 +79,16 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("disconnect-target");
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 4, player.PositionY, 0);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(4, player.PositionY, 0);
 
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(player.RuntimeId, zombie.TargetPlayerRuntimeId);
+        Assert.Equal(player.RuntimeId, Target(system, id));
         player.IsInGame = false;
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Null(zombie.TargetPlayerRuntimeId);
-        Assert.True(zombie.IsActive);
+        Assert.Null(Target(system, id));
+        Assert.True(system.Stores.Entities.IsAlive(id));
     }
 
     [Fact]
@@ -77,10 +97,8 @@ public sealed class ZombieSystemTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stationary-target");
         player.Chunks.Radius = -1;
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 1, player.PositionY, 0);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnZombie(1, player.PositionY, 0);
 
         system.Tick(fx.Clock, fx.Players.Online); // spawn and initial projection state
         system.Tick(fx.Clock, fx.Players.Online); // attack range: no movement to project
@@ -96,21 +114,20 @@ public sealed class ZombieSystemTests
         var player = fx.AddInGamePlayer("blocked-target");
         player.PositionX = -2;
         player.PositionZ = 0;
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, 2.5f, player.PositionY, 0);
-        Assert.True(store.TryAdd(zombie));
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(2.5f, player.PositionY, 0);
         // A full-height obstacle blocks the direct X route while the neighbouring Z cells remain
         // supported by the flat floor.
         fx.World.SetBlock(1, (int)player.PositionY, 0, Blocks.Stone);
         fx.World.SetBlock(1, (int)player.PositionY + 1, 0, Blocks.Stone);
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 
         for (var i = 0; i < 20; i++)
             system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.NotEqual(0f, zombie.PositionZ);
+        var pos = Pos(system, id);
+        Assert.NotEqual(0f, pos.Z);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(
-            (int)MathF.Floor(zombie.PositionX), (int)MathF.Floor(zombie.PositionY), (int)MathF.Floor(zombie.PositionZ)));
+            (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y), (int)MathF.Floor(pos.Z)));
     }
 
     [Fact]
@@ -118,14 +135,12 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(16f, zombie.Health.Current);
+        Assert.Equal(16f, Health(system, id).Current);
 
         for (var i = 0; i < 4; i++)
         {
@@ -133,17 +148,15 @@ public sealed class ZombieSystemTests
             system.Tick(fx.Clock, fx.Players.Online);
         }
 
-        Assert.Empty(store.Active);
-        Assert.False(zombie.IsActive);
-        Assert.True(zombie.Health.IsDead);
+        Assert.Empty(system.Zombies);
+        Assert.False(system.Stores.Entities.IsAlive(id));
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:rotten_flesh"), loot.Id.Value);
         Assert.True(loot.Id.IsItem);
         Assert.Equal(1, loot.Count);
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Empty(store.Active);
-        Assert.Equal(0f, zombie.Health.Current);
+        Assert.Empty(system.Zombies);
     }
 
     [Fact]
@@ -151,16 +164,32 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 10, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(player.PositionX + 10, player.PositionY, player.PositionZ);
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(zombie.Health.Maximum, zombie.Health.Current);
-        Assert.Single(store.Active);
+        var health = Health(system, id);
+        Assert.Equal(health.Maximum, health.Current);
+        Assert.Single(system.Zombies);
+    }
+
+    [Fact]
+    public void Targeted_attack_only_damages_the_runtime_id_named_by_the_client()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("attacker");
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var first = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
+        var second = system.SpawnZombie(player.PositionX + 2, player.PositionY, player.PositionZ);
+        Assert.True(system.Stores.Identities.TryGet(second, out var secondIdentity));
+
+        player.SubmitAttackIntent(checked((long)secondIdentity.ActorRuntimeId));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(20f, Health(system, first).Current);
+        Assert.Equal(16f, Health(system, second).Current);
     }
 
     [Fact]
@@ -168,10 +197,8 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         // A full store cannot accept a new rotten-flesh cell. The source must therefore remain
         // authoritative rather than becoming a death with silently lost loot.
@@ -179,9 +206,10 @@ public sealed class ZombieSystemTests
             Assert.True(fx.World.FloorDrops.TryAddOrMerge(i + 100, (int)player.PositionY, 0,
                 StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
 
-        Assert.False(system.TryApplyDamage(zombie, DamageSource.Melee, zombie.Health.Maximum, fx.Players.Online));
-        Assert.True(zombie.IsActive);
-        Assert.Equal(zombie.Health.Maximum, zombie.Health.Current);
+        var maxHealth = Health(system, id).Maximum;
+        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online));
+        Assert.True(system.Stores.Entities.IsAlive(id));
+        Assert.Equal(maxHealth, Health(system, id).Current);
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 
@@ -190,10 +218,8 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("target");
-        var store = new ZombieStore();
-        var zombie = new Zombie(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(zombie));
-        var system = new ZombieSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
@@ -216,7 +242,7 @@ public sealed class ZombieSystemTests
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
-        var system = new ZombieSystem(fx.World, fx.Players, new ZombieStore(), fx.Context.ItemPalette);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 
@@ -229,5 +255,58 @@ public sealed class ZombieSystemTests
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);
+    }
+
+    [Fact]
+    public void A_landed_player_hit_knocks_the_zombie_back()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("puncher");
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
+        var beforeX = Pos(system, id).X;
+
+        player.SubmitAttackIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        // Knocked further from the player (+X direction) than a chase step alone would move it.
+        Assert.True(Pos(system, id).X > beforeX);
+    }
+
+    [Fact]
+    public void A_zombie_with_no_player_ever_nearby_despawns_after_the_window_elapses()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("far-away");
+        player.PositionX = 1000; // outside the 64-block despawn radius from tick zero
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(0, player.PositionY, 0);
+
+        fx.Clock.AdvanceBy((int)DespawnLifecycle.DefaultDespawnTicks - 1);
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.True(system.Stores.Entities.IsAlive(id));
+        Assert.Single(system.Zombies);
+
+        fx.Clock.AdvanceBy(1);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.False(system.Stores.Entities.IsAlive(id));
+        Assert.Empty(system.Zombies);
+        Assert.Equal(1, system.DespawnCount);
+    }
+
+    [Fact]
+    public void A_zombie_kept_within_range_of_a_player_never_despawns()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("companion");
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(player.PositionX + 30, player.PositionY, player.PositionZ);
+
+        fx.Clock.AdvanceBy((int)DespawnLifecycle.DefaultDespawnTicks + 100);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(system.Stores.Entities.IsAlive(id));
+        Assert.Equal(0, system.DespawnCount);
     }
 }

@@ -24,7 +24,7 @@ public class SparseFlatColumnTests
     public async Task Legacy_empty_payload_still_migrates_with_Put()
     {
         var storage = new InMemoryChunkStorage();
-        // Biome-only empty header byte 1 — not LooksLikeTerrainPayload (wants 8).
+        // Biome-only empty header byte 1 — not LooksLikeTerrainPayload (wants ChunkPayloads.SubChunkVersion).
         var empty = new ChunkColumnData(new ChunkCoord(2, 3), 0, subChunkCount: 1, extraPayload: [1, 2, 3]);
         await storage.PutAsync(empty);
         var putsBefore = storage.PutCount;
@@ -34,7 +34,7 @@ public class SparseFlatColumnTests
 
         Assert.True(storage.PutCount > putsBefore);
         Assert.True(column.Base.SubChunkCount > 0);
-        Assert.Equal(8, column.Base.ExtraPayload[0]);
+        Assert.Equal(ChunkPayloads.SubChunkVersion, column.Base.ExtraPayload[0]);
     }
 
     [Fact]

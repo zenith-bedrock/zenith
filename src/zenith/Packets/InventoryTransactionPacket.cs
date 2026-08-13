@@ -2,11 +2,40 @@ using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
+readonly struct DecodedTransactionItem
+{
+    public short NetworkId { get; init; }
+    public ushort Count { get; init; }
+    public int Meta { get; init; }
+    public int BlockRuntimeId { get; init; }
+    public int StackNetworkId { get; init; }
+
+    public bool IsEmpty => NetworkId == 0 || Count == 0;
+}
+
+readonly struct DecodedInventoryTransactionAction
+{
+    public uint SourceType { get; init; }
+    public byte? WindowId { get; init; }
+    public uint? SourceFlags { get; init; }
+    public int Slot { get; init; }
+    public DecodedTransactionItem OldItem { get; init; }
+    public DecodedTransactionItem NewItem { get; init; }
+}
+
 /// <summary>
 /// InventoryTransaction (0x1e) — decode parcial focado em UseItem (place/destroy).
 /// </summary>
 class InventoryTransactionPacket : DataPacket
 {
+    // Zenith only accepts a two-action legacy drop today. Keep the decoder bounded before the
+    // handler can reject all other Normal transaction shapes.
+    public const int MaxActions = 64;
+    public const int MaxLegacySetItemContainers = 32;
+    public const int MaxLegacySetItemSlotsPerContainer = 64;
+    public const uint SourceContainer = 0;
+    public const uint SourceWorld = 2;
+
     public const int UseClickBlock = 0;
     public const int UseClickAir = 1;
     public const int UseDestroyBlock = 2;
@@ -14,6 +43,8 @@ class InventoryTransactionPacket : DataPacket
 
     public const int ActorInteract = 0;
     public const int ActorAttack = 1;
+
+    public const int ReleaseActionRelease = 0;
 
     public const uint TypeNormal = 0;
     public const uint TypeMismatch = 1;
@@ -24,12 +55,21 @@ class InventoryTransactionPacket : DataPacket
     public override int Id => (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET;
 
     public uint TransactionType { get; set; }
+    public int LegacyRequestId { get; set; }
+    public bool HasLegacySetItemSlots { get; set; }
+    public DecodedInventoryTransactionAction[] Actions { get; set; } = [];
     public int UseActionType { get; set; }
     public int BlockX { get; set; }
     public int BlockY { get; set; }
     public int BlockZ { get; set; }
     public byte BlockFace { get; set; }
     public int HotbarSlot { get; set; }
+    /// <summary>
+    /// Client's runtime-id precondition for the block it clicked. Zero means the client did
+    /// not supply a target-state precondition; a nonzero value must agree with the authoritative
+    /// world snapshot before a placement is accepted.
+    /// </summary>
+    public int ClickedBlockRuntimeId { get; set; }
     public int HeldBlockRuntimeId { get; set; }
     public float FromX { get; set; }
     public float FromY { get; set; }
@@ -40,19 +80,30 @@ class InventoryTransactionPacket : DataPacket
 
     public long TargetActorRuntimeId { get; set; }
     public int ActorActionType { get; set; }
+    public int ReleaseActionType { get; set; }
+    /// <summary>
+    /// Client-declared stack for the specific item-use transaction. It is diagnostic/input
+    /// context only: Gameplay always resolves the authoritative stack from <see cref="HotbarSlot"/>.
+    /// </summary>
+    public DecodedTransactionItem HeldItem { get; set; }
 
     public override Span<byte> Encode() => Array.Empty<byte>();
 
     public override void Decode(ref BinaryStream stream)
     {
-        stream.ReadVarInt(); // legacyRequestId
-        if (stream.ReadBool())
+        LegacyRequestId = stream.ReadVarInt();
+        HasLegacySetItemSlots = stream.ReadBool();
+        if (HasLegacySetItemSlots)
         {
             var slotCount = stream.ReadUnsignedVarInt();
+            if (slotCount > MaxLegacySetItemContainers)
+                throw new InvalidDataException($"InventoryTransaction has {slotCount} legacy containers (max {MaxLegacySetItemContainers}).");
             for (var i = 0; i < slotCount; i++)
             {
                 stream.ReadByte();
                 var inner = stream.ReadUnsignedVarInt();
+                if (inner > MaxLegacySetItemSlotsPerContainer)
+                    throw new InvalidDataException($"InventoryTransaction legacy container has {inner} slots (max {MaxLegacySetItemSlotsPerContainer}).");
                 for (var j = 0; j < inner; j++) stream.ReadByte();
             }
         }
@@ -61,8 +112,12 @@ class InventoryTransactionPacket : DataPacket
         TransactionType = (uint)stream.ReadUnsignedVarInt();
         stream.ReadBool(); // has actions marker
         var actionCount = stream.ReadUnsignedVarInt();
+        if (actionCount > MaxActions)
+            throw new InvalidDataException($"InventoryTransaction has {actionCount} actions (max {MaxActions}).");
+        var actions = new DecodedInventoryTransactionAction[actionCount];
         for (var i = 0; i < actionCount; i++)
-            SkipInventoryAction(ref stream);
+            actions[i] = ReadInventoryAction(ref stream);
+        Actions = actions;
 
         // if (TransactionType != TypeUseItem) return;
 
@@ -80,16 +135,25 @@ class InventoryTransactionPacket : DataPacket
         }
     }
 
-    private static void SkipInventoryAction(ref BinaryStream stream)
+    private static DecodedInventoryTransactionAction ReadInventoryAction(ref BinaryStream stream)
     {
-        stream.ReadUnsignedVarInt(); // source type
-        stream.ReadBool();
-        if (stream.ReadBool()) stream.ReadByte(); // window
-        stream.ReadBool();
-        if (stream.ReadBool()) stream.ReadUnsignedVarInt(); // flags
-        stream.ReadUnsignedVarInt(); // slot
-        SkipNetworkItem(ref stream);
-        SkipNetworkItem(ref stream);
+        var sourceType = (uint)stream.ReadUnsignedVarInt();
+        _ = stream.ReadBool(); // required marker around the window optional
+        byte? window = stream.ReadBool() ? stream.ReadByte() : null;
+        _ = stream.ReadBool(); // required marker around the source-flags optional
+        uint? flags = stream.ReadBool() ? (uint)stream.ReadUnsignedVarInt() : null;
+        var slot = stream.ReadUnsignedVarInt();
+        var oldItem = ReadNetworkItem(ref stream);
+        var newItem = ReadNetworkItem(ref stream);
+        return new DecodedInventoryTransactionAction
+        {
+            SourceType = sourceType,
+            WindowId = window,
+            SourceFlags = flags,
+            Slot = slot,
+            OldItem = oldItem,
+            NewItem = newItem
+        };
     }
 
     private void SkipInventoryItemUseAction(ref BinaryStream stream)
@@ -101,7 +165,8 @@ class InventoryTransactionPacket : DataPacket
         BlockZ = stream.ReadVarInt();
         BlockFace = stream.ReadByte();
         HotbarSlot = stream.ReadVarInt();
-        HeldBlockRuntimeId = SkipNetworkItemReadBlockRuntimeId(ref stream);
+        HeldItem = ReadNetworkItem(ref stream);
+        HeldBlockRuntimeId = HeldItem.BlockRuntimeId;
 
         // position + clicked + ids ignored for gameplay; remaining bytes left unread OK (stream disposed).
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -112,7 +177,7 @@ class InventoryTransactionPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
-        _ = stream.ReadUnsignedVarInt(); // block runtime under cursor
+        ClickedBlockRuntimeId = stream.ReadUnsignedVarInt(); // block runtime under cursor
         _ = stream.ReadByte(); // client interact prediction
         _ = stream.ReadByte(); // client cooldown state
     }
@@ -122,7 +187,7 @@ class InventoryTransactionPacket : DataPacket
         TargetActorRuntimeId = stream.ReadUnsignedVarLong();
         ActorActionType = stream.ReadVarInt();
         HotbarSlot = stream.ReadVarInt();
-        SkipNetworkItem(ref stream);
+        HeldItem = ReadNetworkItem(ref stream);
         FromX = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromY = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromZ = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -133,47 +198,34 @@ class InventoryTransactionPacket : DataPacket
 
     private void SkipItemReleaseAction(ref BinaryStream stream)
     {
-        _ = stream.ReadVarInt(); // action type (Release/Use)
-        _ = stream.ReadVarInt(); // slot
-        SkipNetworkItem(ref stream);
+        ReleaseActionType = stream.ReadVarInt();
+        HotbarSlot = stream.ReadVarInt();
+        HeldItem = ReadNetworkItem(ref stream);
         FromX = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromY = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromZ = stream.ReadFloat(BinaryStream.Endianess.Little);
     }
 
-    private static void SkipNetworkItem(ref BinaryStream stream) => SkipNetworkItemPublic(ref stream);
-
     /// <summary>Skip a NetworkItem for AuthInput item-interaction branch.</summary>
-    internal static void SkipNetworkItemPublic(ref BinaryStream stream)
+    internal static void SkipNetworkItemPublic(ref BinaryStream stream) => _ = ReadNetworkItem(ref stream);
+
+    private static DecodedTransactionItem ReadNetworkItem(ref BinaryStream stream)
     {
-        stream.ReadShort(BinaryStream.Endianess.Little); // id
-        stream.ReadUShort(BinaryStream.Endianess.Little); // count
-        stream.ReadUnsignedVarInt(); // meta
-        if (stream.ReadBool())
-        {
-            stream.ReadUnsignedVarInt();
-            stream.ReadVarInt();
-        }
-
-        stream.ReadUnsignedVarInt(); // block runtime
-        var extraLen = stream.ReadUnsignedVarInt();
-        if (extraLen > 0) stream.ReadSpan(extraLen);
-    }
-
-    private static int SkipNetworkItemReadBlockRuntimeId(ref BinaryStream stream)
-    {
-        stream.ReadShort(BinaryStream.Endianess.Little);
-        stream.ReadUShort(BinaryStream.Endianess.Little);
-        stream.ReadUnsignedVarInt();
-        if (stream.ReadBool())
-        {
-            stream.ReadUnsignedVarInt();
-            stream.ReadVarInt();
-        }
-
+        var networkId = stream.ReadShort(BinaryStream.Endianess.Little);
+        var count = stream.ReadUShort(BinaryStream.Endianess.Little);
+        var meta = stream.ReadUnsignedVarInt();
+        var stackNetworkId = stream.ReadBool() ? stream.ReadVarInt() : 0;
         var blockRuntimeId = stream.ReadUnsignedVarInt();
         var extraLen = stream.ReadUnsignedVarInt();
         if (extraLen > 0) stream.ReadSpan(extraLen);
-        return blockRuntimeId;
+        return new DecodedTransactionItem
+        {
+            NetworkId = networkId,
+            Count = count,
+            Meta = meta,
+            StackNetworkId = stackNetworkId,
+            BlockRuntimeId = blockRuntimeId
+        };
     }
+
 }

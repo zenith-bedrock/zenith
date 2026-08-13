@@ -10,6 +10,8 @@ sealed partial class LevelEventPacket : DataPacket
     public const int EventStartBlockCracking = 3600;
     public const int EventStopBlockCracking = 3601;
     public const int EventBlockBreakSpeed = 3602;
+    /// <summary>Stable Bedrock particle id — Creeper explosion visual (Phase XV).</summary>
+    public const int EventParticleExplosion = 2013;
 
     [WireVar]
     public int EventType { get; set; }

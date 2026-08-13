@@ -31,7 +31,15 @@ sealed class PlayerInventory
     /// <summary>Sentinel de domínio para o cursor ISR (não é slot 0–35).</summary>
     public const int CursorSlot = -1;
 
+    /// <summary>Helmet/chestplate/leggings/boots (Phase XI.2) — a separate 4-slot area, not bag storage.</summary>
+    public const int ArmorSize = 4;
+    public const int ArmorHelmetSlot = 0;
+    public const int ArmorChestplateSlot = 1;
+    public const int ArmorLeggingsSlot = 2;
+    public const int ArmorBootsSlot = 3;
+
     private readonly InventorySlot[] _slots = new InventorySlot[FullInventorySize];
+    private readonly InventorySlot[] _armor = new InventorySlot[ArmorSize];
     private InventorySlot _cursor = InventorySlot.Empty;
 
     /// <param name="seedStarterHotbar">
@@ -59,16 +67,50 @@ sealed class PlayerInventory
 
     public InventorySlot Cursor => _cursor;
 
-    /// <summary>GameLoop-only clear of every bag and cursor location as one domain operation.</summary>
+    /// <summary>GameLoop-only clear of every bag, armor and cursor location as one domain operation.</summary>
     public void Clear()
     {
         Array.Fill(_slots, InventorySlot.Empty);
+        Array.Fill(_armor, InventorySlot.Empty);
         _cursor = InventorySlot.Empty;
     }
 
     public static bool IsValidHotbarSlot(int slot) => slot is >= 0 and < HotbarSize;
 
     public static bool IsValidInventorySlot(int slot) => slot is >= 0 and < FullInventorySize;
+
+    public static bool IsValidArmorSlot(int slot) => slot is >= 0 and < ArmorSize;
+
+    public InventorySlot GetArmor(int slot) => IsValidArmorSlot(slot) ? _armor[slot] : InventorySlot.Empty;
+
+    public bool TrySetArmor(int slot, StackId id, int count)
+    {
+        if (!IsValidArmorSlot(slot) || !IsValidStackCount(count)) return false;
+        _armor[slot] = count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air)
+            ? InventorySlot.Empty
+            : new InventorySlot(id, count);
+        return true;
+    }
+
+    public InventorySlot[] SnapshotArmor()
+    {
+        var copy = new InventorySlot[ArmorSize];
+        Array.Copy(_armor, copy, ArmorSize);
+        return copy;
+    }
+
+    public void RestoreArmorSnapshot(InventorySlot[] snapshot) => Array.Copy(snapshot, _armor, ArmorSize);
+
+    public bool TryLoadArmorFromBlob(ReadOnlySpan<byte> data)
+    {
+        Span<InventorySlot> slots = stackalloc InventorySlot[ArmorSize];
+        if (!SlotBlob.TryUnpack(data, slots))
+            return false;
+        slots.CopyTo(_armor);
+        return true;
+    }
+
+    public byte[] PackArmorBlob() => SlotBlob.Pack(_armor);
 
     public static bool IsValidLocation(int slot) =>
         slot == CursorSlot || IsValidInventorySlot(slot);

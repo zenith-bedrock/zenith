@@ -108,6 +108,9 @@ class NetworkSession
     internal void SendDataPacket(
         RakNetSession.Priority priority, byte compression, byte orderChannel, params DataPacket[] packets)
     {
+        var packetNames = string.Join(", ", packets.Select(DescribeOutboundPacket));
+        Context.Logger.Debug($"Protocol outbound -> {RakSession.EndPoint} channel={orderChannel} {packetNames}");
+
         var gamePacket = new GamePacket
         {
             Compression = compression,
@@ -124,6 +127,27 @@ class NetworkSession
 
         Context.Diagnostics.RecordPacketSent(packets.Length, frame.Buffer.Length);
         RakSession.SendFrame(frame, priority);
+    }
+
+    private static string DescribeOutboundPacket(DataPacket packet) => packet switch
+    {
+        AddActorPacket actor =>
+            $"AddActorPacket(0x{actor.Id:X}, type={actor.EntityType}, uid={actor.EntityUniqueId}, rid={actor.EntityRuntimeId}, attrs=none)",
+        UpdateAttributesPacket attributes =>
+            $"UpdateAttributesPacket(0x{attributes.Id:X}, rid={attributes.ActorRuntimeId}, attrs={string.Join('|', attributes.Attributes.Select(attribute => attribute.Name))})",
+        PlayerListPacket players => DescribePlayerList(players),
+        InventoryContentPacket inventory =>
+            $"InventoryContentPacket(0x{inventory.Id:X}, window={inventory.WindowId}, slots={inventory.Slots.Length}, nonAir={inventory.Slots.Count(slot => slot.NetworkId != 0)})",
+        _ => $"{packet.GetType().Name}(0x{packet.Id:X})"
+    };
+
+    private static string DescribePlayerList(PlayerListPacket packet)
+    {
+        var skin = packet.Entries.FirstOrDefault(entry => entry.Skin is not null).Skin;
+        var skinSummary = skin is { } value
+            ? $"skin={value.Image.Width}x{value.Image.Height}/{value.Image.Data?.Length ?? 0}B persona={value.PersonaPieces?.Length ?? 0} tint={value.TintPieces?.Length ?? 0} anim={value.Animations?.Length ?? 0}"
+            : $"rgbaFallback={packet.Entries.Count(entry => entry.SkinRgba is { Length: > 0 })}";
+        return $"PlayerListPacket(0x{packet.Id:X}, type={(packet.Type == PlayerListPacket.TypeAdd ? "add" : "remove")}, entries={packet.Entries.Length}, {skinSummary})";
     }
 
     public void Disconnect() => RakSession.Disconnect();

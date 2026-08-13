@@ -89,6 +89,18 @@ sealed class World
         return blob is not null && inventory.TryLoadMainFromBlob(blob);
     }
 
+    public void PersistArmor(Player.Player player)
+    {
+        if (!player.IdentityStable) return;
+        _ = _storage.PutArmorAsync(player.Uuid, player.Inventory.PackArmorBlob());
+    }
+
+    public bool TryLoadArmor(Guid uuid, Player.PlayerInventory inventory)
+    {
+        var blob = _storage.GetArmorAsync(uuid).AsTask().GetAwaiter().GetResult();
+        return blob is not null && inventory.TryLoadArmorFromBlob(blob);
+    }
+
     /// <summary>Quit / gamemode Persist — skips unstable identity (ADR §60).</summary>
     public void PersistPlayerData(Player.Player player)
     {
@@ -99,19 +111,26 @@ sealed class World
             player.PositionZ,
             player.Yaw,
             player.Pitch,
-            player.GameMode);
+            player.GameMode,
+            player.ExperienceLevel,
+            player.ExperiencePoints);
         _ = _storage.PutPlayerDataAsync(player.Uuid, blob);
     }
 
     /// <summary>
     /// Login hydrate. False = miss / corrupt / OOB → caller keeps terrain spawn + config GameMode.
     /// </summary>
-    public bool TryLoadPlayerData(Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode)
+    public bool TryLoadPlayerData(
+        Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode,
+        out int experienceLevel, out int experiencePoints)
     {
         x = y = z = yaw = pitch = 0;
         mode = Player.GameMode.Survival;
+        experienceLevel = 0;
+        experiencePoints = 0;
         var blob = _storage.GetPlayerDataAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && PlayerDataBlob.TryUnpack(blob, out x, out y, out z, out yaw, out pitch, out mode);
+        return blob is not null && PlayerDataBlob.TryUnpack(
+            blob, out x, out y, out z, out yaw, out pitch, out mode, out experienceLevel, out experiencePoints);
     }
 
     /// <summary>
@@ -343,8 +362,12 @@ sealed class World
     /// </summary>
     private static bool LooksLikeTerrainPayload(ChunkColumnData column)
     {
-        // Subchunk network version 8 header (flat and noise columns).
-        return column.ExtraPayload.Length >= 3 && column.ExtraPayload[0] == 8;
+        // Reads ChunkPayloads.SubChunkVersion instead of a local literal — a hardcoded second
+        // copy of the subchunk version byte (previously 8, stale after ChunkPayloads moved to 9)
+        // is exactly what let every stored column silently fail this check and get needlessly
+        // re-generated/re-Put on every load. One source of truth, not two numbers that must be
+        // kept in sync by hand.
+        return column.ExtraPayload.Length >= 3 && column.ExtraPayload[0] == ChunkPayloads.SubChunkVersion;
     }
 
     private static int ToChunk(int block) => ChunkMath.BlockToChunk(block);

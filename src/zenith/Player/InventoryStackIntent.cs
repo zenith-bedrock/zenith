@@ -8,7 +8,9 @@ enum InventoryStackActionKind : byte
     CraftRecipe = 3,
     Create = 4,
     NoOp = 5,
-    CraftCreative = 6
+    CraftCreative = 6,
+    Destroy = 7,
+    Mine = 8
 }
 
 /// <summary>Wire container + slot from client ISR — echoed in ItemStackResponse.</summary>
@@ -92,6 +94,23 @@ readonly struct InventoryStackAction
     public static InventoryStackAction Drop(int from, int count) =>
         Drop(Legacy(from), count, default);
 
+    /// <summary>Creative-only delete from a source slot; never becomes a world drop.</summary>
+    public static InventoryStackAction Destroy(InventorySlotReference from, int count, WireSlot fromWire) => new()
+    {
+        Kind = InventoryStackActionKind.Destroy,
+        From = from,
+        Count = count,
+        FromWire = fromWire
+    };
+
+    /// <summary>Durability reconciliation after a mined block; no item mutation without a durability model.</summary>
+    public static InventoryStackAction Mine(InventorySlotReference from, WireSlot fromWire) => new()
+    {
+        Kind = InventoryStackActionKind.Mine,
+        From = from,
+        FromWire = fromWire
+    };
+
     public static InventoryStackAction Craft(uint recipeNetId, byte craftTimes = 1) => new()
     {
         Kind = InventoryStackActionKind.CraftRecipe,
@@ -135,14 +154,25 @@ readonly struct InventoryStackIntent
     /// an open container (or is a direct characterization-test intent).
     /// </summary>
     public uint ExpectedOpenContainerGeneration { get; init; }
+    /// <summary>
+    /// True when this request needs an active UI/container even if it arrived just after an
+    /// <see cref="InventoryWindowIntent"/> that has not reached the GameLoop yet. The optional
+    /// target is revalidated by <c>InventorySystem</c> before any slot is resolved.
+    /// </summary>
+    public bool RequiresOpenContainer { get; init; }
+    public OpenContainerSession.TargetKind? RequiredOpenContainerTarget { get; init; }
 
     public static InventoryStackIntent Create(
         int requestId,
         InventoryStackAction[] actions,
-        uint expectedOpenContainerGeneration = 0) => new()
+        uint expectedOpenContainerGeneration = 0,
+        bool requiresOpenContainer = false,
+        OpenContainerSession.TargetKind? requiredOpenContainerTarget = null) => new()
     {
         RequestId = requestId,
         Actions = actions,
-        ExpectedOpenContainerGeneration = expectedOpenContainerGeneration
+        ExpectedOpenContainerGeneration = expectedOpenContainerGeneration,
+        RequiresOpenContainer = requiresOpenContainer,
+        RequiredOpenContainerTarget = requiredOpenContainerTarget
     };
 }

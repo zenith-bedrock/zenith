@@ -46,13 +46,13 @@ sealed class AddActorPacket : DataPacket
         writer.WriteFloat(Yaw, BinaryStream.Endianess.Little);
         writer.WriteFloat(HeadYaw, BinaryStream.Endianess.Little);
         writer.WriteFloat(BodyYaw, BinaryStream.Endianess.Little);
-        writer.WriteUnsignedVarInt(0); // Attributes — empty (Zenith sends none for falling_block)
+        writer.WriteUnsignedVarInt(0); // Attributes — emitted separately by UpdateAttributesPacket.
         if (ZombieMetadata)
             EntityMetadataWriter.WriteZombieMetadata(ref writer);
         else if (Variant is { } variant)
             EntityMetadataWriter.WriteFallingBlockMetadata(ref writer, variant);
         else
-            writer.WriteUnsignedVarInt(0); // EntityMetadata — empty
+            EntityMetadataWriter.WriteScaleMetadata(ref writer);
         writer.WriteUnsignedVarInt(0); // EntityProperties.int list — empty
         writer.WriteUnsignedVarInt(0); // EntityProperties.float list — empty
         writer.WriteUnsignedVarInt(0); // EntityLinks — empty

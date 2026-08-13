@@ -73,6 +73,14 @@ sealed class InventorySystem : IGameSystem
         switch (intent.Action)
         {
             case InventoryWindowIntent.Kind.OpenInventory:
+                // Bedrock may retransmit Interact(OpenInventory) while awaiting the first
+                // ContainerOpen. Re-emitting ContainerOpen for an already-open player view can
+                // crash the client (Dragonfly's handler_interact documents this behavior).
+                // The open-container state is gameplay-owned, so coalesce it here rather than
+                // making the network handler a second writer.
+                if (player.InventoryWindowOpen)
+                    return;
+
                 if (player.OpenChest.HasValue)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
                 var inventorySession = player.OpenPlayerContainer(
@@ -159,9 +167,11 @@ sealed class InventorySystem : IGameSystem
             return;
         }
 
-        if (intent.ExpectedOpenContainerGeneration != 0 &&
+        if ((intent.RequiresOpenContainer || intent.ExpectedOpenContainerGeneration != 0) &&
             (player.OpenContainer is not { } openContainer ||
-             openContainer.Generation != intent.ExpectedOpenContainerGeneration))
+             (intent.RequiredOpenContainerTarget is { } requiredTarget && openContainer.Target != requiredTarget) ||
+             (intent.ExpectedOpenContainerGeneration != 0 &&
+              openContainer.Generation != intent.ExpectedOpenContainerGeneration)))
         {
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
@@ -186,6 +196,7 @@ sealed class InventorySystem : IGameSystem
         }
 
         var invSnap = inventory.CaptureSnapshot();
+        var armorSnap = inventory.SnapshotArmor();
         var craftSnap = player.CraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
         OpenChestView? chestView = player.OpenChest;
@@ -225,7 +236,9 @@ sealed class InventorySystem : IGameSystem
 
                 case InventoryStackActionKind.CraftCreative:
                     // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
-                    if (player.GameMode != GameMode.Creative ||
+                    // CreatedOutput is authoritative pending state: never overwrite a prior result.
+                    if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty ||
+                        player.GameMode != GameMode.Creative ||
                         !_creative.TryGet(action.CreativeNetId, out var creativeId, out _) ||
                         !TrySetSlot(player, InventorySlotReference.CraftResult,
                             new InventorySlot(creativeId, PlayerInventory.MaxStack)))
@@ -278,6 +291,32 @@ sealed class InventorySystem : IGameSystem
                     break;
                 }
 
+                case InventoryStackActionKind.Destroy:
+                    // The Bedrock Destroy request is the Creative UI's delete gesture. It is not
+                    // a drop and cannot be used to delete survival state.
+                    if (player.GameMode != GameMode.Creative ||
+                        !TryDestroy(player, action.From, action.Count))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, action.From, action.FromWire);
+                    break;
+
+                case InventoryStackActionKind.Mine:
+                    // Bedrock's MineBlock ISR is its durability reconciliation hook. Zenith has
+                    // no durability component yet, so validate the advertised held stack and
+                    // echo it through ItemStackResponse without inventing a mutation here.
+                    if (!IsValidReference(player, action.From))
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    AddWireTouch(wireTouches, action.From, action.FromWire);
+                    break;
+
                 default:
                 {
                     var count = action.Count;
@@ -311,6 +350,7 @@ sealed class InventorySystem : IGameSystem
         if (!ok)
         {
             inventory.RestoreSnapshot(invSnap);
+            inventory.RestoreArmorSnapshot(armorSnap);
             player.CraftUi.RestoreSnapshot(craftSnap);
             if (chestView is { } cvFail && chestSnap is not null)
                 _world.Chests.RestoreOpenSnapshot(cvFail, chestSnap);
@@ -328,6 +368,22 @@ sealed class InventorySystem : IGameSystem
         if (chestView is { } openAfter)
             protocol.SendChestContent(_world.Chests, openAfter);
         _world.PersistInventory(player);
+
+        var armorTouched = false;
+        foreach (var touch in wireTouches)
+        {
+            if (touch.Reference.Area != InventorySlotArea.Armor) continue;
+            armorTouched = true;
+            break;
+        }
+
+        if (armorTouched)
+        {
+            protocol.SendArmorContent(inventory);
+            _world.PersistArmor(player);
+            ArmorFanout.Broadcast(player, online);
+        }
+
         if (chestView is { } openChest)
         {
             _world.PersistChest(openChest.PrimaryX, openChest.PrimaryY, openChest.PrimaryZ);
@@ -354,6 +410,8 @@ sealed class InventorySystem : IGameSystem
                     break;
 
                 case InventoryStackActionKind.Drop:
+                case InventoryStackActionKind.Destroy:
+                case InventoryStackActionKind.Mine:
                     if (!protocol.MatchesAdvertisedStackNetId(action.From, action.FromWire.StackNetworkId))
                         return false;
                     break;
@@ -377,6 +435,7 @@ sealed class InventorySystem : IGameSystem
 
         var src = GetSlot(player, from);
         if (src.IsEmpty || count > src.Count) return false;
+        if (!CanPlaceInArmorSlot(player, to, src)) return false;
 
         var dst = GetSlot(player, to);
         if (!dst.IsEmpty && dst.Id != src.Id) return false;
@@ -413,6 +472,21 @@ sealed class InventorySystem : IGameSystem
         return true;
     }
 
+    private bool TryDestroy(
+        global::Zenith.Player.Player player,
+        in InventorySlotReference from,
+        int count)
+    {
+        if (!IsValidReference(player, from)) return false;
+        if (count <= 0 || !PlayerInventory.IsValidStackCount(count)) return false;
+
+        var src = GetSlot(player, from);
+        if (src.IsEmpty || count > src.Count) return false;
+
+        var left = src.Count - count;
+        return TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left });
+    }
+
     private bool TrySwap(global::Zenith.Player.Player player, in InventorySlotReference a, in InventorySlotReference b)
     {
         if (a == b) return false;
@@ -420,9 +494,22 @@ sealed class InventorySystem : IGameSystem
 
         var sa = GetSlot(player, a);
         var sb = GetSlot(player, b);
+        if (!CanPlaceInArmorSlot(player, a, sb) || !CanPlaceInArmorSlot(player, b, sa)) return false;
         if (!TrySetSlot(player, a, sb)) return false;
         if (!TrySetSlot(player, b, sa)) return false;
         return true;
+    }
+
+    /// <summary>
+    /// Server-authoritative armor slot-type guard (Phase XI.2): a piece can only land in the armor
+    /// slot matching its equipment kind. Every other area accepts any item, unchanged.
+    /// </summary>
+    private static bool CanPlaceInArmorSlot(global::Zenith.Player.Player player, in InventorySlotReference reference, InventorySlot value)
+    {
+        if (reference.Area != InventorySlotArea.Armor) return true;
+        if (value.IsEmpty) return true;
+        return ArmorItems.TryGet(player.Session.Context.ItemPalette, value.Id, out var slot, out _) &&
+               slot == reference.Index;
     }
 
     private bool IsValidReference(global::Zenith.Player.Player player, in InventorySlotReference reference)
@@ -436,6 +523,7 @@ sealed class InventorySystem : IGameSystem
             InventorySlotArea.CraftResult => reference.Index == 0,
             InventorySlotArea.Cursor => reference.Index == 0,
             InventorySlotArea.PlayerInventory => PlayerInventory.IsValidInventorySlot(reference.Index),
+            InventorySlotArea.Armor => PlayerInventory.IsValidArmorSlot(reference.Index),
             _ => false
         };
     }

@@ -67,6 +67,24 @@ sealed class InventoryProtocol
         });
     }
 
+    /// <summary>Window 120 — 4-slot armor (helmet/chestplate/leggings/boots), Phase XI.2.</summary>
+    public void SendArmorContent(PlayerInventory inventory)
+    {
+        var wire = new NetworkItemStack[PlayerInventory.ArmorSize];
+        for (var i = 0; i < wire.Length; i++)
+            wire[i] = DescribeForWire(InventorySlotReference.Armor(i), inventory.GetArmor(i));
+
+        _session.SendDataPacket(new InventoryContentPacket
+        {
+            WindowId = InventoryContainerMap.WindowArmor,
+            Slots = wire
+        });
+    }
+
+    /// <summary>Peer display (MobArmorEquipment fan-out) — no stack net id allocation.</summary>
+    public NetworkItemStack DescribeArmor(PlayerInventory inventory, int slot) =>
+        ToNetworkStack(inventory.GetArmor(slot), stackNetworkId: 0);
+
     /// <summary>Window 124 — 54-slot UI inventory (cursor at 0, craft grid 28–31, result 50).</summary>
     public void SendUiInventoryContent(global::Zenith.Player.Player player)
     {
