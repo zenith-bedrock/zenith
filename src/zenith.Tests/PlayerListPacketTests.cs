@@ -58,8 +58,8 @@ public class PlayerListPacketTests
         var skin = SerializedSkin.Read(ref stream); // placeholder skin — byte-compatible with SkinWire.Write
         Assert.NotEqual("", skin.Id);
 
-        Assert.Equal("True", stream.ReadVarString()); // trusted_skin_flag — inside the skin write, not trailing
-        Assert.Equal("", stream.ReadVarString()); // profile_hash
+        Assert.True(skin.Trusted); // trusted_skin_flag is inside SerializedSkin in protocol 2168
+        Assert.Equal("", skin.ProfileHash);
 
         Assert.False(stream.ReadBool()); // is_teacher
         Assert.False(stream.ReadBool()); // is_host

@@ -3,14 +3,8 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>
-/// PlayerSkin (0x5d). The wire's <c>skin</c> field (<c>SerializedSkinRef</c>) carries two more
-/// fields than <see cref="SerializedSkin"/>'s shared Write/Read (used by PlayerListPacket too,
-/// which does not have them at the same position — ADR §90 fix stays local to this packet
-/// instead of touching the shared type): a name-coded <c>trusted_skin_flag</c> enum
-/// (Unset/False/True, spelled as its member name string on the wire) and a <c>profile_hash</c>
-/// string, both right after <c>overrides_player_appearance</c> and before the packet's own
-/// <c>localized_new_skin_name</c>/<c>localized_old_skin_name</c>. There is no separate trailing
-/// packet-level bool — that was a phantom field.
+/// PlayerSkin (0x5d). PlayerList and PlayerSkin share the complete protocol-2168 SerializedSkin, including its
+/// trusted-skin flag and profile hash. The remaining two strings are packet-local names.
 /// </summary>
 sealed class PlayerSkinPacket : DataPacket
 {
@@ -26,8 +20,7 @@ sealed class PlayerSkinPacket : DataPacket
     {
         Uuid = stream.ReadUuid().ToString("D");
         Skin = SerializedSkin.Read(ref stream);
-        IsVerified = string.Equals(stream.ReadVarString(), "True", StringComparison.OrdinalIgnoreCase);
-        _ = stream.ReadVarString(); // profile_hash — unused
+        IsVerified = Skin.Trusted;
         SkinName = stream.ReadVarString();
         OldSkinName = stream.ReadVarString();
     }
@@ -37,9 +30,7 @@ sealed class PlayerSkinPacket : DataPacket
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
         writer.WriteUuid(Guid.Parse(Uuid));
-        Skin.Write(ref writer);
-        writer.WriteVarString(IsVerified ? "True" : "False"); // trusted_skin_flag
-        writer.WriteVarString(""); // profile_hash
+        (Skin with { Trusted = IsVerified, ProfileHash = "" }).Write(ref writer);
         writer.WriteVarString(SkinName);
         writer.WriteVarString(OldSkinName);
         return writer.GetBufferDisposing();

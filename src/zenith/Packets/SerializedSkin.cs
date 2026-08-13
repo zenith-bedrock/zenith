@@ -32,6 +32,8 @@ readonly struct SerializedSkin
     public bool IsPersonaCapeOnClassic { get; init; }
     public bool IsPrimaryUser { get; init; }
     public bool OverridesPlayerAppearance { get; init; }
+    public bool Trusted { get; init; }
+    public string ProfileHash { get; init; }
 
     public static SerializedSkin Read(ref BinaryStream stream)
     {
@@ -41,7 +43,7 @@ readonly struct SerializedSkin
         var image = SkinImage.Read(ref stream);
         ValidateImageOrThrow(image, "skin", allowEmpty: true);
 
-        var animCount = stream.ReadUInt(BinaryStream.Endianess.Little);
+        var animCount = stream.ReadUnsignedVarInt();
         if (animCount > MaxAnimations)
             throw new InvalidOperationException($"Skin animation count {animCount} exceeds cap {MaxAnimations}.");
         var animations = new SkinAnimation[animCount];
@@ -54,33 +56,35 @@ readonly struct SerializedSkin
         var capeImage = SkinImage.Read(ref stream);
         ValidateImageOrThrow(capeImage, "cape", allowEmpty: true);
 
-        var geometryData = stream.ReadVarString();
-        var geometryVersion = stream.ReadVarString();
-        var animationData = stream.ReadVarString();
+        var geometryData = System.Text.Encoding.UTF8.GetString(stream.ReadByteArray());
+        var geometryVersion = System.Text.Encoding.UTF8.GetString(stream.ReadByteArray());
+        var animationData = System.Text.Encoding.UTF8.GetString(stream.ReadByteArray());
         var capeId = stream.ReadVarString();
         var fullId = stream.ReadVarString();
-        var armSize = stream.ReadVarString();
-        var skinColor = stream.ReadVarString();
+        var armSize = stream.ReadByte() == 0 ? "slim" : "wide";
+        var skinColor = FormatColor(stream.ReadUInt(BinaryStream.Endianess.Big));
 
-        var personaCount = stream.ReadUInt(BinaryStream.Endianess.Little);
+        var personaCount = stream.ReadUnsignedVarInt();
         if (personaCount > MaxPersonaPieces)
             throw new InvalidOperationException($"Persona piece count {personaCount} exceeds cap {MaxPersonaPieces}.");
         var personaPieces = new SkinPersonaPiece[personaCount];
         for (var i = 0; i < personaCount; i++)
             personaPieces[i] = SkinPersonaPiece.Read(ref stream);
 
-        var tintCount = stream.ReadUInt(BinaryStream.Endianess.Little);
+        var tintCount = stream.ReadUnsignedVarInt();
         if (tintCount > MaxTintPieces)
             throw new InvalidOperationException($"Tint piece count {tintCount} exceeds cap {MaxTintPieces}.");
         var tintPieces = new SkinPersonaTintPiece[tintCount];
         for (var i = 0; i < tintCount; i++)
-            tintPieces[i] = SkinPersonaTintPiece.Read(ref stream, MaxTintColors);
+            tintPieces[i] = SkinPersonaTintPiece.Read(ref stream);
 
         var isPremium = stream.ReadBool();
         var isPersona = stream.ReadBool();
         var isPersonaCapeOnClassic = stream.ReadBool();
         var isPrimaryUser = stream.ReadBool();
         var overridesPlayerAppearance = stream.ReadBool();
+        var trusted = string.Equals(stream.ReadVarString(), "true", StringComparison.OrdinalIgnoreCase);
+        var profileHash = stream.ReadVarString();
 
         return new SerializedSkin
         {
@@ -103,7 +107,9 @@ readonly struct SerializedSkin
             IsPersona = isPersona,
             IsPersonaCapeOnClassic = isPersonaCapeOnClassic,
             IsPrimaryUser = isPrimaryUser,
-            OverridesPlayerAppearance = overridesPlayerAppearance
+            OverridesPlayerAppearance = overridesPlayerAppearance,
+            Trusted = trusted,
+            ProfileHash = profileHash
         };
     }
 
@@ -115,27 +121,27 @@ readonly struct SerializedSkin
         Image.Write(ref writer);
 
         var anims = Animations ?? [];
-        writer.WriteUInt((uint)anims.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(anims.Length);
         foreach (var a in anims)
             a.Write(ref writer);
 
         CapeImage.Write(ref writer);
 
-        writer.WriteVarString(GeometryData);
-        writer.WriteVarString(GeometryVersion);
-        writer.WriteVarString(AnimationData);
+        writer.WriteByteArray(System.Text.Encoding.UTF8.GetBytes(GeometryData ?? ""));
+        writer.WriteByteArray(System.Text.Encoding.UTF8.GetBytes(GeometryVersion ?? ""));
+        writer.WriteByteArray(System.Text.Encoding.UTF8.GetBytes(AnimationData ?? ""));
         writer.WriteVarString(CapeId);
         writer.WriteVarString(FullId);
-        writer.WriteVarString(ArmSize);
-        writer.WriteVarString(SkinColor);
+        writer.WriteByte(string.Equals(ArmSize, "slim", StringComparison.OrdinalIgnoreCase) ? (byte)0 : (byte)1);
+        writer.WriteUInt(ParseWireColor(SkinColor), BinaryStream.Endianess.Big);
 
         var personas = PersonaPieces ?? [];
-        writer.WriteUInt((uint)personas.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(personas.Length);
         foreach (var p in personas)
             p.Write(ref writer);
 
         var tints = TintPieces ?? [];
-        writer.WriteUInt((uint)tints.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(tints.Length);
         foreach (var t in tints)
             t.Write(ref writer);
 
@@ -144,6 +150,8 @@ readonly struct SerializedSkin
         writer.WriteBool(IsPersonaCapeOnClassic);
         writer.WriteBool(IsPrimaryUser);
         writer.WriteBool(OverridesPlayerAppearance);
+        writer.WriteVarString(Trusted ? "true" : "false");
+        writer.WriteVarString(ProfileHash ?? "");
     }
 
     /// <summary>True when RGBA buffer matches dimensions (safe for PlayerList SkinWire).</summary>
@@ -170,6 +178,30 @@ readonly struct SerializedSkin
             throw new InvalidOperationException($"{label} image data length {data.Length} != {expected}.");
     }
 
+    internal static uint ParseWireColor(string value)
+    {
+        var hex = (value ?? "").TrimStart('#');
+        if (hex.Length == 3)
+            hex = string.Concat(hex.Select(c => new string(c, 2)));
+        if (hex.Length == 6 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgb))
+            return PackWireColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, 0xff);
+        if (hex.Length == 8 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgba))
+            return PackWireColor((byte)(rgba >> 24), (byte)(rgba >> 16), (byte)(rgba >> 8), (byte)rgba);
+        return 0;
+    }
+
+    internal static string FormatColor(uint wire)
+    {
+        var a = (byte)wire;
+        var r = (byte)(wire >> 8);
+        var g = (byte)(wire >> 16);
+        var b = (byte)(wire >> 24);
+        return a == 0xff ? $"#{r:x2}{g:x2}{b:x2}" : $"#{r:x2}{g:x2}{b:x2}{a:x2}";
+    }
+
+    private static uint PackWireColor(byte r, byte g, byte b, byte a) =>
+        (uint)(a | (r << 8) | (g << 16) | (b << 24));
+
     public static readonly SerializedSkin Default = new()
     {
         Id = "",
@@ -189,13 +221,15 @@ readonly struct SerializedSkin
         CapeId = "",
         FullId = "",
         ArmSize = "wide",
-        SkinColor = "#0",
+        SkinColor = "#000000",
         PersonaPieces = [],
         TintPieces = [],
         IsPremium = false,
         IsPersona = false,
         IsPersonaCapeOnClassic = false,
         IsPrimaryUser = true,
-        OverridesPlayerAppearance = true
+        OverridesPlayerAppearance = true,
+        Trusted = false,
+        ProfileHash = ""
     };
 }

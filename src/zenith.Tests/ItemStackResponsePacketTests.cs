@@ -11,7 +11,7 @@ namespace Zenith.Tests;
 public class ItemStackResponsePacketTests
 {
     [Fact]
-    public void Error_writes_status_li32_then_required_true_and_no_containers()
+    public void Error_writes_status_varint_then_required_true_and_no_containers()
     {
         var bytes = ItemStackResponsePacket.Error(5).Encode().ToArray();
         var stream = new BinaryStream(bytes);
@@ -19,7 +19,7 @@ public class ItemStackResponsePacketTests
         Assert.Equal((int)ProtocolInfo.ITEM_STACK_RESPONSE_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // responses count
         Assert.Equal(ItemStackResponseEntry.StatusError, stream.ReadByte());
-        Assert.Equal(5, stream.ReadInt(BinaryStream.Endianess.Little));
+        Assert.Equal(5, stream.ReadVarInt());
         Assert.True(stream.ReadBool()); // required marker
         Assert.False(stream.ReadBool()); // containers option
         Assert.True(stream.IsEndOfFile);
@@ -43,7 +43,7 @@ public class ItemStackResponsePacketTests
         Assert.Equal((int)ProtocolInfo.ITEM_STACK_RESPONSE_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // responses count
         Assert.Equal(ItemStackResponseEntry.StatusOk, stream.ReadByte());
-        Assert.Equal(9, stream.ReadInt(BinaryStream.Endianess.Little));
+        Assert.Equal(9, stream.ReadVarInt());
         Assert.True(stream.ReadBool()); // required marker
         Assert.True(stream.ReadBool()); // containers option
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // containers array count
@@ -80,7 +80,7 @@ public class ItemStackResponsePacketTests
         stream.ReadUnsignedVarInt(); // id
         stream.ReadUnsignedVarInt(); // responses count
         stream.ReadByte(); // status
-        stream.ReadInt(BinaryStream.Endianess.Little); // request id (li32)
+        stream.ReadVarInt(); // request id
         Assert.True(stream.ReadBool()); // required marker
         stream.ReadBool(); // containers option
         stream.ReadUnsignedVarInt(); // containers count
