@@ -58,7 +58,8 @@ readonly struct ItemStackResponseEntry
     public void Write(ref BinaryStream writer)
     {
         writer.WriteByte(Status);
-        writer.WriteInt(RequestId, BinaryStream.Endianess.Little);
+        // TypedClientNetId<ItemStackRequestIdTag> serializes as zigzag varint at protocol 2168.
+        writer.WriteVarInt(RequestId);
         var hasContainers = Status == StatusOk && ContainerInfo.Length > 0;
         writer.WriteBool(true); // required marker in ItemStackResponseInfo
         writer.WriteBool(hasContainers); // containers option

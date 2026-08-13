@@ -21,10 +21,10 @@ public class StartGameWireTests
     }
 
     [Fact]
-    public void Protocol_identity_matches_client_2169_layout()
+    public void Protocol_identity_matches_client_2168_layout()
     {
-        Assert.Equal(2169, ServerIdentity.ProtocolVersion);
-        Assert.Equal("1.26.50", ServerIdentity.VersionName);
+        Assert.Equal(2168, ServerIdentity.ProtocolVersion);
+        Assert.Equal("1.26.40", ServerIdentity.VersionName);
     }
 
     [Fact]

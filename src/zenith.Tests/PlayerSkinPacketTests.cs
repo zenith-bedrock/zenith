@@ -40,7 +40,7 @@ public class PlayerSkinPacketTests
                 CapeId = "",
                 FullId = "test_skin",
                 ArmSize = "wide",
-                SkinColor = "#0",
+                SkinColor = "#000000",
                 PersonaPieces =
                 [
                     new SkinPersonaPiece
@@ -56,8 +56,8 @@ public class PlayerSkinPacketTests
                 [
                     new SkinPersonaTintPiece
                     {
-                        Type = "hair",
-                        Colors = ["red", "blue"]
+                        Type = "persona_hair",
+                        Colors = ["#ff0000", "#0000ff"]
                     }
                 ],
                 IsPremium = false,
@@ -102,7 +102,7 @@ public class PlayerSkinPacketTests
         Assert.Equal(original.Skin.CapeId, decoded.Skin.CapeId);
         Assert.Equal(original.Skin.FullId, decoded.Skin.FullId);
         Assert.Equal(original.Skin.ArmSize, decoded.Skin.ArmSize);
-        Assert.Equal(original.Skin.SkinColor, decoded.Skin.SkinColor);
+        Assert.Equal("#000000", decoded.Skin.SkinColor);
 
         Assert.Single(decoded.Skin.PersonaPieces);
         Assert.Equal(original.Skin.PersonaPieces[0].PieceId, decoded.Skin.PersonaPieces[0].PieceId);
@@ -110,7 +110,7 @@ public class PlayerSkinPacketTests
 
         Assert.Single(decoded.Skin.TintPieces);
         Assert.Equal(original.Skin.TintPieces[0].Type, decoded.Skin.TintPieces[0].Type);
-        Assert.Equal(original.Skin.TintPieces[0].Colors, decoded.Skin.TintPieces[0].Colors);
+        Assert.Equal(["#ff0000", "#0000ff", "#00000000", "#00000000"], decoded.Skin.TintPieces[0].Colors);
 
         Assert.Equal(original.Skin.IsPremium, decoded.Skin.IsPremium);
         Assert.Equal(original.Skin.IsPersona, decoded.Skin.IsPersona);
@@ -204,7 +204,7 @@ public class PlayerSkinPacketTests
             CapeId = "",
             FullId = "",
             ArmSize = "wide",
-            SkinColor = "#0",
+            SkinColor = "#000000",
             PersonaPieces = [],
             TintPieces = [],
             IsPremium = false,
@@ -236,7 +236,7 @@ public class PlayerSkinPacketTests
         writer.WriteVarString("");
         writer.WriteVarString("");
         new SkinImage { Width = 0, Height = 0, Data = [] }.Write(ref writer);
-        writer.WriteUInt(SerializedSkin.MaxAnimations + 1, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(checked((int)SerializedSkin.MaxAnimations + 1));
 
         var bytes = writer.GetBufferDisposing().ToArray();
         var reader = new BinaryStream(bytes);

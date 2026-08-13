@@ -12,17 +12,17 @@ readonly struct SkinAnimation
     public static SkinAnimation Read(ref BinaryStream stream)
     {
         var image = SkinImage.Read(ref stream);
-        var type = stream.ReadUInt(BinaryStream.Endianess.Little);
+        var type = checked((uint)stream.ReadUnsignedVarInt());
         var frames = stream.ReadFloat(BinaryStream.Endianess.Little);
-        var expression = stream.ReadUInt(BinaryStream.Endianess.Little);
+        var expression = checked((uint)stream.ReadUnsignedVarInt());
         return new SkinAnimation { Image = image, Type = type, Frames = frames, Expression = expression };
     }
 
     public void Write(ref BinaryStream writer)
     {
         Image.Write(ref writer);
-        writer.WriteUInt(Type, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(checked((int)Type));
         writer.WriteFloat(Frames, BinaryStream.Endianess.Little);
-        writer.WriteUInt(Expression, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(checked((int)Expression));
     }
 }

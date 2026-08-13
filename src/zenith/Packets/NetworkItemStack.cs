@@ -55,21 +55,29 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     }
 
     /// <summary>
-    /// ItemStack without stack net id (VarInt network id + block runtime + empty extra blob).
-    /// Use from: CreativeContent, CraftingData outputs.
+    /// NetworkItemInstanceDescriptor (VarInt network id + block runtime + a conditional extra
+    /// blob). Used by CreativeContent (group icons, item entries) and CraftingData outputs.
+    ///
+    /// The extra blob is NOT unconditional — verified against gophertunnel's <c>Writer.Item</c>/
+    /// <c>itemUserData</c> (protocol 2168 tag, `D:\Development\bedrock\gophertunnel`): when
+    /// <c>NetworkId == 0</c> (air — e.g. `CreativeContentBuilder`'s Construction group icon,
+    /// sent on every join), only a bare zero-length varint is written, NOT the 10-byte
+    /// NBT-length + can_place/can_break blob below. Writing the full 10 bytes unconditionally
+    /// (the previous shape here) corrupted every byte after it in the packet for that real,
+    /// production call site — found by reading the reference implementation, not by symptom.
     /// </summary>
     public void WriteItemStack(ref BinaryStream writer)
     {
-        if (NetworkId == 0)
-        {
-            writer.WriteVarInt(0);
-            return;
-        }
-
         writer.WriteVarInt(NetworkId);
         writer.WriteUShort(Count, BinaryStream.Endianess.Little);
         writer.WriteUnsignedVarInt(Meta);
         writer.WriteVarInt(BlockRuntimeId);
+
+        if (NetworkId == 0)
+        {
+            writer.WriteUnsignedVarInt(0); // air: bare empty-user-data marker, no NBT/list blob at all
+            return;
+        }
 
         // Extra blob: int16 NBT length 0 + empty can_place / can_break uint32 lists.
         Span<byte> extra = stackalloc byte[10];
