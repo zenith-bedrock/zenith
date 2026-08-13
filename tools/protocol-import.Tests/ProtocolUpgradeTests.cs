@@ -51,4 +51,45 @@ public sealed class ProtocolUpgradeTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Reconcile_report_identifies_the_target_state_without_calling_it_a_bump()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"protocol-reconcile-{Guid.NewGuid():N}.md");
+        try
+        {
+            UpgradeReportWriter.Write(path,
+                new CacheManifest("endstone", "r26_u5", "newer", DateTimeOffset.UnixEpoch, []),
+                new CacheManifest("endstone", "r26_u4", "target", DateTimeOffset.UnixEpoch, []),
+                new UpgradeSummary([], [], [], [], [], [], ["No packet migration action is required."]),
+                new SchemaCoverage(0, []), "reconcile");
+
+            var report = File.ReadAllText(path);
+            Assert.Contains("protocol reconcile", report, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("r26_u5", report);
+            Assert.Contains("r26_u4", report);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Report_allows_a_filename_in_the_current_directory()
+    {
+        var name = $"protocol-report-{Guid.NewGuid():N}.md";
+        try
+        {
+            UpgradeReportWriter.Write(name,
+                new CacheManifest("endstone", "from", "from", DateTimeOffset.UnixEpoch, []),
+                new CacheManifest("endstone", "to", "to", DateTimeOffset.UnixEpoch, []),
+                new UpgradeSummary([], [], [], [], [], [], []), new SchemaCoverage(0, []));
+            Assert.True(File.Exists(name));
+        }
+        finally
+        {
+            if (File.Exists(name)) File.Delete(name);
+        }
+    }
 }

@@ -18,6 +18,10 @@ internal sealed class PullSettings : CommandSettings
     [CommandOption("--ref <REF>")]
     [Description("Git ref to pull. Defaults to the chosen source's own default branch.")]
     public string? Ref { get; set; }
+
+    [CommandOption("--repo <PATH>")]
+    [Description("Existing local clone for this source. Reads the requested ref locally; never checks out or mutates it.")]
+    public string? Repository { get; set; }
 }
 
 /// <summary>
@@ -29,10 +33,11 @@ internal sealed class PullCommand : AsyncCommand<PullSettings>
 {
     public override async Task<int> ExecuteAsync(CommandContext context, PullSettings settings)
     {
-        using var source = SchemaSourceFactory.Create(settings.Source);
+        using var source = SchemaSourceFactory.Create(settings.Source, settings.Repository);
         var @ref = settings.Ref ?? source.DefaultRef;
 
-        AnsiConsole.MarkupLine($"[grey]Pulling {source.Name}@{@ref} into {settings.Cache} ...[/]");
+        var origin = settings.Repository is null ? "GitHub" : $"local clone {Path.GetFullPath(settings.Repository)}";
+        AnsiConsole.MarkupLine($"[grey]Pulling {source.Name}@{@ref} from {origin} into {settings.Cache} ...[/]");
 
         await AnsiConsole.Status().StartAsync("Downloading...", async ctx =>
         {

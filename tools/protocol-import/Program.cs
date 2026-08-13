@@ -32,6 +32,12 @@ app.Configure(config =>
 
     config.AddCommand<UpgradeCommand>("upgrade")
         .WithDescription("Produce a migration plan and optionally apply guarded GREEN additions.");
+
+    config.AddCommand<ReconcileCommand>("reconcile")
+        .WithDescription("Reconcile toward any cached target snapshot, including a downgrade, with guarded codegen only.");
+
+    config.AddCommand<ReconcileCommand>("downgrade")
+        .WithDescription("Alias for reconcile; set --from newer snapshot and --to older target snapshot.");
 });
 
 return app.Run(args);

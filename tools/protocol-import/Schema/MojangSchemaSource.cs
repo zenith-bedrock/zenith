@@ -12,12 +12,19 @@ namespace Zenith.ProtocolImport.Schema;
 /// (2) "required" only means wire-optional at the packet-payload level - on a standalone
 /// type file it just means "has a JSON-Schema default value", not "has a has-value-flag".
 /// </summary>
-internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
+internal sealed class MojangSchemaSource : ISchemaSource
 {
     public const string DefaultRefConst = "main";
     private const string JsonDir = "json";
 
-    private readonly GitHubContentClient _client = new("Mojang", "bedrock-protocol-docs");
+    private readonly ISchemaRepository _repository;
+
+    public MojangSchemaSource(string? localRepository = null) =>
+        _repository = localRepository is null
+            ? new GitHubContentClient("Mojang", "bedrock-protocol-docs")
+            : new LocalGitSchemaRepository(localRepository);
+
+    internal MojangSchemaSource(ISchemaRepository repository) => _repository = repository;
 
     public string Name => "mojang";
     public string DefaultRef => DefaultRefConst;
@@ -29,13 +36,13 @@ internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
 
     public async Task<CacheManifest> PullAsync(string cacheDir, string @ref, CancellationToken ct)
     {
-        var sha = await _client.ResolveCommitShaAsync(@ref, ct);
-        var listing = await _client.ListFilesAsync(JsonDir, sha, ct);
+        var sha = await _repository.ResolveCommitShaAsync(@ref, ct);
+        var listing = await _repository.ListFilesAsync(JsonDir, sha, ct);
         return await SchemaCache.PublishAsync(cacheDir, Name, @ref, sha, async (staging, token) =>
         {
             foreach (var entry in listing.Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
             {
-                var content = await _client.FetchRawAsync(JsonDir, entry.Name, sha, token);
+                var content = await _repository.ReadFileAsync($"{JsonDir}/{entry.Name}", sha, token);
                 await File.WriteAllTextAsync(Path.Combine(staging, entry.Name), content, token);
             }
         }, ct);
@@ -282,5 +289,5 @@ internal sealed class MojangSchemaSource : ISchemaSource, IDisposable
     private static bool IsUuidRef(string refName) =>
         refName.Replace("_", "").Replace(":", "").Equals("mceuuid", StringComparison.OrdinalIgnoreCase);
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose() => _repository.Dispose();
 }
