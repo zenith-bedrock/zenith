@@ -23,7 +23,7 @@ Bumped from 1001/1.26.33 to 2169/1.26.50 in ADR §79 (Aug 2026). The Cereal migr
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
 | [`roadmap.md`](roadmap.md) | Current dependency graph, maturity gates, NOW/NEXT/LATER |
 | [`protocol-import.md`](protocol-import.md) | Deterministic schema cache, coverage report, and Tier A/B codegen boundary |
-| [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability maturity assessment and ECS decision evidence |
+| [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](history/audits/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability maturity assessment and ECS decision evidence |
 | [`../schemas/zenith.schema.json`](../schemas/zenith.schema.json) | **IDE autocomplete only** — boot validation is `ServerConfig.Validate()` |
 | [`../deploy/README.md`](../deploy/README.md) | Deploy contract — one image, `ZENITH_DATA`, platform adapters |
 | [`../deploy/compose/dokploy.md`](../deploy/compose/dokploy.md) | Dokploy — Compose Path `./deploy/compose/docker-compose.dokploy.yml` + File Mount |

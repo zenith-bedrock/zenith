@@ -1,5 +1,11 @@
 # Phase E — ECS feasibility findings
 
+> **Historical.** This was the first ECS feasibility spike and found no material gain, leading to
+> the deferral recorded in `decisions.md` §102. That conclusion is still accurate as a record of
+> what was measured then. Phase XXI later made an explicit scope decision — not a new measurement —
+> to build a real ECS for a small slice anyway; see [`decisions.md` §106](../../decisions.md) and
+> [`ecs.md`](../../ecs.md).
+
 ## Hypothesis
 
 An internal, single-writer archetype/SoA representation might materially reduce the simulation,

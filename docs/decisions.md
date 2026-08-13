@@ -1265,6 +1265,18 @@ The `[WireWhen]` open question from above is still open on the Mojang source too
 
 **Status (ago 2026):** Shipped — `ItemStackRequestPacket`/`ItemStackResponsePacket` rewritten, 5 tests updated + 3 new tests, 518/518 green. Live validation pending (real client, not smoke-bot).
 
+**Correction (ago 2026, protocol 2168 reconciliation):** The first item above described the two
+discriminants of `StackRequestAction` incorrectly. The Cereal **variant** intentionally omits
+`PlaceInContainer`/`TakeOutContainer` (7/8), but each action is followed by the historical
+`legacy_type_id` byte, which still retains them. Consequently action types at and after the gap
+have different values in the two fields: `MineBlock`, for example, is Cereal variant **9** followed
+by legacy id **11**. Zenith must read both fields and map the variant through the gap before
+dispatching by legacy id; it must not replace the historical ids with a compact 0–17 enum. This
+was verified directly against local Gophertunnel 1.26.40 / protocol 2168 reader and writer, and is
+characterized by a byte-level Zenith test. The original prose in item 1 conflated the compact
+variant list with the legacy id, even though item 2 correctly identified that the latter is present
+on wire.
+
 ### 91. `PlayerSkinPacket` / `ResourcePackClientResponsePacket` / `ResourcePacksInfoPacket` — closing the Cereal debt table, minus `PlayerListPacket`/`StartGamePacket`
 
 **Choice:** Continue closing the roadmap's Cereal migration debt table. Same method as §88–§90: cross-check against `minecraft-data`'s live `protocol.json`, corroborate with `endstone-bedrock-protocol`'s versioned Python schema when the field in question isn't purely mechanical.
@@ -1457,7 +1469,7 @@ If a spike is opened, it compares the straightforward actor model against an int
 
 **Non-goals:** putting players, inventories, containers, sessions, RakNet, packets/protocol, storage, commands or a public plugin API into ECS by default; using ECS as a substitute for interest management; assuming ECS permits safe parallel execution.
 
-**Verification:** gate checklist and benchmark design in [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md). No runtime implementation is authorized by this ADR.
+**Verification:** gate checklist and benchmark design in [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](history/audits/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md). No runtime implementation is authorized by this ADR.
 
 **Status (Aug 2026):** Decision recorded; ECS spike not yet open.
 
@@ -1477,7 +1489,7 @@ If a spike is opened, it compares the straightforward actor model against an int
 
 ### 101. Phase D records actor pressure before any entity-runtime choice
 
-**Choice:** Close the actor-pressure evidence gate with the direct model intact. The second actor is a concrete, short-lived snowball Projectile; it keeps ownership, velocity, collision, impact/lifetime removal and source attribution concrete. The workload runs production single-writer `GameLoop` ordering with real Projectile simulation and protocol/RakNet projection at 100 and 1,000 actors under one and ten observers. It records tail ticks, allocation/GC, churn, actor fan-out and egress. The full matrix, commands and cost decomposition are in [`phase-d-actor-pressure.md`](phase-d-actor-pressure.md).
+**Choice:** Close the actor-pressure evidence gate with the direct model intact. The second actor is a concrete, short-lived snowball Projectile; it keeps ownership, velocity, collision, impact/lifetime removal and source attribution concrete. The workload runs production single-writer `GameLoop` ordering with real Projectile simulation and protocol/RakNet projection at 100 and 1,000 actors under one and ten observers. It records tail ticks, allocation/GC, churn, actor fan-out and egress. The full matrix, commands and cost decomposition are in [`phase-d-actor-pressure.md`](history/phases/phase-d-actor-pressure.md).
 
 **Why:** FallingBlock, Zombie and Projectile independently repeat enough active-state, identity, position/lifetime, tick/remove and viewer bookkeeping to justify testing another representation. The 1,000-actor/10-observer p95 (60.556 ms) is above the 20-TPS 50-ms budget while the one-observer path is far lower; that is evidence for separately measuring actor simulation and global replication/interest, not evidence that ECS solves visibility.
 
@@ -1490,7 +1502,7 @@ If a spike is opened, it compares the straightforward actor model against an int
 ### 102. Defer world-actor ECS after the first isolated Phase-E comparison
 
 **Choice:** **DEFER ECS.** The isolated direct-list versus contiguous-SoA experiment is recorded in
-[`PHASE_E_ECS_FEASIBILITY_FINDINGS.md`](audit/PHASE_E_ECS_FEASIBILITY_FINDINGS.md). It did not
+[`PHASE_E_ECS_FEASIBILITY_FINDINGS.md`](history/audits/PHASE_E_ECS_FEASIBILITY_FINDINGS.md). It did not
 show a material simulation/allocation improvement at 100 or 1,000 mixed actors, while Phase-D
 production evidence still identifies observer projection/wire fan-out as the dominant incremental
 cost.
@@ -1530,7 +1542,7 @@ components/query/plugin APIs and parallel scheduler. Evolve the policy only afte
 named interest rule exceeds confirmed chunk knowledge.
 
 **Verification:** focused actor-interest/reconciliation tests plus
-[`phase-f-entity-interest.md`](phase-f-entity-interest.md)'s reproducible real-runtime benchmark.
+[`phase-f-entity-interest.md`](history/phases/phase-f-entity-interest.md)'s reproducible real-runtime benchmark.
 
 ### 104. Runtime health is emitted as bounded server telemetry, not a metrics platform
 
@@ -1545,7 +1557,7 @@ metric registry, event pipeline or new runtime ownership model.
 
 **Boundary:** telemetry neither changes gameplay nor packets, and it does not hold locks across
 protocol send, I/O or callbacks. Persistence flush remains shutdown-owned. The reproducible
-capacity and recovery limits are recorded in [`phase-g-beta-readiness.md`](phase-g-beta-readiness.md).
+capacity and recovery limits are recorded in [`phase-g-beta-readiness.md`](history/phases/phase-g-beta-readiness.md).
 
 **Non-goals:** Prometheus/OpenTelemetry endpoint, dashboard, polling API, generic metric names or
 alerting framework. Add an external integration only when an operational consumer requires it.
@@ -1640,6 +1652,129 @@ serialization, target selection, actor storage or replication policy.
 **Non-goals:** `LivingEntity`/generic actor hierarchy, generic AI/navigation/behavior trees,
 combat attributes/effects/armor, ECS, VisibilitySystem, public actor/plugin API or scheduler.
 
+### 106. Phase XXI accepts a real ECS for a deliberately small, representative actor slice
+
+**Choice:** build and adopt a real, auditable, non-archetype ECS runtime
+(`src/zenith/Ecs/`: `EntityId`, `EntityWorld`, `ComponentStore<T>`, `Query`/`Query2`/`Query3`,
+`RuntimeIdIndex`, `EntityRuntime`) and migrate three actors — Zombie, Minecart, Projectile — onto
+it as their sole authoritative store for Position/Health/Velocity. The remaining nine
+`IDamageableActor` species (Skeleton, Cow, Creeper, Enderman, Bat, Spider, Villager, Golem, Fish)
+are deliberately untouched and remain served by the existing `IGroundMob`-derived
+(`IDamageableActor`)/`GroundMobCombat`/`GroundMobMovement`/`DespawnLifecycle` pattern. Full detail:
+[`docs/ecs.md`](ecs.md) (what exists), [`docs/phase-xxi-ecs-foundation-findings.md`](history/phases/phase-xxi-ecs-foundation-findings.md)
+(benchmarks, DX comparison, rejected alternatives, final-questions answers),
+[`docs/entities.md`](entities.md) §11.
+
+**Why now, and why this does not overturn §99–102:** §99–102 deferred ECS as an *evidence-gated*
+decision — build it only once measured world-actor pressure justified it, and the first isolated
+feasibility spike (`docs/audit/PHASE_E_ECS_FEASIBILITY_FINDINGS.md`) found no material gain over
+the direct model at the scales actually observed. That reasoning was correct given what was
+measured at the time and is **not retroactively wrong** — nothing about the measured pressure
+changed between §102 and this ADR. What changed is the nature of the decision: this is not another
+feasibility spike arriving at a data-driven "the evidence now says yes." It is an explicit
+architecture decision to build a real ECS for a representative slice and evaluate it by production
+use — correctness, developer experience, whether it makes the remaining nine species easier or
+harder to migrate — rather than continue waiting for a specific actor count to force the question.
+§99–102 remain historically accurate as the record of that earlier, still-valid reasoning; they are
+preserved unedited above.
+
+**Why this slice:** Zombie is the ordinary case, representative of 8 of the 9 remaining species.
+Minecart has no AI/targeting and a real player-riding relationship, chosen specifically to prevent
+the ECS from becoming "a mob ECS." Projectile has no `IDamageableActor`/`HealthComponent` at all,
+chosen specifically to prove ECS composition is broader than "things with health." Together they
+exercise the ECS across the genuine variety already present in the roster without requiring a
+full-roster migration to prove the point.
+
+**What was measured, honestly:** zero allocation at steady state for ECS-core operations (entity
+lifecycle, component-store query iteration, runtime-id lookup) at every scale tested (100/1,000/
+10,000 entities); full-tick gameplay and replication numbers for the now-ECS-backed Zombie/
+Projectile are consistent in shape with pre-ECS Phase D/F baselines — no regression, no dramatic
+win, because storage was never the measured bottleneck and remains not the bottleneck now. No
+benchmark was run or reported to make the ECS look better than it is; see the findings doc's
+Benchmarks and Final Question 6 sections.
+
+**Boundary, preserved from the original brief and unchanged by this ADR:** Gameplay decides →
+Protocol transmits → Packets serialize → RakNet transports. `GameLoop` remains single-writer,
+single-threaded, deterministic registration order — no job scheduler or parallel execution was
+introduced. No inheritance hierarchy (`BaseEntity`/`LivingEntity`/etc.) exists anywhere in the ECS
+or its consumers. `ViewerReconciliation.Sync` (§10 above) remains the one replication seam for
+every category, ECS-backed or not — it was not replaced by a `ReplicationSystem`. Archetypes, a job
+scheduler, source generation/reflection-driven components, and a public plugin API were all
+considered and explicitly deferred again — see the findings doc's Rejected Alternatives; none of
+this ADR's evidence justifies them.
+
+**Non-goals, restated for this specific decision:** this ADR does not extend to Player, sessions,
+inventory, world storage, packets, or transport — it is a world-actor runtime for the migrated
+slice only. It does not schedule migration of the remaining nine species on any timeline; see
+`docs/ecs.md`'s retirement-gate section for the concrete (if not numerically precise) trigger for
+when `GroundMobCombat`/`IDamageableActor` should actually be retired, and the findings doc's Final
+Question 10 for why "what migrates next" is deliberately left to future evidence rather than
+scheduled here.
+
+### 107. Phase XXII expands the ECS roster and replaces the two-species damage dispatch chain
+
+**Choice:** migrate three more actors — Cow, Skeleton, Spider — onto the ECS runtime established by
+§106, chosen to pressure passive/breeding behavior, ECS-to-ECS composition (Skeleton spawning an
+ECS Projectile), and a feature-specific post-hit consequence (Spider's poison) respectively.
+Replace `ProjectileSystem`'s hardcoded two-branch `if (_zombies.Owns) else if (_minecarts.Owns)`
+damage-target chain with `DamageDispatch` (`src/zenith/Gameplay/DamageDispatch.cs`) — a small, fixed
+list of `(Owns, TryApplyDamage)` pairs registered once per ECS-damageable species at
+composition-root time. Re-evaluate, and deliberately not act on, the `GroundMobCombat` retirement
+gate §106 left open. Full detail:
+[`docs/phase-xxii-ecs-roster-consolidation-findings.md`](history/phases/phase-xxii-ecs-roster-consolidation-findings.md),
+[`docs/ecs.md`](ecs.md), [`docs/entities.md`](entities.md) §12.
+
+**Why now:** §106's migrated slice (Zombie, Minecart, Projectile) proved the ECS pattern but was
+deliberately small — three categories sharing mostly the same shape (ground mob, vehicle,
+projectile). Phase XXII's job was to find out whether that DX held up across enough *different*
+gameplay shapes, and whether the two-consumer damage dispatch chain (explicitly flagged in §106 as
+temporary) would need a real design once a third ECS-damageable category arrived. Both questions
+needed real migrations to answer, not more design work in the abstract.
+
+**Why `DamageDispatch`, not a generic event bus:** the trigger condition written into `docs/ecs.md`
+during Phase XXI was explicit — a third ECS-damageable category is the signal to design a real seam,
+not to keep growing the `if`/`else if` chain. Cow/Skeleton/Spider's migration produced five
+ECS-damageable species besides Projectile, well past that trigger. `DamageDispatch` is the smallest
+design that removes species-name growth from `ProjectileSystem`: a fixed list built once at startup,
+each entry a one-line registration, no runtime pub/sub, no reflection. Finding *candidate* targets
+remains capability-based (`Query.With(Health, Position)`, unchanged); `DamageDispatch` only answers
+"which system's `TryApplyDamage` do I call," never "what happens when I call it" — death
+consequences stay entirely feature-owned, exactly as before.
+
+**Why `GroundMobCombat`/`IDamageableActor` were not retired despite reaching roster parity:** the
+retirement trigger was never "the migrated count matches the legacy count" — it was "migrating the
+stragglers costs less than maintaining two combat helpers." Evaluated honestly against the six
+remaining species' actual behavior (Creeper's fuse+explosion, Enderman's damage-triggered
+aggro+teleport, Bat's 3D flight, Villager's trade interaction, Golem's boss phases, Fish's swim
+predicate), none of it is mechanical port work, and no maintenance-cost signal (a bug fixed in one
+combat helper and missed in the other) has appeared. Forcing migration to hit a round number would
+have been exactly the "migrate to fill a table" anti-pattern this project has avoided since Phase
+XVII. See `docs/ecs.md`'s retirement-gate section for the full per-species accounting and the
+updated trigger going forward (migrate a remaining species when gameplay work already needs to
+touch it, not on a schedule).
+
+**What was measured:** ECS-core benchmarks (entity lifecycle, component-store query iteration,
+runtime-id lookup) re-run after the roster expansion show the same zero-allocation-at-steady-state
+result as Phase XXI, at the same 100/1,000/10,000 entity scales — confirming the additional
+component stores (`CowState`/`SkeletonState`/`SpiderState`) introduced no regression. A full
+mixed-species runtime-load benchmark (Zombie+Cow+Skeleton+Spider+Minecart+Projectile together under
+`GameLoop`) was not built this phase — the existing per-species harnesses and the full test suite
+(817 tests passing) were judged sufficient evidence for a scope this size; building a new harness
+extension for a benchmark whose purpose is compositional validation, not a capacity claim, was
+deprioritized. This is recorded honestly, not hidden.
+
+**Boundary, preserved from §106 and unchanged by this ADR:** Gameplay decides → Protocol transmits →
+Packets serialize → RakNet transports. `GameLoop` remains single-writer, single-threaded. No
+inheritance hierarchy exists anywhere in the ECS or its consumers. `ViewerReconciliation.Sync`
+remains the one replication seam for every category. Archetypes, a job scheduler, and reflection-
+driven components remain deferred — nothing in this phase's evidence justifies them.
+
+**Non-goals, restated for this specific decision:** this ADR does not extend ECS to the six
+remaining legacy species, Player, sessions, inventory, world storage, packets, or transport. It does
+not retire `GroundMobCombat`/`IDamageableActor` — see above. It does not build a generic damage/
+event framework — `DamageDispatch` is deliberately narrower than that, and the findings doc records
+what was explicitly considered and rejected.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
@@ -1648,7 +1783,7 @@ Recorded so we don't “accidentally” implement them:
 - **Replacing** ZLDB with full Mojang LSM on the default path (Mojang open/import → §61 seam + converter instead)
 - Multi-level LSM compaction **inside** `Zenith.LevelDB` / PInvoke RocksDB as the product store (unless RAM/streaming need is proven — still not “become BDS”)
 - Full creative catalog / `block_state_b64` decode (short CreativeContent list shipped in §31)
-- Generic WorldEntity/ECS before ADR §99's evidence gate; broad mob AI before actor foundation (drop-item wire shipped without a generic entity layer — §32)
+- Generic WorldEntity/ECS before ADR §99's evidence gate; broad mob AI before actor foundation (drop-item wire shipped without a generic entity layer — §32). **Superseded for a deliberately small slice by §106, expanded by §107** (Zombie/Minecart/Projectile/Cow/Skeleton/Spider — six species, Phase XXI–XXII) — the remaining six species (Creeper, Enderman, Bat, Villager, Golem, Fish), and every other domain in this list, are still governed by this non-goal unchanged.
 - Plugin-facing command registration/discovery and public permission hooks; the protocol-independent first slice is allowed by ADR §100
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines

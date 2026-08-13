@@ -1,5 +1,10 @@
 # Zenith maturity and ECS-readiness audit
 
+> **Historical.** This audit's ECS section ("ready for a feasibility spike, not ready to adopt")
+> reflects the state of the project before Phase XXI. A real ECS now exists for Zombie/Minecart/
+> Projectile — see [`decisions.md` §106](../../decisions.md) and [`ecs.md`](../../ecs.md). The rest
+> of this audit's capability assessment is retained as a point-in-time record, not updated.
+
 **Baseline:** `10517afaf30fde34437f24025e6a01d48eabf6e2` (`develop`, 2026-08-11, post-integration revalidation).
 
 **Scope:** source, leaf libraries, tests, benchmarks, CI, documentation, recent history, local reference clones in `D:\Development\bedrock`, and smoke-tooling references. This revision also accounts for the committed health/actor slices and protocol-independent command slice after the original audit.
@@ -10,7 +15,7 @@ Zenith is a **functional/characterized multiplayer alpha**, not a mature Bedrock
 
 Zenith is **feature-limited first and validation-limited second; it is not currently architecture-limited by missing ECS**. HealthState and one concrete Zombie now exist, but the immediate missing capabilities are a materially different second actor, shared lifecycle/replication evidence, visibility requirements and measured actor/observer workloads. The current GameLoop is a strong basis for a future single-thread ECS, but does not establish a need for one.
 
-Phase-D evidence makes Zenith **READY FOR AN ECS FEASIBILITY SPIKE**, not ready to adopt ECS. The second actor, direct actor-churn/observer measurements, repeated lifecycle pressure and visibility requirements are recorded in [`phase-d-actor-pressure.md`](../phase-d-actor-pressure.md). The spike must still compare and falsify an internal world-actor-only archetype/SoA hypothesis before architecture changes or public API.
+Phase-D evidence makes Zenith **READY FOR AN ECS FEASIBILITY SPIKE**, not ready to adopt ECS. The second actor, direct actor-churn/observer measurements, repeated lifecycle pressure and visibility requirements are recorded in [`phase-d-actor-pressure.md`](../phases/phase-d-actor-pressure.md). The spike must still compare and falsify an internal world-actor-only archetype/SoA hypothesis before architecture changes or public API.
 
 ## Evidence and documentation authority
 
@@ -194,7 +199,7 @@ Measure tick average/p50/p95/p99/max, CPU, allocation, GC, retained memory, iter
 
 ## Revised roadmap rationale
 
-The concise canonical version is [`docs/roadmap.md`](../roadmap.md).
+The concise canonical version is [`docs/roadmap.md`](../../roadmap.md).
 
 | Phase | Objective | Exit evidence | Unlocks | Explicitly deferred |
 |---|---|---|---|---|

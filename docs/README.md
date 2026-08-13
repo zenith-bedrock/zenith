@@ -26,6 +26,15 @@ Task-oriented — you have a specific thing to do.
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Issue / PR norms |
 | [Release notes template](release-notes-template.md) | Notes body for GitHub Releases |
 
+## Runtime architecture
+
+Explains the current, concrete shape of the game runtime — read these before touching gameplay code.
+
+| Doc | Covers |
+|-----|--------|
+| [ECS runtime](ecs.md) | The real ECS in `src/zenith/Ecs/` — `EntityId`/generation, component storage, query semantics, structural mutation, runtime-id mapping, migration model (Zombie/Minecart/Projectile), what's deliberately not built (archetypes, scheduler, plugin API) |
+| [Entity catalog](entities.md) | Every runtime/gameplay category (Player, mobs, vehicles, projectiles, drops), what's ECS-backed vs. the OOP `IDamageableActor` pattern, capability matrix, and the evidence trail for what's shared vs. only looks similar |
+
 ## Reference
 
 Lookup-oriented — you know what you need, you just need the exact value or rule.
@@ -57,7 +66,19 @@ Where the project is headed — check before picking up work.
 | Doc | Covers |
 |-----|--------|
 | [Roadmap](roadmap.md) | Current dependency graph, maturity gates and NOW/NEXT/LATER |
-| [Maturity & ECS readiness audit](audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md) | Capability evidence, mature-server comparison and ECS decision gate |
+
+## Historical evidence
+
+How Zenith arrived at its current architecture — phase-by-phase findings and point-in-time audits.
+Not required reading to work on the current codebase; the canonical docs above already carry the
+durable conclusions. Read these when you need the underlying measurements, rejected alternatives,
+or the full reasoning behind a specific line in [`decisions.md`](decisions.md).
+
+| Doc | Covers |
+|-----|--------|
+| [Phase index](history/phases/README.md) | Every phase report, one line each: purpose, key result, current relevance, canonical successor |
+| [`history/audits/`](history/audits/) | Point-in-time audits — ECS feasibility spike, repo/package topology, maturity assessment |
+| [`adr/`](adr/) | Standalone ADRs too detailed for `decisions.md`'s entry format |
 
 ---
 
