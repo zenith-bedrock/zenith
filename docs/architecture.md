@@ -86,7 +86,9 @@ We intentionally **do not** rewrite full subchunks on every place/break. Overlay
 
 ## Frozen infrastructure
 
-Do **not** add for its own sake: Scheduler, Actor model, full ECS, Job system, Service Locator, Runtime Manager, VisibilitySystem, DI container, or plugin API. Introduce a layer only when a real feature hits a wall the current design cannot absorb.
+Do **not** add for its own sake: Scheduler, Actor model, Job system, Service Locator, Runtime Manager, VisibilitySystem, DI container, or plugin API. Introduce a layer only when a real feature hits a wall the current design cannot absorb.
+
+**ECS is no longer universally frozen.** Since Phase XXI (ADR §106), expanded in Phase XXII (ADR §107), a real ECS exists in `src/zenith/Ecs/`, authoritative for six species — Zombie/Minecart/Projectile/Cow/Skeleton/Spider — see [`ecs.md`](ecs.md) for what exists and [`decisions.md` §106–§107](decisions.md) for why. Everything else — Player, sessions, inventory, storage, packets, transport, and the 6 remaining `IDamageableActor` species (Creeper, Enderman, Bat, Villager, Golem, Fish) — stays under the original freeze: no ECS/generalized runtime there without a concrete feature forcing it, same bar as every other layer in this list.
 
 **Future extension form (ADR §21):** when external extensibility opens, first surface is `EventBus.Subscribe<T>` — not public `GameLoop.Register` and not hooks on `Protocol.Send*`.
 
@@ -95,5 +97,7 @@ Fan-out to all online players is acceptable at this stage when pose is **dirty**
 ## Related
 
 - [Decision history](decisions.md) — how we arrived here
+- [ECS runtime](ecs.md) — the Phase XXI ECS design and contracts
+- [Entity catalog](entities.md) — current runtime/entity capability catalog
 - [Comparison](comparison.md) — how this differs from PocketMine-class stacks
 - [`libs/leveldb/README.md`](../libs/leveldb/README.md) — KV internals and backlog

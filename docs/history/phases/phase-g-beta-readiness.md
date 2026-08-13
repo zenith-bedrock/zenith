@@ -34,7 +34,7 @@ are diagnostic signals, not a metrics endpoint or a new runtime layer.
 
 ## Automated Bedrock E2E
 
-[`bedrock-e2e.yml`](../.github/workflows/bedrock-e2e.yml) builds Release, starts Zenith, checks
+[`bedrock-e2e.yml`](../../../.github/workflows/bedrock-e2e.yml) builds Release, starts Zenith, checks
 out the separate ADR §58 Bun client, then runs login/spawn, block/inventory interaction, actor
 Zombie/Projectile lifecycle and reconnect smokes. The bot remains deliberately outside this C#
 repository.
