@@ -6,13 +6,20 @@ namespace Zenith.ProtocolImport.Schema;
 /// Pulls from EndstoneMC/protocol-docs (github.com/EndstoneMC/protocol-docs), the only schema
 /// source supported in v1 - see ADR §76. Confirmed default branch is "r26_u4", not "main".
 /// </summary>
-internal sealed class EndstoneSchemaSource : ISchemaSource, IDisposable
+internal sealed class EndstoneSchemaSource : ISchemaSource
 {
     /// <summary>Kept as a compile-time const (not just the interface property) so
     /// [Description] attributes elsewhere can still reference it.</summary>
     public const string DefaultRefConst = "r26_u4";
 
-    private readonly GitHubContentClient _client = new("EndstoneMC", "protocol-docs");
+    private readonly ISchemaRepository _repository;
+
+    public EndstoneSchemaSource(string? localRepository = null) =>
+        _repository = localRepository is null
+            ? new GitHubContentClient("EndstoneMC", "protocol-docs")
+            : new LocalGitSchemaRepository(localRepository);
+
+    internal EndstoneSchemaSource(ISchemaRepository repository) => _repository = repository;
 
     public string Name => "endstone";
     public string DefaultRef => DefaultRefConst;
@@ -24,16 +31,16 @@ internal sealed class EndstoneSchemaSource : ISchemaSource, IDisposable
 
     public async Task<CacheManifest> PullAsync(string cacheDir, string @ref, CancellationToken ct)
     {
-        var sha = await _client.ResolveCommitShaAsync(@ref, ct);
+        var sha = await _repository.ResolveCommitShaAsync(@ref, ct);
         var folders = new[] { "packets", "types", "enums" };
-        var listings = new Dictionary<string, IReadOnlyList<GitHubContentClient.GitHubEntry>>();
-        foreach (var folder in folders) listings[folder] = await _client.ListFilesAsync(folder, sha, ct);
+        var listings = new Dictionary<string, IReadOnlyList<RepositoryFile>>();
+        foreach (var folder in folders) listings[folder] = await _repository.ListFilesAsync(folder, sha, ct);
         return await SchemaCache.PublishAsync(cacheDir, Name, @ref, sha, async (staging, token) =>
         {
             foreach (var folder in folders)
             foreach (var entry in listings[folder].Where(e => e.Type == "file" && e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
             {
-                var content = await _client.FetchRawAsync(folder, entry.Name, sha, token);
+                var content = await _repository.ReadFileAsync($"{folder}/{entry.Name}", sha, token);
                 var destDir = Path.Combine(staging, folder);
                 Directory.CreateDirectory(destDir);
                 await File.WriteAllTextAsync(Path.Combine(destDir, entry.Name), content, token);
@@ -138,5 +145,5 @@ internal sealed class EndstoneSchemaSource : ISchemaSource, IDisposable
         return result;
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose() => _repository.Dispose();
 }

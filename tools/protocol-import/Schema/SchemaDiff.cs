@@ -15,8 +15,19 @@ internal static class SchemaDiffAnalyzer
         var changes = new List<SchemaChange>();
         foreach (var name in before.Keys.Intersect(after.Keys, StringComparer.Ordinal).OrderBy(x => x))
         {
-            var oldFields = before[name].Fields.ToDictionary(f => f.Name, StringComparer.Ordinal);
-            var newFields = after[name].Fields.ToDictionary(f => f.Name, StringComparer.Ordinal);
+            // Literal tags frequently have no schema name, and several may occur in one packet.
+            // They are real wire data but not settable packet properties, so never key them by an
+            // empty name or silently collapse them. Report their presence as review work instead.
+            var oldAnonymous = before[name].Fields.Where(field => string.IsNullOrWhiteSpace(field.Name)).ToList();
+            var newAnonymous = after[name].Fields.Where(field => string.IsNullOrWhiteSpace(field.Name)).ToList();
+            if (oldAnonymous.Count != newAnonymous.Count ||
+                !oldAnonymous.SequenceEqual(newAnonymous))
+            {
+                changes.Add(Change(name, "Changed anonymous constant/tag layout", DiffSeverity.Yellow, isManualPacket));
+            }
+
+            var oldFields = NamedFields(before[name]);
+            var newFields = NamedFields(after[name]);
             foreach (var field in newFields.Values.Where(f => !oldFields.ContainsKey(f.Name)))
                 changes.Add(Change(name, $"Added field: {field.Name}", SeverityFor(field), isManualPacket));
             foreach (var field in oldFields.Values.Where(f => !newFields.ContainsKey(f.Name)))
@@ -32,6 +43,11 @@ internal static class SchemaDiffAnalyzer
         }
         return new ProtocolDiff(added, removed, changes);
     }
+
+    private static Dictionary<string, FieldSchema> NamedFields(PacketSchema packet) => packet.Fields
+        .Where(field => !string.IsNullOrWhiteSpace(field.Name))
+        .GroupBy(field => field.Name, StringComparer.Ordinal)
+        .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
 
     private static DiffSeverity SeverityFor(FieldSchema field) => field.Construct is SchemaConstruct.Union or SchemaConstruct.Unknown
         ? DiffSeverity.Red : field.Construct == SchemaConstruct.Array || field.Reference is not null ? DiffSeverity.Yellow : DiffSeverity.Green;

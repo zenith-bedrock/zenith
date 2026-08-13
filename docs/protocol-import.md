@@ -15,6 +15,22 @@ requested ref, resolved SHA, file count and any missing/hash-mismatched file.
 Caches created before the manifest format are readable for offline compatibility, but are marked
 legacy/unverified. Pull again before using one as bump evidence.
 
+### Local-clone provider
+
+`pull` may read an existing clone instead of GitHub, avoiding API rate limits while preserving the
+same resolved-SHA manifest contract. Pass `--repo <PATH>` with the normal provider name; the clone
+must contain that provider's layout (`packets/types/enums` for Endstone, `json/` for Mojang):
+
+```powershell
+dotnet run --project tools/protocol-import -- pull `
+  --source endstone --repo D:\Development\references\endstone-protocol-docs `
+  --ref r26_u4
+```
+
+The importer resolves the branch/tag to a commit and reads that commit from Git's object database.
+It deliberately does **not** run `checkout`, modify the clone, fetch, or switch its branch; this
+makes a pinned local ref safe to use while another investigation has the clone open.
+
 ## Coverage policy
 
 `protocol-import coverage --source mojang` reports schema coverage, local generated packet files, local manual
@@ -62,6 +78,25 @@ Use `--apply-green` only after reviewing the report. It writes a non-overwriting
 `<Packet>.ProtocolUpgrade.g.cs` and a basic decode test only for an **added scalar field** on an
 existing `[GamePacket]` class. It never touches manual packets, arrays, unions, constants or an
 existing generated-upgrade file; those remain suggestions/manual work.
+
+## Target-state reconciliation / downgrade
+
+`protocol-import reconcile --source endstone --from r26_u5 --to r26_u4` treats `--to` as the
+desired state rather than assuming a version direction. It validates both immutable snapshots,
+writes `docs/protocol-reconciliations/<from>-to-<to>.md` by default, and classifies the same delta
+in reverse when the target is older. `downgrade` is an alias for this command.
+
+```powershell
+# Pull both refs once from the local Endstone clone, then reconcile toward r26_u4.
+dotnet run --project tools/protocol-import -- pull --source endstone --repo D:\Development\references\endstone-protocol-docs --ref r26_u5
+dotnet run --project tools/protocol-import -- pull --source endstone --repo D:\Development\references\endstone-protocol-docs --ref r26_u4
+dotnet run --project tools/protocol-import -- reconcile --source endstone --from r26_u5 --to r26_u4
+```
+
+`--apply-green` remains deliberately narrow in either direction: it can add a target scalar field
+through a non-overwriting importer-owned partial file. It never removes fields or rewrites a
+hand-authored packet source, because those operations can change packet order and semantics. Target
+removals therefore remain explicit YELLOW/RED review actions, not `git revert` work.
 
 ## Continuous governance
 
