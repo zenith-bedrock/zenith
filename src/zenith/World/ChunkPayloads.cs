@@ -10,7 +10,13 @@ static class ChunkPayloads
     private const int OverworldMaxSubChunkIndex = 19;
     private const int OverworldSubChunkCount = OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex + 1;
     private const int PlainsBiomeId = 1;
-    private const int SubChunkVersion = 8;
+    // Protocol 2168 uses subchunk v9: version, storage count, then absolute
+    // subchunk Y. v8 omits Y, so a v8 payload shifts the palette by one byte
+    // when consumed by a 2168 client. Internal (not private) so World's
+    // LooksLikeTerrainPayload reads this instead of its own copy of the
+    // literal — a hardcoded second copy is exactly what went stale last time
+    // this value changed.
+    internal const int SubChunkVersion = 9;
     private const int BlockStorageLayers = 1;
     private const byte BiomeNetworkPaletteHeader = 1;
     private const byte BorderBlocksEmpty = 0;
@@ -84,7 +90,7 @@ static class ChunkPayloads
                     }
                 }
 
-                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume));
+                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume), OverworldMinSubChunkIndex + section);
             }
 
             WriteBiomesAndBorder(ref writer, biomeId);
@@ -131,7 +137,7 @@ static class ChunkPayloads
                     }
                 }
 
-                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume));
+                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume), OverworldMinSubChunkIndex + section);
             }
 
             WriteBiomesAndBorder(ref writer, biomeNetworkId);
@@ -157,10 +163,11 @@ static class ChunkPayloads
         writer.WriteByte(BorderBlocksEmpty);
     }
 
-    private static void WriteSubChunk(ref BinaryStream writer, ReadOnlySpan<int> ids)
+    private static void WriteSubChunk(ref BinaryStream writer, ReadOnlySpan<int> ids, int absoluteSubChunkY)
     {
         writer.WriteByte(SubChunkVersion);
         writer.WriteByte(BlockStorageLayers);
+        writer.WriteByte(unchecked((byte)absoluteSubChunkY));
         WritePalettedStorage(ref writer, ids);
     }
 

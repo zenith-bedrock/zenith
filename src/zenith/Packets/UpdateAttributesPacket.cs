@@ -24,12 +24,13 @@ sealed class UpdateAttributesPacket : DataPacket
     public AttributeEntry[] Attributes { get; set; } = [];
     public ulong Tick { get; set; }
 
-    /// <summary>Back-compat: full defaults at 20/20.</summary>
+    /// <summary>Back-compat: full defaults at 20/20, level 0.</summary>
     public static UpdateAttributesPacket CreateFrozenDefaults(ulong actorRuntimeId) =>
-        CreateDefaults(actorRuntimeId, health: 20f, hunger: 20f);
+        CreateDefaults(actorRuntimeId, health: 20f, hunger: 20f, experienceLevel: 0, experienceProgress: 0f);
 
-    /// <summary>Spawn/update attributes using Player vitals (ADR §40).</summary>
-    public static UpdateAttributesPacket CreateDefaults(ulong actorRuntimeId, float health, float hunger) =>
+    /// <summary>Spawn/update attributes using Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
+    public static UpdateAttributesPacket CreateDefaults(
+        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f) =>
         new()
         {
             ActorRuntimeId = actorRuntimeId,
@@ -41,8 +42,8 @@ sealed class UpdateAttributesPacket : DataPacket
                 Entry("minecraft:player.hunger", 0f, 20f, hunger),
                 Entry("minecraft:player.saturation", 0f, 20f, 20f),
                 Entry("minecraft:player.exhaustion", 0f, 5f, 0f),
-                Entry("minecraft:player.level", 0f, 24791f, 0f),
-                Entry("minecraft:player.experience", 0f, 1f, 0f)
+                Entry("minecraft:player.level", 0f, 24791f, experienceLevel),
+                Entry("minecraft:player.experience", 0f, 1f, experienceProgress)
             ]
         };
 

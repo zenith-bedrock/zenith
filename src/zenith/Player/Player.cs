@@ -23,15 +23,15 @@ class Player
     public const float MaxBlockReach = 6f;
 
     private readonly object _movementInputLock = new();
-    private readonly object _attackIntentLock = new();
-    private bool _pendingAttackIntent;
-    private readonly object _projectileIntentLock = new();
-    private bool _pendingProjectileIntent;
+    // A target is present only for InventoryTransaction.ItemUseOnActor. AuthInput missed swings
+    // and air use intentionally remain untargeted, so combat may resolve the first valid target.
+    private readonly PendingValue<long?> _attackIntent = new();
+    private readonly PendingSignal _projectileIntent = new();
+    private readonly PendingSignal _eatIntent = new();
+    private readonly PendingValue<long> _interactIntent = new();
     private MovementInputState _movementInput;
-    private readonly object _blockEditLock = new();
-    private readonly Queue<BlockEditIntent> _blockEdits = new();
-    private readonly object _inventoryStackLock = new();
-    private readonly Queue<InventoryStackIntent> _inventoryStacks = new();
+    private readonly PendingMailbox<BlockEditIntent> _blockEdits = new(MaxPendingBlockEdits);
+    private readonly PendingMailbox<InventoryStackIntent> _inventoryStacks = new(MaxPendingInventoryStacks);
     // GameLoop-owned replay ledger: request IDs are protocol correlation tokens, not item authority.
     private readonly HashSet<int> _claimedInventoryRequests = new();
     private readonly Queue<int> _claimedInventoryRequestOrder = new();
@@ -39,18 +39,16 @@ class Player
     private readonly Queue<DigIntent> _digIntents = new();
     private DigIntent? _provisionalDig;
     private DigIntent? _suppressedDigAuthorization;
-    private readonly object _windowLock = new();
-    private readonly Queue<InventoryWindowIntent> _windowIntents = new();
-    private readonly object _chatLock = new();
-    private readonly Queue<string> _pendingChat = new();
-    private readonly object _gameModeLock = new();
-    private GameMode? _pendingGameMode;
-    private readonly object _respawnLock = new();
-    private bool _pendingRespawn;
+    private readonly PendingMailbox<InventoryWindowIntent> _windowIntents = new(MaxPendingWindowIntents);
+    private readonly PendingMailbox<string> _pendingChat = new(MaxPendingChat);
+    private readonly PendingValue<GameMode> _pendingGameMode = new();
+    private readonly PendingValue<EffectIntent> _pendingEffectIntent = new();
+    // GameLoop-only: EffectSystem is the sole reader/writer on tick, like FallPeakY/IsSneaking.
+    private readonly Dictionary<EffectType, ActiveEffect> _effects = new();
+    private readonly PendingSignal _respawnIntent = new();
     private readonly HealthState _health = new(DefaultMaxHealth);
     private bool _deathTransitionFinalized;
-    private readonly object _spawnReadyLock = new();
-    private bool _pendingSpawnReady;
+    private readonly PendingSignal _spawnReadyIntent = new();
     // The GameLoop is the only writer. This lock is a narrow snapshot handoff for the network
     // decoder, which must bind a wire container action to the session it observed.
     private readonly object _containerLock = new();
@@ -116,6 +114,16 @@ class Player
     public StackId HeldStackId => Inventory.GetStackId(SelectedHotbarSlot);
 
     /// <summary>
+    /// Phase XX — the EntityId of the vehicle this player is riding, or null. Owned by the
+    /// vehicle's own system (currently only <see cref="Gameplay.Systems.MinecartSystem"/>), which
+    /// is the only writer; <see cref="Gameplay.Systems.MovementSystem"/> only reads it to skip
+    /// applying client-reported position while mounted (see MovementSystem's Tick). Not a mailbox:
+    /// this is server-decided relationship state, not a one-shot network intent, and not
+    /// persisted — a disconnect/reconnect starts unmounted (see phase findings).
+    /// </summary>
+    internal long? RidingEntityId { get; set; }
+
+    /// <summary>
     /// Classic RGBA mirror of Session.Skin when dimensions match (PlayerList fallback /
     /// mid-game classic update). Full wire skin lives on <c>NetworkSession.Skin</c> (ADR §49).
     /// </summary>
@@ -141,6 +149,29 @@ class Player
     /// authoritative mutation path through <see cref="ApplyDamage"/>.
     /// </summary>
     public float Hunger { get; set; } = 20f;
+
+    /// <summary>
+    /// Vanilla-parity depletion accumulator (Phase XI.1). GameLoop-owned scalar written only by
+    /// <see cref="Gameplay.Systems.HungerSystem"/>; crosses the threshold into one hunger point.
+    /// </summary>
+    public float Exhaustion { get; set; }
+
+    /// <summary>Player level (Phase XI.4) — <c>minecraft:player.level</c>. Mutated only via <see cref="AddExperience"/>/<see cref="SetExperience"/>.</summary>
+    public int ExperienceLevel { get; private set; }
+
+    /// <summary>Points earned toward <see cref="ExperienceLevel"/>'s next level — never exceeds <see cref="Gameplay.PlayerExperience.PointsToNextLevel"/>.</summary>
+    public int ExperiencePoints { get; private set; }
+
+    /// <summary>GameLoop-owned gain; applies every level-up the addition crosses (Phase XI.4).</summary>
+    internal void AddExperience(int amount) =>
+        (ExperienceLevel, ExperiencePoints) = Gameplay.PlayerExperience.AddPoints(ExperienceLevel, ExperiencePoints, amount);
+
+    /// <summary>Login hydrate only — bypasses level-up math since the saved pair is already valid.</summary>
+    public void SetExperience(int level, int points)
+    {
+        ExperienceLevel = level;
+        ExperiencePoints = points;
+    }
 
     /// <summary>Highest feet Y reached since last on-ground (ADR §96 fall damage). Reset on landing.</summary>
     public float FallPeakY { get; set; } = Blocks.FlatSpawnY;
@@ -541,28 +572,31 @@ class Player
     public bool SubmitWindowIntent(in InventoryWindowIntent intent)
     {
         if (IsDead && intent.Action != InventoryWindowIntent.Kind.Close) return false;
-        lock (_windowLock)
-        {
-            if (_windowIntents.Count >= MaxPendingWindowIntents)
-                return false;
-            _windowIntents.Enqueue(intent);
-            return true;
-        }
+        return _windowIntents.Submit(intent);
     }
 
-    public bool TryConsumeWindowIntent(out InventoryWindowIntent intent)
-    {
-        lock (_windowLock)
-        {
-            if (_windowIntents.Count == 0)
-            {
-                intent = default;
-                return false;
-            }
+    public bool TryConsumeWindowIntent(out InventoryWindowIntent intent) =>
+        _windowIntents.TryConsume(out intent);
 
-            intent = _windowIntents.Dequeue();
-            return true;
-        }
+    /// <summary>
+    /// Reports whether the latest not-yet-applied window intent will open a compatible
+    /// container. Session uses this only to retain an ISR that arrived immediately after the
+    /// corresponding open packet; <see cref="Gameplay.Systems.InventorySystem"/> remains the
+    /// sole owner that creates and validates the actual container session.
+    /// </summary>
+    public bool HasPendingContainerOpen(OpenContainerSession.TargetKind? expectedTarget)
+    {
+        if (!_windowIntents.TryPeekLast(out var pending))
+            return false;
+
+        return pending.Action switch
+        {
+            InventoryWindowIntent.Kind.OpenInventory =>
+                expectedTarget is null or OpenContainerSession.TargetKind.PlayerInventory,
+            InventoryWindowIntent.Kind.OpenChest =>
+                expectedTarget is null or OpenContainerSession.TargetKind.Chest,
+            _ => false
+        };
     }
 
     public Player(
@@ -628,118 +662,67 @@ class Player
     /// Enfileira place/break (FIFO). Cap <see cref="MaxPendingBlockEdits"/>;
     /// overflow rejeita o mais novo (ações já aceites preservam ordem).
     /// </summary>
-    public bool SubmitBlockEdit(in BlockEditIntent intent)
-    {
-        lock (_blockEditLock)
-        {
-            if (_blockEdits.Count >= MaxPendingBlockEdits)
-                return false;
-            _blockEdits.Enqueue(intent);
-            return true;
-        }
-    }
+    public bool SubmitBlockEdit(in BlockEditIntent intent) => _blockEdits.Submit(intent);
 
-    public bool TryConsumeBlockEdit(out BlockEditIntent intent)
-    {
-        lock (_blockEditLock)
-        {
-            if (_blockEdits.Count == 0)
-            {
-                intent = default;
-                return false;
-            }
-
-            intent = _blockEdits.Dequeue();
-            return true;
-        }
-    }
+    public bool TryConsumeBlockEdit(out BlockEditIntent intent) => _blockEdits.TryConsume(out intent);
 
     /// <summary>
     /// Enfileira rearrange ISR (FIFO). Cap <see cref="MaxPendingInventoryStacks"/>;
     /// overflow rejeita o mais novo.
     /// </summary>
-    public bool SubmitInventoryStack(in InventoryStackIntent intent)
-    {
-        lock (_inventoryStackLock)
-        {
-            if (_inventoryStacks.Count >= MaxPendingInventoryStacks)
-                return false;
-            _inventoryStacks.Enqueue(intent);
-            return true;
-        }
-    }
+    public bool SubmitInventoryStack(in InventoryStackIntent intent) => _inventoryStacks.Submit(intent);
 
-    public bool TryConsumeInventoryStack(out InventoryStackIntent intent)
-    {
-        lock (_inventoryStackLock)
-        {
-            if (_inventoryStacks.Count == 0)
-            {
-                intent = default;
-                return false;
-            }
-
-            intent = _inventoryStacks.Dequeue();
-            return true;
-        }
-    }
+    public bool TryConsumeInventoryStack(out InventoryStackIntent intent) => _inventoryStacks.TryConsume(out intent);
 
     /// <summary>
     /// Mensagem já validada pelo ChatProtocol; fan-out no ChatSystem (FIFO, cap
     /// <see cref="MaxPendingChat"/> — overflow rejeita o mais novo, §54).
     /// </summary>
-    public bool SubmitChat(string message)
-    {
-        lock (_chatLock)
-        {
-            if (_pendingChat.Count >= MaxPendingChat)
-                return false;
-            _pendingChat.Enqueue(message);
-            return true;
-        }
-    }
+    public bool SubmitChat(string message) => _pendingChat.Submit(message);
 
     public bool TryConsumeChat(out string message)
     {
-        lock (_chatLock)
-        {
-            if (_pendingChat.Count == 0)
-            {
-                message = "";
-                return false;
-            }
-
-            message = _pendingChat.Dequeue();
-            return true;
-        }
+        if (_pendingChat.TryConsume(out message)) return true;
+        message = "";
+        return false;
     }
 
     /// <summary>Overwrite-latest runtime mode (§52). Applied on GameLoop — not by handlers.</summary>
     public void SubmitGameMode(GameMode mode)
     {
         if (IsDead) return;
-        lock (_gameModeLock)
-            _pendingGameMode = mode;
+        _pendingGameMode.Submit(mode);
     }
 
-    public bool TryConsumeGameMode(out GameMode mode)
-    {
-        lock (_gameModeLock)
-        {
-            if (_pendingGameMode is null)
-            {
-                mode = GameMode;
-                return false;
-            }
-
-            mode = _pendingGameMode.Value;
-            _pendingGameMode = null;
-            return true;
-        }
-    }
+    /// <summary>No pending change reports the current mode (not <c>default</c>) so callers always get a real value.</summary>
+    public bool TryConsumeGameMode(out GameMode mode) => _pendingGameMode.TryConsume(GameMode, out mode);
 
     /// <summary>GameLoop only. Does not reseed inventory (§52).</summary>
     public void SetGameMode(GameMode mode) => GameMode = mode;
+
+    /// <summary>Network/command-to-gameplay handoff for one effect command (Phase XI.3, overwrite-latest like GameMode).</summary>
+    public void SubmitEffect(EffectIntent intent)
+    {
+        if (IsDead) return;
+        _pendingEffectIntent.Submit(intent);
+    }
+
+    public bool TryConsumeEffectIntent(out EffectIntent intent) => _pendingEffectIntent.TryConsume(out intent);
+
+    /// <summary>GameLoop-owned active effects; sole writer is <see cref="Gameplay.Systems.EffectSystem"/>.</summary>
+    internal IReadOnlyDictionary<EffectType, ActiveEffect> Effects => _effects;
+
+    internal void ApplyOrRefreshEffect(EffectType type, int amplifier, ulong expiresAtTick) =>
+        _effects[type] = new ActiveEffect(type, amplifier, expiresAtTick);
+
+    internal bool RemoveEffect(EffectType type) => _effects.Remove(type);
+
+    internal bool ClearEffects()
+    {
+        if (_effects.Count == 0) return false;
+        _effects.Clear();
+        return true;
+    }
 
     /// <summary>
     /// Applies an authoritative damage request on the GameLoop. Network handlers and async work
@@ -760,8 +743,7 @@ class Player
         IsSprinting = false;
         AbortBreak();
         _ = TryClearOpenContainer(out _);
-        lock (_respawnLock)
-            _pendingRespawn = false;
+        _ = _respawnIntent.TryConsume();
         return true;
     }
 
@@ -769,53 +751,61 @@ class Player
     public void SubmitRespawn()
     {
         if (!IsDead) return;
-        lock (_respawnLock)
-            _pendingRespawn = true;
+        _respawnIntent.Submit();
     }
 
-    public bool TryConsumeRespawn()
-    {
-        lock (_respawnLock)
-        {
-            if (!_pendingRespawn) return false;
-            _pendingRespawn = false;
-            return true;
-        }
-    }
+    public bool TryConsumeRespawn() => _respawnIntent.TryConsume();
 
-    /// <summary>Network-to-gameplay handoff for one attack swing; reach is validated on the tick.</summary>
-    internal void SubmitAttackIntent()
-    {
-        lock (_attackIntentLock)
-            _pendingAttackIntent = true;
-    }
+    /// <summary>
+    /// Network-to-gameplay handoff for one attack swing. <paramref name="targetActorRuntimeId"/>
+    /// is populated only by ItemUseOnActor; reach and target ownership remain tick-validated.
+    /// </summary>
+    internal void SubmitAttackIntent(long? targetActorRuntimeId = null) => _attackIntent.Submit(targetActorRuntimeId);
 
-    internal bool TryConsumeAttackIntent()
-    {
-        lock (_attackIntentLock)
-        {
-            if (!_pendingAttackIntent) return false;
-            _pendingAttackIntent = false;
-            return true;
-        }
-    }
+    /// <summary>Consumes an attack regardless of target; used only by direct characterization tests.</summary>
+    internal bool TryConsumeAttackIntent() => _attackIntent.TryConsume(out _);
+
+    /// <summary>
+    /// Consumes an attack only when it was untargeted or named this actor. A targeted wire attack
+    /// must never be claimed by another nearby actor merely because that system ticks first.
+    /// </summary>
+    internal bool TryConsumeAttackIntent(long expectedTargetActorRuntimeId) =>
+        _attackIntent.TryConsumeIf(
+            target => target is null || target.Value == expectedTargetActorRuntimeId,
+            out _);
+
+    /// <summary>
+    /// Strict targeted variant for consumers whose candidate set contains players. Unlike the
+    /// legacy characterization helper above, an absent target can never be promoted into a hit.
+    /// </summary>
+    internal bool TryConsumeTargetedAttackIntent(long expectedTargetActorRuntimeId) =>
+        _attackIntent.TryConsumeIf(
+            target => target is { } targetRuntimeId && targetRuntimeId == expectedTargetActorRuntimeId,
+            out _);
 
     /// <summary>Network-to-gameplay handoff for the first short-lived projectile slice.</summary>
-    internal void SubmitProjectileIntent()
-    {
-        lock (_projectileIntentLock)
-            _pendingProjectileIntent = true;
-    }
+    internal void SubmitProjectileIntent() => _projectileIntent.Submit();
 
-    internal bool TryConsumeProjectileIntent()
-    {
-        lock (_projectileIntentLock)
-        {
-            if (!_pendingProjectileIntent) return false;
-            _pendingProjectileIntent = false;
-            return true;
-        }
-    }
+    internal bool TryConsumeProjectileIntent() => _projectileIntent.TryConsume();
+
+    /// <summary>Network-to-gameplay handoff for eating the held food stack (Phase XI.1).</summary>
+    internal void SubmitEatIntent() => _eatIntent.Submit();
+
+    internal bool TryConsumeEatIntent() => _eatIntent.TryConsume();
+
+    /// <summary>
+    /// Network-to-gameplay handoff for a non-attack actor interact (Phase XVIII) — right-click on
+    /// an entity. Carries only the target's runtime id; which gameplay system owns that id is
+    /// resolved on the tick, one candidate system at a time, via <see cref="TryConsumeInteractIntent"/>.
+    /// </summary>
+    internal void SubmitInteractIntent(long targetActorRuntimeId) => _interactIntent.Submit(targetActorRuntimeId);
+
+    /// <summary>Consumes the pending interact only if it targets <paramref name="expectedTargetRuntimeId"/> — otherwise leaves it for another system to check.</summary>
+    internal bool TryConsumeInteractIntent(long expectedTargetRuntimeId) =>
+        _interactIntent.TryConsumeIf(target => target == expectedTargetRuntimeId, out _);
+
+    /// <summary>Authoritative well-fed regeneration entry point for <see cref="Gameplay.Systems.HungerSystem"/>.</summary>
+    internal void Heal(float amount) => _health.Heal(amount);
 
     /// <summary>
     /// Claims one ISR request id exactly once before any authoritative mutation. Kept bounded so
@@ -836,33 +826,22 @@ class Player
     /// Client confirmation after PLAYER_SPAWN. The network thread records only this one-shot;
     /// the gameplay owner performs the visible join/session transition in ChunkStreamSystem.
     /// </summary>
-    public void SubmitSpawnReady()
-    {
-        lock (_spawnReadyLock)
-            _pendingSpawnReady = true;
-    }
+    public void SubmitSpawnReady() => _spawnReadyIntent.Submit();
 
-    public bool TryConsumeSpawnReady()
-    {
-        lock (_spawnReadyLock)
-        {
-            if (!_pendingSpawnReady) return false;
-            _pendingSpawnReady = false;
-            return true;
-        }
-    }
+    public bool TryConsumeSpawnReady() => _spawnReadyIntent.TryConsume();
 
     /// <summary>Clears death after GameLoop applied spawn pose + vitals.</summary>
     public void CompleteRespawn()
     {
         _health.RestoreFull();
         _deathTransitionFinalized = false;
+        Hunger = 20f;
+        Exhaustion = 0f;
         IsSneaking = false;
         IsSprinting = false;
         LastReplicatedSneaking = false;
         LastReplicatedSprinting = false;
         FallPeakY = PositionY;
-        lock (_respawnLock)
-            _pendingRespawn = false;
+        _ = _respawnIntent.TryConsume();
     }
 }

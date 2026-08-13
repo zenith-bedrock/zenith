@@ -22,8 +22,9 @@ static class PlayerVisibility
             SendAddPlayer(joiner, peer);
         }
 
-        // 2. Todos (incl. joiner) recebem PlayerList(ADD joiner)
-        SendPlayerListAdd(joiner, joiner);
+        // 2. Peers recebem PlayerList(ADD joiner). The joining client has no AddPlayer(self),
+        // so it does not require a self entry to construct its local actor. Keeping this out of
+        // the initial bootstrap also avoids replaying its full ClientData skin to itself.
         foreach (var peer in peers)
             SendPlayerListAdd(peer, joiner);
 
@@ -172,21 +173,25 @@ static class PlayerVisibility
             platformChatId: profile.PlatformChatId,
             deviceId: profile.DeviceId,
             buildPlatform: profile.BuildPlatform);
-        // ADR §44: dirty-check suppresses Absolute while pose is unchanged. New viewers only
-        // get AddPlayer (feet) until the subject moves. Follow with Absolute (feet→wire +1.621)
-        // so peers settle on the ground — bare feet Absolute sinks the model (~eye height).
-        recipient.Session.Protocol.Entity.SendMoveAbsolute(
-            (ulong)subject.RuntimeId,
-            subject.PositionX,
-            subject.PositionY,
-            subject.PositionZ,
-            subject.Pitch,
-            subject.Yaw,
-            subject.HeadYaw,
-            flags: MoveActorAbsolutePacket.FLAG_ON_GROUND);
-        recipient.Session.Protocol.Entity.SendHealth(
-            (ulong)subject.RuntimeId,
-            subject.Health,
-            subject.MaxHealth);
+
+        // PlayerList immediately preceding AddPlayer already carries the complete SerializedSkin.
+        // Do not replay it as PlayerSkin while the recipient constructs the peer actor: PlayerSkin
+        // is for a later skin change. Empty armour is implicit, but an already-equipped peer
+        // needs one initial equipment projection before later armor deltas can apply.
+        var subjectInventory = subject.Inventory;
+        var head = subjectInventory.GetArmor(PlayerInventory.ArmorHelmetSlot);
+        var torso = subjectInventory.GetArmor(PlayerInventory.ArmorChestplateSlot);
+        var legs = subjectInventory.GetArmor(PlayerInventory.ArmorLeggingsSlot);
+        var feet = subjectInventory.GetArmor(PlayerInventory.ArmorBootsSlot);
+        if (!head.IsEmpty || !torso.IsEmpty || !legs.IsEmpty || !feet.IsEmpty)
+        {
+            var inventoryProtocol = subject.Session.Protocol.Inventory;
+            recipient.Session.Protocol.Entity.SendMobArmorEquipment(
+                (ulong)subject.RuntimeId,
+                inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorHelmetSlot),
+                inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorChestplateSlot),
+                inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorLeggingsSlot),
+                inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorBootsSlot));
+        }
     }
 }

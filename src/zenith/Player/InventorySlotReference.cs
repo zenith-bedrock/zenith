@@ -13,6 +13,7 @@ readonly record struct InventorySlotReference(InventorySlotArea Area, int Index)
     public static InventorySlotReference OpenContainer(int index) => new(InventorySlotArea.OpenContainer, index);
     public static InventorySlotReference CraftGrid(int index) => new(InventorySlotArea.CraftGrid, index);
     public static InventorySlotReference CraftResult => new(InventorySlotArea.CraftResult, 0);
+    public static InventorySlotReference Armor(int index) => new(InventorySlotArea.Armor, index);
 
     /// <summary>
     /// Compatibility only for existing in-process characterization tests. Production packet
@@ -63,5 +64,6 @@ public enum InventorySlotArea : byte
     Cursor = 2,
     OpenContainer = 3,
     CraftGrid = 4,
-    CraftResult = 5
+    CraftResult = 5,
+    Armor = 6
 }

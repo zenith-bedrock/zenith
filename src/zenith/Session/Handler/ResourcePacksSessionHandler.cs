@@ -62,8 +62,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 session.Protocol.World.SendBiomeDefinitionList();
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).
                 session.Protocol.Entity.SendLocalActorData((ulong)player.RuntimeId, player.Username);
-                session.Protocol.Entity.SendDefaultAttributes(
-                    (ulong)player.RuntimeId, player.Health, player.Hunger);
+                session.Protocol.Entity.SendPlayerAttributes(player);
                 // Abilities / adventure seed (§37) — after §34, before PreSpawn.
                 session.Protocol.Entity.SendLocalAbilities(player.RuntimeId, (int)player.GameMode);
                 session.Protocol.Entity.SendAdventureSettings();

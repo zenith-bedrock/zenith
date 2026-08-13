@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Systems;
 using Zenith.Player;
@@ -8,33 +9,47 @@ namespace Zenith.Tests;
 
 public sealed class SkeletonSystemTests
 {
+    private static ProjectileSystem CreateProjectileSystem(IntentTestFixture fx, EntityRuntime stores)
+    {
+        var zombies = new ZombieSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
+        var minecarts = new MinecartSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
+        var damage = new DamageDispatch();
+        damage.Register(zombies.Owns, zombies.TryApplyDamage);
+        damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
+        return new ProjectileSystem(fx.World, fx.Players, stores, damage);
+    }
+
+    private static HealthState Health(SkeletonSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Health.TryGet(id, out var health));
+        return health.State;
+    }
+
     [Fact]
     public void TargetInRange_spawnsProjectileOncePerRangedCooldown()
     {
         var fx = new IntentTestFixture();
         var target = fx.AddInGamePlayer("target");
         target.PositionY = 100f;
-        var zombies = new ZombieStore();
-        var projectiles = new ProjectileStore();
-        var projectileSystem = new ProjectileSystem(fx.World, fx.Players, projectiles, new ZombieSystem(fx.World, fx.Players, zombies, fx.Context.ItemPalette));
-        var skeletons = new SkeletonStore();
-        var system = new SkeletonSystem(fx.World, fx.Players, skeletons, projectileSystem, fx.Context.ItemPalette);
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Single(skeletons.Active);
-        Assert.Single(projectiles.Active);
+        Assert.Single(system.Skeletons);
+        Assert.Single(projectileSystem.Projectiles);
 
         for (var i = 0; i < 29; i++)
         {
             fx.Clock.Advance();
             system.Tick(fx.Clock, fx.Players.Online);
         }
-        Assert.Single(projectiles.Active);
+        Assert.Single(projectileSystem.Projectiles);
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(2, projectiles.Active.Count);
+        Assert.Equal(2, projectileSystem.Projectiles.Count);
     }
 
     [Fact]
@@ -42,14 +57,10 @@ public sealed class SkeletonSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
-        var zombies = new ZombieStore();
-        var projectiles = new ProjectileStore();
-        var projectileSystem = new ProjectileSystem(fx.World, fx.Players, projectiles,
-            new ZombieSystem(fx.World, fx.Players, zombies, fx.Context.ItemPalette));
-        var skeletons = new SkeletonStore();
-        var skeleton = new Skeleton(fx.Players.AllocateRuntimeId(), 77, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(skeletons.TryAdd(skeleton));
-        var system = new SkeletonSystem(fx.World, fx.Players, skeletons, projectileSystem, fx.Context.ItemPalette);
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        var id = system.SpawnSkeleton(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         for (var i = 0; i < 5; i++)
         {
@@ -58,8 +69,8 @@ public sealed class SkeletonSystemTests
             system.Tick(fx.Clock, fx.Players.Online);
         }
 
-        Assert.Empty(skeletons.Active);
-        Assert.True(skeleton.Health.IsDead);
+        Assert.Empty(system.Skeletons);
+        Assert.False(stores.Entities.IsAlive(id));
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:bone"), loot.Id.Value);
         Assert.True(loot.Id.IsItem);

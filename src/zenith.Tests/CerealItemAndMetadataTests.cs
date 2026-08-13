@@ -82,7 +82,7 @@ public class CerealItemAndMetadataTests
 
         var stream = new BinaryStream(bytes);
         var count = stream.ReadUnsignedVarInt();
-        Assert.Equal(8, count);
+        Assert.Equal(9, count);
 
         AssertEntry(ref stream, EntityMetaKey.Flags, EntityMetaType.Long);
         var flags = stream.ReadVarLong();
@@ -99,6 +99,9 @@ public class CerealItemAndMetadataTests
 
         AssertEntry(ref stream, EntityMetaKey.EffectAmbience, EntityMetaType.Byte);
         _ = stream.ReadByte();
+
+        AssertEntry(ref stream, EntityMetaKey.Scale, EntityMetaType.Float);
+        _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
         AssertEntry(ref stream, EntityMetaKey.Width, EntityMetaType.Float);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);

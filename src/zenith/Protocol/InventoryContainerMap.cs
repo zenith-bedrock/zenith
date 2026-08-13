@@ -20,11 +20,15 @@ static class InventoryContainerMap
     /// <summary>Bedrock created-output (craft result pickup).</summary>
     public const byte CreatedOutput = 60;
     public const byte Chest = 7;
+    /// <summary>Bedrock FullContainerName container id for the 4 armor slots (Phase XI.2).</summary>
+    public const byte Armor = 6;
 
     /// <summary>Wire window ids — Gameplay must not reference <c>InventoryContentPacket</c> (ADR §56 hygiene).</summary>
     public const int WindowInventory = 0;
     public const int WindowChest = 2;
     public const int WindowUI = 124;
+    /// <summary>Legacy fixed window id for the armor InventoryContentPacket (Phase XI.2).</summary>
+    public const int WindowArmor = 120;
     public const byte WindowTypeChest = 0;
     public const byte WindowTypeInventory = 0xff;
 
@@ -98,6 +102,16 @@ static class InventoryContainerMap
                 reference = InventorySlotReference.OpenContainer(slot);
                 return true;
 
+            case Armor:
+                if (slot >= PlayerInventory.ArmorSize)
+                {
+                    reference = default;
+                    return false;
+                }
+
+                reference = InventorySlotReference.Armor(slot);
+                return true;
+
             case CraftingInput:
                 if (slot is >= CraftingGridWireOffset and < CraftingGridWireOffset + PlayerCraftUi.GridSize)
                 {
@@ -135,6 +149,10 @@ static class InventoryContainerMap
                 return true;
             case InventorySlotArea.OpenContainer when reference.Index is >= 0 and < ChestStore.DoubleSize:
                 containerId = Chest;
+                wireSlot = (byte)reference.Index;
+                return true;
+            case InventorySlotArea.Armor when reference.Index is >= 0 and < PlayerInventory.ArmorSize:
+                containerId = Armor;
                 wireSlot = (byte)reference.Index;
                 return true;
             case InventorySlotArea.CraftGrid when reference.Index is >= 0 and < PlayerCraftUi.GridSize:

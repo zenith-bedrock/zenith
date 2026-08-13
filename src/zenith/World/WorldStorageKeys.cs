@@ -12,6 +12,7 @@ static class WorldStorageKeys
     public const string OverlayPrefix = "ov:";
     public const string ChestPrefix = "ct:";
     public const string InventoryPrefix = "inv:";
+    public const string ArmorPrefix = "ar:";
     public const string PlayerDataPrefix = "pd:";
 
     public static readonly byte[] OverlayPrefixBytes = Encoding.UTF8.GetBytes(OverlayPrefix);
@@ -28,6 +29,9 @@ static class WorldStorageKeys
 
     public static byte[] Inventory(Guid uuid) =>
         Encoding.UTF8.GetBytes($"{InventoryPrefix}{uuid.ToString("D").ToLowerInvariant()}");
+
+    public static byte[] Armor(Guid uuid) =>
+        Encoding.UTF8.GetBytes($"{ArmorPrefix}{uuid.ToString("D").ToLowerInvariant()}");
 
     public static byte[] PlayerData(Guid uuid) =>
         Encoding.UTF8.GetBytes($"{PlayerDataPrefix}{uuid.ToString("D").ToLowerInvariant()}");

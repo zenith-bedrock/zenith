@@ -449,8 +449,9 @@ public class ChunkPayloadsTests
         var (count, payload) = ChunkPayloads.BuildFlatOverworld();
         Assert.Equal(1, count);
         Assert.True(payload.Length > 2);
-        Assert.Equal(8, payload[0]);
+        Assert.Equal(ChunkPayloads.SubChunkVersion, payload[0]);
         Assert.Equal(1, payload[1]);
+        Assert.Equal(unchecked((byte)-4), payload[2]); // v9 absolute subchunk Y
         Assert.Equal(0, payload[^1]); // border
     }
 }

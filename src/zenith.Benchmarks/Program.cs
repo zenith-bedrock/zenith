@@ -7,6 +7,8 @@ try
         Environment.ExitCode = RuntimeLoadHarness.Run(args[1..]);
     else if (args.Length > 0 && args[0] == "--ecs-spike")
         Environment.ExitCode = EcsFeasibilityHarness.Run(args[1..]);
+    else if (args.Length > 0 && args[0] == "--ecs-runtime")
+        Environment.ExitCode = EcsRuntimeBenchmarks.Run(args[1..]);
     else
         BenchmarkSwitcher.FromAssembly(typeof(BinaryStreamBenchmarks).Assembly).Run(args);
 }

@@ -13,7 +13,8 @@ partial class InGameSessionHandler
 {
     private static void HandleAuthInput(NetworkSession session, ref BinaryStream stream)
     {
-        var packet = DataPacket.From<PlayerAuthInputPacket>(ref stream);
+        if (!TryDecode<PlayerAuthInputPacket>(session, ref stream, "PlayerAuthInput", out var packet))
+            return;
         var player = session.Player;
         if (player is null) return;
 
@@ -51,11 +52,11 @@ partial class InGameSessionHandler
 
         player.SubmitMovementInput(input);
 
-        if (packet.InputMissedSwing)
-            player.SubmitAttackIntent();
-
         if (packet.ItemInteraction is { } useItem)
             HandleUseItemInteraction(session, player, useItem);
+
+        if (packet.ItemStackRequest is { } itemStackRequest)
+            HandleItemStackRequests(session, player, [itemStackRequest]);
 
         // AuthInput break order (§27): Abort → Start/Crack → Predict → Continue.
         // Abort-before-Predict clears cancelled dig; Start-before-Predict fixes cancel+redig

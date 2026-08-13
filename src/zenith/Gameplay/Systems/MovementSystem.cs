@@ -60,6 +60,16 @@ sealed class MovementSystem : IGameSystem
                 continue;
             }
 
+            if (player.RidingEntityId is not null)
+            {
+                // Phase XX narrow vehicle-control path: while mounted, position is driven by the
+                // vehicle's own system (currently MinecartSystem), not by client-reported AuthInput
+                // — the client's local position while camera-locked to a vehicle is not
+                // authoritative. Still drain the input so it doesn't apply stale once dismounted.
+                _ = player.TryConsumeMovementInput(out _);
+                continue;
+            }
+
             if (!player.TryConsumeMovementInput(out var input)) continue;
 
             var wasOnGround = player.IsOnGround;
@@ -255,7 +265,7 @@ sealed class MovementSystem : IGameSystem
         var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
         var eyeZ = player.PositionZ;
 
-        entity.SendDefaultAttributes(rid, player.Health, player.Hunger);
+        entity.SendPlayerAttributes(player);
         PlayerVisibility.RelayHealth(player, online);
         entity.SendMovePlayerTeleport(
             entityRuntimeId: rid,
@@ -270,5 +280,6 @@ sealed class MovementSystem : IGameSystem
         // Client clears bag UI on death — resync like join (SpawnResponse).
         player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
         player.Session.Protocol.Inventory.SendUiInventoryContent(player);
+        player.Session.Protocol.Inventory.SendArmorContent(player.Inventory);
     }
 }

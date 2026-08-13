@@ -25,7 +25,9 @@ partial class InGameSessionHandler
             use.BlockY,
             use.BlockZ,
             face,
-            use.HotbarSlot);
+            use.HotbarSlot,
+            use.ClickedBlockRuntimeId,
+            use.HeldItem);
     }
 
     private static void HandleUseItem(
@@ -36,15 +38,18 @@ partial class InGameSessionHandler
         int blockY,
         int blockZ,
         byte blockFace,
-        int hotbarSlot)
+        int hotbarSlot,
+        int clickedBlockRuntimeId,
+        in DecodedTransactionItem heldItem)
     {
-        if (!PlayerInventory.IsValidHotbarSlot(hotbarSlot))
+        if (useActionType is < InventoryTransactionPacket.UseClickBlock or > InventoryTransactionPacket.UseAsAttack)
         {
-            session.Context.Logger.Debug($"Rejected UseItem: hotbar {hotbarSlot}");
+            session.Context.Logger.Debug($"Rejected UseItem: unknown action {useActionType} from {player.Username}.");
             return;
         }
 
-        player.SelectedHotbarSlot = hotbarSlot;
+        if (!TryApplyTransactionHeldStack(session, player, hotbarSlot, heldItem, "UseItem"))
+            return;
 
         if (useActionType == InventoryTransactionPacket.UseDestroyBlock)
         {
@@ -56,8 +61,16 @@ partial class InGameSessionHandler
 
         if (useActionType == InventoryTransactionPacket.UseClickAir)
         {
-            player.SubmitAttackIntent();
-            // Air punch / attack-style use — peer arm swing (§53). MissedSwing AuthInput also covers this.
+            var heldStack = player.Inventory.Get(hotbarSlot);
+            if (heldStack.Count > 0 && FoodItems.TryGetNutrition(session.Context.ItemPalette, heldStack.Id, out _))
+            {
+                player.SubmitEatIntent();
+                return;
+            }
+
+            // UseClickAir and AuthInput.MissedSwing are peer-animation signals only. A real
+            // entity hit carries its runtime id in ItemUseOnActor; turning an untargeted swing
+            // into an attack would let system iteration pick an arbitrary nearby actor.
             PlayerVisibility.RelaySwingArm(
                 player,
                 session.Context.PlayerManager.SnapshotOnline(),
@@ -83,6 +96,18 @@ partial class InGameSessionHandler
         var stack = player.Inventory.Get(hotbarSlot);
         var world = session.Context.World;
         var clicked = world.GetBlock(blockX, blockY, blockZ);
+        // A real client normally supplies the target block runtime id. Some compatible
+        // automation clients, however, encode the optional/prediction field as its zero
+        // default. Zero is not a Zenith block-state id, so it can safely mean “no client
+        // precondition supplied”: retain the explicit-id stale-view guard without rejecting
+        // an otherwise valid, authoritative interaction merely because that hint is absent.
+        if (clickedBlockRuntimeId != 0 && clicked != clickedBlockRuntimeId)
+        {
+            session.Context.Logger.Debug(
+                $"Rejected UseClickBlock from {player.Username}: client={clickedBlockRuntimeId}, server={clicked} @ {blockX},{blockY},{blockZ}");
+            session.Protocol.World.SendUpdateBlock(blockX, blockY, blockZ, clicked);
+            return;
+        }
 
         // Chest interact (§56): empty-hand or non-sneak → open; sneak + held placeable → place on face.
         // Prefer pending AuthInput sneak (same packet as UseItem) over last-tick IsSneaking.

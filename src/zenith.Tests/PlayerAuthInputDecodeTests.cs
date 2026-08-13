@@ -63,6 +63,22 @@ public class PlayerAuthInputDecodeTests
             w.WriteFloat(0, BinaryStream.Endianess.Little); // analogue/camera/raw
     }
 
+    private static void WriteStackActionHeader(ref BinaryStream w, byte legacyActionId)
+    {
+        w.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
+            ? legacyActionId
+            : legacyActionId - 2);
+        w.WriteByte(legacyActionId);
+    }
+
+    private static void WriteSlotInfo(ref BinaryStream w, byte container, byte slot)
+    {
+        w.WriteByte(container);
+        w.WriteBool(false); // no dynamic container id
+        w.WriteByte(slot);
+        w.WriteInt(0, BinaryStream.Endianess.Little); // stack network id
+    }
+
     [Fact]
     public void Decode_no_flags_no_block_actions()
     {
@@ -222,6 +238,7 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(4, packet.ItemInteraction.Value.BlockY);
         Assert.Equal(5, packet.ItemInteraction.Value.BlockZ);
         Assert.Equal(0, packet.ItemInteraction.Value.HotbarSlot);
+        Assert.True(packet.ItemInteraction.Value.HeldItem.IsEmpty);
         Assert.True(stream.IsEndOfFile);
     }
 
@@ -248,7 +265,46 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(8, packet.ItemInteraction.Value.BlockX);
         Assert.Equal(-60, packet.ItemInteraction.Value.BlockY);
         Assert.Equal(12, packet.ItemInteraction.Value.BlockZ);
+        Assert.Equal(0, packet.ItemInteraction.Value.ClickedBlockRuntimeId);
         Assert.Empty(packet.BlockActions);
+        Assert.True(stream.IsEndOfFile);
+    }
+
+    [Fact]
+    public void Decode_embedded_item_stack_request_preserves_creative_create_and_place()
+    {
+        var w = new BinaryStream();
+        WritePoseAndModes(ref w);
+        WriteEmptyInputData(ref w);
+        WriteModesAndTick(ref w);
+        w.WriteBool(false); // transaction_presence (decorative)
+        w.WriteBool(false); // transaction option
+        w.WriteBool(false); // item_stack_request_presence (decorative)
+        w.WriteBool(true); // item_stack_request option
+        w.WriteVarInt(44); // request id, embedded has no request count
+        w.WriteUnsignedVarInt(2); // actions
+        WriteStackActionHeader(ref w, ItemStackRequestPacket.ActionCraftCreative);
+        w.WriteUnsignedVarInt(20);
+        w.WriteByte(1);
+        WriteStackActionHeader(ref w, ItemStackRequestPacket.ActionPlace);
+        w.WriteByte(64);
+        WriteSlotInfo(ref w, 60, 50); // created output
+        WriteSlotInfo(ref w, 28, 0); // hotbar
+        w.WriteUnsignedVarInt(0); // filter strings
+        w.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
+        w.WriteBool(false); // block_action_presence (decorative)
+        w.WriteBool(false); // block_action option
+        WriteNoVehicleTail(ref w);
+
+        var stream = new BinaryStream(w.GetBufferDisposing().ToArray());
+        var packet = new PlayerAuthInputPacket();
+        packet.Decode(ref stream);
+
+        var request = Assert.NotNull(packet.ItemStackRequest);
+        Assert.Equal(44, request.RequestId);
+        Assert.True(request.AllSupported);
+        Assert.Equal(ItemStackRequestPacket.ActionCraftCreative, request.Actions[0].ActionType);
+        Assert.Equal(ItemStackRequestPacket.ActionPlace, request.Actions[1].ActionType);
         Assert.True(stream.IsEndOfFile);
     }
 }

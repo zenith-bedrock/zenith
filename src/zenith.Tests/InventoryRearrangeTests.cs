@@ -77,6 +77,14 @@ public class InventoryContainerMapTests
 
 public class InventoryPacketEncodeTests
 {
+    private static void WriteStackActionHeader(ref BinaryStream writer, byte legacyActionId)
+    {
+        writer.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
+            ? legacyActionId
+            : legacyActionId - 2);
+        writer.WriteByte(legacyActionId);
+    }
+
     [Fact]
     public void ContainerOpen_encode_is_non_empty()
     {
@@ -184,9 +192,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1); // request count
-        writer.WriteInt(1, BinaryStream.Endianess.Little); // Cereal request id (li32)
+        writer.WriteVarInt(1); // typed client request id
         writer.WriteUnsignedVarInt(1); // action count
-        writer.WriteByte(ItemStackRequestPacket.ActionPlace);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionPlace);
         writer.WriteByte(1); // count
         // source FullContainerName + slot + net id (stack_id is li32, ADR §90)
         writer.WriteByte(7);
@@ -215,9 +223,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteInt(3, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(3);
         writer.WriteUnsignedVarInt(1);
-        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
         writer.WriteUnsignedVarInt(1); // recipe net id
         writer.WriteByte(1); // times
         writer.WriteUnsignedVarInt(0);
@@ -237,9 +245,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteInt(4, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(4);
         writer.WriteUnsignedVarInt(1);
-        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipe);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
         writer.WriteUnsignedVarInt(1);
         writer.WriteByte(5); // times — shift-click multi-craft
         writer.WriteUnsignedVarInt(0);
@@ -257,9 +265,9 @@ public class InventoryPacketEncodeTests
     {
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(1);
-        writer.WriteInt(2, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(2);
         writer.WriteUnsignedVarInt(1);
-        writer.WriteByte(ItemStackRequestPacket.ActionDrop);
+        WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionDrop);
         writer.WriteByte(1); // count
         writer.WriteByte(28);
         writer.WriteBool(false);
@@ -308,7 +316,7 @@ public class InventoryPacketEncodeTests
         Assert.Equal((int)ProtocolInfo.ITEM_STACK_RESPONSE_PACKET, (int)stream.ReadUnsignedVarInt());
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
         Assert.Equal(ItemStackResponseEntry.StatusOk, stream.ReadByte());
-        Assert.Equal(42, stream.ReadInt(BinaryStream.Endianess.Little));
+        Assert.Equal(42, stream.ReadVarInt());
         Assert.True(stream.ReadBool()); // Cereal required marker
         Assert.True(stream.ReadBool()); // containers present
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt());

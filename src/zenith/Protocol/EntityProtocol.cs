@@ -225,6 +225,38 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>Peer-visible armor (Phase XI.2) — head/torso/legs/feet; body slot unused by players.</summary>
+    public void SendMobArmorEquipment(
+        ulong actorRuntimeId, NetworkItemStack head, NetworkItemStack torso, NetworkItemStack legs, NetworkItemStack feet)
+    {
+        _session.SendDataPacket(new MobArmorEquipmentPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            Head = head,
+            Torso = torso,
+            Legs = legs,
+            Feet = feet,
+            Body = NetworkItemStack.Empty
+        });
+    }
+
+    /// <summary>Timed player effect add/update/remove (Phase XI.3) — <see cref="MobEffectPacket"/> events.</summary>
+    public void SendMobEffect(
+        ulong actorRuntimeId, byte eventId, int effectId, int amplifier, bool showParticles, int durationTicks)
+    {
+        _session.SendDataPacket(new MobEffectPacket
+        {
+            TargetRuntimeId = (long)actorRuntimeId,
+            EventId = eventId,
+            EffectId = effectId,
+            EffectAmplifier = amplifier,
+            ShowParticles = showParticles,
+            EffectDurationTicks = durationTicks,
+            Tick = 0,
+            Ambient = false
+        });
+    }
+
     public void SendRemoveActor(long actorUniqueId)
     {
         _session.SendDataPacket(new RemoveActorPacket { ActorUniqueId = actorUniqueId });
@@ -288,6 +320,118 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:skeleton", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>First passive-mob vertical slice (Phase XIV). No special metadata needed — same as Skeleton.</summary>
+    public void SendAddCow(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:cow", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XV — fuse/explosion behavior lives entirely in CreeperSystem; this is spawn visual only.</summary>
+    public void SendAddCreeper(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:creeper", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XV — teleport behavior lives entirely in EndermanSystem; this is spawn visual only.</summary>
+    public void SendAddEnderman(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:enderman", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XVII — first flying mob; movement lives entirely in BatSystem, this is spawn visual only.</summary>
+    public void SendAddBat(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:bat", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XVII — second ground-chase mob; targeting/attack logic lives entirely in SpiderSystem.</summary>
+    public void SendAddSpider(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:spider", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XVII — first non-player entity with inventory-shaped data; no trade UI wired yet.</summary>
+    public void SendAddVillager(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:villager", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XVIII — boss pressure test; phase/melee/slam behavior lives entirely in GolemSystem, this is spawn visual only.</summary>
+    public void SendAddGolem(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:iron_golem", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Phase XIX — first vehicle-shaped entity; push/roll physics lives entirely in MinecartSystem, this is spawn visual only.</summary>
+    public void SendAddMinecart(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:minecart", PositionX = x, PositionY = y, PositionZ = z,
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+        });
+    }
+
+    /// <summary>Mount/dismount actor link (Phase XX). <paramref name="linkType"/> is one of <see cref="SetActorLinkPacket"/>'s Type* constants.</summary>
+    public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, byte linkType, bool immediate = true, bool causedByRider = true)
+    {
+        _session.SendDataPacket(new SetActorLinkPacket
+        {
+            RiderUniqueId = riderUniqueId,
+            RiddenUniqueId = riddenUniqueId,
+            LinkType = linkType,
+            Immediate = immediate,
+            CausedByRider = causedByRider
+        });
+    }
+
+    /// <summary>Phase XX — second non-ground-navigation mob (swimming); movement lives entirely in FishSystem, this is spawn visual only.</summary>
+    public void SendAddFish(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
+            EntityType = "minecraft:cod", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
         });
     }
@@ -421,11 +565,25 @@ sealed class EntityProtocol
         });
     }
 
-    /// <summary>Attributes from Player vitals (ADR §40) — remaining fields still seed constants.</summary>
-    public void SendDefaultAttributes(ulong actorRuntimeId, float health, float hunger)
+    /// <summary>Attributes from Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
+    public void SendDefaultAttributes(
+        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f)
     {
-        _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(actorRuntimeId, health, hunger));
+        _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(
+            actorRuntimeId, health, hunger, experienceLevel, experienceProgress));
     }
+
+    /// <summary>
+    /// Projects a live <see cref="global::Zenith.Player.Player"/>'s current UpdateAttributes payload
+    /// (Health/Hunger/Experience) in one call (Phase XII) — every one of six call sites had been
+    /// hand-computing the same <c>(level, progress)</c> pair via <see cref="Gameplay.PlayerExperience.Progress"/>
+    /// before this existed. Still a plain wire projection, not a state model: it reads
+    /// <paramref name="player"/> and sends, nothing more.
+    /// </summary>
+    public void SendPlayerAttributes(global::Zenith.Player.Player player) =>
+        SendDefaultAttributes(
+            (ulong)player.RuntimeId, player.Health, player.Hunger,
+            player.ExperienceLevel, Gameplay.PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints));
 
     /// <summary>Replicates only the current health of an already-spawned actor.</summary>
     public void SendHealth(ulong actorRuntimeId, float health, float maximum)

@@ -61,6 +61,12 @@ internal static class RuntimeLoadHarness
                 }
             return 0;
         }
+        if (options.MixedRoster)
+        {
+            foreach (var actorCount in options.ActorCounts)
+                Print(RunMixedRoster(options.ActorPlayers, actorCount, options.ActorTicks));
+            return 0;
+        }
 
         foreach (var playerCount in options.PlayerCounts)
         {
@@ -193,7 +199,7 @@ internal static class RuntimeLoadHarness
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes,
-            actorCount, host.Projectiles!.Projectiles.Active.Count,
+            actorCount, host.Projectiles!.Projectiles.Count,
             host.Projectiles.ReplicatedSpawnCount, host.Projectiles.RemovalCount, host.Projectiles.ReplicatedMoveCount,
             host.Projectiles.ReplicatedRemovalCount, host.Projectiles.ReplicatedMoveSkippedCount);
     }
@@ -227,7 +233,7 @@ internal static class RuntimeLoadHarness
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes,
-            actorCount, host.Zombies!.Zombies.Active.Count,
+            actorCount, host.Zombies!.Zombies.Count,
             host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
             host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
     }
@@ -260,7 +266,7 @@ internal static class RuntimeLoadHarness
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes,
-            actorCount, host.Zombies!.Zombies.Active.Count,
+            actorCount, host.Zombies!.Zombies.Count,
             host.Zombies.ReplicatedSpawnCount, 0, host.Zombies.ReplicatedMoveCount,
             host.Zombies.ReplicatedRemovalCount, host.Zombies.ReplicatedMoveSkippedCount);
     }
@@ -291,11 +297,47 @@ internal static class RuntimeLoadHarness
             elapsed[tick] = Stopwatch.GetTimestamp() - started;
         }
         host.PrintActivationTimings(scenario, useProjectiles);
-        var active = useProjectiles ? host.Projectiles!.Projectiles.Active.Count : host.Zombies!.Zombies.Active.Count;
+        var active = useProjectiles ? host.Projectiles!.Projectiles.Count : host.Zombies!.Zombies.Count;
         return LoadResult.Create($"activation-{(useProjectiles ? "projectile" : "zombie")}-{scenario.ToString().ToLowerInvariant()}",
             observerCount, ticks, elapsed, GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore, host.Transport.Datagrams, host.Transport.Bytes,
             actorCount, active);
+    }
+
+    /// <summary>
+    /// Phase XXII, Part 29 — every ECS-authoritative species (Zombie/Minecart/Cow/Skeleton/Spider/
+    /// Projectile) ticking together under one GameLoop, roughly evenly split across actorCount, plus
+    /// a steady trickle of projectiles fired into the mob cluster so ProjectileSystem's cross-species
+    /// DamageDispatch query (Query.With(Health, Position)) is actually exercised against a mixed
+    /// population each tick, not just a single species at a time like the other actor benchmarks.
+    /// </summary>
+    private static LoadResult RunMixedRoster(int playerCount, int actorCount, int ticks)
+    {
+        var host = new RuntimeHost(playerCount, streamChunks: false, includeMixedRoster: true,
+            includeWorldInteractionDiagnostics: true);
+        host.ConfigureActorInterest(enabled: true);
+        host.SeedMixedRoster(actorCount);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            host.FireMixedRosterProjectile(tick);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+        }
+        host.PrintMixedRosterTimings();
+
+        return LoadResult.Create("mixed-roster", playerCount, ticks, elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams, host.Transport.Bytes,
+            actorCount, host.MixedRosterActiveActorCount);
     }
 
     private static void Print(LoadResult result) =>
@@ -317,6 +359,10 @@ internal static class RuntimeLoadHarness
         public GameLoop Loop { get; }
         public ProjectileSystem? Projectiles { get; }
         public ZombieSystem? Zombies { get; }
+        public MinecartSystem? Minecarts { get; }
+        public CowSystem? Cows { get; }
+        public SpiderSystem? Spiders { get; }
+        public SkeletonSystem? Skeletons { get; }
         public World.World World { get; }
         private WorldInteractionDiagnostics? WorldDiagnostics { get; }
 
@@ -326,6 +372,7 @@ internal static class RuntimeLoadHarness
             bool includeChunkStream = true,
             bool includeProjectileSystem = false,
             bool includeZombieSystem = false,
+            bool includeMixedRoster = false,
             bool includeWorldInteractionDiagnostics = false)
         {
             if (playerCount <= 0)
@@ -357,8 +404,8 @@ internal static class RuntimeLoadHarness
             ZombieSystem? zombieSystem = null;
             if (includeZombieSystem || includeProjectileSystem)
             {
-                var zombies = new ZombieStore();
-                zombieSystem = new ZombieSystem(world, players, zombies, itemPalette);
+                var entities = new Zenith.Ecs.EntityRuntime();
+                zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
                 Zombies = zombieSystem;
                 if (includeZombieSystem)
                 {
@@ -367,14 +414,63 @@ internal static class RuntimeLoadHarness
                     else
                         Loop.Register(zombieSystem);
                 }
+
+                if (includeProjectileSystem)
+                {
+                    var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
+                    var damage = new Zenith.Gameplay.DamageDispatch();
+                    damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
+                    damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
+                    Projectiles = new ProjectileSystem(world, players, entities, damage);
+                    if (WorldDiagnostics is { } projectileTimings)
+                        Loop.Register(Projectiles, projectileTimings.Projectile);
+                    else
+                        Loop.Register(Projectiles);
+                }
             }
-            if (includeProjectileSystem)
+            else if (includeMixedRoster)
             {
-                Projectiles = new ProjectileSystem(world, players, new ProjectileStore(), zombieSystem!);
-                if (WorldDiagnostics is { } projectileTimings)
-                    Loop.Register(Projectiles, projectileTimings.Projectile);
+                // Mirrors ZenithServer.cs's real composition-root order: DamageDispatch built once,
+                // Zombie/Minecart/Cow/Spider registered, ProjectileSystem constructed on top of that
+                // dispatch, then SkeletonSystem constructed (it needs a live ProjectileSystem to
+                // shoot back) and registered into the same dispatch last.
+                var entities = new Zenith.Ecs.EntityRuntime();
+                zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
+                Zombies = zombieSystem;
+                var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
+                Minecarts = minecartSystem;
+                var cowSystem = new CowSystem(world, players, entities, itemPalette);
+                Cows = cowSystem;
+                var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
+                Spiders = spiderSystem;
+                var damage = new Zenith.Gameplay.DamageDispatch();
+                damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
+                damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
+                damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
+                damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
+                Projectiles = new ProjectileSystem(world, players, entities, damage);
+                var skeletonSystem = new SkeletonSystem(world, players, entities, Projectiles, itemPalette);
+                Skeletons = skeletonSystem;
+                damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
+
+                if (WorldDiagnostics is { } mixedTimings)
+                {
+                    Loop.Register(zombieSystem, mixedTimings.Zombie);
+                    Loop.Register(minecartSystem, mixedTimings.Minecart);
+                    Loop.Register(cowSystem, mixedTimings.Cow);
+                    Loop.Register(spiderSystem, mixedTimings.Spider);
+                    Loop.Register(Projectiles, mixedTimings.Projectile);
+                    Loop.Register(skeletonSystem, mixedTimings.Skeleton);
+                }
                 else
+                {
+                    Loop.Register(zombieSystem);
+                    Loop.Register(minecartSystem);
+                    Loop.Register(cowSystem);
+                    Loop.Register(spiderSystem);
                     Loop.Register(Projectiles);
+                    Loop.Register(skeletonSystem);
+                }
             }
             Loop.Register(new BlockDigSystem(world));
             if (WorldDiagnostics is { } timings)
@@ -496,21 +592,60 @@ internal static class RuntimeLoadHarness
         {
             if (Projectiles is null) throw new InvalidOperationException("Actor churn requires ProjectileSystem.");
             var owner = _players[0];
-            var start = Projectiles.Projectiles.Active.Count;
+            var start = Projectiles.Projectiles.Count;
             for (var i = start; i < targetCount; i++)
             {
-                var entityId = 1_000_000L + i + (long)Loop.Clock.CurrentTick * 10_000L;
-                var projectile = new Projectile(
-                    entityId, (ulong)entityId, owner.RuntimeId,
-                    clustered ? (i % 16) + 0.25f : (i % 100) * 2f,
-                    100f,
-                    clustered ? ((i / 16) % 16) + 0.25f : (i / 100) * 2f,
-                    0.05f, 0f, 0f);
-                if (!Projectiles.Projectiles.TryAdd(projectile)) break;
+                var x = clustered ? (i % 16) + 0.25f : (i % 100) * 2f;
+                var z = clustered ? ((i / 16) % 16) + 0.25f : (i / 100) * 2f;
+                if (!Projectiles.TrySpawnFromActor(owner.RuntimeId, x, 100f, z, 0.05f, 0f, 0f, _playerManager.Online))
+                    break;
             }
         }
 
         public void ReplenishProjectiles(int targetCount, bool clustered) => SeedProjectiles(targetCount, clustered);
+
+        public int MixedRosterActiveActorCount =>
+            (Zombies?.Zombies.Count ?? 0) + (Minecarts?.Minecarts.Count ?? 0) + (Cows?.Cows.Count ?? 0) +
+            (Spiders?.Spiders.Count ?? 0) + (Skeletons?.Skeletons.Count ?? 0) + (Projectiles?.Projectiles.Count ?? 0);
+
+        /// <summary>
+        /// Splits actorCount roughly evenly across the six ECS-authoritative species and spreads
+        /// them in a shared grid near the origin so ProjectileSystem's cross-species query and each
+        /// species' own AI actually have to look past the others every tick, not just their own kind.
+        /// </summary>
+        public void SeedMixedRoster(int actorCount)
+        {
+            if (Zombies is null || Minecarts is null || Cows is null || Spiders is null || Skeletons is null || Projectiles is null)
+                throw new InvalidOperationException("Mixed-roster workload requires includeMixedRoster.");
+
+            var perSpecies = Math.Max(1, actorCount / 6);
+            var side = (int)Math.Ceiling(Math.Sqrt(perSpecies));
+            void Grid(Action<float, float> spawn)
+            {
+                for (var i = 0; i < perSpecies; i++)
+                    spawn((i % side) * 1.5f, (i / side) * 1.5f);
+            }
+
+            Grid((x, z) => Zombies.SpawnZombie(x, Blocks.FlatSpawnY, z));
+            Grid((x, z) => Minecarts.SpawnMinecart(x + 200f, Blocks.FlatSpawnY, z));
+            Grid((x, z) => Cows.SpawnCow(x + 400f, Blocks.FlatSpawnY, z));
+            Grid((x, z) => Spiders.SpawnSpider(x + 600f, Blocks.FlatSpawnY, z));
+            Grid((x, z) => Skeletons.SpawnSkeleton(x + 800f, Blocks.FlatSpawnY, z));
+        }
+
+        /// <summary>Every fifth tick, fires one projectile from the first player toward whichever
+        /// species cluster that tick lands on, keeping DamageDispatch under continuous cross-species
+        /// load for the whole run rather than a single burst at the start.</summary>
+        public void FireMixedRosterProjectile(int tick)
+        {
+            if (Projectiles is null || tick % 5 != 0) return;
+            var owner = _players[0];
+            var clusterOffsets = new[] { 0f, 200f, 400f, 600f, 800f };
+            var targetX = clusterOffsets[(tick / 5) % clusterOffsets.Length] + 0.25f;
+            Projectiles.TrySpawnFromActor(owner.RuntimeId, targetX - 0.3f, Blocks.FlatSpawnY, 0.25f, 0.05f, 0f, 0f, _playerManager.Online);
+        }
+
+        public void PrintMixedRosterTimings() => WorldDiagnostics?.PrintMixedRoster();
 
         public void SeedInterestZombies(int targetCount, InterestLayout layout)
         {
@@ -519,9 +654,7 @@ internal static class RuntimeLoadHarness
             {
                 var x = layout == InterestLayout.Clustered ? 0.25f + (i % 32) * 0.02f : (i % 64) * 16f + 0.25f;
                 var z = layout == InterestLayout.Clustered ? 0.25f + (i / 32) * 0.02f : (i / 64) * 16f + 0.25f;
-                var id = 2_000_000L + i;
-                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
-                    throw new InvalidOperationException("Interest workload seed refused.");
+                Zombies.SpawnZombie(x, Blocks.FlatSpawnY, z);
             }
         }
 
@@ -561,11 +694,9 @@ internal static class RuntimeLoadHarness
             if (Zombies is null) throw new InvalidOperationException("Activation workload requires ZombieSystem.");
             for (var i = 0; i < targetCount; i++)
             {
-                var id = _playerManager.AllocateRuntimeId();
                 var x = (i % 100) * 0.25f;
                 var z = (i / 100) * 0.25f;
-                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
-                    throw new InvalidOperationException("Activation zombie seed refused.");
+                Zombies.SpawnZombie(x, Blocks.FlatSpawnY, z);
             }
         }
 
@@ -609,9 +740,7 @@ internal static class RuntimeLoadHarness
                 var z = mode == ZombieWorkloadMode.Idle
                     ? 100f + (i / 32) * 1.25f
                     : (i / 16) * 0.35f;
-                var id = _playerManager.AllocateRuntimeId();
-                if (!Zombies.Zombies.TryAdd(new Zombie(id, (ulong)id, x, Blocks.FlatSpawnY, z)))
-                    throw new InvalidOperationException("Zombie workload seed refused.");
+                Zombies.SpawnZombie(x, Blocks.FlatSpawnY, z);
             }
 
             if (mode == ZombieWorkloadMode.Obstacle)
@@ -626,7 +755,7 @@ internal static class RuntimeLoadHarness
 
         public void ValidateZombieCount(int expected)
         {
-            if (Zombies is null || Zombies.Zombies.Active.Count != expected)
+            if (Zombies is null || Zombies.Zombies.Count != expected)
                 throw new InvalidOperationException($"Zombie workload lifecycle changed actor count: expected {expected}.");
         }
 
@@ -719,6 +848,10 @@ internal static class RuntimeLoadHarness
         public TimingMetric Inventory { get; }
         public TimingMetric Zombie { get; }
         public TimingMetric Projectile { get; }
+        public TimingMetric Minecart { get; }
+        public TimingMetric Cow { get; }
+        public TimingMetric Spider { get; }
+        public TimingMetric Skeleton { get; }
 
         public WorldInteractionDiagnostics()
         {
@@ -729,6 +862,10 @@ internal static class RuntimeLoadHarness
             Inventory = builder.Timing("tick.system.inventory", "tick");
             Zombie = builder.Timing("tick.system.zombie", "tick");
             Projectile = builder.Timing("tick.system.projectile", "tick");
+            Minecart = builder.Timing("tick.system.minecart", "tick");
+            Cow = builder.Timing("tick.system.cow", "tick");
+            Spider = builder.Timing("tick.system.spider", "tick");
+            Skeleton = builder.Timing("tick.system.skeleton", "tick");
             Runtime = builder.Build();
         }
 
@@ -766,6 +903,23 @@ internal static class RuntimeLoadHarness
             var metric = snapshot.Metrics.First(m => m.Name == name);
             var average = metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
             Console.WriteLine($"activation timings actor={(projectiles ? "projectile" : "zombie")} scenario={scenario.ToString().ToLowerInvariant()} avg={average:F3}ms");
+        }
+
+        public void PrintMixedRoster()
+        {
+            var snapshot = Runtime.CaptureSnapshot();
+            var names = new[]
+            {
+                "tick.system.zombie", "tick.system.minecart", "tick.system.cow",
+                "tick.system.spider", "tick.system.skeleton", "tick.system.projectile"
+            };
+            var parts = names.Select(name =>
+            {
+                var metric = snapshot.Metrics.First(m => m.Name == name);
+                var average = metric.Count == 0 ? 0d : metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
+                return $"{name["tick.system.".Length..]}={average:F3}ms";
+            });
+            Console.WriteLine($"mixed-roster timings {string.Join(" ", parts)}");
         }
     }
 
@@ -843,7 +997,8 @@ internal static class RuntimeLoadHarness
         bool WorldInteraction,
         bool ZombieBehavior,
         bool InterestScaling,
-        bool ActivationPressure)
+        bool ActivationPressure,
+        bool MixedRoster)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -855,6 +1010,7 @@ internal static class RuntimeLoadHarness
             var zombieBehavior = false;
             var interestScaling = false;
             var activationPressure = false;
+            var mixedRoster = false;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -873,11 +1029,13 @@ internal static class RuntimeLoadHarness
                     interestScaling = true;
                 else if (args[i] == "--activation-pressure")
                     activationPressure = true;
+                else if (args[i] == "--mixed-roster")
+                    mixedRoster = true;
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure, mixedRoster);
         }
     }
 

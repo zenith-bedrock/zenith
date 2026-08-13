@@ -1,6 +1,7 @@
 using Zenith.Event;
 using Zenith.Diagnostics;
 using System.Diagnostics;
+using Zenith.Ecs;
 using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
@@ -69,16 +70,16 @@ class ZenithServer
         }
         var players = new PlayerManager();
         var clock = new GameClock();
-        var zombies = new ZombieStore();
-        var projectiles = new ProjectileStore();
-        var skeletons = new SkeletonStore();
+        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for Zombie/Minecart/Projectile/Cow/Skeleton/Spider.
+        var creepers = new CreeperStore();
+        var endermen = new EndermanStore();
+        var bats = new BatStore();
+        var villagers = new VillagerStore();
+        var golems = new GolemStore();
+        var fish = new FishStore();
         var diagnostics = new ServerRuntimeDiagnostics();
         var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
-        gameLoop.Register(new TimeSyncSystem(), diagnostics.System("time-sync"));
-        // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
-        gameLoop.Register(new MovementSystem(players), diagnostics.System("movement"));
-        gameLoop.Register(new ChatSystem(), diagnostics.System("chat"));
-        gameLoop.Register(new GameModeSystem(), diagnostics.System("game-mode"));
+        RegisterEarlySystems(gameLoop, players, diagnostics);
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
@@ -109,20 +110,9 @@ class ZenithServer
         var world = new World.World(_chunkStorage, serverLogger, terrain);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);
-        var gravity = new GravitySystem(world, players);
-        var zombieSystem = new ZombieSystem(world, players, zombies, itemPalette);
-        gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
-        var projectileSystem = new ProjectileSystem(world, players, projectiles, zombieSystem);
-        gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
-        gameLoop.Register(new SkeletonSystem(world, players, skeletons, projectileSystem, itemPalette), diagnostics.System("skeleton"));
-        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
-        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
-        gameLoop.Register(gravity, diagnostics.System("gravity"));
-        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
-        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
-        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
-        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
-        gameLoop.Register(new ChunkStreamSystem(world), diagnostics.System("chunk-stream"));
+        var gravity = RegisterWorldSystems(
+            gameLoop, diagnostics, world, players, entities, creepers, endermen,
+            bats, villagers, golems, fish, itemPalette, recipes, creative);
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative, diagnostics);
@@ -152,12 +142,97 @@ class ZenithServer
         _telemetry = new RuntimeTelemetry(serverLogger);
         gameLoop.SetTickObserver(elapsed =>
         {
-            var actors = zombies.Active.Count + skeletons.Active.Count + projectiles.Active.Count +
-                         world.FallingBlocks.Active.Count + world.FloorDrops.Count;
+            var actors = entities.Entities.AliveCount +
+                         creepers.Active.Count + endermen.Active.Count +
+                         bats.Active.Count + villagers.Active.Count + golems.Active.Count +
+                         fish.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count;
             diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
                 diagnostics.Systems.Count, RakNetServer);
             _telemetry.RecordTick(elapsed, players.Count, actors, RakNetServer);
         });
+    }
+
+    /// <summary>
+    /// Phase XIII.2: the systems that need only <see cref="PlayerManager"/> — registered before
+    /// palettes/world exist. Grouped here so the constructor reads as one sequence of named steps
+    /// instead of interleaving registration with palette/world bootstrap.
+    /// </summary>
+    private static void RegisterEarlySystems(GameLoop gameLoop, PlayerManager players, ServerRuntimeDiagnostics diagnostics)
+    {
+        gameLoop.Register(new TimeSyncSystem(), diagnostics.System("time-sync"));
+        // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
+        gameLoop.Register(new MovementSystem(players), diagnostics.System("movement"));
+        // ItemUseOnActor player targets are resolved after movement established this tick's pose.
+        gameLoop.Register(new PlayerMeleeSystem(players), diagnostics.System("player-melee"));
+        gameLoop.Register(new ChatSystem(), diagnostics.System("chat"));
+        gameLoop.Register(new GameModeSystem(), diagnostics.System("game-mode"));
+    }
+
+    /// <summary>
+    /// Phase XIII.2: every system that needs the world/palettes/recipes, registered in the exact
+    /// order the inline comments below require. Returns only <see cref="GravitySystem"/> — the sole
+    /// system the constructor still needs a handle to after registration (graceful-shutdown flush).
+    /// </summary>
+    private static GravitySystem RegisterWorldSystems(
+        GameLoop gameLoop,
+        ServerRuntimeDiagnostics diagnostics,
+        World.World world,
+        PlayerManager players,
+        EntityRuntime entities,
+        CreeperStore creeperStore,
+        EndermanStore endermanStore,
+        BatStore batStore,
+        VillagerStore villagerStore,
+        GolemStore golemStore,
+        FishStore fishStore,
+        ItemPalette itemPalette,
+        RecipeRegistry recipes,
+        CreativeCatalog creative)
+    {
+        var gravity = new GravitySystem(world, players);
+        // Phase XXI/XXII — ECS-authoritative roster. DamageDispatch (Phase XXII) is built once and
+        // registered by every ECS-damageable system before Projectile is constructed — this is the
+        // seam that replaced the old hardcoded Zombie/Minecart-only dispatch chain in
+        // ProjectileSystem once a third (then fourth, fifth) ECS-damageable species arrived. Skeleton
+        // is constructed after Projectile (it fires through it) and registers into the same dispatch.
+        var damage = new DamageDispatch();
+        var zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
+        damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
+        var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
+        damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
+        var cowSystem = new CowSystem(world, players, entities, itemPalette);
+        damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
+        var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
+        damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
+        var projectileSystem = new ProjectileSystem(world, players, entities, damage);
+        var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette);
+        damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
+
+        gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
+        gameLoop.Register(minecartSystem, diagnostics.System("minecart"));
+        gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
+        gameLoop.Register(skeletonSystem, diagnostics.System("skeleton"));
+        gameLoop.Register(cowSystem, diagnostics.System("cow"));
+        gameLoop.Register(new CreeperSystem(world, players, creeperStore, itemPalette), diagnostics.System("creeper"));
+        gameLoop.Register(new EndermanSystem(world, players, endermanStore, itemPalette), diagnostics.System("enderman"));
+        gameLoop.Register(new BatSystem(world, players, batStore, itemPalette), diagnostics.System("bat"));
+        gameLoop.Register(spiderSystem, diagnostics.System("spider"));
+        gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette), diagnostics.System("villager"));
+        gameLoop.Register(new GolemSystem(world, players, golemStore, itemPalette), diagnostics.System("golem"));
+        gameLoop.Register(new FishSystem(world, players, fishStore, itemPalette), diagnostics.System("fish"));
+        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
+        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
+        gameLoop.Register(gravity, diagnostics.System("gravity"));
+        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
+        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
+        // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
+        gameLoop.Register(new HungerSystem(itemPalette, players), diagnostics.System("hunger"));
+        gameLoop.Register(new EffectSystem(players), diagnostics.System("effect"));
+        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
+        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
+        gameLoop.Register(new ChunkStreamSystem(world), diagnostics.System("chunk-stream"));
+
+        return gravity;
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>

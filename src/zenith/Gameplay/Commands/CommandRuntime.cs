@@ -33,6 +33,27 @@ sealed class CommandRuntime
         };
         _catalog.Register(new CommandDefinition("diagnostics", "Capture and compare runtime diagnostics", CommandPermission.Any,
             new CommandOverload(new EnumCommandArgument("action", diagnosticsActions))));
+
+        var effectGive = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["give"] = "give" };
+        var effectClear = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["clear"] = "clear" };
+        var effectTypes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["poison"] = EffectType.Poison,
+            ["regeneration"] = EffectType.Regeneration,
+            ["regen"] = EffectType.Regeneration
+        };
+        _catalog.Register(new CommandDefinition("effect", "Apply or clear a timed player effect", CommandPermission.Any,
+            [
+                new CommandOverload(
+                    new EnumCommandArgument("action", effectGive),
+                    new EnumCommandArgument("type", effectTypes),
+                    new IntegerCommandArgument("duration", 1, 24000, Optional: true),
+                    new IntegerCommandArgument("amplifier", 0, 3, Optional: true),
+                    new PlayerCommandArgument("target", name => _players.Get(name), Optional: true)),
+                new CommandOverload(
+                    new EnumCommandArgument("action", effectClear),
+                    new PlayerCommandArgument("target", name => _players.Get(name), Optional: true))
+            ]));
     }
 
     public IReadOnlyList<string> Suggest(string prefix) => _catalog.Suggest(prefix);
@@ -58,9 +79,28 @@ sealed class CommandRuntime
                 return new("Command", arguments.TryGetValue("ticks", out var ticks) ? $"Sample request: {ticks} ticks." : "Sample request: default.");
             case "diagnostics":
                 return ExecuteDiagnostics((string)arguments["action"]);
+            case "effect":
+                return ExecuteEffect(source, arguments);
             default:
                 return new("Command", "Unknown command.");
         }
+    }
+
+    private CommandFeedback ExecuteEffect(Player.Player source, IReadOnlyDictionary<string, object> arguments)
+    {
+        var target = arguments.TryGetValue("target", out var targetValue) ? (Player.Player)targetValue : source;
+        var action = (string)arguments["action"];
+        if (action == "clear")
+        {
+            target.SubmitEffect(EffectIntent.Clear);
+            return new("Effect", $"Clearing effects for {target.Username}.");
+        }
+
+        var type = (EffectType)arguments["type"];
+        var duration = arguments.TryGetValue("duration", out var durationValue) ? (int)durationValue : 600;
+        var amplifier = arguments.TryGetValue("amplifier", out var amplifierValue) ? (int)amplifierValue : 0;
+        target.SubmitEffect(EffectIntent.Give(type, amplifier, duration));
+        return new("Effect", $"Queued {type} (amplifier {amplifier}, {duration} ticks) for {target.Username}.");
     }
 
     private CommandFeedback ExecuteDiagnostics(string action)

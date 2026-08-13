@@ -10,7 +10,9 @@ enum DamageCause
     Fall,
     Void,
     Melee,
-    Projectile
+    Projectile,
+    Starve,
+    Magic
 }
 
 /// <summary>
@@ -23,6 +25,8 @@ readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = nu
     public static DamageSource Generic => new(DamageCause.Generic);
     public static DamageSource Fall => new(DamageCause.Fall);
     public static DamageSource Void => new(DamageCause.Void);
+    public static DamageSource Starve => new(DamageCause.Starve);
+    public static DamageSource Magic => new(DamageCause.Magic);
     public static DamageSource Melee => new(DamageCause.Melee);
     public static DamageSource MeleeFrom(long ownerRuntimeId) => new(DamageCause.Melee, ownerRuntimeId);
     /// <summary>Concrete first attribution case; the id is not an actor abstraction.</summary>
@@ -91,6 +95,13 @@ sealed class HealthState
         IsDead = true;
         FatalSource = source;
         return new DamageResult(DamageResultKind.Died, source, previous, Current);
+    }
+
+    /// <summary>Well-fed regeneration (Phase XI.1). No-op once dead; never exceeds Maximum.</summary>
+    public void Heal(float amount)
+    {
+        if (IsDead || !float.IsFinite(amount) || amount <= 0f) return;
+        Current = MathF.Min(Maximum, Current + amount);
     }
 
     /// <summary>Respawn resets the health lifecycle after its owner completed the transition.</summary>
