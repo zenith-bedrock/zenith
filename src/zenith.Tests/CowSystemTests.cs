@@ -88,6 +88,7 @@ public sealed class CowSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.Empty(system.Cows);
@@ -127,7 +128,7 @@ public sealed class CowSystemTests
                 StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
 
         var maxHealth = Health(system, id).Maximum;
-        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online));
+        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
         Assert.True(system.Stores.Entities.IsAlive(id));
         Assert.Equal(maxHealth, Health(system, id).Current);
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
@@ -162,7 +163,7 @@ public sealed class CowSystemTests
         var id = system.SpawnCow(shooter.PositionX + 1, shooter.PositionY, shooter.PositionZ);
 
         Assert.True(system.TryApplyDamage(
-            id, DamageSource.Projectile(shooter.RuntimeId), Health(system, id).Maximum, fx.Players.Online));
+            id, DamageSource.Projectile(shooter.RuntimeId), Health(system, id).Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.Equal(1, shooter.ExperiencePoints);
     }

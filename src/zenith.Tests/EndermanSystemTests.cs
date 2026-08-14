@@ -122,6 +122,7 @@ public sealed class EndermanSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.False(enderman.IsActive);

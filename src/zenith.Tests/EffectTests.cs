@@ -46,6 +46,55 @@ public class EffectTests
         Assert.Equal(fx.Clock.CurrentTick + 200, active.ExpiresAtTick);
     }
 
+    /// <summary>
+    /// Cross-reference audit finding, Phase XXIII-B polish pass — vanilla/PocketMine "stronger
+    /// wins": Zenith previously overwrote unconditionally, so a weak potion could silently
+    /// downgrade/shorten a stronger effect already ticking.
+    /// </summary>
+    [Fact]
+    public void A_weaker_or_shorter_reapplication_does_not_downgrade_a_stronger_active_effect()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("resistant");
+        var system = new EffectSystem(fx.Players);
+
+        player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 2, durationTicks: 200));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        // Lower amplifier, even with a longer duration — vanilla keeps the stronger instance.
+        player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 1000));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.Effects.TryGetValue(EffectType.Regeneration, out var stillActive));
+        Assert.Equal(2, stillActive.Amplifier);
+        Assert.Equal(fx.Clock.CurrentTick + 200, stillActive.ExpiresAtTick);
+
+        // Same amplifier, shorter duration — vanilla keeps the longer instance.
+        player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 2, durationTicks: 5));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.Effects.TryGetValue(EffectType.Regeneration, out var stillLonger));
+        Assert.Equal(fx.Clock.CurrentTick + 200, stillLonger.ExpiresAtTick); // unchanged — the clock never advanced across these calls
+    }
+
+    [Fact]
+    public void A_strictly_stronger_reapplication_does_replace_the_active_effect()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("upgraded");
+        var system = new EffectSystem(fx.Players);
+
+        player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 100));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 1, durationTicks: 50));
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.Effects.TryGetValue(EffectType.Regeneration, out var active));
+        Assert.Equal(1, active.Amplifier);
+        Assert.Equal(fx.Clock.CurrentTick + 50, active.ExpiresAtTick);
+    }
+
     [Fact]
     public void Effect_expires_naturally_once_its_duration_elapses()
     {
@@ -107,11 +156,14 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("nearly-dead");
-        _ = player.ApplyDamage(DamageSource.Generic, 18.5f); // Health = 1.5
+        _ = player.ApplyDamage(DamageSource.Generic, 18.5f, 0); // Health = 1.5
         var system = new EffectSystem(fx.Players);
 
-        // Amplifier 3 would deal 4 damage — clamped so the tick at CurrentTick=0 leaves exactly 1 HP.
+        // Amplifier 3 would deal 4 damage — clamped so the poison tick leaves exactly 1 HP. Advance
+        // past the setup hit's own hit-invulnerability window first (Phase XXIII-B), landing exactly
+        // on the 25-tick poison interval.
         player.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 3, durationTicks: 100));
+        fx.Clock.AdvanceBy(25);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.False(player.IsDead);
@@ -129,7 +181,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("healing");
-        _ = player.ApplyDamage(DamageSource.Generic, 10f); // Health = 10
+        _ = player.ApplyDamage(DamageSource.Generic, 10f, 0); // Health = 10
         var system = new EffectSystem(fx.Players);
 
         player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 200));
@@ -152,7 +204,7 @@ public class EffectTests
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotEmpty(player.Effects);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
 
         Assert.True(player.IsDead);
         Assert.Empty(player.Effects);
@@ -163,7 +215,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("corpse");
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
         Assert.True(player.IsDead);
 
         player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 100));

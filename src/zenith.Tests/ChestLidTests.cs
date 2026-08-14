@@ -93,6 +93,73 @@ public class ChestLidTests
         Assert.Equal(0, fx.World.Chests.OpenerCount(2, 70, 2));
     }
 
+    /// <summary>Phase XXIII-B — real-client report: a container never opens again after the first close.</summary>
+    [Fact]
+    public void InventorySystem_can_reopen_the_same_chest_after_closing_it()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("reopener");
+        fx.World.Chests.Ensure(4, 64, 4);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+
+        Assert.True(player.SubmitWindowIntent(
+            InventoryWindowIntent.Close((byte)InventoryContainerMap.WindowChest, ContainerOpenPacket.WindowTypeChest)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Null(player.OpenChest);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+        Assert.Equal(OpenChestView.Single(4, 64, 4), player.OpenChest);
+    }
+
+    /// <summary>Real Bedrock clients sometimes send WindowId 0xFF ("none") instead of the actual id on close — PocketMine documents this since 1.21.100. Must not permanently lock the player out of reopening.</summary>
+    [Fact]
+    public void InventorySystem_closes_the_active_chest_even_when_the_client_sends_the_unknown_window_id_quirk()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("quirky-close");
+        fx.World.Chests.Ensure(4, 64, 4);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+
+        Assert.True(player.SubmitWindowIntent(
+            InventoryWindowIntent.Close(InventoryWindowIntent.UnknownWindowId, InventoryWindowIntent.UnknownWindowId)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Null(player.OpenChest);
+        Assert.Equal(0, fx.World.Chests.OpenerCount(4, 64, 4));
+
+        // Must still be able to reopen afterward — the actual reported symptom.
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+    }
+
+    [Fact]
+    public void InventorySystem_can_open_the_player_inventory_again_after_closing_it()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("reopener-inv");
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenInventory()));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.True(player.InventoryWindowOpen);
+
+        Assert.True(player.SubmitWindowIntent(
+            InventoryWindowIntent.Close((byte)InventoryContainerMap.WindowInventory, ContainerOpenPacket.WindowTypeInventory)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.False(player.InventoryWindowOpen);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenInventory()));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.True(player.InventoryWindowOpen);
+    }
+
     [Fact]
     public void InventorySystem_releases_disconnected_chest_opener_on_the_gameplay_tick()
     {

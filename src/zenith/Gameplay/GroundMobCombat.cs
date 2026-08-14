@@ -28,7 +28,7 @@ interface IDamageableActor
     float PositionZ { get; }
     HealthState Health { get; }
     bool IsActive { get; }
-    DamageResult ApplyDamage(DamageSource source, float amount);
+    DamageResult ApplyDamage(DamageSource source, float amount, ulong currentTick);
     void Remove();
 }
 
@@ -52,7 +52,8 @@ static class GroundMobCombat
         IReadOnlyList<Player.Player> online,
         float attackDistance,
         float attackDamage,
-        Func<TMob, DamageSource, float, IReadOnlyList<Player.Player>, bool> tryApplyDamage)
+        ulong currentTick,
+        Func<TMob, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
         where TMob : IDamageableActor
     {
         var reachSquared = attackDistance * attackDistance;
@@ -63,7 +64,7 @@ static class GroundMobCombat
             var dz = mob.PositionZ - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
             if (!player.TryConsumeAttackIntent(checked((long)mob.RuntimeId))) continue;
-            if (tryApplyDamage(mob, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online)) break;
+            if (tryApplyDamage(mob, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) break;
         }
     }
 
@@ -87,6 +88,7 @@ static class GroundMobCombat
         StackId lootItem,
         int killExperience,
         string mobName,
+        ulong currentTick,
         Action<TMob> removeFromStore,
         Action<Player.Player>? onDeathReplicatedToPeer = null)
         where TMob : IDamageableActor
@@ -98,12 +100,16 @@ static class GroundMobCombat
             lootItem, 1);
         if (mob.Health.Current <= amount && !canDropLoot) return false;
 
-        var result = mob.ApplyDamage(source, amount);
+        var result = mob.ApplyDamage(source, amount, currentTick);
         if (!result.WasApplied) return false;
 
         foreach (var peer in online)
             if (replicated.Contains((mob.EntityId, peer.RuntimeId)))
+            {
                 peer.Session.Protocol.Entity.SendHealth(mob.RuntimeId, mob.Health.Current, mob.Health.Maximum);
+                if (!result.CausedDeath)
+                    peer.Session.Protocol.Entity.SendHurt(mob.RuntimeId);
+            }
 
         if (!result.CausedDeath) return true;
 
@@ -118,6 +124,7 @@ static class GroundMobCombat
         foreach (var peer in online)
             if (replicated.Remove((mob.EntityId, peer.RuntimeId)))
             {
+                peer.Session.Protocol.Entity.SendDeath(mob.RuntimeId);
                 peer.Session.Protocol.Entity.SendRemoveActor(mob.EntityId);
                 onDeathReplicatedToPeer?.Invoke(peer);
             }

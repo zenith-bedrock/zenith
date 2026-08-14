@@ -28,7 +28,6 @@ sealed class MovementSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        _ = clock;
         if (online.Count == 0) return;
         _dirtyPose.Clear();
         _dirtyFlags.Clear();
@@ -86,10 +85,10 @@ sealed class MovementSystem : IGameSystem
             if (input.MissedSwing)
                 _swing.Add(player);
 
-            ApplyFallDamage(player, wasOnGround, online);
+            ApplyFallDamage(player, wasOnGround, online, clock.CurrentTick);
 
             if (!player.IsDead && player.PositionY < VoidRescueY)
-                BeginVoidDeath(player, online);
+                BeginVoidDeath(player, online, clock.CurrentTick);
 
             if (IsPoseDirty(player))
                 _dirtyPose.Add(player);
@@ -201,8 +200,9 @@ sealed class MovementSystem : IGameSystem
     /// <summary>Void fall → death screen + Survival death loot (ADR §73). Creative keeps inventory.</summary>
     private void BeginVoidDeath(
         global::Zenith.Player.Player player,
-        IReadOnlyList<global::Zenith.Player.Player> online) =>
-        ApplyDamage(player, online, DamageSource.Void, player.MaxHealth);
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        ulong currentTick) =>
+        ApplyDamage(player, online, DamageSource.Void, player.MaxHealth, currentTick);
 
     /// <summary>
     /// The gameplay owner applies health, then owns the single fatal transition if necessary.
@@ -213,8 +213,9 @@ sealed class MovementSystem : IGameSystem
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online,
         DamageSource source,
-        float amount) =>
-        _ = PlayerDamage.Apply(player, _players, online, source, amount);
+        float amount,
+        ulong currentTick) =>
+        _ = PlayerDamage.Apply(player, _players, online, source, amount, currentTick);
 
     /// <summary>
     /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per block beyond
@@ -226,7 +227,8 @@ sealed class MovementSystem : IGameSystem
     private void ApplyFallDamage(
         global::Zenith.Player.Player player,
         bool wasOnGround,
-        IReadOnlyList<global::Zenith.Player.Player> online)
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        ulong currentTick)
     {
         if (!wasOnGround && player.IsOnGround)
         {
@@ -239,7 +241,7 @@ sealed class MovementSystem : IGameSystem
             var damage = MathF.Floor(fallDistance - SafeFallDistance);
             if (damage <= 0) return;
 
-            ApplyDamage(player, online, DamageSource.Fall, damage);
+            ApplyDamage(player, online, DamageSource.Fall, damage, currentTick);
             return;
         }
 

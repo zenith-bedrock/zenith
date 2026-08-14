@@ -14,7 +14,19 @@ enum ProtocolInfo : int
     MOVE_PLAYER_PACKET = 0x13,
     MOVE_ACTOR_ABSOLUTE_PACKET = 0x12,
     MOB_EFFECT_PACKET = 0x1c,
-    SET_ACTOR_LINK_PACKET = 0x1b,
+    /// <summary>
+    /// Phase XXIII fix: was misassigned to 0x1b (ActorEvent's real ID) when introduced in Phase
+    /// XX. Corrected against gophertunnel's iota-based packet id table (protocol.packet.id.go) —
+    /// SetActorLink is packet #41 (0x29), not #27. The Phase XX field-order comment ("cross-checked
+    /// against gophertunnel") verified the payload shape but not the id itself.
+    /// </summary>
+    SET_ACTOR_LINK_PACKET = 0x29,
+    ACTOR_EVENT_PACKET = 0x1b,
+    /// <summary>
+    /// Phase XXIII-B — knockback impulse. Confirmed against gophertunnel's iota packet id table:
+    /// sits between SetActorData (39/0x27) and SetActorLink (41/0x29), i.e. #40/0x28.
+    /// </summary>
+    SET_ACTOR_MOTION_PACKET = 0x28,
     MOB_EQUIPMENT_PACKET = 0x1f,
     MOB_ARMOR_EQUIPMENT_PACKET = 0x20,
     INTERACT_PACKET = 0x21,

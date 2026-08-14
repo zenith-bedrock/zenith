@@ -39,7 +39,7 @@ sealed class Creeper : IDamageableActor
     /// <summary>Phase XVI: last tick a player was within despawn range — see <see cref="DespawnLifecycle"/>.</summary>
     internal ulong LastSeenNearPlayerTick { get; set; }
 
-    public DamageResult ApplyDamage(DamageSource source, float amount) => Health.Apply(source, amount);
+    public DamageResult ApplyDamage(DamageSource source, float amount, ulong currentTick) => Health.Apply(source, amount, currentTick);
     public void Remove() => IsActive = false;
 }
 

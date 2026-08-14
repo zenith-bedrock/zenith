@@ -100,11 +100,13 @@ public sealed class CreeperSystemTests
         Assert.True(store.TryAdd(creeper));
         var system = new CreeperSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 
-        for (var i = 0; i < 5; i++)
-        {
-            player.SubmitAttackIntent();
-            system.Tick(fx.Clock, fx.Players.Online);
-        }
+        // One lethal swing, not several graduated ones (Phase XXIII-B: with real hit-invulnerability
+        // now enforced, several small melee hits spaced >10 ticks apart cannot land inside the
+        // Creeper's own 30-tick fuse anyway once the player is close enough to reach it — that's now
+        // correct vanilla-like tension, not a bug. This test is about the *bookkeeping path*, not
+        // about racing the fuse, so it deals the kill in one authoritative call.)
+        Assert.True(system.TryApplyDamage(
+            creeper, DamageSource.MeleeFrom(player.RuntimeId), creeper.Health.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.False(creeper.IsActive);
         Assert.Empty(store.Active);

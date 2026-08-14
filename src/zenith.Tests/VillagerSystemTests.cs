@@ -84,6 +84,7 @@ public sealed class VillagerSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.Empty(store.Active);

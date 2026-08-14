@@ -148,6 +148,10 @@ partial class InGameSessionHandler : ISessionHandler
         var cap = session.Context.Config.World.SpawnChunkRadius;
         var radius = Math.Min(request.Radius, cap);
         player.Chunks.Radius = radius;
+        // A radius change alone never crosses a chunk boundary, so ChunkStreamSystem's own
+        // PublisherCenterChanged check would otherwise never re-fire — force it to republish at the
+        // new radius next tick (see ForcePublisherRefresh's doc comment).
+        player.Chunks.ForcePublisherRefresh();
         session.Protocol.World.SendChunkRadiusUpdated(radius);
         session.Context.Logger.Debug($"In-game chunk radius updated for {player.Username}: {radius}");
     }

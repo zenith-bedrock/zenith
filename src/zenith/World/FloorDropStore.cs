@@ -177,10 +177,21 @@ sealed class FloorDropStore
         }
     }
 
-    public IEnumerable<((int X, int Y, int Z) Pos, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks)> Snapshot()
+    /// <summary>
+    /// A real, eagerly-materialized copy — not a lazy iterator over <c>_drops</c>. This must stay
+    /// eager: <see cref="FloorDropSystem"/>'s pickup loop mutates the store (via
+    /// <see cref="TryTakeUpTo"/>) while iterating a previously-called <c>Snapshot()</c> result. A
+    /// lazy <c>yield return</c> generator here throws "Collection was modified" the moment a second
+    /// item is picked up in the same tick — found as a real bug (partial-pickup + an uncaught
+    /// exception that permanently kills the GameLoop task, since <see cref="Zenith.Gameplay.Runtime.GameLoop.TickOnce"/>
+    /// re-throws system failures) rather than a silent behavioral difference.
+    /// </summary>
+    public List<((int X, int Y, int Z) Pos, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks)> Snapshot()
     {
+        var result = new List<((int X, int Y, int Z), StackId, int, long, int, int)>(_drops.Count);
         foreach (var (pos, slot) in _drops)
-            yield return (pos, slot.Id, slot.Count, slot.EntityRuntimeId, slot.PickupDelayTicks, slot.AgeTicks);
+            result.Add((pos, slot.Id, slot.Count, slot.EntityRuntimeId, slot.PickupDelayTicks, slot.AgeTicks));
+        return result;
     }
 
     public bool TryTake(int x, int y, int z, out StackId id, out int count, out long entityRuntimeId)

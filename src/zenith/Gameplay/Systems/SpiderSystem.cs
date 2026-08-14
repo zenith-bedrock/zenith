@@ -41,7 +41,7 @@ sealed class SpiderSystem : IGameSystem
     private readonly StackId _lootItem;
     private readonly Random _random;
     private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
@@ -84,7 +84,7 @@ sealed class SpiderSystem : IGameSystem
             if (!_stores.Entities.IsAlive(id)) continue;
             if (TryDespawn(id, clock, online)) continue;
             ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online);
+            ApplyPlayerAttacks(id, online, clock.CurrentTick);
             if (!_stores.Entities.IsAlive(id)) continue;
             var target = FindOrAcquireTarget(id, online);
             if (target is not null)
@@ -168,7 +168,7 @@ sealed class SpiderSystem : IGameSystem
             {
                 peer.Session.Protocol.Entity.SendAddSpider(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
                 peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPosition(pos.X, pos.Y, pos.Z);
+                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
@@ -179,8 +179,8 @@ sealed class SpiderSystem : IGameSystem
             });
     }
 
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, TryApplyDamage);
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);
 
     private void TryAttackPlayer(EntityId id, Player.Player? target, GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -191,10 +191,14 @@ sealed class SpiderSystem : IGameSystem
         if (!IsTargetValid(pos, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
             return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage))
+        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
+                clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z))
         {
             state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             TryApplyPoison(target, clock);
+            foreach (var peer in online)
+                if (_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+                    peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
 
@@ -210,16 +214,16 @@ sealed class SpiderSystem : IGameSystem
         if (_random.NextDouble() >= PoisonChance) return;
 
         var expiresAtTick = clock.CurrentTick + PoisonDurationTicks;
-        target.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick);
+        if (!target.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
         target.Session.Protocol.Entity.SendMobEffect(
             (ulong)target.RuntimeId, MobEffectPacket.EventAdd, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
         PoisonInflictedCount++;
     }
 
     /// <summary>Concrete Spider health/removal operation — same shape as every other migrated actor's.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Spider",
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Spider", currentTick,
             destroyActor: sid =>
             {
                 if (_stores.Identities.TryGet(sid, out var identity))
@@ -293,7 +297,7 @@ sealed class SpiderSystem : IGameSystem
             TryMove(id, pos.X - sideX, pos.Z - sideZ))
         {
             ref var p = ref _stores.Positions.GetRef(id);
-            p.Yaw = MathF.Atan2(-dxn, dzn) * (180f / MathF.PI);
+            p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
         }
     }
 
@@ -319,7 +323,7 @@ sealed class SpiderSystem : IGameSystem
                 var key = (identity.ActorUniqueId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
                 if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPosition(pos.X, pos.Y, pos.Z);
+                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -330,25 +334,14 @@ sealed class SpiderSystem : IGameSystem
                     ActorRuntimeId = identity.ActorRuntimeId,
                     X = pos.X,
                     Y = pos.Y,
-                    Z = pos.Z
+                    Z = pos.Z,
+                    Yaw = pos.Yaw,
+                    HeadYaw = pos.Yaw
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

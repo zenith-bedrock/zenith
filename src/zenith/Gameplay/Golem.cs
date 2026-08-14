@@ -44,7 +44,15 @@ sealed class Golem : IDamageableActor
     /// <summary>Last tick a player was within despawn range — see <see cref="DespawnLifecycle"/>.</summary>
     internal ulong LastSeenNearPlayerTick { get; set; }
 
-    public DamageResult ApplyDamage(DamageSource source, float amount) => Health.Apply(source, amount);
+    /// <summary>
+    /// Phase XXIII-B — vanilla parity: naturally-passive iron golems only become hostile toward a
+    /// specific player who provoked them (attacked the golem itself, or attacked a villager nearby).
+    /// Retained once set, same target-retention shape as Zombie/Spider, until that player is no
+    /// longer a valid target.
+    /// </summary>
+    internal long? TargetPlayerRuntimeId { get; set; }
+
+    public DamageResult ApplyDamage(DamageSource source, float amount, ulong currentTick) => Health.Apply(source, amount, currentTick);
     public void Remove() => IsActive = false;
 }
 

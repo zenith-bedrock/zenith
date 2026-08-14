@@ -114,7 +114,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("regen");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
         player.Hunger = 20f;
-        _ = player.ApplyDamage(DamageSource.Generic, 5f);
+        _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
 
         fx.Clock.AdvanceBy(79);
         system.Tick(fx.Clock, fx.Players.Online);
@@ -132,7 +132,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("hungry");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
         player.Hunger = 10f;
-        _ = player.ApplyDamage(DamageSource.Generic, 5f);
+        _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
 
         fx.Clock.AdvanceBy(80);
         system.Tick(fx.Clock, fx.Players.Online);
@@ -147,7 +147,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("respawner");
         player.Hunger = 3f;
         player.Exhaustion = 2f;
-        _ = player.ApplyDamage(DamageSource.Void, player.MaxHealth);
+        _ = player.ApplyDamage(DamageSource.Void, player.MaxHealth, 0);
         Assert.True(player.IsDead);
 
         player.CompleteRespawn();

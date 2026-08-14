@@ -140,6 +140,14 @@ sealed class ServerConfig
     {
         public string Server { get; set; } = "info";
         public string Raknet { get; set; } = "warn";
+
+        /// <summary>
+        /// When true, also writes every log line to <c>{data-root}/logs/zenith-{timestamp}.log</c>
+        /// (one file per server run) and periodic diagnostics snapshots to a paired
+        /// <c>zenith-diagnostics-{timestamp}.jsonl</c> — off by default so normal runs don't
+        /// accumulate files.
+        /// </summary>
+        public bool ToFile { get; set; } = false;
     }
 
     /// <summary>

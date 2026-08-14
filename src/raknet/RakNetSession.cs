@@ -32,7 +32,15 @@ public class RakNetSession
     protected readonly HashSet<uint> ReceivedFrameSequences = new();
     protected readonly HashSet<uint> LostFrameSequences = new();
     protected readonly uint[] InputHighestSequenceIndex = new uint[32];
-    protected readonly Dictionary<short, Dictionary<int, Frame>> FragmentsQueue = new();
+
+    /// <summary>
+    /// Timestamp is when reassembly for that split id started. Without an eviction sweep, a split
+    /// id whose peer never delivers the final fragment (lost fragment, disconnect mid-transfer)
+    /// occupied its slot forever — after <see cref="MAX_CONCURRENT_FRAGMENTED_MESSAGES"/> such
+    /// abandoned reassemblies accumulate over a session's lifetime, the session could no longer
+    /// receive ANY further split packet (cross-reference audit finding, Phase XXIII-B polish pass).
+    /// </summary>
+    protected readonly Dictionary<short, (long StartedAtMs, Dictionary<int, Frame> Parts)> FragmentsQueue = new();
 
     protected readonly uint[] InputOrderIndex = new uint[32];
     protected readonly Dictionary<byte, Dictionary<uint, Frame>> InputOrderingQueue = new();
@@ -53,7 +61,17 @@ public class RakNetSession
     protected readonly uint[] OutputSequenceIndex = new uint[32];
 
     protected readonly HashSet<Frame> OutputFrames = new();
-    protected readonly Dictionary<uint, List<Frame>> OutputBackup = new();
+
+    /// <summary>
+    /// Timestamp is the "sent at" wall-clock time (ms) — <see cref="ResendStaleBackupLocked"/> uses
+    /// it to retransmit a reliable FrameSet that was never ACKed *or* NACKed. Retransmission was
+    /// previously NACK-only: if the one NACK datagram reporting the loss was itself dropped by UDP
+    /// (exactly as likely as any other datagram), the peer never learned it was missing and the
+    /// entry sat here forever, permanently stalling that order channel (cross-reference audit
+    /// finding, Phase XXIII-B polish pass). No RTT estimation exists yet, so the timeout is a fixed,
+    /// conservative value rather than adaptive — see <see cref="ResendTimeoutMs"/>.
+    /// </summary>
+    protected readonly Dictionary<uint, (long SentAtMs, List<Frame> Frames)> OutputBackup = new();
 
     // Mantido em paralelo a OutputFrames em vez de recalculado via LINQ Sum a cada
     // QueueFrame: eram O(n) por chamada (O(n²) num burst de frames), e esse é
@@ -128,8 +146,35 @@ public class RakNetSession
         {
             FlushAcknowledgeLocked<ACK>(ReceivedFrameSequences);
             FlushAcknowledgeLocked<NACK>(LostFrameSequences);
+            ResendStaleBackupLocked(now);
 
             SendQueueLocked(OutputFrames.Count);
+        }
+    }
+
+    /// <summary>Fixed, conservative resend timeout — see <see cref="OutputBackup"/>'s doc comment.</summary>
+    private const long ResendTimeoutMs = 1500;
+
+    /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
+    private void ResendStaleBackupLocked(long now)
+    {
+        if (OutputBackup.Count == 0) return;
+
+        List<uint>? stale = null;
+        foreach (var (sequence, entry) in OutputBackup)
+        {
+            if (now - entry.SentAtMs < ResendTimeoutMs) continue;
+            (stale ??= new List<uint>()).Add(sequence);
+        }
+        if (stale is null) return;
+
+        foreach (var sequence in stale)
+        {
+            if (!OutputBackup.Remove(sequence, out var entry)) continue;
+            // Same "resend as-backed-up" requirement as HandleNack: QueueFrameLocked re-batches
+            // into a fresh FrameSet without re-deriving reliability identity.
+            foreach (var frame in entry.Frames)
+                QueueFrameLocked(frame, Priority.Immediate);
         }
     }
 
@@ -164,11 +209,15 @@ public class RakNetSession
 
         var frameSet = new FrameSet
         {
-            Sequence = OutputSequence++,
+            Sequence = OutputSequence,
             Packets = OutputFrames.Take(count).ToList()
         };
+        // The wire only carries 24 bits (WriteTriad/ReadTriad) — wrapping the in-memory counter to
+        // match keeps OutputBackup's keys aligned with what a peer's ACK/NACK actually reports once
+        // a long-lived session crosses 2^24 FrameSets (cross-reference audit finding).
+        OutputSequence = (OutputSequence + 1) & SequenceMask;
 
-        OutputBackup[frameSet.Sequence] = frameSet.Packets;
+        OutputBackup[frameSet.Sequence] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), frameSet.Packets);
 
         foreach (var frame in frameSet.Packets)
         {
@@ -318,8 +367,8 @@ public class RakNetSession
         {
             foreach (var sequence in nack.Sequences)
             {
-                if (!OutputBackup.TryGetValue(sequence, out var frames)) continue;
-                foreach (var frame in frames)
+                if (!OutputBackup.Remove(sequence, out var entry)) continue;
+                foreach (var frame in entry.Frames)
                 {
                     // Retransmit the frame AS-BACKED-UP — do not route through SendFrameLocked,
                     // which unconditionally re-derives OrderIndex/SequenceIndex/MessageIndex as if
@@ -338,6 +387,25 @@ public class RakNetSession
         }
     }
 
+    /// <summary>24-bit wire sequence space — <see cref="FrameSet.Sequence"/> only ever carries the
+    /// low 24 bits (<c>WriteTriad</c>/<c>ReadTriad</c>).</summary>
+    private const uint SequenceMask = 0xFFFFFF;
+    private const uint SequenceHalfSpace = 0x800000;
+
+    /// <summary>
+    /// RFC1982-style circular "is `a` strictly newer than `b`" over the 24-bit wire sequence space.
+    /// A plain numeric `&lt;`/`==` comparison (the pre-fix code) treats every FrameSet sent after a
+    /// long-lived session's <see cref="OutputSequence"/> wraps past 2^24 as permanently "stale" —
+    /// the receiver silently stops accepting any further input forever (cross-reference audit
+    /// finding, Phase XXIII-B polish pass). Only matters after ~16.7M FrameSets on one connection,
+    /// but that's an ordinary outcome for a long-running always-on server, not a hypothetical.
+    /// </summary>
+    private static bool IsSequenceNewer(uint a, uint b)
+    {
+        var diff = (a - b) & SequenceMask;
+        return diff != 0 && diff < SequenceHalfSpace;
+    }
+
     private void HandleIncomingFrameSet(ref BinaryStream reader)
     {
         var frameSet = new FrameSet();
@@ -353,17 +421,24 @@ public class RakNetSession
 
             // Stale/old frameset (<= last accepted sequence) — drop. Per-message ordering
             // within a channel is handled separately in HandleFrame via InputOrderIndex.
-            if (frameSet.Sequence < LastInputSequence || frameSet.Sequence == LastInputSequence) return;
+            // LastInputSequence starts at -1 (sentinel: "nothing received yet") — always accept
+            // the very first FrameSet regardless of its wire value.
+            if (LastInputSequence >= 0 && !IsSequenceNewer(frameSet.Sequence, (uint)LastInputSequence)) return;
 
             ReceivedFrameSequences.Add(frameSet.Sequence);
 
-            if (frameSet.Sequence - LastInputSequence > 1)
+            if (LastInputSequence >= 0)
             {
-                for (
-                    var index = (uint)(LastInputSequence + 1);
-                    index < frameSet.Sequence;
-                    index++
-                ) LostFrameSequences.Add(index);
+                var gap = (frameSet.Sequence - (uint)LastInputSequence) & SequenceMask;
+                if (gap > 1)
+                {
+                    var index = ((uint)LastInputSequence + 1) & SequenceMask;
+                    for (var i = 0u; i < gap - 1; i++)
+                    {
+                        LostFrameSequences.Add(index);
+                        index = (index + 1) & SequenceMask;
+                    }
+                }
             }
 
             LastInputSequence = (int)frameSet.Sequence;
@@ -411,11 +486,40 @@ public class RakNetSession
     private const int MAX_CONCURRENT_FRAGMENTED_MESSAGES = 32;
     private const int MAX_FRAGMENT_COUNT_PER_MESSAGE = 512;
 
+    /// <summary>Generous relative to any real transfer — see <see cref="FragmentsQueue"/>'s doc comment.</summary>
+    private const long FragmentTimeoutMs = 30_000;
+
+    /// <summary>
+    /// Not lock-protected, deliberately: <see cref="FragmentsQueue"/> (like the rest of the
+    /// input-side ordering/fragment state) is only ever touched from the single UDP receive-loop
+    /// thread that calls <see cref="HandleFragment"/> — sweeping here keeps that invariant instead
+    /// of introducing a second, cross-thread access path guarded by a different lock.
+    /// </summary>
+    private void EvictStaleFragments(long now)
+    {
+        if (FragmentsQueue.Count == 0) return;
+
+        List<short>? stale = null;
+        foreach (var (id, entry) in FragmentsQueue)
+        {
+            if (now - entry.StartedAtMs < FragmentTimeoutMs) continue;
+            (stale ??= new List<short>()).Add(id);
+        }
+        if (stale is null) return;
+
+        foreach (var id in stale)
+        {
+            Server.Logger?.Warning($"[{EndPoint}] Evicted abandoned fragment reassembly id={id} after {FragmentTimeoutMs}ms.");
+            FragmentsQueue.Remove(id);
+        }
+    }
+
     private bool HandleFragment(Frame frame)
     {
         if (!frame.IsSplit()) return false;
 
         var splitInfo = frame.SplitInfo!;
+        EvictStaleFragments(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 
         if (splitInfo.Count <= 0 || splitInfo.Count > MAX_FRAGMENT_COUNT_PER_MESSAGE || splitInfo.Index < 0 || splitInfo.Index >= splitInfo.Count)
         {
@@ -423,8 +527,9 @@ public class RakNetSession
             return false;
         }
 
-        if (FragmentsQueue.TryGetValue(splitInfo.Id, out var fragment))
+        if (FragmentsQueue.TryGetValue(splitInfo.Id, out var entry))
         {
+            var fragment = entry.Parts;
             fragment[splitInfo.Index] = frame;
 
             if (fragment.Count != splitInfo.Count) return false;
@@ -466,10 +571,10 @@ public class RakNetSession
             return false;
         }
 
-        FragmentsQueue[splitInfo.Id] = new()
+        FragmentsQueue[splitInfo.Id] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), new Dictionary<int, Frame>
         {
             [splitInfo.Index] = frame
-        };
+        });
         return false;
     }
 

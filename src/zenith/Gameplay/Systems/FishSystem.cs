@@ -57,7 +57,7 @@ sealed class FishSystem : IGameSystem
             if (!fish.IsActive) continue;
             if (TryDespawn(fish, clock, online)) continue;
             ReconcileViewers(fish, online);
-            ApplyPlayerAttacks(fish, online);
+            ApplyPlayerAttacks(fish, online, clock.CurrentTick);
             if (!fish.IsActive) continue;
             Wander(fish, clock, online);
             ReconcileViewers(fish, online);
@@ -126,16 +126,16 @@ sealed class FishSystem : IGameSystem
                 ReplicatedRemovalCount++;
             });
 
-    private void ApplyPlayerAttacks(Fish fish, IReadOnlyList<Player.Player> online)
+    private void ApplyPlayerAttacks(Fish fish, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         const float attackDistance = 2.25f;
-        GroundMobCombat.ApplyPlayerMeleeAttacks(fish, online, attackDistance, 4f, TryApplyDamage);
+        GroundMobCombat.ApplyPlayerMeleeAttacks(fish, online, attackDistance, 4f, currentTick, TryApplyDamage);
     }
 
     /// <summary>Concrete Fish health/removal operation — same shape as every other ground mob's, one loot item, no retaliation.</summary>
-    public bool TryApplyDamage(Fish fish, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+    public bool TryApplyDamage(Fish fish, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         GroundMobCombat.TryApplyDamage(
-            fish, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Fish",
+            fish, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Fish", currentTick,
             removeFromStore: _fish.Remove,
             onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
 
@@ -149,7 +149,10 @@ sealed class FishSystem : IGameSystem
         var desiredY = fish.PositionY + fish.WanderDirectionY * MovePerTick;
         var desiredZ = fish.PositionZ + fish.WanderDirectionZ * MovePerTick;
         if (TrySwim(fish, desiredX, desiredY, desiredZ))
+        {
+            fish.Yaw = LookMath.MoveYawTowards(fish.Yaw, LookMath.YawTowards(fish.WanderDirectionX, fish.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
             BroadcastMove(fish, online);
+        }
         else
             fish.WanderChangeAtTick = clock.CurrentTick; // out of water — choose a fresh heading next tick
     }
@@ -159,7 +162,7 @@ sealed class FishSystem : IGameSystem
         foreach (var peer in online)
         {
             if (!_replicated.Contains((fish.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(fish.RuntimeId, fish.PositionX, fish.PositionY, fish.PositionZ);
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(fish.RuntimeId, fish.PositionX, fish.PositionY, fish.PositionZ, yaw: fish.Yaw, headYaw: fish.Yaw);
         }
     }
 
@@ -171,7 +174,6 @@ sealed class FishSystem : IGameSystem
         fish.WanderDirectionZ = MathF.Sin(yaw) * horizontal;
         fish.WanderDirectionY = (_random.NextSingle() * 2f - 1f) * (1f - horizontal);
         fish.WanderChangeAtTick = clock.CurrentTick + (ulong)_random.Next(MinWanderTicks, MaxWanderTicks);
-        fish.Yaw = MathF.Atan2(-fish.WanderDirectionX, fish.WanderDirectionZ) * (180f / MathF.PI);
     }
 
     /// <summary>

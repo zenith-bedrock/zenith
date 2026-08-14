@@ -17,13 +17,22 @@ readonly struct AbsoluteActorPose
     public bool OnGround { get; init; }
 }
 
-/// <summary>Raw non-player actor pose; the domain Y is already the actor base position.</summary>
+/// <summary>
+/// Raw non-player actor pose; the domain Y is already the actor base position. Yaw/HeadYaw default
+/// to 0 for callers that genuinely have no orientation (falling blocks, projectiles) — every mob
+/// system must pass its actual current yaw or every post-spawn movement update silently resets the
+/// actor to face +Z (Phase XXIII finding: this was happening for every migrated species before this
+/// struct grew rotation fields).
+/// </summary>
 readonly struct RawActorPose
 {
     public ulong ActorRuntimeId { get; init; }
     public float X { get; init; }
     public float Y { get; init; }
     public float Z { get; init; }
+    public float Pitch { get; init; }
+    public float Yaw { get; init; }
+    public float HeadYaw { get; init; }
     public byte Flags { get; init; }
 }
 
@@ -101,7 +110,8 @@ sealed class EntityProtocol
     /// Non-player actor move — no <see cref="EntityHitboxes.AbsoluteWireY"/> eye offset (that's a
     /// player-only wire convention). <paramref name="y"/> is the actor's own base position (ADR §95).
     /// </summary>
-    public void SendMoveActorAbsoluteRaw(ulong actorRuntimeId, float x, float y, float z, byte flags = 0)
+    public void SendMoveActorAbsoluteRaw(
+        ulong actorRuntimeId, float x, float y, float z, byte flags = 0, float pitch = 0f, float yaw = 0f, float headYaw = 0f)
     {
         _session.SendDataPacket(new MoveActorAbsolutePacket
         {
@@ -109,7 +119,10 @@ sealed class EntityProtocol
             Flags = flags,
             PositionX = x,
             PositionY = y,
-            PositionZ = z
+            PositionZ = z,
+            Pitch = pitch,
+            Yaw = yaw,
+            HeadYaw = headYaw
         });
     }
 
@@ -262,6 +275,66 @@ sealed class EntityProtocol
         _session.SendDataPacket(new RemoveActorPacket { ActorUniqueId = actorUniqueId });
     }
 
+    /// <summary>
+    /// Non-lethal damage reaction (Phase XXIII) — ActorEvent HURT_ANIMATION. Send once per landed
+    /// hit that did not kill the target; gameplay decides "hurt happened", this only projects it.
+    /// </summary>
+    public void SendHurt(ulong actorRuntimeId)
+    {
+        _session.SendDataPacket(new ActorEventPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            EventId = ActorEventPacket.EventHurt,
+            EventData = 0
+        });
+    }
+
+    /// <summary>
+    /// Mob attack-swing animation (Phase XXIII-B) — ActorEvent ARM_SWING, not the player-only
+    /// AnimatePacket. See <see cref="ActorEventPacket.EventArmSwing"/>.
+    /// </summary>
+    public void SendAttackSwing(ulong actorRuntimeId)
+    {
+        _session.SendDataPacket(new ActorEventPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            EventId = ActorEventPacket.EventArmSwing,
+            EventData = 0
+        });
+    }
+
+    /// <summary>
+    /// Death reaction (Phase XXIII) — ActorEvent DEATH_ANIMATION. Sent immediately before
+    /// <see cref="SendRemoveActor"/>; PocketMine's reference behavior fires this as a one-shot event
+    /// tolerating immediate removal, so no separate "dying" ECS lifecycle state was introduced (see
+    /// docs/history/phases/phase-xxiii-entity-fidelity-findings.md).
+    /// </summary>
+    public void SendDeath(ulong actorRuntimeId)
+    {
+        _session.SendDataPacket(new ActorEventPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            EventId = ActorEventPacket.EventDeath,
+            EventData = 0
+        });
+    }
+
+    /// <summary>
+    /// Player-facing knockback impulse (Phase XXIII-B) — SetActorMotion. The player's own client
+    /// physics integrates this velocity (gravity/friction) same as a mob's SetActorMotion; the
+    /// server does not (and cannot) move a player's position directly.
+    /// </summary>
+    public void SendKnockback(ulong actorRuntimeId, float velocityX, float velocityY, float velocityZ)
+    {
+        _session.SendDataPacket(new SetActorMotionPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            VelocityX = velocityX,
+            VelocityY = velocityY,
+            VelocityZ = velocityZ
+        });
+    }
+
     /// <summary>Falling-block actor (ADR §95). <paramref name="y"/> is block-anchored, no eye offset.</summary>
     public void SendAddFallingBlock(long entityUniqueId, ulong entityRuntimeId, int blockRuntimeId, float x, float y, float z)
     {
@@ -320,18 +393,20 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:skeleton", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.6f, 1.9f)
         });
     }
 
-    /// <summary>First passive-mob vertical slice (Phase XIV). No special metadata needed — same as Skeleton.</summary>
+    /// <summary>First passive-mob vertical slice (Phase XIV).</summary>
     public void SendAddCow(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
     {
         _session.SendDataPacket(new AddActorPacket
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:cow", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.9f, 1.3f)
         });
     }
 
@@ -342,7 +417,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:creeper", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.6f, 1.8f)
         });
     }
 
@@ -353,7 +429,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:enderman", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.6f, 2.9f)
         });
     }
 
@@ -364,7 +441,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:bat", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            BatMetadata = true
         });
     }
 
@@ -375,7 +453,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:spider", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (1.4f, 0.9f)
         });
     }
 
@@ -386,7 +465,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:villager", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.6f, 1.9f)
         });
     }
 
@@ -397,7 +477,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:iron_golem", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (1.4f, 2.7f)
         });
     }
 
@@ -432,7 +513,8 @@ sealed class EntityProtocol
         {
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:cod", PositionX = x, PositionY = y, PositionZ = z,
-            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw
+            Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
+            Dimensions = (0.5f, 0.3f)
         });
     }
 
@@ -443,7 +525,7 @@ sealed class EntityProtocol
         if (poses.Count == 1)
         {
             var p = poses[0];
-            SendMoveActorAbsoluteRaw(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Flags);
+            SendMoveActorAbsoluteRaw(p.ActorRuntimeId, p.X, p.Y, p.Z, p.Flags, p.Pitch, p.Yaw, p.HeadYaw);
             return;
         }
 
@@ -457,7 +539,10 @@ sealed class EntityProtocol
                 Flags = p.Flags,
                 PositionX = p.X,
                 PositionY = p.Y,
-                PositionZ = p.Z
+                PositionZ = p.Z,
+                Pitch = p.Pitch,
+                Yaw = p.Yaw,
+                HeadYaw = p.HeadYaw
             };
         }
         _session.SendDataPacket(packets);
@@ -528,6 +613,24 @@ sealed class EntityProtocol
             FlagsOnly = true,
             Sneaking = sneaking,
             Sprinting = sprinting,
+            Tick = 0
+        });
+    }
+
+    /// <summary>
+    /// Creeper fuse-lit visual state (Phase XXIII fix — was never sent at all). Gameplay only
+    /// decides "ignited happened"; the FLAGS bitmask itself is a wire concern owned here, not in
+    /// CreeperSystem (see docs/history/phases/phase-xxiii-entity-fidelity-findings.md).
+    /// </summary>
+    public void SendActorIgnited(ulong actorRuntimeId, bool ignited)
+    {
+        var flags = EntityMetadataWriter.BuildMobFlags();
+        if (ignited) flags |= EntityFlag.Bit(EntityFlag.Ignited);
+        _session.SendDataPacket(new SetActorDataPacket
+        {
+            ActorRuntimeId = actorRuntimeId,
+            FlagsOnly = true,
+            RawFlags = flags,
             Tick = 0
         });
     }

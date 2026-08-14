@@ -27,7 +27,8 @@ static class DamageableActorCombat
         IReadOnlyList<Player.Player> online,
         float attackDistance,
         float attackDamage,
-        Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, bool> tryApplyDamage)
+        ulong currentTick,
+        Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
     {
         if (!stores.Positions.TryGet(id, out var pos)) return;
         if (!stores.Identities.TryGet(id, out var identity)) return;
@@ -40,7 +41,7 @@ static class DamageableActorCombat
             var dz = pos.Z - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
             if (!player.TryConsumeAttackIntent(checked((long)identity.ActorRuntimeId))) continue;
-            if (tryApplyDamage(id, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online)) break;
+            if (tryApplyDamage(id, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) break;
         }
     }
 
@@ -64,6 +65,7 @@ static class DamageableActorCombat
         StackId lootItem,
         int killExperience,
         string actorName,
+        ulong currentTick,
         Action<EntityId> destroyActor,
         Action<Player.Player>? onDeathReplicatedToPeer = null)
     {
@@ -76,12 +78,16 @@ static class DamageableActorCombat
             world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y), (int)MathF.Floor(pos.Z), lootItem, 1);
         if (health.Current <= amount && !canDropLoot) return false;
 
-        var result = health.Apply(source, amount);
+        var result = health.Apply(source, amount, currentTick);
         if (!result.WasApplied) return false;
 
         foreach (var peer in online)
             if (replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+            {
                 peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                if (!result.CausedDeath)
+                    peer.Session.Protocol.Entity.SendHurt(identity.ActorRuntimeId);
+            }
 
         if (!result.CausedDeath) return true;
 
@@ -94,6 +100,7 @@ static class DamageableActorCombat
         foreach (var peer in online)
             if (replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
             {
+                peer.Session.Protocol.Entity.SendDeath(identity.ActorRuntimeId);
                 peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 onDeathReplicatedToPeer?.Invoke(peer);
             }

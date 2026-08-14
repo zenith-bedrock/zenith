@@ -39,3 +39,6 @@ network:
 log:
   server: info
   raknet: warn
+  # true = also write logs/zenith-<run>.log + logs/zenith-diagnostics-<run>.jsonl under the data
+  # root (debug/evidence tooling, off by default so normal runs don't accumulate files).
+  to-file: false

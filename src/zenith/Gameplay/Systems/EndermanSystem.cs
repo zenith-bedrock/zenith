@@ -65,7 +65,7 @@ sealed class EndermanSystem : IGameSystem
             if (!enderman.IsActive) continue;
             if (TryDespawn(enderman, clock, online)) continue;
             ReconcileViewers(enderman, online);
-            ApplyPlayerAttacks(enderman, online);
+            ApplyPlayerAttacks(enderman, online, clock.CurrentTick);
             if (!enderman.IsActive) continue;
 
             if (enderman.AggroTicksRemaining > 0)
@@ -136,12 +136,12 @@ sealed class EndermanSystem : IGameSystem
             });
 
     /// <summary>A landed player hit both damages the Enderman and provokes it — the one place aggro is triggered.</summary>
-    private void ApplyPlayerAttacks(Enderman enderman, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(enderman, online, AttackDistance, AttackDamage, TryApplyDamageAndProvoke);
+    private void ApplyPlayerAttacks(Enderman enderman, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        GroundMobCombat.ApplyPlayerMeleeAttacks(enderman, online, AttackDistance, AttackDamage, currentTick, TryApplyDamageAndProvoke);
 
-    private bool TryApplyDamageAndProvoke(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
+    private bool TryApplyDamageAndProvoke(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        var applied = TryApplyDamage(enderman, source, amount, online);
+        var applied = TryApplyDamage(enderman, source, amount, online, currentTick);
         if (applied && enderman.IsActive && source.OwnerRuntimeId is { } attackerId)
         {
             enderman.AggroTargetRuntimeId = attackerId;
@@ -150,9 +150,9 @@ sealed class EndermanSystem : IGameSystem
         return applied;
     }
 
-    public bool TryApplyDamage(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+    public bool TryApplyDamage(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         GroundMobCombat.TryApplyDamage(
-            enderman, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Enderman",
+            enderman, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Enderman", currentTick,
             removeFromStore: _endermen.Remove,
             onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
 
@@ -197,7 +197,7 @@ sealed class EndermanSystem : IGameSystem
 
         if (distanceSquared <= AttackDistance * AttackDistance && clock.CurrentTick >= enderman.NextAttackTick)
         {
-            if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(enderman.EntityId), AttackDamage))
+            if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(enderman.EntityId), AttackDamage, clock.CurrentTick, dx, dz))
                 enderman.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
         }
     }
@@ -235,7 +235,7 @@ sealed class EndermanSystem : IGameSystem
         {
             if (!peer.IsInGame) continue;
             if (!_replicated.Contains((enderman.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw((ulong)enderman.EntityId, enderman.PositionX, enderman.PositionY, enderman.PositionZ, flags: 0);
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw((ulong)enderman.EntityId, enderman.PositionX, enderman.PositionY, enderman.PositionZ, flags: 0, yaw: enderman.Yaw, headYaw: enderman.Yaw);
             peer.Session.Protocol.World.SendLevelSoundEvent("mob.endermen.portal", enderman.PositionX, enderman.PositionY, enderman.PositionZ);
         }
     }

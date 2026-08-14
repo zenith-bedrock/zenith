@@ -65,7 +65,7 @@ public sealed class SkeletonSystemTests
         for (var i = 0; i < 5; i++)
         {
             player.SubmitAttackIntent();
-            fx.Clock.Advance();
+            fx.Clock.AdvanceBy(11);
             system.Tick(fx.Clock, fx.Players.Online);
         }
 
@@ -90,5 +90,101 @@ public sealed class SkeletonSystemTests
         Assert.Contains(
             Enumerable.Range(0, PlayerInventory.FullInventorySize).Select(player.Inventory.Get),
             slot => slot.Id == loot.Id && slot.Count == 1);
+    }
+
+    /// <summary>Phase XXIII — Skeleton previously never moved after spawn; this proves the spacing mechanism, not tuned distances.</summary>
+    [Fact]
+    public void A_player_closing_inside_the_retreat_range_pushes_the_skeleton_back()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("closer");
+        player.PositionY = Blocks.FlatSpawnY;
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        var id = system.SpawnSkeleton(player.PositionX + 3f, player.PositionY, player.PositionZ); // inside the 5-block retreat threshold
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var before));
+        var distanceBefore = MathF.Abs(before.X - player.PositionX);
+
+        fx.Clock.Advance();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var after));
+        var distanceAfter = MathF.Abs(after.X - player.PositionX);
+        Assert.True(distanceAfter > distanceBefore);
+    }
+
+    [Fact]
+    public void A_distant_player_within_detection_but_beyond_the_approach_threshold_pulls_the_skeleton_closer()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("far");
+        player.PositionY = Blocks.FlatSpawnY;
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        var id = system.SpawnSkeleton(player.PositionX + 15f, player.PositionY, player.PositionZ); // beyond the 10-block approach threshold, within 20-block detection
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var before));
+        var distanceBefore = MathF.Abs(before.X - player.PositionX);
+
+        fx.Clock.Advance();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var after));
+        var distanceAfter = MathF.Abs(after.X - player.PositionX);
+        Assert.True(distanceAfter < distanceBefore);
+    }
+
+    [Fact]
+    public void A_player_within_the_preferred_band_is_held_at_range_not_approached_or_retreated_from()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("banded");
+        player.PositionY = Blocks.FlatSpawnY;
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        var id = system.SpawnSkeleton(player.PositionX + 7f, player.PositionY, player.PositionZ); // between the 5-block retreat and 10-block approach thresholds
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var before));
+
+        fx.Clock.Advance();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(system.Stores.Positions.TryGet(id, out var after));
+        Assert.Equal(before.X, after.X, 3);
+        Assert.Equal(before.Z, after.Z, 3);
+    }
+
+    /// <summary>
+    /// Phase XXIII-B real-client finding: "a bola de neve do esqueleto some antes de me atingir" —
+    /// the shot previously launched with a flat +0.08 vertical velocity regardless of range, so
+    /// against a constant per-tick gravity it fell several blocks short over any real shot distance
+    /// and despawned into the ground well before reaching the target. This proves the ballistic-arc
+    /// fix actually lands a hit at a real shot distance, not just that a projectile spawns.
+    /// </summary>
+    [Fact]
+    public void A_ranged_shot_at_a_real_distance_actually_reaches_and_damages_the_target()
+    {
+        var fx = new IntentTestFixture();
+        var target = fx.AddInGamePlayer("victim");
+        target.PositionY = 100f;
+        var stores = new EntityRuntime();
+        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        system.SpawnSkeleton(target.PositionX + 10f, target.PositionY, target.PositionZ);
+
+        var initialHealth = target.Health;
+
+        for (var i = 0; i < 60; i++)
+        {
+            fx.Clock.Advance();
+            system.Tick(fx.Clock, fx.Players.Online);
+            projectileSystem.Tick(fx.Clock, fx.Players.Online);
+        }
+
+        Assert.True(target.Health < initialHealth);
     }
 }

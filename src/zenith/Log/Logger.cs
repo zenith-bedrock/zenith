@@ -11,6 +11,14 @@ public partial class Logger : ILogger
 
         public Dictionary<LogLevel, string> CustomLevelColorMap { get; set; } = LevelColorMap;
 
+        /// <summary>
+        /// Optional file sink (Phase XXIII debug tooling \u2014 <c>log.to-file</c> in <c>zenith.yml</c>).
+        /// Multiple <see cref="Logger"/> instances (server/raknet) may share one
+        /// <see cref="TextWriter.Synchronized(TextWriter)"/>-wrapped writer for a single run's file;
+        /// null means console-only, the original behavior.
+        /// </summary>
+        public TextWriter? FileWriter { get; set; }
+
         private static readonly Dictionary<string, string> ColorMap = new()
         {
             { "black", "\x1b[30m" },
@@ -42,6 +50,23 @@ public partial class Logger : ILogger
 
             var formattedMessage = FormatMessage(level, message);
             Console.WriteLine(formattedMessage);
+
+            if (FileWriter is not null)
+                FileWriter.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {level.ToString().ToUpperInvariant(),-7} {StripMarkup(message)}");
+        }
+
+        /// <summary>File lines stay plain text — no ANSI escapes, no <c>&lt;b&gt;</c>/<c>&lt;color&gt;</c> markup — so a run's log reads cleanly in any text viewer or grep.</summary>
+        private string StripMarkup(string message)
+        {
+            var plain = LinkRegex().Replace(message, m => m.Groups[2].Value);
+            plain = ColorRegex().Replace(plain, m => m.Groups[2].Value);
+            plain = ShortColorRegex().Replace(plain, m => m.Groups[2].Value);
+            return plain
+                .Replace("<b>", "").Replace("</b>", "")
+                .Replace("<i>", "").Replace("</i>", "")
+                .Replace("<u>", "").Replace("</u>", "")
+                .Replace("<s>", "").Replace("</s>", "")
+                .Replace("<br>", "\n");
         }
 
         private string FormatMessage(LogLevel level, string message)

@@ -33,7 +33,7 @@ sealed class MinecartSystem : IGameSystem
     private readonly ComponentStore<VehicleOccupancy> _minecarts;
     private readonly StackId _lootItem;
     private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
@@ -77,7 +77,7 @@ sealed class MinecartSystem : IGameSystem
             TryReleaseInvalidOccupant(id, online);
             if (TryDespawn(id, clock, online)) continue;
             ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online);
+            ApplyPlayerAttacks(id, online, clock.CurrentTick);
             if (!_stores.Entities.IsAlive(id)) continue;
             TryHandleMountInteraction(id, online);
             var occupant = ResolveOccupant(id, online);
@@ -187,7 +187,7 @@ sealed class MinecartSystem : IGameSystem
                 // Late join / re-entering interest while occupied: this peer never saw the mount happen, so it must be told now.
                 if (occupancy.OccupantPlayerRuntimeId is { } riderId)
                     peer.Session.Protocol.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, SetActorLinkPacket.TypeRider);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPosition(pos.X, pos.Y, pos.Z);
+                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
@@ -198,10 +198,10 @@ sealed class MinecartSystem : IGameSystem
             });
     }
 
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online)
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         const float attackDistance = 2.25f;
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, attackDistance, AttackDamage, TryApplyDamage);
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, attackDistance, AttackDamage, currentTick, TryApplyDamage);
     }
 
     /// <summary>
@@ -214,14 +214,14 @@ sealed class MinecartSystem : IGameSystem
     /// <c>onDeathReplicatedToPeer</c> — the same peer loop already sending `RemoveActor` — rather
     /// than a second post-destroy broadcast that would have nothing to look up.
     /// </summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         var occupant = ResolveOccupant(id, online);
         if (!_stores.Identities.TryGet(id, out var identityBeforeDamage)) return false;
         var actorUniqueId = identityBeforeDamage.ActorUniqueId;
 
         var applied = DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Minecart",
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Minecart", currentTick,
             destroyActor: mid =>
             {
                 if (_stores.Identities.TryGet(mid, out var identity))
@@ -378,7 +378,7 @@ sealed class MinecartSystem : IGameSystem
                 var key = (identity.ActorUniqueId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
                 if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPosition(pos.X, pos.Y, pos.Z);
+                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -389,25 +389,14 @@ sealed class MinecartSystem : IGameSystem
                     ActorRuntimeId = identity.ActorRuntimeId,
                     X = pos.X,
                     Y = pos.Y,
-                    Z = pos.Z
+                    Z = pos.Z,
+                    Yaw = pos.Yaw,
+                    HeadYaw = pos.Yaw
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

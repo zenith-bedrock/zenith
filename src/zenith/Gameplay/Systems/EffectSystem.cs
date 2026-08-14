@@ -54,7 +54,8 @@ sealed class EffectSystem : IGameSystem
         var durationTicks = Math.Max(1, intent.DurationTicks);
         var expiresAtTick = clock.CurrentTick + (ulong)durationTicks;
         var wasActive = player.Effects.ContainsKey(intent.Type);
-        player.ApplyOrRefreshEffect(intent.Type, amplifier, expiresAtTick);
+        if (!player.ApplyOrRefreshEffect(intent.Type, amplifier, expiresAtTick, clock.CurrentTick))
+            return; // a stronger or longer instance is already active — vanilla ignores the weaker one.
 
         entity.SendMobEffect(
             rid,
@@ -106,7 +107,7 @@ sealed class EffectSystem : IGameSystem
         if (player.Health <= 1f) return;
 
         var amount = MathF.Min(1f + effect.Amplifier, player.Health - 1f);
-        _ = PlayerDamage.Apply(player, _players, online, DamageSource.Magic, amount);
+        _ = PlayerDamage.Apply(player, _players, online, DamageSource.Magic, amount, clock.CurrentTick);
     }
 
     private static void TickRegeneration(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
