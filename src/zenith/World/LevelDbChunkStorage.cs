@@ -257,6 +257,48 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     }
 
     /// <summary>
+    /// One fixed key, read/written only at server startup (before any concurrent chunk/overlay
+    /// traffic) — no need for the pending-task-await race guard <see cref="GetUuidBlobAwaitedAsync"/>
+    /// uses for hot-path player data.
+    /// </summary>
+    public ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<WorldMetadata?>(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            byte[]? bytes;
+            lock (_gate)
+            {
+                bytes = _db.Get(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey));
+            }
+
+            if (bytes is null || bytes.Length < 5) return (WorldMetadata?)null;
+            var seed = BitConverter.ToInt32(bytes, 0);
+            var terrain = Encoding.UTF8.GetString(bytes, 4, bytes.Length - 4);
+            return new WorldMetadata(terrain, seed);
+        }, cancellationToken));
+    }
+
+    public ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        return Track(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var terrainBytes = Encoding.UTF8.GetBytes(metadata.Terrain);
+            var blob = new byte[4 + terrainBytes.Length];
+            BitConverter.GetBytes(metadata.Seed).CopyTo(blob, 0);
+            terrainBytes.CopyTo(blob, 4);
+            lock (_gate)
+            {
+                _db.Put(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey), blob);
+            }
+        }, cancellationToken));
+    }
+
+    /// <summary>
     /// Await in-flight Puts before read — fast quit→rejoin otherwise races Put and loads miss (S39b / §60).
     /// </summary>
     private async Task<byte[]?> GetUuidBlobAwaitedAsync(byte[] key, CancellationToken cancellationToken)

@@ -94,11 +94,17 @@ static class OverworldBiomeSampler
             _ => "plains",
         };
 
+    /// <summary>
+    /// Phase XXIV cross-reference finding: Ocean previously fell through to the Grass/Dirt default
+    /// like Plains, giving every ocean floor a grass surface underwater — a real, visible bug (an
+    /// independent reference server's vanilla-faithful generator pulls a distinct sea-floor material
+    /// per biome; Ocean's is sand, never grass).
+    /// </summary>
     public static int SurfaceBlock(OverworldBiomeKind kind)
-        => kind == OverworldBiomeKind.Desert ? Blocks.Sand : Blocks.GrassBlock;
+        => kind is OverworldBiomeKind.Desert or OverworldBiomeKind.Ocean ? Blocks.Sand : Blocks.GrassBlock;
 
     public static int SubsurfaceBlock(OverworldBiomeKind kind)
-        => kind == OverworldBiomeKind.Desert ? Blocks.Sand : Blocks.Dirt;
+        => kind is OverworldBiomeKind.Desert or OverworldBiomeKind.Ocean ? Blocks.Sand : Blocks.Dirt;
 
     public static bool AllowsTrees(OverworldBiomeKind kind)
         => kind is OverworldBiomeKind.Plains or OverworldBiomeKind.Forest or OverworldBiomeKind.Hills;
