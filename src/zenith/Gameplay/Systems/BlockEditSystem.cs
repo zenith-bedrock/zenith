@@ -270,7 +270,7 @@ sealed class BlockEditSystem : IGameSystem
             }
             else if (shouldDrop)
             {
-                dropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(previous));
+                dropId = BlockLoot.DropFor(previous);
                 var snapshot = player.Inventory.CaptureSnapshot();
                 inventoryCanReceiveDrop = player.Inventory.TryAdd(dropId);
                 player.Inventory.RestoreSnapshot(snapshot);
@@ -293,6 +293,12 @@ sealed class BlockEditSystem : IGameSystem
                 RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                 return false;
             }
+
+            // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
+            // Creative skip). Small per-block value: mining alone barely dents hunger in vanilla
+            // either, sprinting dominates.
+            if (!creative)
+                player.Exhaustion += HungerSystem.MiningExhaustionPerBlock;
 
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
             BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);

@@ -39,7 +39,7 @@ public class CraftingDataPacketTests
         var stream = new BinaryStream(bytes);
         Assert.Equal((int)ProtocolInfo.CRAFTING_DATA_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(0, stream.ReadUnsignedVarInt()); // shaped_recipes — protocol 2168+ shape (ADR §86)
-        Assert.Equal(2, stream.ReadUnsignedVarInt()); // shapeless_recipes
+        Assert.Equal(registry.SnapshotRecipes().Count, stream.ReadUnsignedVarInt()); // shapeless_recipes
 
         // Skip recipe payloads until the trailing empty-array run + ClearRecipes by scanning for
         // ending: after recipes, protocol 2168+ has 9 more empty lists (was 3) + bool ClearRecipes.

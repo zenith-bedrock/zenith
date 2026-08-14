@@ -311,14 +311,17 @@ already correct) — only one real gap there, noted below.
 - **No movement speed/teleport-distance validation** — `MovementSystem` applies client-reported
   position unconditionally, no plausibility check against a max blocks/tick. Confirmed real gap
   (anti-cheat baseline), not urgent per the session-lifecycle audit's own framing.
-- **No saturation system at all** — hunger drains straight from food on exhaustion; vanilla
-  consumes a saturation buffer first. A real feature (new persisted field + eating-path rewrite),
-  not a one-line fix.
-- **Exhaustion only comes from sprinting** — jumping, attacking, mining, and taking damage don't
-  generate exhaustion in Zenith; vanilla sources all of them.
-- **XP is not reset/dropped on death**, and **only XP + pose persist across reconnect** — health,
-  hunger, and effects silently reset to defaults on reconnect while XP carries over. Might be a
-  deliberate simplification (no XP-orb entity), but nothing documents it as one.
+- ~~No saturation system at all~~ — **closed in Phase XXV**: `Player.Saturation` is real state,
+  depleted before `Hunger` on each exhaustion-threshold crossing and restored (capped at the current
+  hunger level) on eating. See `docs/history/phases/phase-xxv-survival-foundation-findings.md`.
+- ~~Exhaustion only comes from sprinting~~ — **closed in Phase XXV** for mining and taking damage
+  (each already had a single call-site funnel to add the source to). Jumping and walking's own
+  smaller per-block cost are still not sourced — walking needs distance tracking `MovementSystem`
+  doesn't have yet.
+- ~~XP is not reset/dropped on death~~, and ~~only XP + pose persist across reconnect~~ — **both
+  closed in Phase XXV**: death resets XP to zero, and `PlayerDataBlob` v3 persists
+  health/hunger/saturation/exhaustion alongside pose and XP. Effects are still not persisted
+  (timed, expected to lapse naturally — a smaller, deliberately deferred gap).
 - **`BreakDuration`'s tool-efficiency-vs-tier-mismatch formula diverges from vanilla's** — a
   wood pickaxe on a diamond-tier block should still dig faster than bare hands (no drop, but faster
   time); Zenith resets to 1.0× speed on any tier mismatch. Currently a no-op (no registered block

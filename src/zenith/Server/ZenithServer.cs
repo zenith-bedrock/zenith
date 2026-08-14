@@ -131,7 +131,7 @@ class ZenithServer
         var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed);
         serverLogger.Info($"world.terrain={worldIdentity.Terrain} seed={worldIdentity.Seed}");
         var world = new World.World(_chunkStorage, serverLogger, terrain);
-        var recipes = RecipeRegistry.CreateDefault();
+        var recipes = RecipeRegistry.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities, creepers, endermen,

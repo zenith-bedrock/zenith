@@ -164,7 +164,8 @@ class LoginSessionHandler : ISessionHandler
 
         if (session.Context.World.TryLoadPlayerData(
                 player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode,
-                out var savedLevel, out var savedPoints))
+                out var savedLevel, out var savedPoints,
+                out var savedHealth, out var savedHunger, out var savedSaturation, out var savedExhaustion))
         {
             player.PositionX = px;
             player.PositionY = py;
@@ -174,8 +175,10 @@ class LoginSessionHandler : ISessionHandler
             player.HeadYaw = yaw;
             player.SetGameMode(savedMode);
             player.SetExperience(savedLevel, savedPoints);
+            player.HydrateVitals(savedHealth, savedHunger, savedSaturation, savedExhaustion);
             session.Context.Logger.Info(
-                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode} xp={savedLevel}/{savedPoints}");
+                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode} xp={savedLevel}/{savedPoints} " +
+                $"hp={savedHealth:F1} hunger={savedHunger:F1}");
 
             // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
             if (session.Context.World.TryHealSpawnFeet(player))

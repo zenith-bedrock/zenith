@@ -68,12 +68,30 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("sprinter");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
         player.IsSprinting = true;
+        player.Saturation = 0f; // isolate the hunger-depletion path — see the saturation-first test below
 
         for (var i = 0; i < 41; i++) // ~40 * 0.1 exhaustion reaches the 4.0 threshold (float accumulation)
             system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(19f, player.Hunger);
         Assert.True(player.Exhaustion < 4f);
+    }
+
+    /// <summary>Phase XXV — vanilla's "well-fed" cushion: exhaustion depletes saturation before it ever touches hunger.</summary>
+    [Fact]
+    public void Exhaustion_threshold_depletes_saturation_before_hunger()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("well-fed");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.IsSprinting = true;
+        Assert.Equal(5f, player.Saturation); // default
+
+        for (var i = 0; i < 41; i++)
+            system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(20f, player.Hunger); // untouched — saturation absorbed the crossing
+        Assert.Equal(4f, player.Saturation);
     }
 
     [Fact]
