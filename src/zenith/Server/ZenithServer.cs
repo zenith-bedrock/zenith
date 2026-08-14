@@ -126,8 +126,10 @@ class ZenithServer
         serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
 
         _chunkStorage = CreateChunkStorage(config, serverLogger);
-        var terrain = TerrainProviders.Create(config.World.Terrain, config.World.Seed);
-        serverLogger.Info($"world.terrain={config.World.Terrain} seed={config.World.Seed}");
+        var worldIdentity = WorldIdentity.Reconcile(
+            _chunkStorage, new WorldMetadata(config.World.Terrain, config.World.Seed), serverLogger);
+        var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed);
+        serverLogger.Info($"world.terrain={worldIdentity.Terrain} seed={worldIdentity.Seed}");
         var world = new World.World(_chunkStorage, serverLogger, terrain);
         var recipes = RecipeRegistry.CreateDefault();
         var creative = CreativeCatalog.CreateDefault(itemPalette);

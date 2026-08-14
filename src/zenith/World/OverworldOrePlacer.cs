@@ -65,10 +65,21 @@ static class OverworldOrePlacer
         return PickOreBlock(worldY, h, deepslateHost);
     }
 
+    /// <summary>
+    /// Phase XXIV cross-reference finding: several vertical bands were checked against an
+    /// independent reference server's vanilla-faithful generator and corrected. Diamond was far too
+    /// shallow (y≤16 let it appear near the surface; real diamond skews deep, y≤-4). Coal had no
+    /// lower bound at all (any y, including diamond depth) — a real gameable bug, not just
+    /// imprecision, since it diluted vertical strata distinctiveness and let players find coal mixed
+    /// into the deepest veins. Iron was missing vanilla's second, shallower band entirely (real iron
+    /// generates both deep AND near hilltops); added a modest shallow band since Zenith's terrain
+    /// rarely exceeds ~y120 anyway. Copper's upper bound was extended to match. Lapis and tree height
+    /// were confirmed already correct and left unchanged.
+    /// </summary>
     private static int PickOreBlock(int worldY, uint h, bool deepslate)
     {
         var r = (int)(h >> 12);
-        if (worldY <= 16 && r % 120 == 0)
+        if (worldY <= -4 && r % 120 == 0)
             return deepslate ? Blocks.DeepslateDiamondOre : Blocks.DiamondOre;
         if (worldY is >= -32 and <= 32 && r % 80 == 0)
             return deepslate ? Blocks.DeepslateLapisOre : Blocks.LapisOre;
@@ -76,11 +87,11 @@ static class OverworldOrePlacer
             return deepslate ? Blocks.DeepslateRedstoneOre : Blocks.RedstoneOre;
         if (worldY <= 32 && r % 45 == 0)
             return deepslate ? Blocks.DeepslateGoldOre : Blocks.GoldOre;
-        if (worldY <= 64 && r % 25 == 0)
+        if ((worldY <= 64 || worldY is >= 80 and <= 120) && r % 25 == 0)
             return deepslate ? Blocks.DeepslateIronOre : Blocks.IronOre;
-        if (worldY <= 96 && r % 20 == 0)
+        if (worldY <= 112 && r % 20 == 0)
             return deepslate ? Blocks.DeepslateCopperOre : Blocks.CopperOre;
-        if (r % 12 == 0)
+        if (worldY >= 0 && r % 12 == 0)
             return deepslate ? Blocks.DeepslateCoalOre : Blocks.CoalOre;
 
         return 0;

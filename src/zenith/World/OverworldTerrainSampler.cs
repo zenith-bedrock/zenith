@@ -13,8 +13,12 @@ static class OverworldTerrainSampler
 
     public const int NoiseDirtDepth = 3;
 
-    /// <summary>Vanilla-ish sea level — valleys below this fill with water.</summary>
-    public const int SeaLevel = 62;
+    /// <summary>
+    /// Vanilla sea level — valleys below this fill with water. Corrected from 62 to 63 (Phase XXIV
+    /// cross-reference finding: confirmed against an independent reference server's vanilla-faithful
+    /// generator constant).
+    /// </summary>
+    public const int SeaLevel = 63;
 
     /// <summary>Noise mean surface (Bedrock overworld band, not classic flat).</summary>
     public const int NoiseBaseSurfaceY = 64;
@@ -119,7 +123,13 @@ static class OverworldTerrainSampler
     public static int SpawnFeetY(int surfaceY) => Math.Max(surfaceY, SeaLevel) + 1;
 
     /// <summary>
-    /// Clear air column above terrain/features at (x,z) for join/respawn.
+    /// Clear air column above terrain/features at (x,z) for join/respawn. Phase XXIV cross-reference
+    /// finding: previously only checked the feet/head cells were air, never that anything solid
+    /// actually supported them — a real hole (confirmed against an independent reference server's
+    /// spawn-safety check, which also requires the block underfoot to be non-passable). Scanning
+    /// upward through e.g. tree leaves could land a candidate with clear air above but more air (or a
+    /// carved void) below, dropping the player. Now also requires the cell directly underfoot to be
+    /// non-air.
     /// </summary>
     public static int SampleSpawnFeetY(int worldX, int worldZ, int seed)
     {
@@ -127,7 +137,8 @@ static class OverworldTerrainSampler
         for (var i = 0; i < 24; i++)
         {
             if (SampleNoiseBlock(worldX, feet, worldZ, seed) == Blocks.Air
-                && SampleNoiseBlock(worldX, feet + 1, worldZ, seed) == Blocks.Air)
+                && SampleNoiseBlock(worldX, feet + 1, worldZ, seed) == Blocks.Air
+                && SampleNoiseBlock(worldX, feet - 1, worldZ, seed) != Blocks.Air)
                 return feet;
             feet++;
         }

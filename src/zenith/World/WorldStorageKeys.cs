@@ -15,6 +15,9 @@ static class WorldStorageKeys
     public const string ArmorPrefix = "ar:";
     public const string PlayerDataPrefix = "pd:";
 
+    /// <summary>Single fixed key — world generator identity (Phase XXIV, see <see cref="WorldMetadata"/>).</summary>
+    public const string WorldMetadataKey = "wm:";
+
     public static readonly byte[] OverlayPrefixBytes = Encoding.UTF8.GetBytes(OverlayPrefix);
     public static readonly byte[] ChestPrefixBytes = Encoding.UTF8.GetBytes(ChestPrefix);
 

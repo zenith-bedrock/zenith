@@ -2,6 +2,9 @@ namespace Zenith.World;
 
 readonly record struct ChunkCoord(int X, int Z);
 
+/// <summary>World generator identity — see <see cref="IChunkStorage.GetWorldMetadataAsync"/>.</summary>
+readonly record struct WorldMetadata(string Terrain, int Seed);
+
 /// <summary>
 /// Coluna de chunk pronta pra transmissão (payload de LevelChunk).
 /// Imutável após publicação — leituras fora do tick são thread-safe.
@@ -48,6 +51,14 @@ interface IChunkStorage
     ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// World identity (generator mode + seed) — set once, the first time a world is ever opened, and
+    /// never overwritten after (Phase XXIV: seed is world identity, not a per-restart config knob).
+    /// Null means this is a brand-new world with no committed generator identity yet.
+    /// </summary>
+    ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default);
+    ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default);
+
     /// <summary>Await in-flight persistence (chest/inv/pd/overlay). Shutdown only — never GameLoop (ADR §41).</summary>
     ValueTask FlushAsync(CancellationToken cancellationToken = default);
 }
@@ -63,6 +74,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _armor = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
+    private WorldMetadata? _worldMetadata;
 
     /// <summary>Column Put count — tests for ADR §45 sparse flat.</summary>
     public int PutCount { get; private set; }
@@ -146,4 +158,13 @@ sealed class InMemoryChunkStorage : IChunkStorage
 
     public ValueTask FlushAsync(CancellationToken cancellationToken = default) =>
         ValueTask.CompletedTask;
+
+    public ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(_worldMetadata);
+
+    public ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default)
+    {
+        _worldMetadata = metadata;
+        return ValueTask.CompletedTask;
+    }
 }
