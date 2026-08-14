@@ -193,6 +193,7 @@ public sealed class MinecartSystemTests
         {
             attacker.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.False(system.Stores.Entities.IsAlive(id));
@@ -236,6 +237,7 @@ public sealed class MinecartSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.Empty(system.Minecarts);

@@ -33,12 +33,51 @@ public sealed class GolemSystemTests
     }
 
     [Fact]
-    public void Golem_chases_the_nearest_player_without_a_retained_target_field()
+    public void Golem_ignores_a_nearby_player_who_never_provoked_it()
     {
+        // Phase XXIII-B — vanilla parity: a naturally-spawned Iron Golem is passive by default.
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("target");
+        var player = fx.AddInGamePlayer("bystander");
         player.PositionX = 0;
         player.PositionZ = 0;
+        var store = new GolemStore();
+        var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, 10, player.PositionY, 0);
+        Assert.True(store.TryAdd(golem));
+        var system = new GolemSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        var initialX = golem.PositionX;
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(initialX, golem.PositionX);
+    }
+
+    [Fact]
+    public void Golem_chases_the_player_who_attacked_it()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("attacker");
+        player.PositionX = 0;
+        player.PositionZ = 0;
+        var store = new GolemStore();
+        var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, 10, player.PositionY, 0);
+        Assert.True(store.TryAdd(golem));
+        var system = new GolemSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        Assert.True(system.TryApplyDamage(golem, DamageSource.MeleeFrom(player.RuntimeId), 5f, fx.Players.Online, fx.Clock.CurrentTick));
+        var distanceAfterHit = MathF.Abs(golem.PositionX - player.PositionX);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(MathF.Abs(golem.PositionX - player.PositionX) < distanceAfterHit);
+    }
+
+    [Fact]
+    public void Golem_chases_a_player_who_recently_attacked_a_nearby_villager()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("villager-attacker");
+        player.PositionX = 0;
+        player.PositionZ = 0;
+        player.LastVillagerAttack = (fx.Clock.CurrentTick, 9f, 0f); // near the golem, not the player
         var store = new GolemStore();
         var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, 10, player.PositionY, 0);
         Assert.True(store.TryAdd(golem));
@@ -51,10 +90,34 @@ public sealed class GolemSystemTests
     }
 
     [Fact]
+    public void Golem_ignores_a_villager_attack_that_happened_far_away()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("far-villager-attacker");
+        player.PositionX = 0;
+        player.PositionZ = 0;
+        player.LastVillagerAttack = (fx.Clock.CurrentTick, 500f, 0f); // nowhere near the golem
+        var store = new GolemStore();
+        var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, 10, player.PositionY, 0);
+        Assert.True(store.TryAdd(golem));
+        var system = new GolemSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        var initialX = golem.PositionX;
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(initialX, golem.PositionX);
+    }
+
+    [Fact]
     public void Melee_kill_drops_iron_ingot_and_awards_boss_tier_experience()
     {
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("attacker");
+        // Creative: this test is about the many-hits-to-kill loot/XP path, not about surviving the
+        // Golem's own retaliation. With real hit-invulnerability now enforced (Phase XXIII-B) a
+        // Survival player with default health could die to the Golem's counter-attacks partway
+        // through 17 rounds, silently truncating the kill — Creative sidesteps that without changing
+        // what this test is actually proving.
+        var player = fx.AddInGamePlayer("attacker", GameMode.Creative);
         var store = new GolemStore();
         var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
         Assert.True(store.TryAdd(golem));
@@ -64,6 +127,7 @@ public sealed class GolemSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.Empty(store.Active);
@@ -90,7 +154,7 @@ public sealed class GolemSystemTests
         var golem = new Golem(fx.Players.AllocateRuntimeId(), 99, 0.5f, first.PositionY, 0);
         // Force enrage directly rather than fighting the golem down — this test is about the
         // slam's multi-target behavior, not about re-proving the melee path.
-        golem.ApplyDamage(DamageSource.Generic, 51f); // 100 -> 49, at/below the 50% threshold
+        golem.ApplyDamage(DamageSource.Generic, 51f, fx.Clock.CurrentTick); // 100 -> 49, at/below the 50% threshold
         Assert.True(store.TryAdd(golem));
         var system = new GolemSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
 

@@ -32,6 +32,24 @@ public class PlayerChunkTrackerTests
         Assert.True(t.PublisherCenterChanged(3, 5));
     }
 
+    /// <summary>
+    /// Cross-reference audit finding, Phase XXIII-B polish pass — a mid-game render-distance change
+    /// alone never crosses a chunk boundary, so PublisherCenterChanged would otherwise stay false
+    /// forever after the first publish, and the client's last-told publish radius would go stale.
+    /// </summary>
+    [Fact]
+    public void ForcePublisherRefresh_makes_the_next_check_report_changed_even_at_the_same_chunk()
+    {
+        var t = new PlayerChunkTracker();
+        Assert.True(t.PublisherCenterChanged(3, 4));
+        Assert.False(t.PublisherCenterChanged(3, 4)); // same chunk — no republish
+
+        t.ForcePublisherRefresh();
+
+        Assert.True(t.PublisherCenterChanged(3, 4)); // same chunk, but forced — republish
+        Assert.False(t.PublisherCenterChanged(3, 4)); // settles back down afterward
+    }
+
     [Fact]
     public void BlockToChunk_floors_negatives()
     {

@@ -145,6 +145,7 @@ public sealed class ZombieSystemTests
         for (var i = 0; i < 4; i++)
         {
             player.SubmitAttackIntent();
+            fx.Clock.AdvanceBy(11);
             system.Tick(fx.Clock, fx.Players.Online);
         }
 
@@ -207,7 +208,7 @@ public sealed class ZombieSystemTests
                 StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
 
         var maxHealth = Health(system, id).Maximum;
-        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online));
+        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
         Assert.True(system.Stores.Entities.IsAlive(id));
         Assert.Equal(maxHealth, Health(system, id).Current);
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
@@ -308,5 +309,47 @@ public sealed class ZombieSystemTests
 
         Assert.True(system.Stores.Entities.IsAlive(id));
         Assert.Equal(0, system.DespawnCount);
+    }
+
+    /// <summary>Phase XXIII — hurt/death feedback proof, sharing DamageableActorCombat's seam with every other ECS-damageable species.</summary>
+    [Fact]
+    public void Non_lethal_damage_to_a_replicated_zombie_sends_a_hurt_reaction_and_leaves_it_alive()
+    {
+        var fx = new IntentTestFixture();
+        var viewer = fx.AddInGamePlayer("viewer");
+        viewer.Chunks.Radius = 1;
+        viewer.Chunks.RememberMany([(0, 0)]);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(1f, viewer.PositionY, viewer.PositionZ);
+        system.Tick(fx.Clock, fx.Players.Online); // replicate spawn to the viewer before damaging
+        foreach (var player in fx.Players.Online) player.Session.RakSession.Tick();
+        var before = fx.Transport.Captured.Count;
+
+        Assert.True(system.TryApplyDamage(id, DamageSource.Melee, 6f, fx.Players.Online, fx.Clock.CurrentTick));
+        foreach (var player in fx.Players.Online) player.Session.RakSession.Tick();
+
+        Assert.True(system.Stores.Entities.IsAlive(id));
+        Assert.True(fx.Transport.Captured.Count > before); // health + hurt reaction reached the viewer
+    }
+
+    [Fact]
+    public void Lethal_damage_sends_death_reaction_before_removal_and_destroys_the_zombie()
+    {
+        var fx = new IntentTestFixture();
+        var viewer = fx.AddInGamePlayer("viewer");
+        viewer.Chunks.Radius = 1;
+        viewer.Chunks.RememberMany([(0, 0)]);
+        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnZombie(1f, viewer.PositionY, viewer.PositionZ);
+        system.Tick(fx.Clock, fx.Players.Online);
+        foreach (var player in fx.Players.Online) player.Session.RakSession.Tick();
+        var maxHealth = Health(system, id).Maximum;
+        var before = fx.Transport.Captured.Count;
+
+        Assert.True(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
+        foreach (var player in fx.Players.Online) player.Session.RakSession.Tick();
+
+        Assert.False(system.Stores.Entities.IsAlive(id)); // authoritative destruction remains immediate — see EntityProtocol.SendDeath doc comment
+        Assert.True(fx.Transport.Captured.Count > before); // death reaction + remove-actor reached the viewer
     }
 }

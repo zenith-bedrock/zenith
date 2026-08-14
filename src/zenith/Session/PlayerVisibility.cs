@@ -133,6 +133,36 @@ static class PlayerVisibility
         }
     }
 
+    /// <summary>
+    /// Non-lethal hurt reaction to other peers (Phase XXIII) — the subject's own client already
+    /// infers its hurt state from the incoming health change, so this is peer-only like
+    /// <see cref="RelaySwingArm"/>.
+    /// </summary>
+    public static void RelayHurt(
+        Player.Player subject,
+        IReadOnlyList<Player.Player> online)
+    {
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendHurt(rid);
+        }
+    }
+
+    /// <summary>Death reaction to other peers (Phase XXIII) — the subject gets its own death flow via <see cref="Zenith.Protocol.EntityProtocol.SendDeathInfo"/>.</summary>
+    public static void RelayDeath(
+        Player.Player subject,
+        IReadOnlyList<Player.Player> online)
+    {
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendDeath(rid);
+        }
+    }
+
     private static void SendPlayerListAdd(Player.Player recipient, Player.Player subject)
     {
         var profile = subject.Session.Profile;

@@ -32,6 +32,15 @@ sealed class GolemSystem : IGameSystem
     private const int SlamCooldownTicks = 100; // 5s @ 20 TPS.
     private const float SlamRadius = 4f;
     private const float SlamDamage = 8f;
+    /// <summary>
+    /// Phase XXIII-B — vanilla parity: a naturally-spawned Iron Golem is passive until a player
+    /// attacks it directly or attacks a villager it can "see" (Zenith has no village/reputation
+    /// system, so proximity + a short recency window stands in for that — see
+    /// <c>Player.LastVillagerAttack</c>'s doc comment). Confirmed against the Minecraft Wiki: golems
+    /// retaliate against their own attacker, and become hostile toward a player who damages a
+    /// villager near them.
+    /// </summary>
+    private const int ProvokeWindowTicks = 200; // 10s @ 20 TPS.
     private const string LootItemName = "minecraft:iron_ingot";
     /// <summary>Boss-tier kill reward — five times a hostile ground mob's (Phase XI.4/XIV precedent).</summary>
     private const int KillExperience = 25;
@@ -42,9 +51,10 @@ sealed class GolemSystem : IGameSystem
     private readonly GolemStore _golems;
     private readonly StackId _lootItem;
     private readonly HashSet<(long GolemId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long GolemId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly Dictionary<(long GolemId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private bool _bootstrapSpawned;
+    private ulong _currentTick;
 
     public GolemSystem(World.World world, PlayerManager players, GolemStore golems, ItemPalette itemPalette)
     {
@@ -64,6 +74,7 @@ sealed class GolemSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _currentTick = clock.CurrentTick;
         if (online.Count == 0) return;
         if (_golems.Active.Count != 0)
             _bootstrapSpawned = true;
@@ -79,7 +90,7 @@ sealed class GolemSystem : IGameSystem
 
             golem.IsEnraged = golem.Health.Current <= golem.Health.Maximum * EnrageHealthFraction;
 
-            var target = FindNearestPlayer(golem, online);
+            var target = FindProvokedTarget(golem, online);
             if (target is not null)
             {
                 AdvanceTowardTarget(golem, target);
@@ -141,7 +152,7 @@ sealed class GolemSystem : IGameSystem
                 peer.Session.Protocol.Entity.SendAddGolem(
                     golem.EntityId, golem.RuntimeId, golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
                 peer.Session.Protocol.Entity.SendHealth(golem.RuntimeId, golem.Health.Current, golem.Health.Maximum);
-                _lastProjected[(golem.EntityId, peer.RuntimeId)] = new ProjectedPosition(golem.PositionX, golem.PositionY, golem.PositionZ);
+                _lastProjected[(golem.EntityId, peer.RuntimeId)] = new ProjectedPose(golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
@@ -152,39 +163,62 @@ sealed class GolemSystem : IGameSystem
             });
 
     private void ApplyPlayerAttacks(Golem golem, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(golem, online, AttackDistance, AttackDamage, TryApplyDamage);
+        GroundMobCombat.ApplyPlayerMeleeAttacks(golem, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
 
-    /// <summary>Concrete Golem health/removal operation — same shape as every other ground mob's.</summary>
-    public bool TryApplyDamage(Golem golem, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.TryApplyDamage(
-            golem, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Golem",
+    /// <summary>Concrete Golem health/removal operation — same shape as every other ground mob's. A player attacker provokes retaliation (self-defense — vanilla golems always fight back).</summary>
+    public bool TryApplyDamage(Golem golem, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    {
+        if (source.OwnerRuntimeId is { } attackerId)
+            golem.TargetPlayerRuntimeId = attackerId;
+
+        return GroundMobCombat.TryApplyDamage(
+            golem, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Golem", currentTick,
             removeFromStore: _golems.Remove,
             onDeathReplicatedToPeer: peer =>
             {
                 _lastProjected.Remove((golem.EntityId, peer.RuntimeId));
                 ReplicatedRemovalCount++;
             });
+    }
 
     /// <summary>
-    /// Deliberately NOT a retained-target field like Zombie/Spider's — see Golem's doc comment for
-    /// why a boss re-scanning every tick is a real behavioral choice, not a dodge of the "third
-    /// instance" question.
+    /// Phase XXIII-B — replaces the old "always attack the nearest player" boss behavior: a golem
+    /// stays passive until provoked (see <see cref="ProvokeWindowTicks"/>'s doc comment), then
+    /// retains that specific player as its target the same way Zombie/Spider retain theirs.
     /// </summary>
-    private static Player.Player? FindNearestPlayer(Golem golem, IReadOnlyList<Player.Player> online)
+    private Player.Player? FindProvokedTarget(Golem golem, IReadOnlyList<Player.Player> online)
     {
-        Player.Player? nearest = null;
-        var best = DetectionDistance * DetectionDistance;
+        if (golem.TargetPlayerRuntimeId is { } retainedId)
+        {
+            var retained = online.FirstOrDefault(p => p.RuntimeId == retainedId);
+            if (retained is not null && IsTargetValid(golem, retained))
+                return retained;
+            golem.TargetPlayerRuntimeId = null;
+        }
+
         foreach (var player in online)
         {
             if (!player.IsInGame || player.IsDead) continue;
-            var dx = player.PositionX - golem.PositionX;
-            var dz = player.PositionZ - golem.PositionZ;
-            var distance = dx * dx + dz * dz;
-            if (distance >= best) continue;
-            best = distance;
-            nearest = player;
+            if (player.LastVillagerAttack is not { } attack) continue;
+            if (_currentTick - attack.Tick > ProvokeWindowTicks) continue;
+
+            var dx = attack.X - golem.PositionX;
+            var dz = attack.Z - golem.PositionZ;
+            if (dx * dx + dz * dz > DetectionDistance * DetectionDistance) continue;
+
+            golem.TargetPlayerRuntimeId = player.RuntimeId;
+            return player;
         }
-        return nearest;
+
+        return null;
+    }
+
+    private static bool IsTargetValid(Golem golem, Player.Player target)
+    {
+        if (!target.IsInGame || target.IsDead) return false;
+        var dx = target.PositionX - golem.PositionX;
+        var dz = target.PositionZ - golem.PositionZ;
+        return dx * dx + dz * dz <= DetectionDistance * DetectionDistance;
     }
 
     private void AdvanceTowardTarget(Golem golem, Player.Player target)
@@ -199,7 +233,7 @@ sealed class GolemSystem : IGameSystem
         var dzn = dz / length;
         var distance = MathF.Min(MovePerTick, length - AttackDistance);
         if (TryMove(golem, golem.PositionX + dxn * distance, golem.PositionZ + dzn * distance))
-            golem.Yaw = MathF.Atan2(-dxn, dzn) * (180f / MathF.PI);
+            golem.Yaw = LookMath.MoveYawTowards(golem.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
     }
 
     /// <summary>Concrete Golem rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
@@ -217,8 +251,13 @@ sealed class GolemSystem : IGameSystem
         var dx = target.PositionX - golem.PositionX;
         var dz = target.PositionZ - golem.PositionZ;
         if (dx * dx + dz * dz > AttackDistance * AttackDistance) return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(golem.EntityId), AttackDamage))
+        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(golem.EntityId), AttackDamage, clock.CurrentTick, dx, dz))
+        {
             golem.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+            foreach (var peer in online)
+                if (_replicated.Contains((golem.EntityId, peer.RuntimeId)))
+                    peer.Session.Protocol.Entity.SendAttackSwing(golem.RuntimeId);
+        }
     }
 
     /// <summary>
@@ -238,7 +277,7 @@ sealed class GolemSystem : IGameSystem
             var dx = player.PositionX - golem.PositionX;
             var dz = player.PositionZ - golem.PositionZ;
             if (dx * dx + dz * dz > radiusSquared) continue;
-            if (PlayerDamage.Apply(player, _players, online, DamageSource.MeleeFrom(golem.EntityId), SlamDamage))
+            if (PlayerDamage.Apply(player, _players, online, DamageSource.MeleeFrom(golem.EntityId), SlamDamage, clock.CurrentTick, dx, dz))
                 hitAny = true;
         }
 
@@ -259,7 +298,7 @@ sealed class GolemSystem : IGameSystem
             {
                 var key = (golem.EntityId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPosition(golem.PositionX, golem.PositionY, golem.PositionZ);
+                var current = new ProjectedPose(golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -270,25 +309,14 @@ sealed class GolemSystem : IGameSystem
                     ActorRuntimeId = golem.RuntimeId,
                     X = golem.PositionX,
                     Y = golem.PositionY,
-                    Z = golem.PositionZ
+                    Z = golem.PositionZ,
+                    Yaw = golem.Yaw,
+                    HeadYaw = golem.Yaw
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

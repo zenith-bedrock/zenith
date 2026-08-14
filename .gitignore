@@ -71,6 +71,9 @@ worlds/
 deploy/worlds/
 deploy/data/zenith.yml
 deploy/data/worlds/
+logs/
+deploy/logs/
+deploy/data/logs/
 docker-compose.override.yml
 .cursor/*
 !.cursor/skills/

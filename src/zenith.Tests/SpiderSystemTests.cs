@@ -93,6 +93,7 @@ public sealed class SpiderSystemTests
         {
             player.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
+            fx.Clock.AdvanceBy(11);
         }
 
         Assert.Empty(system.Spiders);

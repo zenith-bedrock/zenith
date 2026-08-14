@@ -22,7 +22,6 @@ sealed class PlayerMeleeSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _ = clock;
         var reachSquared = AttackDistance * AttackDistance;
 
         // Resolve by the wire runtime-id rather than snapshot/list order. Each attacker has one
@@ -51,7 +50,9 @@ sealed class PlayerMeleeSystem : IGameSystem
                     _players,
                     online,
                     DamageSource.MeleeFrom(attacker.RuntimeId),
-                    AttackDamage);
+                    AttackDamage,
+                    clock.CurrentTick,
+                    dx, dz);
             }
         }
     }

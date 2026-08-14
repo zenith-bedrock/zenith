@@ -36,9 +36,10 @@ sealed class VillagerSystem : IGameSystem
     private readonly StackId _requestedWare;
     private readonly Random _random;
     private readonly HashSet<(long VillagerId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long VillagerId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly Dictionary<(long VillagerId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private bool _bootstrapSpawned;
+    private ulong _currentTick;
 
     internal long TradeCount { get; private set; }
 
@@ -62,6 +63,7 @@ sealed class VillagerSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _currentTick = clock.CurrentTick;
         if (online.Count == 0) return;
         if (_villagers.Active.Count != 0)
             _bootstrapSpawned = true;
@@ -182,7 +184,7 @@ sealed class VillagerSystem : IGameSystem
                 peer.Session.Protocol.Entity.SendAddVillager(
                     villager.EntityId, villager.RuntimeId, villager.PositionX, villager.PositionY, villager.PositionZ, villager.Yaw);
                 peer.Session.Protocol.Entity.SendHealth(villager.RuntimeId, villager.Health.Current, villager.Health.Maximum);
-                _lastProjected[(villager.EntityId, peer.RuntimeId)] = new ProjectedPosition(villager.PositionX, villager.PositionY, villager.PositionZ);
+                _lastProjected[(villager.EntityId, peer.RuntimeId)] = new ProjectedPose(villager.PositionX, villager.PositionY, villager.PositionZ, villager.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
@@ -195,19 +197,31 @@ sealed class VillagerSystem : IGameSystem
     private void ApplyPlayerAttacks(Villager villager, IReadOnlyList<Player.Player> online)
     {
         const float attackDistance = 2.25f;
-        GroundMobCombat.ApplyPlayerMeleeAttacks(villager, online, attackDistance, AttackDamage, TryApplyDamage);
+        GroundMobCombat.ApplyPlayerMeleeAttacks(villager, online, attackDistance, AttackDamage, _currentTick, TryApplyDamage);
     }
 
     /// <summary>Concrete Villager health/removal operation — same shape as every other ground mob's, no retaliation.</summary>
-    public bool TryApplyDamage(Villager villager, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.TryApplyDamage(
-            villager, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Villager",
+    public bool TryApplyDamage(Villager villager, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    {
+        // Phase XXIII-B — vanilla-parity Golem aggro trigger (see Player.LastVillagerAttack's doc
+        // comment): recorded regardless of whether the hit is ultimately accepted below, since a
+        // player swinging at a villager is provocative even if e.g. loot capacity later refuses it.
+        if (source.OwnerRuntimeId is { } attackerId)
+        {
+            var attacker = online.FirstOrDefault(p => p.RuntimeId == attackerId);
+            if (attacker is not null)
+                attacker.LastVillagerAttack = (_currentTick, villager.PositionX, villager.PositionZ);
+        }
+
+        return GroundMobCombat.TryApplyDamage(
+            villager, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Villager", currentTick,
             removeFromStore: _villagers.Remove,
             onDeathReplicatedToPeer: peer =>
             {
                 _lastProjected.Remove((villager.EntityId, peer.RuntimeId));
                 ReplicatedRemovalCount++;
             });
+    }
 
     /// <summary>Peaceful AI: pick a random heading periodically, walk it, retry sooner if blocked. Same shape as Cow's wander — see phase findings.</summary>
     private void Wander(Villager villager, GameClock clock)
@@ -218,7 +232,11 @@ sealed class VillagerSystem : IGameSystem
         var desiredX = villager.PositionX + villager.WanderDirectionX * MovePerTick;
         var desiredZ = villager.PositionZ + villager.WanderDirectionZ * MovePerTick;
         if (!TryMove(villager, desiredX, desiredZ))
+        {
             villager.WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
+            return;
+        }
+        villager.Yaw = LookMath.MoveYawTowards(villager.Yaw, LookMath.YawTowards(villager.WanderDirectionX, villager.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
     }
 
     private void PickNewHeading(Villager villager, GameClock clock)
@@ -227,7 +245,6 @@ sealed class VillagerSystem : IGameSystem
         villager.WanderDirectionX = MathF.Cos(angle);
         villager.WanderDirectionZ = MathF.Sin(angle);
         villager.WanderChangeAtTick = clock.CurrentTick + (ulong)_random.Next(MinWanderTicks, MaxWanderTicks);
-        villager.Yaw = MathF.Atan2(-villager.WanderDirectionX, villager.WanderDirectionZ) * (180f / MathF.PI);
     }
 
     /// <summary>Concrete Villager rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
@@ -248,7 +265,7 @@ sealed class VillagerSystem : IGameSystem
             {
                 var key = (villager.EntityId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPosition(villager.PositionX, villager.PositionY, villager.PositionZ);
+                var current = new ProjectedPose(villager.PositionX, villager.PositionY, villager.PositionZ, villager.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -259,25 +276,14 @@ sealed class VillagerSystem : IGameSystem
                     ActorRuntimeId = villager.RuntimeId,
                     X = villager.PositionX,
                     Y = villager.PositionY,
-                    Z = villager.PositionZ
+                    Z = villager.PositionZ,
+                    Yaw = villager.Yaw,
+                    HeadYaw = villager.Yaw
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

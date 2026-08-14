@@ -46,6 +46,13 @@ jobs:
         env:
           ZENITH_DATA: ${{ runner.temp }}/zenith-e2e-data
           ZENITH_PROJECT: ${{ github.workspace }}
+          # zenith-smoke-bot's own config.ts still defaults to 2169 (stale — it was written while
+          # ServerIdentity.ProtocolVersion was briefly 2169 per §79; that bump was deliberately
+          # reverted back to 2168, see ServerIdentity.cs's doc comment, but the separate bot repo's
+          # default was never updated to follow). Override it here instead of touching that repo, so
+          # the bot's claimed protocol actually matches what Zenith announces and ProtocolGate accepts
+          # the handshake instead of rejecting it as a version mismatch.
+          ZENITH_BOT_PROTOCOL_VERSION: "2168"
         run: |
           set -euo pipefail
           mkdir -p "$ZENITH_DATA"

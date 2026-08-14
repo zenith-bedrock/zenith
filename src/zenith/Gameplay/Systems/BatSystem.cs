@@ -60,7 +60,7 @@ sealed class BatSystem : IGameSystem
             if (!bat.IsActive) continue;
             if (TryDespawn(bat, clock, online)) continue;
             ReconcileViewers(bat, online);
-            ApplyPlayerAttacks(bat, online);
+            ApplyPlayerAttacks(bat, online, clock.CurrentTick);
             if (!bat.IsActive) continue;
             Wander(bat, clock, online);
             ReconcileViewers(bat, online);
@@ -117,16 +117,16 @@ sealed class BatSystem : IGameSystem
                 ReplicatedRemovalCount++;
             });
 
-    private void ApplyPlayerAttacks(Bat bat, IReadOnlyList<Player.Player> online)
+    private void ApplyPlayerAttacks(Bat bat, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         const float attackDistance = 2.25f;
-        GroundMobCombat.ApplyPlayerMeleeAttacks(bat, online, attackDistance, 4f, TryApplyDamage);
+        GroundMobCombat.ApplyPlayerMeleeAttacks(bat, online, attackDistance, 4f, currentTick, TryApplyDamage);
     }
 
     /// <summary>Concrete Bat health/removal operation — same shape as every other ground mob's, one loot item, no retaliation.</summary>
-    public bool TryApplyDamage(Bat bat, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+    public bool TryApplyDamage(Bat bat, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         GroundMobCombat.TryApplyDamage(
-            bat, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Bat",
+            bat, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Bat", currentTick,
             removeFromStore: _bats.Remove,
             onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
 
@@ -144,7 +144,10 @@ sealed class BatSystem : IGameSystem
         var desiredY = bat.PositionY + bat.WanderDirectionY * MovePerTick;
         var desiredZ = bat.PositionZ + bat.WanderDirectionZ * MovePerTick;
         if (TryFly(bat, desiredX, desiredY, desiredZ))
+        {
+            bat.Yaw = LookMath.MoveYawTowards(bat.Yaw, LookMath.YawTowards(bat.WanderDirectionX, bat.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
             BroadcastMove(bat, online);
+        }
         else
             bat.WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
     }
@@ -159,7 +162,7 @@ sealed class BatSystem : IGameSystem
         foreach (var peer in online)
         {
             if (!_replicated.Contains((bat.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ);
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, yaw: bat.Yaw, headYaw: bat.Yaw);
         }
     }
 
@@ -171,7 +174,6 @@ sealed class BatSystem : IGameSystem
         bat.WanderDirectionZ = MathF.Sin(yaw) * horizontal;
         bat.WanderDirectionY = (_random.NextSingle() * 2f - 1f) * (1f - horizontal);
         bat.WanderChangeAtTick = clock.CurrentTick + (ulong)_random.Next(MinWanderTicks, MaxWanderTicks);
-        bat.Yaw = MathF.Atan2(-bat.WanderDirectionX, bat.WanderDirectionZ) * (180f / MathF.PI);
     }
 
     /// <summary>

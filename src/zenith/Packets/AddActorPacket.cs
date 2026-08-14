@@ -28,6 +28,9 @@ sealed class AddActorPacket : DataPacket
     /// <summary>DATA_VARIANT metadata (e.g. falling_block's block runtime id) — null omits the entry.</summary>
     public int? Variant { get; set; }
     public bool ZombieMetadata { get; set; }
+    public bool BatMetadata { get; set; }
+    /// <summary>Phase XXIII-B — real per-species Bedrock hitbox (width, height), replacing the Scale-only placeholder metadata most mobs used.</summary>
+    public (float Width, float Height)? Dimensions { get; set; }
 
     public override Span<byte> Encode()
     {
@@ -49,8 +52,12 @@ sealed class AddActorPacket : DataPacket
         writer.WriteUnsignedVarInt(0); // Attributes — emitted separately by UpdateAttributesPacket.
         if (ZombieMetadata)
             EntityMetadataWriter.WriteZombieMetadata(ref writer);
+        else if (BatMetadata)
+            EntityMetadataWriter.WriteBatMetadata(ref writer);
         else if (Variant is { } variant)
             EntityMetadataWriter.WriteFallingBlockMetadata(ref writer, variant);
+        else if (Dimensions is { } dimensions)
+            EntityMetadataWriter.WriteMobDimensionMetadata(ref writer, dimensions.Width, dimensions.Height);
         else
             EntityMetadataWriter.WriteScaleMetadata(ref writer);
         writer.WriteUnsignedVarInt(0); // EntityProperties.int list — empty

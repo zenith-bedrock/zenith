@@ -115,6 +115,41 @@ public class CerealItemAndMetadataTests
         Assert.True(stream.IsEndOfFile);
     }
 
+    /// <summary>Phase XXIII-B — real per-species hitbox metadata, replacing the Scale-only placeholder most mobs used.</summary>
+    [Fact]
+    public void WriteMobDimensionMetadata_writes_flags_scale_width_height()
+    {
+        var writer = new BinaryStream();
+        EntityMetadataWriter.WriteMobDimensionMetadata(ref writer, width: 1.4f, height: 0.9f);
+        var bytes = writer.GetBufferDisposing().ToArray();
+
+        // Phase XXIII-B regression: the declared entry count previously said 3 while 4 entries
+        // (Flags, Scale, Width, Height) actually followed — a real client desyncs its metadata
+        // dictionary parser the moment count != the entries actually present, corrupting every
+        // packet after it on the connection until it force-disconnects. The count is read into a
+        // variable and used to drive exactly that many reads below specifically so this test fails
+        // if a future edit reintroduces the mismatch, instead of only checking byte-level EOF
+        // (which a wrong count wouldn't necessarily break by itself).
+        var stream = new BinaryStream(bytes);
+        var count = stream.ReadUnsignedVarInt();
+
+        AssertEntry(ref stream, EntityMetaKey.Flags, EntityMetaType.Long);
+        var flags = stream.ReadVarLong();
+        Assert.NotEqual(0L, flags & EntityFlag.Bit(EntityFlag.HasCollision));
+
+        AssertEntry(ref stream, EntityMetaKey.Scale, EntityMetaType.Float);
+        Assert.Equal(1f, stream.ReadFloat(BinaryStream.Endianess.Little));
+
+        AssertEntry(ref stream, EntityMetaKey.Width, EntityMetaType.Float);
+        Assert.Equal(1.4f, stream.ReadFloat(BinaryStream.Endianess.Little));
+
+        AssertEntry(ref stream, EntityMetaKey.Height, EntityMetaType.Float);
+        Assert.Equal(0.9f, stream.ReadFloat(BinaryStream.Endianess.Little));
+
+        Assert.Equal(4, count); // must match the number of entries actually read above
+        Assert.True(stream.IsEndOfFile);
+    }
+
     [Fact]
     public void WriteFlagsOnly_single_entry_also_writes_type_twice()
     {

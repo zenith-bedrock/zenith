@@ -37,13 +37,23 @@ sealed class LoginProtocol
         _session.SendDataPacket(new PlayStatusPacket { Status = PlayStatusPacket.LoginSuccess });
     }
 
-    /// <summary>PlayStatus LOGIN_FAILED_CLIENT/SERVER — Immediate + uncompressed (§43).</summary>
+    /// <summary>PlayStatus LOGIN_FAILED_CLIENT/SERVER — Immediate, on the negotiated compression.</summary>
     public void SendIncompatibleProtocol(int playStatus)
     {
-        // Reject runs during handshake before the client enables compression.
+        // Cross-reference audit finding: this used to hardcode PacketCompression.NOT_PRESENT on the
+        // (stale, since-disproven) assumption that a protocol rejection always runs before the
+        // client enables compression. It doesn't — TryAcceptProtocol is checked AFTER
+        // SendNetworkSettings has already run unconditionally (both at the RequestNetworkSettings
+        // stage and, transitively, at the later Login stage), so the client has always already
+        // switched into "every batch has a leading algorithm byte" mode by the time this sends.
+        // Sending NOT_PRESENT here made the client misread the first byte of the uncompressed
+        // PlayStatus batch (its own small length-prefix varint) as the algorithm byte instead —
+        // observed on a real Bedrock client as "Unknown compression type 5" instead of a clean
+        // protocol-mismatch rejection, whenever a client's claimed protocol version didn't match
+        // ServerIdentity.ProtocolVersion. Use whatever was actually negotiated, same as SendDisconnect.
         _session.SendDataPacket(
             RakNetSession.Priority.Immediate,
-            PacketCompression.NOT_PRESENT,
+            _session.CompressionAlgorithm,
             new PlayStatusPacket { Status = playStatus });
     }
 

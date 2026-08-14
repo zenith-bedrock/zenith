@@ -75,7 +75,7 @@ public class ExperienceTests
         Assert.True(system.Stores.Health.TryGet(id, out var health));
 
         Assert.True(system.TryApplyDamage(
-            id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online));
+            id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Equal(0, player.ExperienceLevel);
@@ -99,7 +99,7 @@ public class ExperienceTests
         Assert.True(ecsStores.Health.TryGet(id, out var health));
 
         Assert.True(system.TryApplyDamage(
-            id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online));
+            id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.False(ecsStores.Entities.IsAlive(id));
         Assert.Equal(5, player.ExperiencePoints);
@@ -115,7 +115,7 @@ public class ExperienceTests
         Assert.True(system.Stores.Health.TryGet(id, out var health));
 
         Assert.True(system.TryApplyDamage(
-            id, DamageSource.Projectile(shooter.RuntimeId), health.State.Maximum, fx.Players.Online));
+            id, DamageSource.Projectile(shooter.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.Equal(5, shooter.ExperiencePoints);
     }
@@ -129,7 +129,7 @@ public class ExperienceTests
         var id = system.SpawnZombie(bystander.PositionX + 1, bystander.PositionY, bystander.PositionZ);
         Assert.True(system.Stores.Health.TryGet(id, out var health));
 
-        Assert.True(system.TryApplyDamage(id, DamageSource.Void, health.State.Maximum, fx.Players.Online));
+        Assert.True(system.TryApplyDamage(id, DamageSource.Void, health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.Equal(0, bystander.ExperiencePoints);
     }
@@ -173,7 +173,7 @@ public class ExperienceTests
         var player = fx.AddInGamePlayer("hardcore");
         player.AddExperience(50);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
 
         Assert.True(player.IsDead);
         Assert.Equal(4, player.ExperienceLevel);

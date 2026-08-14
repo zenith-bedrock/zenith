@@ -229,6 +229,21 @@ sealed class PlayerChunkTracker
         return true;
     }
 
+    /// <summary>
+    /// Cross-reference audit finding, Phase XXIII-B polish pass — <see cref="PublisherCenterChanged"/>
+    /// only compares chunk X/Z, never radius, so a mid-game render-distance increase (no chunk
+    /// boundary crossed) never re-sent NetworkChunkPublisherUpdate. The client culls anything outside
+    /// its last-told publish radius even after the server streams the new terrain, so newly streamed
+    /// chunks at the edge of the increased view distance silently never render/tick. Resetting to the
+    /// "never published" sentinel makes the next <see cref="PublisherCenterChanged"/> check report
+    /// true unconditionally, forcing a fresh publish at the current center/radius.
+    /// </summary>
+    public void ForcePublisherRefresh()
+    {
+        LastPublisherChunkX = int.MinValue;
+        LastPublisherChunkZ = int.MinValue;
+    }
+
     public static int BlockToChunk(float block) => ChunkMath.BlockToChunk(block);
 
     public static void ForEachInSquare(int centerX, int centerZ, int radius, Action<int, int> visit)

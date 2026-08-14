@@ -129,20 +129,34 @@ sealed class InventorySystem : IGameSystem
                 break;
 
             case InventoryWindowIntent.Kind.Close:
-                if (player.OpenContainer is not { } active ||
-                    active.WindowId != intent.WindowId || active.WindowType != intent.WindowType)
+                // Phase XXIII-B fix: real Bedrock clients (documented in PocketMine's
+                // InventoryManager::onClientRemoveWindow, "since 1.21.100 and probably earlier")
+                // sometimes send WindowId 0xFF ("none", signed -1) instead of echoing the actual
+                // window id — e.g. if another UI was already open when the close fired. Zenith's
+                // exact-match check silently rejected that as "stale" and never cleared
+                // player.OpenContainer, permanently locking the player out of every future
+                // container open (found via real-client testing). Treat 0xFF as "close whatever is
+                // currently open", the same workaround PocketMine uses.
+                if (player.OpenContainer is not { } active)
                 {
                     player.Session.Context.Logger.Debug(
                         $"Ignored stale container close from {player.Username}: {intent.WindowId}/{intent.WindowType}.");
+                    return;
+                }
+                if (intent.WindowId != InventoryWindowIntent.UnknownWindowId &&
+                    (active.WindowId != intent.WindowId || active.WindowType != intent.WindowType))
+                {
+                    player.Session.Context.Logger.Debug(
+                        $"Ignored mismatched container close from {player.Username}: {intent.WindowId}/{intent.WindowType} (active {active.WindowId}/{active.WindowType}).");
                     return;
                 }
 
                 if (active.Target == OpenContainerSession.TargetKind.Chest)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
                 else
-                    _ = player.TryCloseContainer(intent.WindowId, intent.WindowType, out _);
+                    _ = player.TryCloseContainer(active.WindowId, active.WindowType, out _);
                 inv.EndOpenContainerSession();
-                inv.SendContainerClose(intent.WindowId, intent.WindowType);
+                inv.SendContainerClose(active.WindowId, active.WindowType);
                 break;
         }
     }

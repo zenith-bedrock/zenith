@@ -13,6 +13,14 @@ readonly struct InventoryWindowIntent
         Close = 3
     }
 
+    /// <summary>
+    /// Real Bedrock clients send this (signed -1) as <c>ContainerClosePacket.WindowId</c> when they
+    /// can't identify which window they're closing (documented in PocketMine's
+    /// <c>InventoryManager::onClientRemoveWindow</c>). Treated as "close whatever is currently open"
+    /// rather than a window id to match exactly — see <c>InventorySystem.ApplyWindow</c>.
+    /// </summary>
+    public const byte UnknownWindowId = 255;
+
     public bool HasValue { get; init; }
     public Kind Action { get; init; }
     public int X { get; init; }

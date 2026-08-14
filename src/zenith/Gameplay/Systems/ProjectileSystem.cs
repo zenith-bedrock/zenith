@@ -27,7 +27,22 @@ sealed class ProjectileSystem : IGameSystem
 {
     private const float LaunchSpeed = 0.5f;
     private const float LaunchUpwardVelocity = 0.1f;
-    private const float GravityPerTick = 0.03f;
+
+    /// <summary>
+    /// Internal (not private) so ranged shooters — currently only <see cref="SkeletonSystem"/> — can
+    /// compute a launch arc that actually reaches the target instead of guessing a fixed vertical
+    /// velocity. Phase XXIII-B fix: Skeleton previously launched with a flat +0.08 vertical velocity
+    /// regardless of range; against this same per-tick gravity, the accumulated drop over the many
+    /// ticks a real shot distance takes (e.g. ~22 ticks at 10 blocks) is several blocks — the arrow
+    /// was hitting the ground and despawning well short of the player, read by a real client as "the
+    /// snowball disappears before hitting me".
+    ///
+    /// Value corrected in the same pass's cross-reference review: was 0.03, but PocketMine's
+    /// <c>Arrow::getInitialGravity()</c> (D:\Development\bedrock\pocketmine\src\entity\projectile\
+    /// Arrow.php) returns 0.05 — matching vanilla. Symbolic (not hand-tuned) throughout this file and
+    /// in SkeletonSystem's ballistic-arc formula, so this single constant fix keeps both consistent.
+    /// </summary>
+    internal const float GravityPerTick = 0.05f;
     private const float HitRadius = 0.55f;
     private const float Damage = 6f;
     private const int MaximumLifetimeTicks = 80;
@@ -75,7 +90,6 @@ sealed class ProjectileSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _ = clock;
         SpawnFromPlayerInputs(online);
 
         _tickScratch.Clear();
@@ -85,7 +99,7 @@ sealed class ProjectileSystem : IGameSystem
         {
             if (!_stores.Entities.IsAlive(id)) continue;
             ReconcileViewers(id, online);
-            Advance(id, online);
+            Advance(id, online, clock.CurrentTick);
         }
 
         _replicated.RemoveWhere(pair => !IsKnownAliveProjectileId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
@@ -115,7 +129,7 @@ sealed class ProjectileSystem : IGameSystem
         }
     }
 
-    private void Advance(EntityId id, IReadOnlyList<Player.Player> online)
+    private void Advance(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         if (!_stores.Velocities.TryGet(id, out var vel)) return;
@@ -125,10 +139,10 @@ sealed class ProjectileSystem : IGameSystem
         var nextY = pos.Y + vel.Y;
         var nextZ = pos.Z + vel.Z;
 
-        var hitActor = FindHitDamageableActor(nextX, nextY, nextZ);
+        var hitActor = FindHitDamageableActor(nextX, nextY, nextZ, state.OwnerRuntimeId);
         if (hitActor is { } actorId)
         {
-            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), Damage, online);
+            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), Damage, online, currentTick);
             Remove(id, online);
             return;
         }
@@ -136,7 +150,10 @@ sealed class ProjectileSystem : IGameSystem
         var player = FindHitPlayer(state.OwnerRuntimeId, nextX, nextY, nextZ, online);
         if (player is not null)
         {
-            PlayerDamage.Apply(player, _players, online, DamageSource.Projectile(state.OwnerRuntimeId), Damage);
+            // Knockback direction follows the arrow's own flight, not the shooter's position —
+            // matches vanilla (an arrow that curved under gravity still knocks the target the way
+            // it was actually travelling at impact).
+            PlayerDamage.Apply(player, _players, online, DamageSource.Projectile(state.OwnerRuntimeId), Damage, currentTick, vel.X, vel.Z);
             Remove(id, online);
             return;
         }
@@ -162,11 +179,21 @@ sealed class ProjectileSystem : IGameSystem
     /// regardless of which system spawned it — this is the generalization the ECS foundation was
     /// meant to make possible (see this class's doc comment). Health drives the query since it is
     /// the smaller set (projectiles themselves, and any future non-damageable actor, never match).
+    ///
+    /// Phase XXIII-B fix: this never excluded the shooter itself. A real client crash traced back
+    /// to Skeleton — the one ECS-damageable species that also fires projectiles — hitting itself on
+    /// the very first movement step (the arrow spawns almost exactly at the shooter's own position),
+    /// killing it a tick after spawn. Player-fired arrows never showed this because Player isn't an
+    /// ECS entity, so this query could never match the shooter in that case. <paramref
+    /// name="ownerRuntimeId"/> excludes whichever ECS entity actually fired this projectile,
+    /// regardless of species.
     /// </summary>
-    private EntityId? FindHitDamageableActor(float x, float y, float z)
+    private EntityId? FindHitDamageableActor(float x, float y, float z, long ownerRuntimeId)
     {
         foreach (var candidateId in Query.With(_stores.Health, _stores.Positions))
         {
+            if (_stores.Identities.TryGet(candidateId, out var identity) && identity.ActorRuntimeId == (ulong)ownerRuntimeId)
+                continue;
             if (!_stores.Positions.TryGet(candidateId, out var pos)) continue;
             if (MathF.Abs(pos.X - x) > HitRadius || MathF.Abs(pos.Z - z) > HitRadius) continue;
             if (y < pos.Y || y > pos.Y + 2f) continue;
@@ -181,8 +208,8 @@ sealed class ProjectileSystem : IGameSystem
     /// itself — loot/XP/removal specifics stay per-system, exactly the "share data, not behavior"
     /// principle applied to a cross-species query result.
     /// </summary>
-    private bool TryDamageActor(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
-        _damage.TryApplyDamage(id, source, amount, online);
+    private bool TryDamageActor(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        _damage.TryApplyDamage(id, source, amount, online, currentTick);
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)
     {

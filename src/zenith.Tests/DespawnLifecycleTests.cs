@@ -59,7 +59,7 @@ public sealed class DespawnLifecycleTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("corpse");
-        _ = player.ApplyDamage(DamageSource.Void, player.MaxHealth);
+        _ = player.ApplyDamage(DamageSource.Void, player.MaxHealth, 0);
         Assert.True(player.IsDead);
 
         var (shouldDespawn, _) = DespawnLifecycle.EvaluateDespawn(

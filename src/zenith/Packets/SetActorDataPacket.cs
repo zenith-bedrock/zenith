@@ -19,6 +19,12 @@ sealed class SetActorDataPacket : DataPacket
     public bool Sneaking { get; set; }
     public bool Sprinting { get; set; }
 
+    /// <summary>
+    /// Non-player FLAGS-only override (e.g. Creeper Ignited/Powered) — when set, <see cref="FlagsOnly"/>
+    /// writes this raw bitmask instead of the player pose builder (<see cref="Sneaking"/>/<see cref="Sprinting"/>).
+    /// </summary>
+    public long? RawFlags { get; set; }
+
     public override Span<byte> Encode()
     {
         var writer = new BinaryStream();
@@ -28,7 +34,7 @@ sealed class SetActorDataPacket : DataPacket
         if (FlagsOnly)
             EntityMetadataWriter.WriteFlagsOnly(
                 ref writer,
-                EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting));
+                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting));
         else
             EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Name, Sneaking, Sprinting);
 

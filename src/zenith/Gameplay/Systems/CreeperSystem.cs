@@ -20,6 +20,13 @@ sealed class CreeperSystem : IGameSystem
     private const float SpawnDistance = 6f;
     private const float DetectionDistance = 16f;
     private const float IgniteDistance = 3f;
+    /// <summary>
+    /// Phase XXIII-B polish pass — separate ignite/defuse thresholds (hysteresis), matching
+    /// PowerNukkitX's <c>EntityCreeper</c> (ignites at ≤3 blocks, only defuses at ≥7 blocks;
+    /// real vanilla has this same start/stop asymmetry). Using one shared threshold for both made a
+    /// creeper standing at exactly ~3 blocks flicker its Ignited flag on/off every tick.
+    /// </summary>
+    private const float DefuseDistance = 7f;
     private const float AttackDistance = 2.25f;
     /// <summary>Damage a player's weapon deals per hit — unrelated to <see cref="ExplosionDamage"/>.</summary>
     private const float PlayerAttackDamage = 4f;
@@ -37,7 +44,7 @@ sealed class CreeperSystem : IGameSystem
     private readonly CreeperStore _creepers;
     private readonly StackId _lootItem;
     private readonly HashSet<(long CreeperId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long CreeperId, long PlayerId), ProjectedPosition> _lastProjected = new();
+    private readonly Dictionary<(long CreeperId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private bool _bootstrapSpawned;
 
@@ -67,17 +74,18 @@ sealed class CreeperSystem : IGameSystem
             if (!creeper.IsActive) continue;
             if (TryDespawn(creeper, clock, online)) continue;
             ReconcileViewers(creeper, online);
-            ApplyPlayerAttacks(creeper, online);
+            ApplyPlayerAttacks(creeper, online, clock.CurrentTick);
             if (!creeper.IsActive) continue;
 
             var target = FindOrAcquireTarget(creeper, online);
+            var exitThreshold = creeper.IsFusing ? DefuseDistance : IgniteDistance;
             if (target is null)
             {
-                Defuse(creeper);
+                Defuse(creeper, online);
             }
-            else if (DistanceSquared(creeper, target) > IgniteDistance * IgniteDistance)
+            else if (DistanceSquared(creeper, target) > exitThreshold * exitThreshold)
             {
-                Defuse(creeper);
+                Defuse(creeper, online);
                 AdvanceTowardTarget(creeper, target);
             }
             else
@@ -144,7 +152,7 @@ sealed class CreeperSystem : IGameSystem
                 peer.Session.Protocol.Entity.SendAddCreeper(
                     creeper.EntityId, creeper.RuntimeId, creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
                 peer.Session.Protocol.Entity.SendHealth(creeper.RuntimeId, creeper.Health.Current, creeper.Health.Maximum);
-                _lastProjected[(creeper.EntityId, peer.RuntimeId)] = new ProjectedPosition(creeper.PositionX, creeper.PositionY, creeper.PositionZ);
+                _lastProjected[(creeper.EntityId, peer.RuntimeId)] = new ProjectedPose(creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
@@ -154,13 +162,13 @@ sealed class CreeperSystem : IGameSystem
                 ReplicatedRemovalCount++;
             });
 
-    private void ApplyPlayerAttacks(Creeper creeper, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(creeper, online, AttackDistance, PlayerAttackDamage, TryApplyDamage);
+    private void ApplyPlayerAttacks(Creeper creeper, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        GroundMobCombat.ApplyPlayerMeleeAttacks(creeper, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
 
     /// <summary>Player kills it with a weapon before the fuse completes — ordinary shared bookkeeping.</summary>
-    public bool TryApplyDamage(Creeper creeper, DamageSource source, float amount, IReadOnlyList<Player.Player> online) =>
+    public bool TryApplyDamage(Creeper creeper, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         GroundMobCombat.TryApplyDamage(
-            creeper, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Creeper",
+            creeper, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Creeper", currentTick,
             removeFromStore: _creepers.Remove,
             onDeathReplicatedToPeer: peer =>
             {
@@ -168,19 +176,36 @@ sealed class CreeperSystem : IGameSystem
                 ReplicatedRemovalCount++;
             });
 
-    private static void Defuse(Creeper creeper) => creeper.IsFusing = false;
+    /// <summary>
+    /// Phase XXIII fix — Creeper never broadcast its Ignited state at all, so a real client never
+    /// showed the fuse-lit swell/flash animation. FLAGS bit 10 confirmed against bedrock-protocol's
+    /// <c>EntityMetadataFlags::IGNITED</c> and gophertunnel's <c>EntityDataFlagIgnited</c> (both match
+    /// Zenith's existing Sneaking/Sprinting/ShowName bit numbers exactly, high confidence). Sent only
+    /// on the false→true/true→false transition, not every tick.
+    /// </summary>
+    private void SetIgnited(Creeper creeper, bool ignited, IReadOnlyList<Player.Player> online)
+    {
+        if (creeper.IsFusing == ignited) return;
+        creeper.IsFusing = ignited;
+
+        foreach (var peer in online)
+            if (_replicated.Contains((creeper.EntityId, peer.RuntimeId)))
+                peer.Session.Protocol.Entity.SendActorIgnited(creeper.RuntimeId, ignited);
+    }
+
+    private void Defuse(Creeper creeper, IReadOnlyList<Player.Player> online) => SetIgnited(creeper, false, online);
 
     private void TickFuse(Creeper creeper, GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (!creeper.IsFusing)
         {
-            creeper.IsFusing = true;
+            SetIgnited(creeper, true, online);
             creeper.FuseStartedTick = clock.CurrentTick;
             return;
         }
 
         if (clock.CurrentTick - creeper.FuseStartedTick >= FuseDurationTicks)
-            Explode(creeper, online);
+            Explode(creeper, online, clock.CurrentTick);
     }
 
     /// <summary>
@@ -189,7 +214,7 @@ sealed class CreeperSystem : IGameSystem
     /// damage to nearby players is a distinct, Creeper-only concept — GroundMobCombat never touches
     /// player health.
     /// </summary>
-    private void Explode(Creeper creeper, IReadOnlyList<Player.Player> online)
+    private void Explode(Creeper creeper, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         var explosionX = creeper.PositionX;
         var explosionY = creeper.PositionY;
@@ -197,7 +222,7 @@ sealed class CreeperSystem : IGameSystem
 
         if (!GroundMobCombat.TryApplyDamage(
                 creeper, DamageSource.Generic, creeper.Health.Maximum, online, _world, _players, _replicated,
-                _lootItem, KillExperience, "Creeper", removeFromStore: _creepers.Remove,
+                _lootItem, KillExperience, "Creeper", currentTick, removeFromStore: _creepers.Remove,
                 onDeathReplicatedToPeer: peer =>
                 {
                     _lastProjected.Remove((creeper.EntityId, peer.RuntimeId));
@@ -219,15 +244,53 @@ sealed class CreeperSystem : IGameSystem
             if (distance > ExplosionRadius) continue;
             var damage = ExplosionDamage * (1f - distance / ExplosionRadius);
             if (damage <= 0f) continue;
-            _ = PlayerDamage.Apply(player, _players, online, DamageSource.Generic, damage);
+            _ = PlayerDamage.Apply(player, _players, online, DamageSource.Generic, damage, currentTick);
         }
+
+        var blockUpdates = BreakBlocksInRadius(explosionX, explosionY, explosionZ);
 
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
             peer.Session.Protocol.World.SendLevelEvent(LevelEventPacket.EventParticleExplosion, explosionX, explosionY, explosionZ);
             peer.Session.Protocol.World.SendLevelSoundEvent("explode", explosionX, explosionY, explosionZ);
+            if (blockUpdates.Count > 0)
+                peer.Session.Protocol.World.PublishUpdateBlocks(blockUpdates);
         }
+    }
+
+    /// <summary>
+    /// Phase XXIII fix — Creeper explosions never touched the world at all (no crater), even though
+    /// they already applied player area damage. Simple spherical carve (distance falloff, not a full
+    /// blast-resistance/ray-casting simulation) — every solid, non-bedrock block within
+    /// <see cref="ExplosionRadius"/> becomes air. No item drops for destroyed terrain, matching
+    /// vanilla's default (mobGriefing-independent) "no block drops from mob-caused explosions".
+    /// </summary>
+    private List<(int X, int Y, int Z, int BlockRuntimeId)> BreakBlocksInRadius(float centerX, float centerY, float centerZ)
+    {
+        var updates = new List<(int, int, int, int)>();
+        var radius = (int)MathF.Ceiling(ExplosionRadius);
+        var cx = (int)MathF.Floor(centerX);
+        var cy = (int)MathF.Floor(centerY);
+        var cz = (int)MathF.Floor(centerZ);
+
+        for (var dx = -radius; dx <= radius; dx++)
+            for (var dy = -radius; dy <= radius; dy++)
+                for (var dz = -radius; dz <= radius; dz++)
+                {
+                    var distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                    if (distance > ExplosionRadius) continue;
+
+                    var x = cx + dx;
+                    var y = cy + dy;
+                    var z = cz + dz;
+                    var current = _world.GetBlock(x, y, z);
+                    if (current == World.World.AirRuntimeId || current == Blocks.Bedrock) continue;
+                    if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId)) continue;
+                    updates.Add((x, y, z, World.World.AirRuntimeId));
+                }
+
+        return updates;
     }
 
     private static Player.Player? FindOrAcquireTarget(Creeper creeper, IReadOnlyList<Player.Player> online)
@@ -280,7 +343,7 @@ sealed class CreeperSystem : IGameSystem
 
         creeper.PositionX = stepX;
         creeper.PositionZ = stepZ;
-        creeper.Yaw = MathF.Atan2(-dx, dz) * (180f / MathF.PI);
+        creeper.Yaw = LookMath.MoveYawTowards(creeper.Yaw, LookMath.YawTowards(dx, dz), LookMath.DefaultMaxTurnDegreesPerTick);
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)
@@ -292,7 +355,7 @@ sealed class CreeperSystem : IGameSystem
             {
                 var key = (creeper.EntityId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPosition(creeper.PositionX, creeper.PositionY, creeper.PositionZ);
+                var current = new ProjectedPose(creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                     continue;
                 _moveBatch.Add(new RawActorPose
@@ -300,24 +363,13 @@ sealed class CreeperSystem : IGameSystem
                     ActorRuntimeId = creeper.RuntimeId,
                     X = creeper.PositionX,
                     Y = creeper.PositionY,
-                    Z = creeper.PositionZ
+                    Z = creeper.PositionZ,
+                    Yaw = creeper.Yaw,
+                    HeadYaw = creeper.Yaw
                 });
                 _lastProjected[key] = current;
             }
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
         }
     }
 }

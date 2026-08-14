@@ -109,7 +109,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("tank");
         EquipDiamondSet(player, fx);
 
-        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f);
+        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
 
         Assert.True(applied);
         Assert.Equal(18f, player.Health); // 10 * (1 - 0.8) = 2 damage
@@ -121,7 +121,7 @@ public class ArmorTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bare");
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
 
         Assert.Equal(10f, player.Health);
     }
@@ -133,7 +133,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("voidtank");
         EquipDiamondSet(player, fx);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
 
         Assert.True(player.IsDead);
     }
@@ -145,7 +145,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("armored-death");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronHelmet(fx)), 1));
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
 
         Assert.True(player.IsDead);
         Assert.True(player.Inventory.GetArmor(PlayerInventory.ArmorHelmetSlot).IsEmpty);
@@ -159,7 +159,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("respawner");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronChestplate(fx)), 1));
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth);
+        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
         Assert.True(player.IsDead);
 
         player.SubmitRespawn();

@@ -42,7 +42,8 @@ public sealed class ProjectileSystemTests
         owner.Yaw = -90f;
         var system = CreateSystem(fx, out var zombies, out _);
         var zombieId = zombies.SpawnZombie(1f, owner.PositionY, owner.PositionZ);
-        zombies.TryApplyDamage(zombieId, DamageSource.Generic, 14f, fx.Players.Online);
+        zombies.TryApplyDamage(zombieId, DamageSource.Generic, 14f, fx.Players.Online, fx.Clock.CurrentTick);
+        fx.Clock.AdvanceBy(11); // past the hit-invulnerability window — the arrow is a distinct, later hit.
 
         owner.SubmitProjectileIntent();
         system.Tick(fx.Clock, fx.Players.Online);

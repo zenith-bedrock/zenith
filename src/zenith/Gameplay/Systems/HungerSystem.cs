@@ -48,7 +48,7 @@ sealed class HungerSystem : IGameSystem
             if (player.Hunger <= 0f && clock.CurrentTick % StarveDamageIntervalTicks == 0)
             {
                 // PlayerDamage.Apply already sends attributes/relays health for both outcomes.
-                _ = PlayerDamage.Apply(player, _players, online, DamageSource.Starve, 1f);
+                _ = PlayerDamage.Apply(player, _players, online, DamageSource.Starve, 1f, clock.CurrentTick);
                 continue;
             }
 

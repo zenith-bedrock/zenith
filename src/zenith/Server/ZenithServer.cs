@@ -28,6 +28,8 @@ class ZenithServer
     private readonly ZenithSessionListener _sessionListener;
     private readonly GravitySystem _gravity;
     private readonly RuntimeTelemetry _telemetry;
+    private readonly TextWriter? _logFileWriter;
+    private readonly StreamWriter? _diagnosticsFileWriter;
     private Task? _runTask;
     private Task? _shutdownTask;
     private Task? _gameLoopTask;
@@ -46,13 +48,30 @@ class ZenithServer
     {
         Config = config;
         ConfigPath = configPath;
+
+        // Debug tooling (Phase XXIII) — log.to-file: one text log + one diagnostics-snapshot jsonl
+        // per run under {data-root}/logs/, sharing a timestamp so the pair is easy to correlate.
+        string? logFilePath = null;
+        if (config.Log.ToFile)
+        {
+            var logsDir = Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "logs");
+            Directory.CreateDirectory(logsDir);
+            var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            logFilePath = Path.Combine(logsDir, $"zenith-{runStamp}.log");
+            _logFileWriter = TextWriter.Synchronized(new StreamWriter(logFilePath, append: false) { AutoFlush = true });
+            _diagnosticsFileWriter = new StreamWriter(
+                Path.Combine(logsDir, $"zenith-diagnostics-{runStamp}.jsonl"), append: false) { AutoFlush = true };
+        }
+
         var serverLogger = new Logger
         {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server"),
+            FileWriter = _logFileWriter
         };
         var raknetLogger = new Logger
         {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet")
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet"),
+            FileWriter = _logFileWriter
         };
         _logger = serverLogger;
         serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
@@ -60,6 +79,8 @@ class ZenithServer
         var dataDir = ServerConfigPaths.ResolveDataDirectory();
         if (dataDir is not null)
             serverLogger.Info($"data root ({ServerConfigPaths.DataDirEnvironmentVariable}): {dataDir}");
+        if (logFilePath is not null)
+            serverLogger.Info($"log.to-file: writing {logFilePath} (+ diagnostics jsonl alongside it)");
         serverLogger.Info($"log.server={config.Log.Server} log.raknet={config.Log.Raknet}");
         serverLogger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
         if (!config.Auth.RequireStrictXbox)
@@ -140,6 +161,8 @@ class ZenithServer
             OnListening = _ => serverLogger.Info("Server ready.")
         };
         _telemetry = new RuntimeTelemetry(serverLogger);
+        var diagnosticsFileTicks = 0L;
+        const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
         gameLoop.SetTickObserver(elapsed =>
         {
             var actors = entities.Entities.AliveCount +
@@ -149,6 +172,9 @@ class ZenithServer
             diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
                 diagnostics.Systems.Count, RakNetServer);
             _telemetry.RecordTick(elapsed, players.Count, actors, RakNetServer);
+
+            if (_diagnosticsFileWriter is not null && ++diagnosticsFileTicks % diagnosticsFileEveryTicks == 0)
+                _diagnosticsFileWriter.WriteLine(diagnostics.Runtime.CaptureSnapshot().ToJson(indented: false));
         });
     }
 
@@ -480,6 +506,11 @@ class ZenithServer
 
             if (_chunkStorage is IDisposable disposable)
                 disposable.Dispose();
+
+            _logFileWriter?.Flush();
+            _logFileWriter?.Dispose();
+            _diagnosticsFileWriter?.Flush();
+            _diagnosticsFileWriter?.Dispose();
         }
         finally
         {

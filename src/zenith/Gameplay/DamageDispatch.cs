@@ -20,19 +20,19 @@ namespace Zenith.Gameplay;
 /// </summary>
 sealed class DamageDispatch
 {
-    private readonly List<(Func<EntityId, bool> Owns, Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, bool> TryApplyDamage)> _handlers = [];
+    private readonly List<(Func<EntityId, bool> Owns, Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> TryApplyDamage)> _handlers = [];
 
     public void Register(
         Func<EntityId, bool> owns,
-        Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, bool> tryApplyDamage) =>
+        Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage) =>
         _handlers.Add((owns, tryApplyDamage));
 
     /// <summary>Dispatches to whichever registered system owns <paramref name="id"/>; false if none does.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online)
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         foreach (var (owns, tryApplyDamage) in _handlers)
             if (owns(id))
-                return tryApplyDamage(id, source, amount, online);
+                return tryApplyDamage(id, source, amount, online, currentTick);
         return false;
     }
 }

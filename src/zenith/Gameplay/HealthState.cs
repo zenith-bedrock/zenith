@@ -70,16 +70,32 @@ sealed class HealthState
         Current = maximum;
     }
 
+    /// <summary>
+    /// Vanilla hit-invulnerability window (10 ticks / 0.5s — Java's <c>hurtResistantTime</c>, mirrored
+    /// by PocketMine's default <c>Living::getAttackCooldown()</c>). Phase XXIII-B real-client-review
+    /// finding: Zenith had NO invulnerability concept at all anywhere (player or mob) — every damage
+    /// source applied in full every tick with no grace window, so e.g. two mobs hitting the same tick,
+    /// or a mob whose AI happens to re-check every tick, could stack far beyond vanilla feel. A
+    /// strictly-greater new hit still lands (matches Java's "harder hit overrides" rule) — this is not
+    /// a hard damage-immunity, just a duplicate/lesser-hit suppressor.
+    /// </summary>
+    private const int InvulnerabilityTicks = 10;
+
     public float Maximum { get; }
     public float Current { get; private set; }
     public bool IsDead { get; private set; }
     public DamageSource? FatalSource { get; private set; }
 
+    private ulong _invulnerableUntilTick;
+    private float _lastDamageTaken;
+
     /// <summary>
     /// Applies one finite, positive damage amount. A lethal transition is emitted exactly once;
     /// later damage cannot re-run death effects or change the recorded fatal source.
+    /// <paramref name="currentTick"/> drives the hit-invulnerability window — Void bypasses it
+    /// (matches vanilla: falling out of the world damages every tick, not just once).
     /// </summary>
-    public DamageResult Apply(DamageSource source, float amount)
+    public DamageResult Apply(DamageSource source, float amount, ulong currentTick)
     {
         var previous = Current;
         if (!float.IsFinite(amount) || amount <= 0f)
@@ -87,6 +103,12 @@ sealed class HealthState
 
         if (IsDead)
             return new DamageResult(DamageResultKind.AlreadyDead, source, previous, previous);
+
+        if (source.Cause != DamageCause.Void && currentTick < _invulnerableUntilTick && amount <= _lastDamageTaken)
+            return new DamageResult(DamageResultKind.Rejected, source, previous, previous);
+
+        _lastDamageTaken = amount;
+        _invulnerableUntilTick = currentTick + InvulnerabilityTicks;
 
         Current = MathF.Max(0f, Current - amount);
         if (Current > 0f)
@@ -110,5 +132,7 @@ sealed class HealthState
         Current = Maximum;
         IsDead = false;
         FatalSource = null;
+        _invulnerableUntilTick = 0;
+        _lastDamageTaken = 0f;
     }
 }

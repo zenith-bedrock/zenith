@@ -157,6 +157,11 @@
           "enum": ["none", "info", "warn", "warning", "error", "debug", "all"],
           "default": "warn",
           "description": "RakNet transport logger. warn keeps drops/full/rate-limit; debug floods ACK/Incoming/Connected PID."
+        },
+        "to-file": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, also writes logs/zenith-<run>.log and a paired logs/zenith-diagnostics-<run>.jsonl (periodic metrics snapshots) under the data root, one pair per server run."
         }
       }
     }

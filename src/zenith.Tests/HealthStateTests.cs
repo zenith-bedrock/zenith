@@ -11,7 +11,7 @@ public class HealthStateTests
     {
         var health = new HealthState(maximum: 20f);
 
-        var result = health.Apply(DamageSource.Melee, amount: 6f);
+        var result = health.Apply(DamageSource.Melee, amount: 6f, currentTick: 0);
 
         Assert.Equal(DamageResultKind.Applied, result.Kind);
         Assert.Equal(20f, result.PreviousHealth);
@@ -29,7 +29,7 @@ public class HealthStateTests
     {
         var health = new HealthState(maximum: 20f);
 
-        var result = health.Apply(DamageSource.Generic, amount);
+        var result = health.Apply(DamageSource.Generic, amount, currentTick: 0);
 
         Assert.Equal(DamageResultKind.Rejected, result.Kind);
         Assert.Equal(20f, health.Current);
@@ -42,8 +42,8 @@ public class HealthStateTests
     {
         var health = new HealthState(maximum: 5f);
 
-        var fatal = health.Apply(DamageSource.Fall, amount: 5f);
-        var replay = health.Apply(DamageSource.Melee, amount: 1f);
+        var fatal = health.Apply(DamageSource.Fall, amount: 5f, currentTick: 0);
+        var replay = health.Apply(DamageSource.Melee, amount: 1f, currentTick: 0);
 
         Assert.Equal(DamageResultKind.Died, fatal.Kind);
         Assert.Equal(DamageResultKind.AlreadyDead, replay.Kind);
@@ -57,13 +57,73 @@ public class HealthStateTests
     public void Respawn_reset_restores_full_health_and_opens_a_new_lifecycle()
     {
         var health = new HealthState(maximum: 12f);
-        _ = health.Apply(DamageSource.Void, amount: 12f);
+        _ = health.Apply(DamageSource.Void, amount: 12f, currentTick: 0);
 
         health.RestoreFull();
 
         Assert.False(health.IsDead);
         Assert.Equal(12f, health.Current);
         Assert.Null(health.FatalSource);
-        Assert.Equal(DamageResultKind.Applied, health.Apply(DamageSource.Generic, amount: 1f).Kind);
+        Assert.Equal(DamageResultKind.Applied, health.Apply(DamageSource.Generic, amount: 1f, currentTick: 0).Kind);
+    }
+
+    /// <summary>
+    /// Phase XXIII-B real-client-review finding: Zenith had no hit-invulnerability at all (player or
+    /// mob) — every damage source landed in full every tick, unlike vanilla's ~10-tick grace window
+    /// after a hit. This locks in the window's three defining behaviors in one place, independent of
+    /// any gameplay system.
+    /// </summary>
+    [Fact]
+    public void A_second_equal_or_lesser_hit_inside_the_window_is_rejected()
+    {
+        var health = new HealthState(maximum: 20f);
+
+        var first = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 0);
+        var secondEqual = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 5);
+        var secondLesser = health.Apply(DamageSource.Melee, amount: 3f, currentTick: 9);
+
+        Assert.Equal(DamageResultKind.Applied, first.Kind);
+        Assert.Equal(DamageResultKind.Rejected, secondEqual.Kind);
+        Assert.Equal(DamageResultKind.Rejected, secondLesser.Kind);
+        Assert.Equal(15f, health.Current);
+    }
+
+    [Fact]
+    public void A_strictly_harder_hit_inside_the_window_still_lands()
+    {
+        var health = new HealthState(maximum: 20f);
+
+        _ = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 0);
+        var harder = health.Apply(DamageSource.Melee, amount: 8f, currentTick: 5);
+
+        Assert.Equal(DamageResultKind.Applied, harder.Kind);
+        Assert.Equal(7f, health.Current);
+    }
+
+    [Fact]
+    public void An_equal_hit_lands_again_once_the_window_has_elapsed()
+    {
+        var health = new HealthState(maximum: 20f);
+
+        _ = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 0);
+        var afterWindow = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 10);
+
+        Assert.Equal(DamageResultKind.Applied, afterWindow.Kind);
+        Assert.Equal(10f, health.Current);
+    }
+
+    /// <summary>Void bypasses the window — matches vanilla (falling out of the world damages every tick, not just once).</summary>
+    [Fact]
+    public void Void_damage_ignores_the_invulnerability_window()
+    {
+        var health = new HealthState(maximum: 20f);
+
+        _ = health.Apply(DamageSource.Melee, amount: 5f, currentTick: 0);
+        var void1 = health.Apply(DamageSource.Void, amount: 5f, currentTick: 1);
+        var void2 = health.Apply(DamageSource.Void, amount: 5f, currentTick: 2);
+
+        Assert.Equal(DamageResultKind.Applied, void1.Kind);
+        Assert.Equal(DamageResultKind.Applied, void2.Kind);
+        Assert.Equal(5f, health.Current);
     }
 }

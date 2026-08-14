@@ -712,8 +712,25 @@ class Player
     /// <summary>GameLoop-owned active effects; sole writer is <see cref="Gameplay.Systems.EffectSystem"/>.</summary>
     internal IReadOnlyDictionary<EffectType, ActiveEffect> Effects => _effects;
 
-    internal void ApplyOrRefreshEffect(EffectType type, int amplifier, ulong expiresAtTick) =>
+    /// <summary>
+    /// Vanilla/PocketMine "stronger wins" (cross-reference audit finding, Phase XXIII-B polish
+    /// pass): a currently-active effect is kept, not overwritten, unless the new instance is a
+    /// strictly higher amplifier or the same amplifier with more remaining duration. Previously this
+    /// unconditionally overwrote — a weak potion could silently downgrade/shorten a stronger one
+    /// already ticking. Returns whether the new instance actually took effect, so the caller knows
+    /// whether to tell the client anything changed.
+    /// </summary>
+    internal bool ApplyOrRefreshEffect(EffectType type, int amplifier, ulong expiresAtTick, ulong currentTick)
+    {
+        if (_effects.TryGetValue(type, out var existing) && !existing.HasExpired(currentTick))
+        {
+            if (existing.Amplifier > amplifier) return false;
+            if (existing.Amplifier == amplifier && existing.ExpiresAtTick >= expiresAtTick) return false;
+        }
+
         _effects[type] = new ActiveEffect(type, amplifier, expiresAtTick);
+        return true;
+    }
 
     internal bool RemoveEffect(EffectType type) => _effects.Remove(type);
 
@@ -728,7 +745,7 @@ class Player
     /// Applies an authoritative damage request on the GameLoop. Network handlers and async work
     /// must submit intent/results to that owner rather than mutate health directly.
     /// </summary>
-    internal DamageResult ApplyDamage(DamageSource source, float amount) => _health.Apply(source, amount);
+    internal DamageResult ApplyDamage(DamageSource source, float amount, ulong currentTick) => _health.Apply(source, amount, currentTick);
 
     /// <summary>
     /// Finalizes one already-accepted fatal health transition. This is deliberately separate
@@ -782,6 +799,16 @@ class Player
         _attackIntent.TryConsumeIf(
             target => target is { } targetRuntimeId && targetRuntimeId == expectedTargetActorRuntimeId,
             out _);
+
+    /// <summary>
+    /// Phase XXIII-B — vanilla-parity Golem aggro trigger: iron golems are passive until a player
+    /// attacks a villager near them (or attacks the golem itself). Zenith has no village/reputation
+    /// system, so this narrow signal (who, when, where) is what <c>GolemSystem</c> checks instead of
+    /// a full reputation model. Set by <c>VillagerSystem.TryApplyDamage</c>, read by
+    /// <c>GolemSystem</c> — a direct field rather than a cross-system event bus, since there is
+    /// exactly one producer and one consumer.
+    /// </summary>
+    internal (ulong Tick, float X, float Z)? LastVillagerAttack { get; set; }
 
     /// <summary>Network-to-gameplay handoff for the first short-lived projectile slice.</summary>
     internal void SubmitProjectileIntent() => _projectileIntent.Submit();
