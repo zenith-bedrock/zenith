@@ -1813,6 +1813,41 @@ seed the first time it boots under this code, same as any other "brand-new" worl
 See `docs/history/phases/phase-xxiv-overworld-generation-findings.md` for the full audit this
 decision came out of, and `docs/world-generation.md` for the living contract this ADR backs.
 
+### 109. Survival vitals close the reconnect/death honesty gap; no generic Attribute framework
+
+**Choice:** `Player.Saturation` becomes real state (default 5, vanilla-parity buffer that depletes
+before `Hunger` on each exhaustion-threshold crossing); `HungerSystem`'s exhaustion accumulator gains
+mining and damage as sources alongside sprinting; death resets XP to zero
+(`PlayerDamage.Apply` → `player.SetExperience(0, 0)`); and `PlayerDataBlob` gains a v3 layout (v2 + 4
+floats: health/hunger/saturation/exhaustion) so a reconnect restores the same vitals a player left
+with instead of resetting three of four to spawn defaults while only XP quietly survived. Each closes
+a specific gap already named in the Phase XXIII-B cross-reference audit (`docs/entity-fidelity.md`) —
+this is not a new survival subsystem, it's finishing four documented half-implementations.
+
+**Why version the blob instead of a parallel `pd2:` key or a migration pass:** `PlayerDataBlob`
+already had a version byte and an established pattern for it — `TryUnpack` reads each version band
+with `>=`, so a v3 blob still gets its v2 XP fields, and an old v1/v2 blob simply has no vitals band
+and loads at fresh-spawn defaults, exactly how a v1 blob already behaved for XP before this phase. No
+migration step exists or is needed; adding a fourth storage key for four floats would be more
+machinery than the problem calls for.
+
+**Why not a generic `Attribute` framework:** Minecraft's own attribute model is broad (health, hunger,
+movement speed, attack damage, …), and it would be easy to justify "unifying" hunger/saturation/
+exhaustion/health under one generic mutable-attribute type now that both exist side by side on
+`Player`. Rejected — each already has its own owner, its own mutation rules, and its own wire
+projection (`HealthState` vs. plain `Player` fields vs. `UpdateAttributes`), and nothing about this
+phase's four fixes needed them to share a spine. Building one now would be designing for hypothetical
+future attributes, not solving today's four gaps.
+
+**Non-goals for this ADR:** no per-item stack-size table, no fix for `BreakDuration`'s tool-tier-
+mismatch formula (still a latent no-op — no block gates on `ToolTier`, only `ToolKind`), no movement
+validation, no walking-exhaustion source (needs distance tracking `MovementSystem` doesn't have), no
+per-food saturation-modifier table (one constant ratio applies to every food), no effects persistence
+across reconnect. All are pre-existing, separately documented gaps this phase deliberately left alone
+— see the findings doc for the full list.
+
+See `docs/history/phases/phase-xxv-survival-foundation-findings.md` for the full record.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

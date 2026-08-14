@@ -7,7 +7,14 @@ namespace Zenith.Protocol;
 /// <summary>Builds CraftingDataPacket from <see cref="RecipeRegistry"/> SSOT (ADR §35 / §54 / §55).</summary>
 static class CraftingDataBuilder
 {
-    /// <summary>Wire DTOs from <see cref="RecipeRegistry"/> SSOT (ADR §35) — no second recipe table.</summary>
+    /// <summary>
+    /// Wire DTOs from <see cref="RecipeRegistry"/> SSOT (ADR §35) — no second recipe table.
+    /// Both StackId kinds are valid here: the wire "name" descriptor (<see cref="DefaultDescriptorInput"/>)
+    /// and <see cref="NetworkItemStack"/> both identify by palette name/network id regardless of
+    /// whether the underlying stack is a block or a plain item (Phase XXV — tool/stick recipes
+    /// output items, not blocks; the earlier Block-only assumption only held because the first two
+    /// recipes happened to both output blocks).
+    /// </summary>
     public static CraftingDataPacket Build(RecipeRegistry registry, ItemPalette palette)
     {
         var snapshots = registry.SnapshotRecipes();
@@ -19,19 +26,11 @@ static class CraftingDataBuilder
             for (var j = 0; j < snap.Inputs.Length; j++)
             {
                 var (id, count) = snap.Inputs[j];
-                if (!id.IsBlock)
-                    throw new InvalidOperationException(
-                        $"CraftingData: recipe {snap.NetId} input must be StackKind.Block (got {id}).");
-                if (!Blocks.TryGetName(id.Value, out var inName))
-                    throw new InvalidOperationException($"CraftingData: unknown input BlockRuntimeId {id.Value}.");
-                inputs[j] = new DefaultDescriptorInput(inName, 0, count);
+                inputs[j] = new DefaultDescriptorInput(ResolveName(id, palette, snap.NetId, "input"), 0, count);
             }
 
-            if (!snap.Output.IsBlock)
-                throw new InvalidOperationException(
-                    $"CraftingData: recipe {snap.NetId} output must be StackKind.Block (got {snap.Output}).");
-            if (!Blocks.TryGetName(snap.Output.Value, out var outName))
-                throw new InvalidOperationException($"CraftingData: unknown output BlockRuntimeId {snap.Output.Value}.");
+            var outName = ResolveName(snap.Output, palette, snap.NetId, "output");
+            var outBlockRid = snap.Output.IsBlock ? snap.Output.Value : 0;
 
             recipes[i] = new ShapelessCraftingRecipe
             {
@@ -39,7 +38,7 @@ static class CraftingDataBuilder
                 Inputs = inputs,
                 Outputs =
                 [
-                    new NetworkItemStack(palette.Require(outName), (ushort)snap.OutCount, snap.Output.Value)
+                    new NetworkItemStack(palette.Require(outName), (ushort)snap.OutCount, outBlockRid)
                 ],
                 RecipeNetworkId = snap.NetId
             };
@@ -52,4 +51,19 @@ static class CraftingDataBuilder
         };
     }
 
+    private static string ResolveName(StackId id, ItemPalette palette, uint recipeNetId, string role)
+    {
+        if (id.IsBlock)
+        {
+            if (!Blocks.TryGetName(id.Value, out var name))
+                throw new InvalidOperationException(
+                    $"CraftingData: unknown {role} BlockRuntimeId {id.Value} (recipe {recipeNetId}).");
+            return name;
+        }
+
+        if (!palette.TryGetName(id.Value, out var itemName))
+            throw new InvalidOperationException(
+                $"CraftingData: unknown {role} ItemNetworkId {id.Value} (recipe {recipeNetId}).");
+        return itemName;
+    }
 }

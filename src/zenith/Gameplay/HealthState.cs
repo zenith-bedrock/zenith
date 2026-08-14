@@ -126,6 +126,19 @@ sealed class HealthState
         Current = MathF.Min(Maximum, Current + amount);
     }
 
+    /// <summary>
+    /// Phase XXV — hydrate from persisted storage on login, not a gameplay damage/heal transition
+    /// (no invulnerability-window bookkeeping, no death handling). Caller (world-data load) already
+    /// rejects a non-positive persisted value as corrupt, but this clamps defensively regardless —
+    /// a hydrated player must never load already-dead.
+    /// </summary>
+    public void Hydrate(float health)
+    {
+        Current = Math.Clamp(health, 1f, Maximum);
+        IsDead = false;
+        FatalSource = null;
+    }
+
     /// <summary>Respawn resets the health lifecycle after its owner completed the transition.</summary>
     public void RestoreFull()
     {

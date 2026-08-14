@@ -105,6 +105,12 @@ sealed class World
     public void PersistPlayerData(Player.Player player)
     {
         if (!player.IdentityStable) return;
+        // A persisted health of 0 would fail TryUnpack's own corruption guard on the next load
+        // (health must be positive — a hydrated player must never load already-dead). Disconnecting
+        // mid-death-screen (before CompleteRespawn ran) is the one real path that could otherwise
+        // hit this: persist as if already respawned rather than losing the whole blob (pose/XP too)
+        // to a validation rejection.
+        var health = player.IsDead ? player.MaxHealth : player.Health;
         var blob = PlayerDataBlob.Pack(
             player.PositionX,
             player.PositionY,
@@ -113,7 +119,11 @@ sealed class World
             player.Pitch,
             player.GameMode,
             player.ExperienceLevel,
-            player.ExperiencePoints);
+            player.ExperiencePoints,
+            health,
+            player.Hunger,
+            player.Saturation,
+            player.Exhaustion);
         _ = _storage.PutPlayerDataAsync(player.Uuid, blob);
     }
 
@@ -122,15 +132,21 @@ sealed class World
     /// </summary>
     public bool TryLoadPlayerData(
         Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode,
-        out int experienceLevel, out int experiencePoints)
+        out int experienceLevel, out int experiencePoints,
+        out float health, out float hunger, out float saturation, out float exhaustion)
     {
         x = y = z = yaw = pitch = 0;
         mode = Player.GameMode.Survival;
         experienceLevel = 0;
         experiencePoints = 0;
+        health = 20f;
+        hunger = 20f;
+        saturation = 5f;
+        exhaustion = 0f;
         var blob = _storage.GetPlayerDataAsync(uuid).AsTask().GetAwaiter().GetResult();
         return blob is not null && PlayerDataBlob.TryUnpack(
-            blob, out x, out y, out z, out yaw, out pitch, out mode, out experienceLevel, out experiencePoints);
+            blob, out x, out y, out z, out yaw, out pitch, out mode, out experienceLevel, out experiencePoints,
+            out health, out hunger, out saturation, out exhaustion);
     }
 
     /// <summary>

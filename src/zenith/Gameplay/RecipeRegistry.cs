@@ -14,6 +14,24 @@ sealed class RecipeRegistry
     public const uint OakLogToPlanks = 1;
     public const uint OakPlanksToChest = 2;
 
+    // Phase XXV — smallest tool-progression chain the existing shapeless/2×2-grid recipe model can
+    // express (ADR §108's sibling decision — see the Phase XXV findings doc): wood and stone tiers
+    // use directly-mined materials; diamond skips straight from raw ore (vanilla doesn't smelt
+    // diamond either, via BlockLoot's ore→item mapping). Iron/gold are deliberately NOT wired to a
+    // tool recipe yet — their vanilla ingot form requires smelting, and no furnace exists in Zenith;
+    // recipes here only use materials a player can actually obtain today, not simulate crafting
+    // options currently sitting on the far side of an unbuilt feature.
+    public const uint PlanksToStick = 3;
+    public const uint WoodenPickaxe = 4;
+    public const uint WoodenAxe = 5;
+    public const uint WoodenShovel = 6;
+    public const uint StonePickaxe = 7;
+    public const uint StoneAxe = 8;
+    public const uint StoneShovel = 9;
+    public const uint DiamondPickaxe = 10;
+    public const uint DiamondAxe = 11;
+    public const uint DiamondShovel = 12;
+
     private readonly Dictionary<uint, Recipe> _byNetId = new();
 
     readonly record struct Recipe(uint NetId, (StackId Id, int Count)[] Inputs, StackId Output, int OutCount);
@@ -25,22 +43,48 @@ sealed class RecipeRegistry
         StackId Output,
         int OutCount);
 
-    public static RecipeRegistry CreateDefault()
+    public static RecipeRegistry CreateDefault() =>
+        CreateDefault(ItemPaletteLoader.FromEmbeddedResource());
+
+    public static RecipeRegistry CreateDefault(ItemPalette itemPalette)
     {
         Blocks.EnsureLoaded();
+        var stick = StackId.FromItem(itemPalette.Require("minecraft:stick"));
+        var diamond = StackId.FromItem(itemPalette.Require("minecraft:diamond"));
+        var planks = StackId.FromBlock(Blocks.OakPlanks);
+        var stone = StackId.FromBlock(Blocks.Stone);
+
         var reg = new RecipeRegistry();
         reg.Register(new Recipe(
             OakLogToPlanks,
             [(StackId.FromBlock(Blocks.OakLog), 1)],
-            StackId.FromBlock(Blocks.OakPlanks),
+            planks,
             4));
         reg.Register(new Recipe(
             OakPlanksToChest,
-            [(StackId.FromBlock(Blocks.OakPlanks), 8)],
+            [(planks, 8)],
             StackId.FromBlock(Blocks.Chest),
             1));
+
+        reg.Register(new Recipe(PlanksToStick, [(planks, 2)], stick, 4));
+
+        reg.Register(new Recipe(WoodenPickaxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_pickaxe"), 1));
+        reg.Register(new Recipe(WoodenAxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_axe"), 1));
+        reg.Register(new Recipe(WoodenShovel, [(planks, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_shovel"), 1));
+
+        reg.Register(new Recipe(StonePickaxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_pickaxe"), 1));
+        reg.Register(new Recipe(StoneAxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_axe"), 1));
+        reg.Register(new Recipe(StoneShovel, [(stone, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_shovel"), 1));
+
+        reg.Register(new Recipe(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1));
+        reg.Register(new Recipe(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1));
+        reg.Register(new Recipe(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1));
+
         return reg;
     }
+
+    private static StackId ToolStack(ItemPalette itemPalette, string name) =>
+        StackId.FromItem(itemPalette.Require(name));
 
     private void Register(in Recipe recipe) => _byNetId[recipe.NetId] = recipe;
 

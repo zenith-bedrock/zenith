@@ -151,8 +151,17 @@ class Player
     public float Hunger { get; set; } = 20f;
 
     /// <summary>
+    /// Vanilla-parity saturation buffer (Phase XXV) — depletes before <see cref="Hunger"/> on each
+    /// exhaustion-threshold crossing, same as vanilla's "well-fed" cushion. Written only by
+    /// <see cref="Gameplay.Systems.HungerSystem"/>.
+    /// </summary>
+    public float Saturation { get; set; } = 5f;
+
+    /// <summary>
     /// Vanilla-parity depletion accumulator (Phase XI.1). GameLoop-owned scalar written only by
-    /// <see cref="Gameplay.Systems.HungerSystem"/>; crosses the threshold into one hunger point.
+    /// <see cref="Gameplay.Systems.HungerSystem"/> (thresholded transitions) and by whichever system
+    /// caused the exhaustion in the first place (mining, taking damage — see
+    /// <see cref="Gameplay.Systems.HungerSystem"/>'s own exhaustion-source constants).
     /// </summary>
     public float Exhaustion { get; set; }
 
@@ -834,6 +843,15 @@ class Player
     /// <summary>Authoritative well-fed regeneration entry point for <see cref="Gameplay.Systems.HungerSystem"/>.</summary>
     internal void Heal(float amount) => _health.Heal(amount);
 
+    /// <summary>Login hydrate of persisted vitals (Phase XXV, <see cref="World.PlayerDataBlob"/> v3) — not a gameplay transition.</summary>
+    internal void HydrateVitals(float health, float hunger, float saturation, float exhaustion)
+    {
+        _health.Hydrate(health);
+        Hunger = hunger;
+        Saturation = saturation;
+        Exhaustion = exhaustion;
+    }
+
     /// <summary>
     /// Claims one ISR request id exactly once before any authoritative mutation. Kept bounded so
     /// a long-lived session cannot turn replay protection into unbounded memory.
@@ -863,6 +881,7 @@ class Player
         _health.RestoreFull();
         _deathTransitionFinalized = false;
         Hunger = 20f;
+        Saturation = 5f;
         Exhaustion = 0f;
         IsSneaking = false;
         IsSprinting = false;

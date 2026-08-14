@@ -14,7 +14,29 @@ namespace Zenith.Gameplay.Systems;
 sealed class HungerSystem : IGameSystem
 {
     private const float ExhaustionPerSprintTick = 0.1f;
+
+    /// <summary>
+    /// Phase XXV — exhaustion sources beyond sprint (previously the only one that existed at all,
+    /// a real gap from the earlier cross-reference audit). Values are vanilla-adjacent, confirmed
+    /// against a reference implementation for the damage figure; walking's own much smaller
+    /// per-block cost is deliberately deferred — it needs distance-moved tracking that doesn't exist
+    /// yet in <see cref="MovementSystem"/>, unlike mining (one call per completed break) and damage
+    /// (already has a single funnel in <see cref="PlayerDamage"/>).
+    /// </summary>
+    internal const float MiningExhaustionPerBlock = 0.005f;
+    internal const float DamageExhaustion = 0.1f;
+
     private const float ExhaustionThreshold = 4f;
+
+    /// <summary>
+    /// Phase XXV — vanilla's "well-fed" cushion: an exhaustion-threshold crossing depletes
+    /// saturation before it ever touches <see cref="Player.Player.Hunger"/>. Restore ratio is a
+    /// single vanilla-adjacent constant applied to every food's nutrition value, not a per-food
+    /// saturation-modifier table (vanilla has one per food; this is a deliberate simplification —
+    /// see the Phase XXV findings doc).
+    /// </summary>
+    private const float SaturationRestoreRatio = 0.5f;
+
     private const float RegenHungerThreshold = 18f;
     private const ulong StarveDamageIntervalTicks = 80; // 4s @ 20 TPS, vanilla-parity cadence.
     private const ulong RegenIntervalTicks = 80;
@@ -85,6 +107,9 @@ sealed class HungerSystem : IGameSystem
         }
 
         player.Hunger = MathF.Min(20f, player.Hunger + nutrition);
+        // Vanilla caps saturation at the current food level — never lets a big meal "bank" more
+        // cushion than the hunger bar it's attached to.
+        player.Saturation = MathF.Min(player.Hunger, player.Saturation + nutrition * SaturationRestoreRatio);
     }
 
     private static void AccrueExhaustion(Player.Player player)
@@ -94,6 +119,13 @@ sealed class HungerSystem : IGameSystem
 
         if (player.Exhaustion < ExhaustionThreshold) return;
         player.Exhaustion -= ExhaustionThreshold;
+
+        if (player.Saturation > 0f)
+        {
+            player.Saturation = MathF.Max(0f, player.Saturation - 1f);
+            return;
+        }
+
         player.Hunger = MathF.Max(0f, player.Hunger - 1f);
     }
 }

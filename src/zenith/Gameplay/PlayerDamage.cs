@@ -33,6 +33,10 @@ static class PlayerDamage
         var mitigated = ArmorMitigation.Apply(player, source, amount);
         var result = player.ApplyDamage(source, mitigated, currentTick);
         if (!result.WasApplied) return false;
+        // Phase XXV — damage exhaustion source (survival only; a Creative death only happens via the
+        // deliberate Void exception above, and shouldn't feed the hunger cycle either).
+        if (player.GameMode != GameMode.Creative)
+            player.Exhaustion += Systems.HungerSystem.DamageExhaustion;
         var entity = player.Session.Protocol.Entity;
         var rid = (ulong)player.RuntimeId;
         if (!result.CausedDeath)
@@ -55,6 +59,10 @@ static class PlayerDamage
         }
         if (!player.TryFinalizeDeath()) throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");
         if (player.GameMode != GameMode.Creative) _ = FloorDropFanout.TryDropDeathLoot(world, players, online, player);
+        // Phase XXV — vanilla resets experience to zero on death regardless of gamemode (a Creative
+        // death only ever happens via the deliberate Void exception above). Previously nothing
+        // touched XP on death at all — a real, documented gap from the earlier cross-reference audit.
+        player.SetExperience(0, 0);
         entity.SendPlayerAttributes(player);
         PlayerVisibility.RelayHealth(player, online);
         PlayerVisibility.RelayDeath(player, online);

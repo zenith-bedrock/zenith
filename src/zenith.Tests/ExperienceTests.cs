@@ -144,7 +144,7 @@ public class ExperienceTests
         fx.World.PersistPlayerData(player);
 
         Assert.True(fx.World.TryLoadPlayerData(
-            player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points));
+            player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points, out _, out _, out _, out _));
         Assert.Equal(player.ExperienceLevel, level);
         Assert.Equal(player.ExperiencePoints, points);
     }
@@ -159,7 +159,7 @@ public class ExperienceTests
 
         var reconnected = fx.AddPlayer("reconnector-again");
         Assert.True(fx.World.TryLoadPlayerData(
-            player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points));
+            player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points, out _, out _, out _, out _));
         reconnected.SetExperience(level, points);
 
         Assert.Equal(player.ExperienceLevel, reconnected.ExperienceLevel);
@@ -167,7 +167,12 @@ public class ExperienceTests
     }
 
     [Fact]
-    public void Death_does_not_reset_experience()
+    /// <summary>
+    /// Phase XXV: previously death never touched XP at all — a real, documented gap from the
+    /// earlier cross-reference audit ("might be deliberate, but nothing documents it as one").
+    /// Vanilla resets experience to zero on death regardless of gamemode; fixed to match.
+    /// </summary>
+    public void Death_resets_experience_to_zero()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("hardcore");
@@ -176,7 +181,7 @@ public class ExperienceTests
         _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
 
         Assert.True(player.IsDead);
-        Assert.Equal(4, player.ExperienceLevel);
-        Assert.Equal(10, player.ExperiencePoints);
+        Assert.Equal(0, player.ExperienceLevel);
+        Assert.Equal(0, player.ExperiencePoints);
     }
 }
