@@ -9,6 +9,13 @@ namespace Zenith.Player;
 class PlayerManager
 {
     private readonly ConcurrentDictionary<string, Player> _players = new();
+    // Mirrors _players, keyed by RuntimeId. Multiple gameplay consumers already resolve a player
+    // from an explicit wire-supplied RuntimeId (player melee targets, Enderman aggro target,
+    // Minecart rider, retained Golem/Creeper target) via an O(N) online.FirstOrDefault scan —
+    // this index makes that resolution O(1) instead. Kept in sync with _players on the same
+    // TryAdd/Remove calls; no separate lock needed since ConcurrentDictionary already serializes
+    // its own writes and a reader never needs the two maps to agree within the same instant.
+    private readonly ConcurrentDictionary<long, Player> _byRuntimeId = new();
     // Connection teardown is a network-thread concern, but releasing a chest opener mutates
     // authoritative world container state. Each live Player can be queued once on disconnect.
     private readonly ConcurrentQueue<Player> _disconnectedContainerCleanup = new();
@@ -47,9 +54,26 @@ class PlayerManager
     public long AllocateRuntimeId() => Interlocked.Increment(ref _nextRuntimeId);
 
     /// <summary>Retorna false se já existir um player online com o mesmo username.</summary>
-    public bool TryAdd(Player player) => _players.TryAdd(player.Username, player);
+    public bool TryAdd(Player player)
+    {
+        if (!_players.TryAdd(player.Username, player)) return false;
+        _byRuntimeId[player.RuntimeId] = player;
+        return true;
+    }
 
-    public void Remove(Player player) => _players.TryRemove(player.Username, out _);
+    public void Remove(Player player)
+    {
+        _players.TryRemove(player.Username, out _);
+        _byRuntimeId.TryRemove(player.RuntimeId, out _);
+    }
+
+    /// <summary>
+    /// Resolves an online player from a wire-supplied RuntimeId (e.g. ItemUseOnActor's target).
+    /// Returns null for any id that isn't a currently online player — including a mob/entity id
+    /// from the same global RuntimeId space (see <see cref="AllocateRuntimeId"/>), which is the
+    /// caller's signal to leave that intent for a different owner rather than treat it as unknown.
+    /// </summary>
+    public Player? GetByRuntimeId(long runtimeId) => _byRuntimeId.GetValueOrDefault(runtimeId);
 
     /// <summary>Network lifecycle handoff; consumed by <c>InventorySystem</c> on the GameLoop.</summary>
     public void SubmitDisconnectedContainerCleanup(Player player) =>
