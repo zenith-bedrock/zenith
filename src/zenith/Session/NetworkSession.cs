@@ -196,8 +196,14 @@ class NetworkSession
     internal void SendDataPacket(
         RakNetSession.Priority priority, byte compression, byte orderChannel, params DataPacket[] packets)
     {
-        var packetNames = string.Join(", ", packets.Select(DescribeOutboundPacket));
-        Context.Logger.Debug($"Protocol outbound -> {RakSession.EndPoint} channel={orderChannel} {packetNames}");
+        // packetNames does a LINQ Select + string.Join per call — method arguments are evaluated
+        // eagerly regardless of whether Debug logging is enabled, so without this guard every single
+        // outbound send pays for it even when nothing will ever be printed (Phase XXVII).
+        if (Context.Logger.IsDebugEnabled)
+        {
+            var packetNames = string.Join(", ", packets.Select(DescribeOutboundPacket));
+            Context.Logger.Debug($"Protocol outbound -> {RakSession.EndPoint} channel={orderChannel} {packetNames}");
+        }
 
         var gamePacket = new GamePacket
         {
@@ -315,7 +321,7 @@ class NetworkSession
     /// </summary>
     public bool HandleGamePacket(ref BinaryStream stream)
     {
-        var compressionType = stream.Buffer[0];
+        var compressionType = stream.PeekByte();
 
         switch (compressionType)
         {
@@ -346,10 +352,20 @@ class NetworkSession
 
             // TODO: snappy compression
 
-            var gamePacket = IPacket.From<GamePacket>(ref stream);
-            foreach (var buffer in gamePacket.Buffers)
+            // Inbound batch framing (Phase XXVII): each subpacket used to be copied into its own
+            // byte[] (GamePacket.Decode) purely so it could be handed to a handler that immediately
+            // wrapped it in a fresh BinaryStream and consumed it synchronously — no ownership ever
+            // needed to survive past that call. ReadSubstream gives the same synchronous, bounded
+            // access over the SAME backing buffer (the decompressed pooled array, or the original
+            // frame buffer when uncompressed) with no per-subpacket allocation. The length prefix is
+            // client-controlled; ReadSubstream itself rejects a declared length exceeding what's
+            // actually left in the batch before creating the window, so a malformed length cannot
+            // read into whatever follows.
+            while (!stream.IsEndOfFile)
             {
-                HandleDataPacket(buffer);
+                var length = stream.ReadUnsignedVarInt();
+                var subpacket = stream.ReadSubstream(length);
+                HandleDataPacket(ref subpacket);
             }
 
             return false;
@@ -400,10 +416,9 @@ class NetworkSession
         return buffer;
     }
 
-    private void HandleDataPacket(byte[] buffer)
+    private void HandleDataPacket(ref BinaryStream stream)
     {
-        Context.Diagnostics.RecordPacketReceived(buffer.Length);
-        var stream = new BinaryStream(buffer);
+        Context.Diagnostics.RecordPacketReceived(stream.Length - stream.Offset);
 
         var header = new DataPacket.HeaderInfo();
         header.Decode(ref stream);

@@ -108,6 +108,26 @@ public ref struct BinaryStream : IDisposable
         Offset = 0;
     }
 
+    /// <summary>
+    /// Read-window: envelopes an existing array starting at <paramref name="offset"/> for
+    /// <paramref name="count"/> bytes, without copying (replaces <c>buffer[offset..]</c> array-range
+    /// syntax, which materializes a new array). <see cref="Length"/> stays an absolute end index
+    /// (<paramref name="offset"/> + <paramref name="count"/>), the same invariant every other
+    /// constructor already uses — this window is not a second, incompatible offset/length scheme.
+    /// </summary>
+    public BinaryStream(byte[] buffer, int offset, int count)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        if ((uint)offset > (uint)buffer.Length)
+            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Offset must be within the buffer.");
+        if (count < 0 || (uint)(offset + count) > (uint)buffer.Length)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Count must fit within the buffer starting at offset.");
+
+        Buffer = buffer;
+        Offset = offset;
+        Length = offset + count;
+    }
+
     public void Rewind()
     {
         ThrowIfDisposed();
@@ -134,6 +154,41 @@ public ref struct BinaryStream : IDisposable
         var result = new Span<byte>(Buffer, Offset, len);
         Offset += len;
         return result;
+    }
+
+    /// <summary>
+    /// Reads the next byte without advancing <see cref="Offset"/>. Prefer this over indexing
+    /// <see cref="Buffer"/> directly (e.g. <c>stream.Buffer[0]</c>) — that assumes <c>Offset == 0</c>
+    /// and silently reads the wrong byte once a stream can start at a non-zero window offset.
+    /// </summary>
+    public byte PeekByte()
+    {
+        ThrowIfDisposed();
+        if (Offset >= Length)
+            throw new InvalidOperationException("No bytes left to peek");
+        return Buffer[Offset];
+    }
+
+    /// <summary>
+    /// Bounded sub-reader over the SAME backing array for exactly <paramref name="len"/> bytes
+    /// starting at the current position, then advances past that window (same shape as
+    /// <see cref="ReadSpan"/>). This is a security boundary, not just a copy-avoidance trick: the
+    /// returned window's own <see cref="Length"/> is capped to its <paramref name="len"/> bytes, so
+    /// no read against it — however the caller's decode logic is buggy or the declared length lies —
+    /// can ever cross into whatever data follows in the parent buffer.
+    /// </summary>
+    public BinaryStream ReadSubstream(int len)
+    {
+        ThrowIfDisposed();
+        if (len < 0)
+            throw new ArgumentException("Length must be positive");
+        var remaining = Length - Offset;
+        if (remaining < len)
+            throw new InvalidOperationException($"Not enough bytes left in buffer: need {len}, have {remaining}");
+
+        var window = new BinaryStream(Buffer, Offset, len);
+        Offset += len;
+        return window;
     }
 
     public Span<byte> ReadRemaining()

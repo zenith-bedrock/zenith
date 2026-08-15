@@ -1,14 +1,23 @@
 using System.IO;
 using System.IO.Compression;
 using Zenith.Raknet.Enumerator;
-using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.Packets;
 
-class GamePacket : IPacket
+/// <summary>
+/// Outbound Bedrock batch envelope only (ADR §… Phase XXVII). Inbound batch framing is parsed
+/// directly by <see cref="Zenith.Session.NetworkSession.HandleGamePacket"/> via bounded
+/// <see cref="BinaryStream.ReadSubstream"/> windows over the same backing buffer — each contained
+/// DataPacket used to get its own <c>byte[]</c> copy here just to be handed to a handler that
+/// immediately wrapped it in a fresh <see cref="BinaryStream"/> and consumed it synchronously; that
+/// per-subpacket array was pure copy pressure with no ownership need. Encode/decode were never a
+/// symmetrical pair to begin with (outbound built <see cref="DataPacket"/> objects, inbound only
+/// ever needed raw byte windows), so splitting them is not a design compromise.
+/// </summary>
+class GamePacket
 {
-    public byte Id => (byte)MessageIdentifier.Game;
+    public const byte GameId = (byte)Zenith.Raknet.Enumerator.MessageIdentifier.Game;
 
     /// <summary>
     /// Wire compression algorithm preference. After NetworkSettings, typically
@@ -28,7 +37,7 @@ class GamePacket : IPacket
     public byte[] EncodeOwned()
     {
         var writer = new BinaryStream();
-        writer.WriteByte(Id);
+        writer.WriteByte(GameId);
 
         var payloadWriter = new BinaryStream();
         foreach (var packet in Packets)
@@ -71,17 +80,5 @@ class GamePacket : IPacket
         return writer.TakeOwnedBuffer();
     }
 
-    public void Decode(ref BinaryStream stream)
-    {
-        while (!stream.IsEndOfFile)
-        {
-            var length = stream.ReadUnsignedVarInt();
-            Buffers.Add(stream.ReadSpan(length).ToArray());
-        }
-        stream.Dispose();
-    }
-
-    /// <summary>Sub-pacotes decodificados de um GamePacket recebido. Só populado por Decode.</summary>
-    public List<byte[]> Buffers = new();
 }
 

@@ -327,7 +327,7 @@ public class RakNetSession
         Server.Logger?.Debug($"[{EndPoint} Incoming {buffer.Length} bytes.");
 
         var flag = buffer[0] & 0xf0;
-        var reader = new BinaryStream(buffer[1..]);
+        var reader = new BinaryStream(buffer, 1, buffer.Length - 1);
         switch (flag)
         {
             default:
@@ -581,7 +581,7 @@ public class RakNetSession
     private bool HandleIncomingBatch(byte[] buffer)
     {
         var pid = buffer[0];
-        var reader = new BinaryStream(buffer[1..]);
+        var reader = new BinaryStream(buffer, 1, buffer.Length - 1);
 
         Server.Logger?.Debug($"Connected PID: {pid}");
 
