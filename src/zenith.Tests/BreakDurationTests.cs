@@ -75,6 +75,47 @@ public class BreakDurationTests
     }
 
     [Fact]
+    public void Wood_pickaxe_cannot_harvest_diamond_ore_but_still_digs_faster_than_hand()
+    {
+        // Phase XXVI: MinHarvestTier gate. Wood pickaxe is kind-effective (still faster than hand),
+        // but under diamond ore's Iron minimum tier — no drop.
+        var wood = StackId.FromItem(Tools.Require("minecraft:wooden_pickaxe"));
+        DigProfiles.TryGet(Blocks.DiamondOre, out var profile);
+        var woodTool = Tools.AsTool(Tools.Require("minecraft:wooden_pickaxe"));
+        Assert.False(BreakDuration.IsHarvestable(profile, woodTool));
+
+        var handTicks = BreakDuration.BreakTicks(Blocks.DiamondOre);
+        var woodTicks = BreakDuration.BreakTicks(Blocks.DiamondOre, wood);
+        Assert.True(woodTicks < handTicks);
+    }
+
+    [Fact]
+    public void Iron_pickaxe_harvests_diamond_ore()
+    {
+        var iron = Tools.AsTool(Tools.Require("minecraft:iron_pickaxe"));
+        DigProfiles.TryGet(Blocks.DiamondOre, out var profile);
+        Assert.True(BreakDuration.IsHarvestable(profile, iron));
+    }
+
+    [Fact]
+    public void Stone_pickaxe_harvests_iron_ore_but_not_diamond_ore()
+    {
+        var stone = Tools.AsTool(Tools.Require("minecraft:stone_pickaxe"));
+        DigProfiles.TryGet(Blocks.IronOre, out var ironProfile);
+        DigProfiles.TryGet(Blocks.DiamondOre, out var diamondProfile);
+        Assert.True(BreakDuration.IsHarvestable(ironProfile, stone));
+        Assert.False(BreakDuration.IsHarvestable(diamondProfile, stone));
+    }
+
+    [Fact]
+    public void Wood_pickaxe_harvests_coal_ore()
+    {
+        var wood = Tools.AsTool(Tools.Require("minecraft:wooden_pickaxe"));
+        DigProfiles.TryGet(Blocks.CoalOre, out var profile);
+        Assert.True(BreakDuration.IsHarvestable(profile, wood));
+    }
+
+    [Fact]
     public void Unknown_block_without_DigProfile_returns_minus_one()
     {
         // Palette may contain many rids; curated DigProfiles are sparse (ADR §55).

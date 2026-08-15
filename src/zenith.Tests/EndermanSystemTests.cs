@@ -64,6 +64,30 @@ public sealed class EndermanSystemTests
         Assert.True(enderman.Health.Current < enderman.Health.Maximum);
     }
 
+    /// <summary>Phase XXVI — closes the entity-fidelity finding that Enderman never set Yaw at all.</summary>
+    [Fact]
+    public void Aggro_tick_orients_the_enderman_toward_its_target()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("provoker");
+        player.PositionX = 10;
+        player.PositionZ = 0;
+        var store = new EndermanStore();
+        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ)
+        {
+            Yaw = 0f
+        };
+        Assert.True(store.TryAdd(enderman));
+        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+
+        player.SubmitAttackIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        var expectedYaw = LookMath.YawTowards(
+            player.PositionX - enderman.PositionX, player.PositionZ - enderman.PositionZ);
+        Assert.Equal(expectedYaw, enderman.Yaw, precision: 3);
+    }
+
     [Fact]
     public void Aggravated_enderman_teleports_toward_and_eventually_retaliates_against_its_attacker()
     {

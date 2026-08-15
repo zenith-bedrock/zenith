@@ -4,14 +4,27 @@ namespace Zenith.World;
 sealed class NoiseTerrainProvider : ITerrainProvider
 {
     private readonly int _seed;
+    private readonly WorldGenerationDiagnostics? _generationDiagnostics;
 
-    public NoiseTerrainProvider(int seed) => _seed = seed;
+    public NoiseTerrainProvider(int seed, WorldGenerationDiagnostics? generationDiagnostics = null)
+    {
+        _seed = seed;
+        _generationDiagnostics = generationDiagnostics;
+    }
 
     public TerrainColumn GetBaseColumn(int chunkX, int chunkZ)
     {
-        using var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, _seed);
-        var (subChunkCount, payload) = ChunkPayloads.BuildNoiseOverworldColumn(chunkX, chunkZ, _seed, caves);
-        return new TerrainColumn(subChunkCount, payload);
+        OverworldCaveContext caves;
+        var caveScope = _generationDiagnostics is null ? default : _generationDiagnostics.BeginCaves();
+        using (caveScope)
+            caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, _seed);
+
+        using (caves)
+        {
+            var (subChunkCount, payload) = ChunkPayloads.BuildNoiseOverworldColumn(
+                chunkX, chunkZ, _seed, caves, _generationDiagnostics);
+            return new TerrainColumn(subChunkCount, payload);
+        }
     }
 
     public int SampleBaseBlock(int x, int y, int z)

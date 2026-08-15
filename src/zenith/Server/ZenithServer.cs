@@ -28,6 +28,7 @@ class ZenithServer
     private readonly ZenithSessionListener _sessionListener;
     private readonly GravitySystem _gravity;
     private readonly RuntimeTelemetry _telemetry;
+    private readonly AsyncLogSink _logSink;
     private readonly TextWriter? _logFileWriter;
     private readonly StreamWriter? _diagnosticsFileWriter;
     private Task? _runTask;
@@ -58,20 +59,20 @@ class ZenithServer
             Directory.CreateDirectory(logsDir);
             var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
             logFilePath = Path.Combine(logsDir, $"zenith-{runStamp}.log");
-            _logFileWriter = TextWriter.Synchronized(new StreamWriter(logFilePath, append: false) { AutoFlush = true });
+            _logFileWriter = new StreamWriter(logFilePath, append: false);
             _diagnosticsFileWriter = new StreamWriter(
                 Path.Combine(logsDir, $"zenith-diagnostics-{runStamp}.jsonl"), append: false) { AutoFlush = true };
         }
 
-        var serverLogger = new Logger
+        _logSink = new AsyncLogSink(fileWriter: _logFileWriter);
+
+        var serverLogger = new Logger(_logSink)
         {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server"),
-            FileWriter = _logFileWriter
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
         };
-        var raknetLogger = new Logger
+        var raknetLogger = new Logger(_logSink)
         {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet"),
-            FileWriter = _logFileWriter
+            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet")
         };
         _logger = serverLogger;
         serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
@@ -128,9 +129,15 @@ class ZenithServer
         _chunkStorage = CreateChunkStorage(config, serverLogger);
         var worldIdentity = WorldIdentity.Reconcile(
             _chunkStorage, new WorldMetadata(config.World.Terrain, config.World.Seed), serverLogger);
-        var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed);
+        var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed, diagnostics.Worldgen);
         serverLogger.Info($"world.terrain={worldIdentity.Terrain} seed={worldIdentity.Seed}");
-        var world = new World.World(_chunkStorage, serverLogger, terrain);
+        var world = new World.World(
+            _chunkStorage,
+            serverLogger,
+            terrain,
+            diagnostics.Worldgen,
+            config.World.ChunkGenerationWorkers,
+            config.World.ChunkGenerationCacheColumns);
         var recipes = RecipeRegistry.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = RegisterWorldSystems(
@@ -258,7 +265,7 @@ class ZenithServer
         gameLoop.Register(new EffectSystem(players), diagnostics.System("effect"));
         // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
         gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
-        gameLoop.Register(new ChunkStreamSystem(world), diagnostics.System("chunk-stream"));
+        gameLoop.Register(new ChunkStreamSystem(world, diagnostics.Worldgen), diagnostics.System("chunk-stream"));
 
         return gravity;
     }
@@ -506,10 +513,12 @@ class ZenithServer
                 _logger.Warning($"Persistence flush failed during shutdown: {ex.Message}");
             }
 
+            await Context.World.StopGenerationAsync().ConfigureAwait(false);
+
             if (_chunkStorage is IDisposable disposable)
                 disposable.Dispose();
 
-            _logFileWriter?.Flush();
+            await _logSink.DisposeAsync().ConfigureAwait(false);
             _logFileWriter?.Dispose();
             _diagnosticsFileWriter?.Flush();
             _diagnosticsFileWriter?.Dispose();

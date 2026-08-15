@@ -15,7 +15,7 @@ static class ColumnSend
     [ThreadStatic]
     private static List<(int X, int Y, int Z, int BlockRuntimeId)>? t_updatesScratch;
 
-    public static void EmitToSession(NetworkSession session, in ColumnReadResult column)
+    public static void EmitToSession(NetworkSession session, in ColumnReadResult column, byte orderChannel)
     {
         ColumnTerrainEmitter.Emit(
             column,
@@ -24,9 +24,9 @@ static class ColumnSend
                 bas.Coord.Z,
                 bas.DimensionId,
                 bas.SubChunkCount,
-                bas.ExtraPayload)),
+                bas.ExtraPayload), orderChannel),
             sendUpdateBlock: (x, y, z, runtimeId) =>
-                session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId));
+                session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId, orderChannel: orderChannel));
 
         EmitFloorDropsInColumn(session, session.Context.World, column.Base.Coord.X, column.Base.Coord.Z);
     }

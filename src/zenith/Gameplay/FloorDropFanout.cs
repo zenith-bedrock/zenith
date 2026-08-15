@@ -80,7 +80,10 @@ static class FloorDropFanout
         int z,
         IReadOnlyList<DepositRequest> requests,
         int pickupDelayTicks = FloorDropStore.DefaultPickupDelay,
-        int searchRadius = 3)
+        int searchRadius = 3,
+        float velocityX = 0f,
+        float velocityY = 0f,
+        float velocityZ = 0f)
     {
         if (requests.Count == 0) return true;
         if (!TryPlanDeposits(world.FloorDrops, x, y, z, requests, searchRadius, out var plan))
@@ -113,7 +116,7 @@ static class FloorDropFanout
         }
 
         foreach (var deposit in publications)
-            Publish(online, deposit);
+            Publish(online, deposit, velocityX, velocityY, velocityZ);
         return true;
     }
 
@@ -248,9 +251,17 @@ static class FloorDropFanout
         return requests;
     }
 
+    /// <summary>
+    /// <paramref name="velocityX"/>/<paramref name="velocityY"/>/<paramref name="velocityZ"/> only
+    /// apply to a genuinely new cell (a fresh toss) — a merge/republish is already-settled loot
+    /// getting topped off or re-announced, not a new throw, so it always renders static.
+    /// </summary>
     public static void Publish(
         IReadOnlyList<Player.Player> online,
-        FloorDropStore.DepositResult deposit)
+        FloorDropStore.DepositResult deposit,
+        float velocityX = 0f,
+        float velocityY = 0f,
+        float velocityZ = 0f)
     {
         if (!deposit.Created && !deposit.CountChanged) return;
 
@@ -259,6 +270,8 @@ static class FloorDropFanout
         var px = deposit.X + 0.5f;
         var py = deposit.Y + 0.125f;
         var pz = deposit.Z + 0.5f;
+        if (!deposit.Created)
+            velocityX = velocityY = velocityZ = 0f;
 
         foreach (var peer in online)
         {
@@ -268,7 +281,9 @@ static class FloorDropFanout
             var entity = peer.Session.Protocol.Entity;
             if (!deposit.Created && deposit.CountChanged)
                 entity.SendRemoveActor(deposit.EntityRuntimeId);
-            entity.SendFloorDropActor(deposit.EntityRuntimeId, deposit.Id, deposit.Count, px, py, pz);
+            entity.SendFloorDropActor(
+                deposit.EntityRuntimeId, deposit.Id, deposit.Count, px, py, pz,
+                velocityX, velocityY, velocityZ);
         }
     }
 }

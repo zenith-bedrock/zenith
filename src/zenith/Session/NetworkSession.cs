@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.IO.Compression;
+using System.Threading.Channels;
 using Zenith.Event;
 using Zenith.Gameplay;
 using Zenith.Packets;
@@ -10,6 +11,7 @@ using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
+using Zenith.World;
 
 namespace Zenith.Session;
 
@@ -22,6 +24,21 @@ namespace Zenith.Session;
 /// </summary>
 class NetworkSession
 {
+    private const int WorldStreamQueueCapacity = 64;
+    private readonly Channel<WorldStreamWork> _worldStreamQueue =
+        Channel.CreateBounded<WorldStreamWork>(new BoundedChannelOptions(WorldStreamQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false
+        });
+    private readonly CancellationTokenSource _worldStreamShutdown = new();
+    private readonly Task _worldStreamWorker;
+    private int _pendingWorldStreamColumns;
+    private long _nextWorldStreamSequence;
+    private long _completedWorldStreamSequence;
+
     public RakNetSession RakSession { get; }
     public ServerContext Context { get; }
     public BedrockProtocol Protocol { get; }
@@ -57,7 +74,79 @@ class NetworkSession
         Protocol = new BedrockProtocol(this);
         _handler = initialHandler;
         _handler.OnEnable(this);
+        _worldStreamWorker = Task.Run(ProcessWorldStreamAsync);
     }
+
+    /// <summary>
+    /// Enqueues an already-decided column for off-tick LevelChunk encoding/compression and
+    /// transmission. The bounded queue is deliberately specific to the post-spawn world stream;
+    /// latency-sensitive gameplay remains on the owning tick and default channel.
+    /// </summary>
+    internal bool QueueWorldColumn(in ColumnReadResult column, byte orderChannel)
+        => QueueWorldColumn(in column, orderChannel, out _);
+
+    internal bool QueueWorldColumn(in ColumnReadResult column, byte orderChannel, out long sequence)
+    {
+        sequence = Interlocked.Increment(ref _nextWorldStreamSequence);
+        Interlocked.Increment(ref _pendingWorldStreamColumns);
+        if (_worldStreamQueue.Writer.TryWrite(new WorldStreamWork(column, orderChannel, sequence)))
+            return true;
+
+        Interlocked.Decrement(ref _pendingWorldStreamColumns);
+        sequence = 0;
+        return false;
+    }
+
+    internal bool WorldStreamIdle => Volatile.Read(ref _pendingWorldStreamColumns) == 0;
+    internal long WorldStreamCompletedThrough => Volatile.Read(ref _completedWorldStreamSequence);
+
+    private async Task ProcessWorldStreamAsync()
+    {
+        try
+        {
+            await foreach (var work in _worldStreamQueue.Reader
+                               .ReadAllAsync(_worldStreamShutdown.Token)
+                               .ConfigureAwait(false))
+            {
+                try
+                {
+                    ColumnSend.EmitToSession(this, work.Column, work.OrderChannel);
+                    Volatile.Write(ref _completedWorldStreamSequence, work.Sequence);
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _pendingWorldStreamColumns);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_worldStreamShutdown.IsCancellationRequested)
+        {
+            // Session teardown cancels pending bulk world transmission.
+        }
+        catch (Exception exception)
+        {
+            Context.Logger.Error($"World stream worker failed: {exception}");
+        }
+    }
+
+    /// <summary>
+    /// Synchronous teardown (called from <see cref="HandleClose"/>, which cannot await): signal
+    /// cancellation now, dispose the CTS once the worker has actually observed it and exited —
+    /// disposing immediately would race the worker's still-in-flight read of <c>_shutdown.Token</c>.
+    /// </summary>
+    private void StopWorldStreamWorker()
+    {
+        _worldStreamQueue.Writer.TryComplete();
+        _worldStreamShutdown.Cancel();
+        _ = _worldStreamWorker.ContinueWith(
+            static (_, state) => ((CancellationTokenSource)state!).Dispose(),
+            _worldStreamShutdown,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private readonly record struct WorldStreamWork(ColumnReadResult Column, byte OrderChannel, long Sequence);
 
     /// <summary>Troca o handler ativo, disparando OnDisable no antigo e OnEnable no novo.</summary>
     public void SetHandler(ISessionHandler handler)
@@ -188,6 +277,7 @@ class NetworkSession
     public void HandleClose(DisconnectReason reason)
     {
         Context.Logger.Info($"Session closed ({reason}): {RakSession.EndPoint}");
+        StopWorldStreamWorker();
 
         if (Player is not null)
         {

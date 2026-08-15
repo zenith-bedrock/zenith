@@ -28,6 +28,16 @@ static class OverworldBiomeSampler
     public static void SampleClimate(int worldX, int worldZ, int seed, out double temperature, out double rainfall)
     {
         var fields = OverworldNoiseFields.For(seed);
+        SampleClimate(fields, worldX, worldZ, out temperature, out rainfall);
+    }
+
+    internal static void SampleClimate(
+        OverworldNoiseFields.Fields fields,
+        int worldX,
+        int worldZ,
+        out double temperature,
+        out double rainfall)
+    {
         temperature = OverworldNoiseFields.Climate01(fields.Temperature.GetNoise(worldX, worldZ));
         rainfall = OverworldNoiseFields.Climate01(fields.Rainfall.GetNoise(worldX, worldZ));
     }

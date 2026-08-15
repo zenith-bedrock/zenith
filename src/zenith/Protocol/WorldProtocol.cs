@@ -99,8 +99,11 @@ sealed class WorldProtocol
     /// atrás de uma rajada de colunas no mesmo canal ordenado.
     /// </summary>
     public void SendLevelChunk(ChunkColumn column)
+        => SendLevelChunk(column, NetworkSession.WorldStreamOrderChannel);
+
+    internal void SendLevelChunk(ChunkColumn column, byte orderChannel)
     {
-        _session.SendDataPacket(NetworkSession.WorldStreamOrderChannel, new LevelChunkPacket
+        _session.SendDataPacket(orderChannel, new LevelChunkPacket
         {
             ChunkX = column.X,
             ChunkZ = column.Z,
@@ -148,6 +151,12 @@ sealed class WorldProtocol
     public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, int flags = UpdateBlockPacket.FlagNeighborsAndNetwork, int dataLayerId = 0)
     {
         _session.SendDataPacket(CreateUpdateBlock(x, y, z, blockRuntimeId, flags, dataLayerId));
+    }
+
+    internal void SendUpdateBlock(int x, int y, int z, int blockRuntimeId, byte orderChannel,
+        int flags = UpdateBlockPacket.FlagNeighborsAndNetwork, int dataLayerId = 0)
+    {
+        _session.SendDataPacket(orderChannel, CreateUpdateBlock(x, y, z, blockRuntimeId, flags, dataLayerId));
     }
 
     /// <summary>One GamePacket envelope for N UpdateBlocks (ADR §44).</summary>

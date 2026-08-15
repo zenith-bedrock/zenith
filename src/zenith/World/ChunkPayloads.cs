@@ -44,17 +44,37 @@ static class ChunkPayloads
             PlainsBiomeId,
             maxWorldY: Blocks.FlatGrassY);
 
-    /// <summary>Noise overworld — surface cache + cave context + single-pass sections (ADR §69).</summary>
+    /// <summary>Noise overworld — staged surfaces, feature plan, cave context and single-pass sections (ADR §69).</summary>
     public static (int SubChunkCount, byte[] Payload) BuildNoiseOverworldColumn(
         int chunkX,
         int chunkZ,
         int seed,
-        OverworldCaveContext caves)
+        OverworldCaveContext caves,
+        WorldGenerationDiagnostics? generationDiagnostics = null)
     {
         Span<int> surfaces = stackalloc int[256];
         Span<OverworldBiomeKind> biomes = stackalloc OverworldBiomeKind[256];
-        OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out var maxSurface);
-        var featureMaxY = OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(chunkX, chunkZ, seed);
+        int maxSurface;
+        var surfaceScope = generationDiagnostics is null ? default : generationDiagnostics.BeginSurface();
+        using (surfaceScope)
+            OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out maxSurface);
+
+        // The cave context is built independently of terrain surfaces so point queries remain
+        // cheap to construct. Full-column generation has the complete surface field now; turn
+        // the segment geometry into an O(1) bit lookup before entering the voxel loop.
+        var caveMaskScope = generationDiagnostics is null ? default : generationDiagnostics.BeginCaves();
+        using (caveMaskScope)
+            caves.PrepareColumnMask(surfaces);
+
+        OverworldTerrainSampler.FeaturePlacementPlan features;
+        int featureMaxY;
+        var featureScope = generationDiagnostics is null ? default : generationDiagnostics.BeginFeatures();
+        using (featureScope)
+        {
+            features = OverworldTerrainSampler.FeaturePlacementPlan.Build(chunkX, chunkZ, seed);
+            featureMaxY = OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(chunkX, chunkZ, seed, features);
+        }
+
         var maxWorldY = Math.Max(maxSurface + NoiseFeatureHeadroom, OverworldTerrainSampler.SeaLevel);
         if (featureMaxY > maxWorldY)
             maxWorldY = featureMaxY;
@@ -66,35 +86,53 @@ static class ChunkPayloads
 
         var baseX = chunkX << 4;
         var baseZ = chunkZ << 4;
+        Span<OreCell> oreCells = stackalloc OreCell[OverworldOrePlacer.MaxColumnCellCount];
+        var oreCellCount = OverworldOrePlacer.FillColumnCells(
+            baseX, baseZ, seed, oreCells,
+            out var minOreCellX, out var minOreCellY, out var minOreCellZ,
+            out var oreWidthX, out var oreWidthY, out var oreWidthZ);
+        var oreView = oreCells[..oreCellCount];
         var ids = ArrayPool<int>.Shared.Rent(SectionVolume);
+        var payloadScope = generationDiagnostics is null ? default : generationDiagnostics.BeginPayload();
         try
         {
-            var writer = new BinaryStream();
-            for (var section = 0; section <= maxSubChunk; section++)
+            using (payloadScope)
             {
-                var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
-                for (var lx = 0; lx < 16; lx++)
-                {
-                    for (var lz = 0; lz < 16; lz++)
+                var writer = new BinaryStream();
+                    for (var section = 0; section <= maxSubChunk; section++)
                     {
-                        var meta = (lx << 4) | lz;
-                        var wx = baseX + lx;
-                        var wz = baseZ + lz;
-                        var surface = surfaces[meta];
-                        var biome = biomes[meta];
-                        for (var localY = 0; localY < 16; localY++)
+                        var worldYBase = OverworldMinSubChunkIndex * 16 + section * 16;
+                    var samplingScope = generationDiagnostics is null ? default : generationDiagnostics.BeginSampling();
+                    using (samplingScope)
+                    {
+                        for (var lx = 0; lx < 16; lx++)
                         {
-                            ids[BlockIndex(lx, localY, lz)] = OverworldTerrainSampler.SampleNoiseBlockAtSurface(
-                                wx, worldYBase + localY, wz, seed, surface, caves, biome);
+                            for (var lz = 0; lz < 16; lz++)
+                            {
+                                var meta = (lx << 4) | lz;
+                                var wx = baseX + lx;
+                                var wz = baseZ + lz;
+                                var surface = surfaces[meta];
+                                var biome = biomes[meta];
+                                for (var localY = 0; localY < 16; localY++)
+                                {
+                                    ids[BlockIndex(lx, localY, lz)] = OverworldTerrainSampler.SampleNoiseBlockAtSurfaceWithOre(
+                                        wx, worldYBase + localY, wz, seed, surface, caves, biome, features,
+                                        oreView, minOreCellX, minOreCellY, minOreCellZ,
+                                        oreWidthX, oreWidthY, oreWidthZ);
+                                }
+                            }
                         }
                     }
+
+                    var encodeScope = generationDiagnostics is null ? default : generationDiagnostics.BeginEncode();
+                    using (encodeScope)
+                        WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume), OverworldMinSubChunkIndex + section);
                 }
 
-                WriteSubChunk(ref writer, ids.AsSpan(0, SectionVolume), OverworldMinSubChunkIndex + section);
+                WriteBiomesAndBorder(ref writer, biomeId);
+                return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
             }
-
-            WriteBiomesAndBorder(ref writer, biomeId);
-            return (SubChunkCount: maxSubChunk + 1, Payload: writer.GetBufferDisposing().ToArray());
         }
         finally
         {
@@ -173,30 +211,38 @@ static class ChunkPayloads
 
     private static void WritePalettedStorage(ref BinaryStream writer, ReadOnlySpan<int> ids)
     {
-        // Noise columns typically use &lt; 32 unique block types — linear palette, no Dictionary.
+        // Keep the section hot path data-oriented: runtime ids are dense in the loaded block
+        // palette, so a direct lookup avoids rescanning the palette for every voxel. The linear
+        // fallback preserves correctness if a custom palette contains an id outside the scratch
+        // range. No Dictionary/boxing is allowed in this per-section path.
         Span<int> palette = stackalloc int[64];
         Span<ushort> indices = stackalloc ushort[SectionVolume];
+        Span<int> paletteLookup = stackalloc int[SectionVolume];
+        paletteLookup.Fill(-1);
         var paletteCount = 0;
 
         for (var i = 0; i < SectionVolume; i++)
         {
             var id = ids[i];
-            var found = -1;
-            for (var p = 0; p < paletteCount; p++)
+            var found = id is >= 0 and < SectionVolume ? paletteLookup[id] : -1;
+            if (found < 0)
             {
-                if (palette[p] == id)
+                for (var p = 0; p < paletteCount; p++)
                 {
+                    if (palette[p] != id) continue;
                     found = p;
                     break;
                 }
-            }
 
-            if (found < 0)
-            {
-                if (paletteCount >= palette.Length)
-                    throw new InvalidOperationException($"Subchunk palette exceeds {palette.Length} entries.");
-                found = paletteCount;
-                palette[paletteCount++] = id;
+                if (found < 0)
+                {
+                    if (paletteCount >= palette.Length)
+                        throw new InvalidOperationException($"Subchunk palette exceeds {palette.Length} entries.");
+                    found = paletteCount;
+                    palette[paletteCount++] = id;
+                    if (id is >= 0 and < SectionVolume)
+                        paletteLookup[id] = found;
+                }
             }
 
             indices[i] = (ushort)found;

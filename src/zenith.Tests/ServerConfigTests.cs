@@ -289,6 +289,58 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
+    public void Validate_rejects_invalid_chunk_generation_worker_count()
+    {
+        var config = new ServerConfig();
+        config.World.ChunkGenerationWorkers = 0;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+
+        Assert.Contains("chunk-generation-workers", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_accepts_explicit_chunk_generation_worker_count()
+    {
+        var config = new ServerConfig();
+        config.World.ChunkGenerationWorkers = 2;
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void Validate_rejects_invalid_chunk_publish_budgets()
+    {
+        var config = new ServerConfig();
+        config.World.PreSpawnColumnsPerTick = 0;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+
+        Assert.Contains("pre-spawn-columns-per-tick", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_accepts_explicit_chunk_publish_budgets()
+    {
+        var config = new ServerConfig();
+        config.World.PreSpawnColumnsPerTick = 4;
+        config.World.ChunkStreamColumnsPerTick = 4;
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void Validate_rejects_invalid_chunk_generation_cache_size()
+    {
+        var config = new ServerConfig();
+        config.World.ChunkGenerationCacheColumns = -1;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
+
+        Assert.Contains("chunk-generation-cache-columns", ex.Message);
+    }
+
+    [Fact]
     public void Validate_rejects_unsupported_gamemode()
     {
         var config = new ServerConfig();

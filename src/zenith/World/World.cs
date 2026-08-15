@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Zenith.Raknet.Log;
@@ -20,12 +21,19 @@ sealed class World
     private readonly IChunkStorage _storage;
     private readonly Dimension _overworld;
     private readonly ConcurrentDictionary<(int X, int Y, int Z), int> _blockOverrides = new();
+    private readonly WorldGenerationBroker _generationBroker;
+    private readonly int _generationWorkers;
+    private readonly int _generationCacheColumns;
+    private readonly ConcurrentDictionary<ChunkCoord, ChunkColumnData> _baseColumnCache = new();
+    private readonly ConcurrentQueue<ChunkCoord> _baseColumnCacheOrder = new();
+    private int _baseColumnCacheCount;
     /// <summary>
     /// Secondary index by chunk for column stream. SSOT for GetBlock remains <see cref="_blockOverrides"/>;
     /// both updated only via <see cref="StoreOverlay"/> / <see cref="RemoveOverlay"/> (no drift).
     /// </summary>
     private readonly ConcurrentDictionary<(int Cx, int Cz), ConcurrentDictionary<(int X, int Y, int Z), int>> _overlaysByChunk = new();
     private readonly ILogger? _logger;
+    private readonly WorldGenerationDiagnostics? _generationDiagnostics;
     private int _softCapWarned;
 
     public FloorDropStore FloorDrops { get; }
@@ -44,11 +52,26 @@ sealed class World
     /// <summary>Spawn biome wire pair from overworld terrain (flat → plains).</summary>
     public SpawnBiome SampleSpawnBiome(int x, int z) => _overworld.Terrain.SampleSpawnBiome(x, z);
 
-    public World(IChunkStorage storage, ILogger? logger = null, ITerrainProvider? terrain = null)
+    public World(
+        IChunkStorage storage,
+        ILogger? logger = null,
+        ITerrainProvider? terrain = null,
+        WorldGenerationDiagnostics? generationDiagnostics = null,
+        int generationWorkers = 1,
+        int generationCacheColumns = 1024)
     {
+        if (generationWorkers is < 1 or > 64)
+            throw new ArgumentOutOfRangeException(nameof(generationWorkers), generationWorkers, "Generation workers must be 1..64.");
+        if (generationCacheColumns is < 0 or > 65_536)
+            throw new ArgumentOutOfRangeException(nameof(generationCacheColumns), generationCacheColumns, "Generation cache must be 0..65536 columns.");
+
         _storage = storage;
         _overworld = Dimension.CreateOverworld(terrain ?? FlatTerrainProvider.Instance);
         _logger = logger;
+        _generationDiagnostics = generationDiagnostics;
+        _generationWorkers = generationWorkers;
+        _generationCacheColumns = generationCacheColumns;
+        _generationBroker = new WorldGenerationBroker(generationWorkers, GenerateColumnCoreAsync, generationDiagnostics);
         FloorDrops = new FloorDropStore(logger);
         Chests = new ChestStore(logger);
         GravityPending = new GravityPendingStore(logger);
@@ -186,27 +209,68 @@ sealed class World
     /// </summary>
     public async ValueTask<ColumnReadResult> GetOrCreateColumnAsync(int chunkX, int chunkZ, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+        var generationScope = _generationDiagnostics is null
+            ? default(WorldGenerationDiagnostics.ColumnScope)
+            : _generationDiagnostics.BeginColumn();
+        using (generationScope)
+        {
+            var request = await _generationBroker.RequestAsync(new ChunkCoord(chunkX, chunkZ)).ConfigureAwait(false);
+            if (request.Coalesced) _generationDiagnostics?.RecordCoalesced();
+            return await request.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask<ColumnReadResult> GenerateColumnCoreAsync(ChunkCoord coord)
+    {
+        try
+        {
+            return await GetOrCreateColumnCoreAsync(coord.X, coord.Z, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            _generationDiagnostics?.RecordFailed();
+            throw;
+        }
+    }
+
+    private async ValueTask<ColumnReadResult> GetOrCreateColumnCoreAsync(
+        int chunkX, int chunkZ, CancellationToken ct)
+    {
         var coord = new ChunkCoord(chunkX, chunkZ);
+        if (_baseColumnCache.TryGetValue(coord, out var cached))
+        {
+            _generationDiagnostics?.RecordCacheHit();
+            return new ColumnReadResult(cached, GetOverlaysInColumn(chunkX, chunkZ));
+        }
+
         var existing = await _storage.GetAsync(coord, ct).ConfigureAwait(false);
 
         ChunkColumnData bas;
         if (existing is not null && existing.SubChunkCount > 0 && LooksLikeTerrainPayload(existing))
         {
             bas = existing;
+            _generationDiagnostics?.RecordLoaded();
+            CacheBaseColumn(bas);
         }
         else if (existing is null)
         {
             // ADR §45: miss → in-memory base only (do not materialize identical c:x:z blobs).
+            _generationDiagnostics?.RecordGenerated();
             var terrain = _overworld.Terrain.GetBaseColumn(chunkX, chunkZ);
             bas = new ChunkColumnData(coord, dimensionId: _overworld.WireId, terrain.SubChunkCount, terrain.Payload);
+            CacheBaseColumn(bas);
         }
         else
         {
             // Legacy empty/corrupt c: — regenerate base and Put so disk self-heals.
+            _generationDiagnostics?.RecordGenerated();
             var terrain = _overworld.Terrain.GetBaseColumn(chunkX, chunkZ);
             bas = new ChunkColumnData(coord, dimensionId: _overworld.WireId, terrain.SubChunkCount, terrain.Payload);
             await _storage.PutAsync(bas, ct).ConfigureAwait(false);
             bas = (await _storage.GetAsync(coord, ct).ConfigureAwait(false)) ?? bas;
+            CacheBaseColumn(bas);
         }
 
         var overlays = GetOverlaysInColumn(chunkX, chunkZ);
@@ -215,31 +279,81 @@ sealed class World
 
     public async ValueTask<IReadOnlyList<ColumnReadResult>> GetRadiusAsync(int centerX, int centerZ, int radius, CancellationToken ct = default)
     {
-        var span = radius * 2 + 1;
-        var count = span * span;
-        var coords = new (int X, int Z)[count];
-        var index = 0;
-        for (var x = centerX - radius; x <= centerX + radius; x++)
+        var results = new List<ColumnReadResult>();
+        await foreach (var column in StreamRadiusAsync(centerX, centerZ, radius, ct)
+                           .ConfigureAwait(false))
+            results.Add(column);
+        return results;
+    }
+
+    /// <summary>
+    /// Reads a square radius in deterministic chunk order without materializing the complete
+    /// radius. At most a small worker-sized batch is retained by this iterator; the caller's
+    /// consumption rate therefore applies backpressure to generation and serialization stages.
+    /// </summary>
+    public async IAsyncEnumerable<ColumnReadResult> StreamRadiusAsync(
+        int centerX,
+        int centerZ,
+        int radius,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (radius < 0)
+            throw new ArgumentOutOfRangeException(nameof(radius), radius, "Radius must be non-negative.");
+
+        var batch = new List<Task<ColumnReadResult>>(Math.Max(_generationWorkers * 2, 1));
+        foreach (var (x, z) in EnumerateRadius(centerX, centerZ, radius))
         {
-            for (var z = centerZ - radius; z <= centerZ + radius; z++)
-                coords[index++] = (x, z);
+            ct.ThrowIfCancellationRequested();
+            batch.Add(GetOrCreateColumnAsync(x, z, ct).AsTask());
+            if (batch.Count < batch.Capacity)
+                continue;
+
+            var completed = await Task.WhenAll(batch).ConfigureAwait(false);
+            foreach (var column in completed)
+                yield return column;
+            batch.Clear();
         }
 
-        var results = new ColumnReadResult[count];
-        await Parallel.ForEachAsync(
-            Enumerable.Range(0, count),
-            new ParallelOptions
-            {
-                CancellationToken = ct,
-                MaxDegreeOfParallelism = Environment.ProcessorCount
-            },
-            async (i, token) =>
-            {
-                var (x, z) = coords[i];
-                results[i] = await GetOrCreateColumnAsync(x, z, token).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+        if (batch.Count == 0)
+            yield break;
 
-        return results;
+        var tail = await Task.WhenAll(batch).ConfigureAwait(false);
+        foreach (var column in tail)
+            yield return column;
+    }
+
+    /// <summary>Enumerates a square in center-out order without retaining the complete radius.</summary>
+    private static IEnumerable<(int X, int Z)> EnumerateRadius(int centerX, int centerZ, int radius)
+    {
+        yield return (centerX, centerZ);
+        for (var ring = 1; ring <= radius; ring++)
+        {
+            for (var dx = -ring; dx <= ring; dx++)
+                yield return (centerX + dx, centerZ - ring);
+            for (var dz = -ring + 1; dz <= ring; dz++)
+                yield return (centerX + ring, centerZ + dz);
+            for (var dx = ring - 1; dx >= -ring; dx--)
+                yield return (centerX + dx, centerZ + ring);
+            for (var dz = ring - 1; dz >= -ring + 1; dz--)
+                yield return (centerX - ring, centerZ + dz);
+        }
+    }
+
+
+    public ValueTask StopGenerationAsync() => _generationBroker.DisposeAsync();
+
+    private void CacheBaseColumn(ChunkColumnData column)
+    {
+        if (_generationCacheColumns == 0 || !_baseColumnCache.TryAdd(column.Coord, column))
+            return;
+
+        _baseColumnCacheOrder.Enqueue(column.Coord);
+        var count = Interlocked.Increment(ref _baseColumnCacheCount);
+        while (count > _generationCacheColumns && _baseColumnCacheOrder.TryDequeue(out var evicted))
+        {
+            if (_baseColumnCache.TryRemove(evicted, out _))
+                count = Interlocked.Decrement(ref _baseColumnCacheCount);
+        }
     }
 
     public static int AirRuntimeId => Blocks.Air;

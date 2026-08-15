@@ -71,6 +71,12 @@ sealed class FloorDropSystem : IGameSystem
                 {
                     if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
                     peer.Session.Protocol.Entity.SendTakeItemActor((ulong)eid, (ulong)player.RuntimeId);
+                    // TakeItemActor is only the pickup animation, not a despawn (confirmed against
+                    // PocketMine/Dragonfly: both always pair it with a real actor removal). A full
+                    // take has no later tick to emit one — the cell is already gone from the store —
+                    // so without this the client renders an orphaned item forever after pickup.
+                    if (remainingPublish is null)
+                        peer.Session.Protocol.Entity.SendRemoveActor(eid);
                 }
 
                 // Partial pickup replaces the actor with the remaining authoritative stack.

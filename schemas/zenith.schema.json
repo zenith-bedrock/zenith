@@ -76,6 +76,34 @@
           "default": 2,
           "description": "Columns loaded/published before PLAYER_SPAWN (0..spawn-chunk-radius). ADR §70 ready-disk."
         },
+        "pre-spawn-columns-per-tick": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 8,
+          "description": "Maximum ready/view columns queued for one player per gameplay tick before spawn."
+        },
+        "chunk-stream-columns-per-tick": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "default": 4,
+          "description": "Maximum completed post-spawn columns published for one player per tick."
+        },
+        "chunk-generation-workers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 4,
+          "description": "Fixed, bounded worker-pool size for CPU-bound base-column generation (ADR §111). Not an automatic ProcessorCount scale-up — raise only after measuring tick headroom."
+        },
+        "chunk-generation-cache-columns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536,
+          "default": 1024,
+          "description": "Maximum immutable base columns retained in memory for shared warm reads (ADR §111). Zero disables the cache; does not persist terrain."
+        },
         "terrain": {
           "type": "string",
           "enum": ["flat", "noise"],

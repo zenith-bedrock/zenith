@@ -13,7 +13,6 @@ sealed class PlayerChunkTracker
     private readonly Dictionary<(int X, int Z), int> _epoch = new();
     private readonly Queue<StreamCompletion> _completedStreams = new();
     private PreSpawnRequest? _pendingPreSpawn;
-    private PreSpawnCompletion? _completedPreSpawn;
     private readonly List<(int X, int Z)> _scratch = new();
     private int _nextEpoch = 1;
 
@@ -29,7 +28,7 @@ sealed class PlayerChunkTracker
     {
         lock (_gate)
         {
-            if (_pendingPreSpawn.HasValue || _completedPreSpawn.HasValue)
+            if (_pendingPreSpawn.HasValue)
                 return false;
             _pendingPreSpawn = new PreSpawnRequest(viewRadius);
             return true;
@@ -48,30 +47,6 @@ sealed class PlayerChunkTracker
 
             _pendingPreSpawn = null;
             request = pending;
-            return true;
-        }
-    }
-
-    /// <summary>Async I/O completion handoff. It must not apply Player/session state itself.</summary>
-    public void CompletePreSpawn(in PreSpawnCompletion completion)
-    {
-        lock (_gate)
-            _completedPreSpawn = completion;
-    }
-
-    /// <summary>Consumes the one pending pre-spawn result on the gameplay thread.</summary>
-    public bool TryConsumePreSpawnCompletion(out PreSpawnCompletion completion)
-    {
-        lock (_gate)
-        {
-            if (_completedPreSpawn is not { } pending)
-            {
-                completion = default;
-                return false;
-            }
-
-            _completedPreSpawn = null;
-            completion = pending;
             return true;
         }
     }
@@ -286,20 +261,4 @@ sealed class PlayerChunkTracker
         int BlockY,
         int BlockZ);
 
-    /// <summary>Background pre-spawn load result awaiting gameplay-owned publication.</summary>
-    public readonly record struct PreSpawnCompletion(
-        PreSpawnSnapshot Snapshot,
-        IReadOnlyList<ColumnReadResult>? Columns,
-        string? Error,
-        long LoadElapsedMilliseconds)
-    {
-        public bool Succeeded => Error is null && Columns is not null;
-
-        public static PreSpawnCompletion Success(
-            in PreSpawnSnapshot snapshot, IReadOnlyList<ColumnReadResult> columns, long elapsedMilliseconds) =>
-            new(snapshot, columns, null, elapsedMilliseconds);
-
-        public static PreSpawnCompletion Failure(in PreSpawnSnapshot snapshot, string error, long elapsedMilliseconds) =>
-            new(snapshot, null, error, elapsedMilliseconds);
-    }
 }

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Buffers;
 
 namespace Zenith.World;
@@ -14,6 +15,10 @@ sealed class OverworldCaveContext : IDisposable
     internal const int NeighborhoodBlocks = NeighborhoodChunks * 16;
     internal const int Grid = NeighborhoodBlocks / CellSize; // 6
     internal const int BucketCount = Grid * Grid;
+    internal const int MaskMinY = Blocks.FlatMinY + 2;
+    internal const int MaskMaxY = 320;
+    private const int MaskHeight = MaskMaxY - MaskMinY + 1;
+    private const int MaskWordsPerColumn = (MaskHeight + 63) / 64;
 
     [ThreadStatic] private static List<CaveSegment>? t_scratch;
 
@@ -24,6 +29,8 @@ sealed class OverworldCaveContext : IDisposable
     private int _indexCount;
     private int _originX;
     private int _originZ;
+    private ulong[] _columnMask = Array.Empty<ulong>();
+    private int _columnMaskLength;
     private bool _disposed;
 
     private static readonly int[] EmptyOffsets = CreateEmptyOffsets();
@@ -79,6 +86,11 @@ sealed class OverworldCaveContext : IDisposable
         if (worldY <= Blocks.FlatMinY + 1 || worldY >= surfaceY - OverworldCaveCarver.SurfaceGuardDepth)
             return false;
 
+        if (_columnMaskLength != 0
+            && (uint)(worldX - (_originX + 16)) < 16u
+            && (uint)(worldZ - (_originZ + 16)) < 16u)
+            return IsMasked(worldX, worldY, worldZ);
+
         var bucket = BucketIndex(worldX, worldZ);
         if (bucket < 0)
             return false;
@@ -92,6 +104,66 @@ sealed class OverworldCaveContext : IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Materializes the cave result for this column once the surface field is available.
+    /// The mask is intentionally owned by this short-lived context: it removes repeated
+    /// segment intersection work from the 16×16×height voxel loop without changing the
+    /// point-sampling API used by callers outside full-column generation.
+    /// </summary>
+    internal void PrepareColumnMask(ReadOnlySpan<int> surfaces)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (surfaces.Length < 256)
+            throw new ArgumentException("A cave column mask requires 256 surface samples.", nameof(surfaces));
+
+        var required = 256 * MaskWordsPerColumn;
+        if (_columnMask.Length < required)
+            _columnMask = ArrayPool<ulong>.Shared.Rent(required);
+        Array.Clear(_columnMask, 0, required);
+        _columnMaskLength = required;
+
+        var columnMinX = _originX + 16;
+        var columnMinZ = _originZ + 16;
+        var columnMaxX = columnMinX + 15;
+        var columnMaxZ = columnMinZ + 15;
+
+        for (var segmentIndex = 0; segmentIndex < _segmentCount; segmentIndex++)
+        {
+            ref readonly var segment = ref _segments[segmentIndex];
+            var minX = Math.Max(segment.MinX, columnMinX);
+            var maxX = Math.Min(segment.MaxX, columnMaxX);
+            var minZ = Math.Max(segment.MinZ, columnMinZ);
+            var maxZ = Math.Min(segment.MaxZ, columnMaxZ);
+            if (minX > maxX || minZ > maxZ)
+                continue;
+
+            for (var worldX = minX; worldX <= maxX; worldX++)
+            {
+                var localX = worldX - columnMinX;
+                for (var worldZ = minZ; worldZ <= maxZ; worldZ++)
+                {
+                    var localZ = worldZ - columnMinZ;
+                    var surface = surfaces[(localX << 4) | localZ];
+                    var minY = Math.Max(segment.MinY, MaskMinY);
+                    var maxY = Math.Min(segment.MaxY, Math.Min(MaskMaxY,
+                        surface - OverworldCaveCarver.SurfaceGuardDepth - 1));
+                    if (minY > maxY)
+                        continue;
+
+                    var columnOffset = ((localX << 4) | localZ) * MaskWordsPerColumn;
+                    for (var worldY = minY; worldY <= maxY; worldY++)
+                    {
+                        if (!segment.Contains(worldX, worldY, worldZ))
+                            continue;
+
+                        var maskY = worldY - MaskMinY;
+                        _columnMask[columnOffset + (maskY >> 6)] |= 1UL << (maskY & 63);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>Linear scan — tests only (ADR §69 spatial must match).</summary>
@@ -127,6 +199,13 @@ sealed class OverworldCaveContext : IDisposable
             ArrayPool<int>.Shared.Return(_bucketIndices, clearArray: false);
             _bucketIndices = Array.Empty<int>();
             _indexCount = 0;
+        }
+
+        if (_columnMaskLength > 0 && _columnMask.Length > 0)
+        {
+            ArrayPool<ulong>.Shared.Return(_columnMask, clearArray: false);
+            _columnMask = Array.Empty<ulong>();
+            _columnMaskLength = 0;
         }
 
         _bucketOffsets = EmptyOffsets;
@@ -205,6 +284,7 @@ sealed class OverworldCaveContext : IDisposable
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryBucketRange(
         in CaveSegment seg,
         int originX,
@@ -214,10 +294,10 @@ sealed class OverworldCaveContext : IDisposable
         out int minCz,
         out int maxCz)
     {
-        var minX = Math.Min(seg.X0, seg.X1) - seg.Radius;
-        var maxX = Math.Max(seg.X0, seg.X1) + seg.Radius;
-        var minZ = Math.Min(seg.Z0, seg.Z1) - seg.Radius;
-        var maxZ = Math.Max(seg.Z0, seg.Z1) + seg.Radius;
+        var minX = seg.MinX;
+        var maxX = seg.MaxX;
+        var minZ = seg.MinZ;
+        var maxZ = seg.MaxZ;
 
         if (maxX < originX || minX >= originX + NeighborhoodBlocks
             || maxZ < originZ || minZ >= originZ + NeighborhoodBlocks)
@@ -226,11 +306,31 @@ sealed class OverworldCaveContext : IDisposable
             return false;
         }
 
-        minCx = Math.Clamp((minX - originX) / CellSize, 0, Grid - 1);
-        maxCx = Math.Clamp((maxX - originX) / CellSize, 0, Grid - 1);
-        minCz = Math.Clamp((minZ - originZ) / CellSize, 0, Grid - 1);
-        maxCz = Math.Clamp((maxZ - originZ) / CellSize, 0, Grid - 1);
+        minCx = ClampBucket((minX - originX) / CellSize);
+        maxCx = ClampBucket((maxX - originX) / CellSize);
+        minCz = ClampBucket((minZ - originZ) / CellSize);
+        maxCz = ClampBucket((maxZ - originZ) / CellSize);
         return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsMasked(int worldX, int worldY, int worldZ)
+    {
+        if ((uint)(worldY - MaskMinY) >= MaskHeight)
+            return false;
+
+        var localX = worldX - (_originX + 16);
+        var localZ = worldZ - (_originZ + 16);
+        var columnOffset = ((localX << 4) | localZ) * MaskWordsPerColumn;
+        var maskY = worldY - MaskMinY;
+        return (_columnMask[columnOffset + (maskY >> 6)] & (1UL << (maskY & 63))) != 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ClampBucket(int value)
+    {
+        if (value < 0) return 0;
+        return value >= Grid ? Grid - 1 : value;
     }
 }
 
@@ -238,6 +338,8 @@ sealed class OverworldCaveContext : IDisposable
 readonly struct CaveSegment
 {
     public readonly int X0, Y0, Z0, X1, Y1, Z1, Radius;
+    public readonly int Dx, Dy, Dz, LengthSquared;
+    public readonly int MinX, MaxX, MinY, MaxY, MinZ, MaxZ;
 
     public CaveSegment(int x0, int y0, int z0, int x1, int y1, int z1, int radius)
     {
@@ -248,8 +350,27 @@ readonly struct CaveSegment
         Y1 = y1;
         Z1 = z1;
         Radius = radius;
+        Dx = x1 - x0;
+        Dy = y1 - y0;
+        Dz = z1 - z0;
+        LengthSquared = Dx * Dx + Dy * Dy + Dz * Dz;
+        var minX = x0 < x1 ? x0 : x1;
+        var maxX = x0 > x1 ? x0 : x1;
+        var minZ = z0 < z1 ? z0 : z1;
+        var maxZ = z0 > z1 ? z0 : z1;
+        MinX = minX - radius;
+        MaxX = maxX + radius;
+        var minY = y0 < y1 ? y0 : y1;
+        var maxY = y0 > y1 ? y0 : y1;
+        MinY = minY - radius;
+        MaxY = maxY + radius;
+        MinZ = minZ - radius;
+        MaxZ = maxZ + radius;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Contains(int px, int py, int pz)
-        => OverworldCaveCarver.IsWithinSegment(px, py, pz, X0, Y0, Z0, X1, Y1, Z1, Radius);
+        => OverworldCaveCarver.IsWithinSegment(
+            px, py, pz, X0, Y0, Z0, X1, Y1, Z1, Radius,
+            MinX, MaxX, MinY, MaxY, MinZ, MaxZ, Dx, Dy, Dz, LengthSquared);
 }

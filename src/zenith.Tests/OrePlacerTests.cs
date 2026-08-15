@@ -91,6 +91,73 @@ public class OrePlacerTests
     }
 
     [Fact]
+    public void Column_ore_context_matches_legacy_cell_generation()
+    {
+        const int seed = 31415;
+        const int chunkX = -3;
+        const int chunkZ = 4;
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        Span<OreCell> cells = stackalloc OreCell[OverworldOrePlacer.MaxColumnCellCount];
+        var count = OverworldOrePlacer.FillColumnCells(
+            baseX, baseZ, seed, cells,
+            out var minCellX, out var minCellY, out var minCellZ,
+            out var widthX, out var widthY, out var widthZ);
+        var view = cells[..count];
+
+        for (var x = baseX; x < baseX + 16; x++)
+        for (var z = baseZ; z < baseZ + 16; z++)
+        for (var y = Blocks.FlatMinY; y <= OverworldOrePlacer.ColumnMaxOreY; y += 2)
+        {
+            var deep = y < 0;
+            var host = deep ? Blocks.Deepslate : Blocks.Stone;
+            var legacy = OverworldOrePlacer.TryReplaceHost(host, x, y, z, seed);
+            var planned = OverworldOrePlacer.TryReplaceHost(
+                deep, x, y, z, view,
+                minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
+            Assert.Equal(legacy, planned);
+        }
+    }
+
+    /// <summary>
+    /// Regression: the fast per-column cell grid only covers up to <c>ColumnMaxOreY</c>. Sampling a
+    /// worldY above that (e.g. deep terrain under an unusually tall mountain/feature) must not index
+    /// outside the precomputed grid — it should fall back to the always-safe per-point path instead
+    /// of throwing, and must still agree with that path's answer.
+    /// </summary>
+    [Fact]
+    public void SampleNoiseBlockAtSurfaceWithOre_falls_back_safely_above_ColumnMaxOreY()
+    {
+        const int seed = 2024;
+        const int chunkX = 5;
+        const int chunkZ = -2;
+        var baseX = chunkX << 4;
+        var baseZ = chunkZ << 4;
+        Span<OreCell> cells = stackalloc OreCell[OverworldOrePlacer.MaxColumnCellCount];
+        var count = OverworldOrePlacer.FillColumnCells(
+            baseX, baseZ, seed, cells,
+            out var minCellX, out var minCellY, out var minCellZ,
+            out var widthX, out var widthY, out var widthZ);
+        var view = cells[..count];
+
+        var features = OverworldTerrainSampler.FeaturePlacementPlan.Build(chunkX, chunkZ, seed);
+        var highSurface = 300; // still within [FlatMinY, 320] — worldY below must read as "underground"
+        // Far corner of the chunk (max cx/cz cell) so a Y overshoot pushes the flattened cell index
+        // past the end of the buffer instead of silently aliasing a neighboring column's cell.
+        const int x = 5 * 16 + 15;
+        const int z = -2 * 16 + 15;
+        var y = OverworldOrePlacer.ColumnMaxOreY + 80; // above the grid's built range, still <= 320
+
+        var viaFastPath = OverworldTerrainSampler.SampleNoiseBlockAtSurfaceWithOre(
+            x, y, z, seed, highSurface, caves: null, OverworldBiomeKind.Plains, features,
+            view, minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
+        var viaLegacyPointPath = OverworldTerrainSampler.SampleNoiseBlockAtSurface(
+            x, y, z, seed, highSurface, caves: null, OverworldBiomeKind.Plains);
+
+        Assert.Equal(viaLegacyPointPath, viaFastPath);
+    }
+
+    [Fact]
     public void Ores_never_replace_surface_layers()
     {
         const int seed = 99;

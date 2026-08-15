@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Zenith.World;
 
 /// <summary>
@@ -40,7 +42,13 @@ static class OverworldTerrainSampler
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
-        FillSurfaceAt(worldX, worldZ, seed, out var y, out _);
+        FillSurfaceAt(worldX, worldZ, seed, OverworldNoiseFields.For(seed), out var y, out _);
+        return y;
+    }
+
+    private static int SurfaceY(int worldX, int worldZ, int seed, OverworldNoiseFields.Fields fields)
+    {
+        FillSurfaceAt(worldX, worldZ, seed, fields, out var y, out _);
         return y;
     }
 
@@ -58,13 +66,14 @@ static class OverworldTerrainSampler
 
         var baseX = chunkX << 4;
         var baseZ = chunkZ << 4;
+        var fields = OverworldNoiseFields.For(seed);
         maxSurfaceY = int.MinValue;
         for (var lx = 0; lx < 16; lx++)
         {
             for (var lz = 0; lz < 16; lz++)
             {
                 var i = (lx << 4) | lz;
-                FillSurfaceAt(baseX + lx, baseZ + lz, seed, out var y, out var biome);
+                FillSurfaceAt(baseX + lx, baseZ + lz, seed, fields, out var y, out var biome);
                 surfaces256[i] = y;
                 biomes256[i] = biome;
                 if (y > maxSurfaceY) maxSurfaceY = y;
@@ -76,8 +85,15 @@ static class OverworldTerrainSampler
     /// Highest canopy Y from trees whose trunk can place leaves inside this chunk
     /// (canopy radius <see cref="TreeCanopyRadius"/>). <see cref="int.MinValue"/> if none.
     /// </summary>
-    internal static int MaxTreeCanopyYAffectingChunk(int chunkX, int chunkZ, int seed)
+    internal static int MaxTreeCanopyYAffectingChunk(
+        int chunkX,
+        int chunkZ,
+        int seed,
+        FeaturePlacementPlan? features = null)
     {
+        if (features is not null)
+            return features.MaxYForChunk;
+
         var baseX = chunkX << 4;
         var baseZ = chunkZ << 4;
         var minX = baseX - TreeCanopyRadius;
@@ -96,6 +112,7 @@ static class OverworldTerrainSampler
             {
                 if (!TryTreeAnchor(cellX, cellZ, seed, out var tx, out var tz, out var trunkH))
                     continue;
+
                 if (tx < minX || tx > maxX || tz < minZ || tz > maxZ)
                     continue;
 
@@ -108,11 +125,17 @@ static class OverworldTerrainSampler
         return maxY;
     }
 
-    private static void FillSurfaceAt(int worldX, int worldZ, int seed, out int y, out OverworldBiomeKind biome)
+    private static void FillSurfaceAt(
+        int worldX,
+        int worldZ,
+        int seed,
+        OverworldNoiseFields.Fields fields,
+        out int y,
+        out OverworldBiomeKind biome)
     {
-        OverworldBiomeSampler.SampleClimate(worldX, worldZ, seed, out var temperature, out var rainfall);
+        OverworldBiomeSampler.SampleClimate(fields, worldX, worldZ, out var temperature, out var rainfall);
         biome = OverworldBiomeSampler.Lookup(temperature, rainfall);
-        var n = OverworldNoiseFields.For(seed).Height.GetNoise(worldX, worldZ);
+        var n = fields.Height.GetNoise(worldX, worldZ);
         var bias = OverworldBiomeSampler.ContinuousHeightBias(temperature, rainfall);
         // No hard ocean Min — that created 1-block cliffs at biome edges (ADR §72).
         y = NoiseBaseSurfaceY + (int)Math.Round(n * NoiseHillAmplitude + bias);
@@ -179,7 +202,7 @@ static class OverworldTerrainSampler
         return SampleNoiseBlockAtSurface(worldX, worldY, worldZ, seed, surface, caves);
     }
 
-    /// <summary>Column fill path — surface/biome already cached (ADR §69).</summary>
+    /// <summary>Column fill path — surface/biome and deterministic feature plan are already prepared (ADR §69).</summary>
     internal static int SampleNoiseBlockAtSurface(
         int worldX,
         int worldY,
@@ -187,13 +210,57 @@ static class OverworldTerrainSampler
         int seed,
         int surface,
         OverworldCaveContext? caves,
-        OverworldBiomeKind? biome = null)
+        OverworldBiomeKind? biome = null,
+        FeaturePlacementPlan? features = null)
+        => SampleNoiseBlockAtSurfaceCore(
+            worldX, worldY, worldZ, seed, surface, caves, biome, features,
+            default, 0, 0, 0, 0, 0, 0);
+
+    internal static int SampleNoiseBlockAtSurfaceWithOre(
+        int worldX,
+        int worldY,
+        int worldZ,
+        int seed,
+        int surface,
+        OverworldCaveContext? caves,
+        OverworldBiomeKind biome,
+        FeaturePlacementPlan features,
+        ReadOnlySpan<OreCell> oreCells,
+        int minCellX,
+        int minCellY,
+        int minCellZ,
+        int widthX,
+        int widthY,
+        int widthZ)
+        => SampleNoiseBlockAtSurfaceCore(
+            worldX, worldY, worldZ, seed, surface, caves, biome, features,
+            oreCells, minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
+
+    private static int SampleNoiseBlockAtSurfaceCore(
+        int worldX,
+        int worldY,
+        int worldZ,
+        int seed,
+        int surface,
+        OverworldCaveContext? caves,
+        OverworldBiomeKind? biome,
+        FeaturePlacementPlan? features,
+        ReadOnlySpan<OreCell> oreCells,
+        int minCellX,
+        int minCellY,
+        int minCellZ,
+        int widthX,
+        int widthY,
+        int widthZ)
     {
         if (worldY < Blocks.FlatMinY || worldY > 320) return Blocks.Air;
 
         if (worldY > surface)
         {
             if (worldY <= SeaLevel) return Blocks.Water;
+            if (features is not null)
+                return features.TryGet(worldX, worldY, worldZ, out var aboveBlock) ? aboveBlock : Blocks.Air;
+
             var above = SampleFeature(worldX, worldY, worldZ, seed);
             return above != Blocks.Air ? above : Blocks.Air;
         }
@@ -209,15 +276,51 @@ static class OverworldTerrainSampler
             return OverworldBiomeSampler.SubsurfaceBlock(kind);
         if (worldY < 0)
         {
-            var ore = OverworldOrePlacer.TryReplaceHost(Blocks.Deepslate, worldX, worldY, worldZ, seed);
+            var ore = TryOre(
+                Blocks.Deepslate, worldX, worldY, worldZ, seed, oreCells,
+                minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
             return ore != 0 ? ore : Blocks.Deepslate;
         }
 
-        var feature = SampleFeature(worldX, worldY, worldZ, seed);
+        int feature;
+        if (features is not null)
+            feature = features.TryGet(worldX, worldY, worldZ, out var featureBlock) ? featureBlock : Blocks.Air;
+        else
+            feature = SampleFeature(worldX, worldY, worldZ, seed);
         if (feature != Blocks.Air) return feature;
 
-        var stoneOre = OverworldOrePlacer.TryReplaceHost(Blocks.Stone, worldX, worldY, worldZ, seed);
+        var stoneOre = TryOre(
+            Blocks.Stone, worldX, worldY, worldZ, seed, oreCells,
+            minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
         return stoneOre != 0 ? stoneOre : Blocks.Stone;
+    }
+
+    /// <summary>
+    /// Fast per-column cell-grid ore lookup, guarded by the grid's own Y range. The grid built by
+    /// <see cref="OverworldOrePlacer.FillColumnCells"/> only covers
+    /// [<see cref="OverworldOrePlacer.ColumnMinOreY"/>, <see cref="OverworldOrePlacer.ColumnMaxOreY"/>]
+    /// — a <paramref name="worldY"/> outside that band (current terrain never reaches it, but nothing
+    /// enforces that as an invariant) falls back to the always-safe per-point overload instead of
+    /// indexing outside the precomputed cells.
+    /// </summary>
+    private static int TryOre(
+        int hostBlock, int worldX, int worldY, int worldZ, int seed,
+        ReadOnlySpan<OreCell> oreCells,
+        int minCellX, int minCellY, int minCellZ, int widthX, int widthY, int widthZ)
+    {
+        if (oreCells.IsEmpty
+            || worldY < OverworldOrePlacer.ColumnMinOreY
+            || worldY > OverworldOrePlacer.ColumnMaxOreY)
+            return OverworldOrePlacer.TryReplaceHost(hostBlock, worldX, worldY, worldZ, seed);
+
+        // The fast overload takes `deep` directly (not `hostBlock`) — both call sites here already
+        // know it from their own worldY branch, and profiling showed the Stone/Deepslate property
+        // getters (each does a per-access EnsureLoaded() check) as a measurable share of this
+        // per-voxel hot path when re-derived redundantly inside the fast overload itself.
+        var deep = hostBlock == Blocks.Deepslate;
+        return OverworldOrePlacer.TryReplaceHost(
+            deep, worldX, worldY, worldZ, oreCells,
+            minCellX, minCellY, minCellZ, widthX, widthY, widthZ);
     }
 
     private static int SampleFeature(int x, int y, int z, int seed)
@@ -235,19 +338,19 @@ static class OverworldTerrainSampler
         {
             for (var dz = -1; dz <= 1; dz++)
             {
-                if (!TryTreeAnchor(cellX + dx, cellZ + dz, seed, out var tx, out var tz, out var trunkH))
+                if (!TryTreeAnchor(cellX + dx, cellZ + dz, seed, out var atx, out var atz, out var trunkHeight))
                     continue;
 
-                var surface = SurfaceY(tx, tz, seed);
+                var surface = SurfaceY(atx, atz, seed);
                 if (surface < SeaLevel) continue;
 
-                if (x == tx && z == tz && y > surface && y <= surface + trunkH)
+                if (x == atx && z == atz && y > surface && y <= surface + trunkHeight)
                     return Blocks.OakLog;
 
-                var top = surface + trunkH;
+                var top = surface + trunkHeight;
                 if (y < top - 2 || y > top + 1) continue;
-                var lx = Math.Abs(x - tx);
-                var lz = Math.Abs(z - tz);
+                var lx = Math.Abs(x - atx);
+                var lz = Math.Abs(z - atz);
                 if (y == top + 1)
                 {
                     if (lx <= 1 && lz <= 1) return Blocks.OakLeaves;
@@ -256,7 +359,7 @@ static class OverworldTerrainSampler
 
                 if (lx > 2 || lz > 2) continue;
                 if (y == top - 2 && lx == 2 && lz == 2) continue;
-                if (x == tx && z == tz && y <= top) continue;
+                if (x == atx && z == atz && y <= top) continue;
                 return Blocks.OakLeaves;
             }
         }
@@ -265,11 +368,22 @@ static class OverworldTerrainSampler
     }
 
     private static bool TryTreeAnchor(int cellX, int cellZ, int seed, out int tx, out int tz, out int trunkH)
+        => TryTreeAnchor(cellX, cellZ, seed, OverworldNoiseFields.For(seed), out tx, out tz, out trunkH);
+
+    private static bool TryTreeAnchor(
+        int cellX,
+        int cellZ,
+        int seed,
+        OverworldNoiseFields.Fields fields,
+        out int tx,
+        out int tz,
+        out int trunkH)
     {
         var h = Hash(cellX, cellZ, seed ^ TreeSalt);
         tx = cellX * TreeCellSize + (int)(h % (uint)TreeCellSize);
         tz = cellZ * TreeCellSize + (int)((h >> 8) % (uint)TreeCellSize);
-        var biome = OverworldBiomeSampler.SampleKind(tx, tz, seed);
+        OverworldBiomeSampler.SampleClimate(fields, tx, tz, out var temperature, out var rainfall);
+        var biome = OverworldBiomeSampler.Lookup(temperature, rainfall);
         if (!OverworldBiomeSampler.AllowsTrees(biome)
             || !OverworldBiomeSampler.TryTreeRoll(h, biome))
         {
@@ -325,5 +439,191 @@ static class OverworldTerrainSampler
             h = (h ^ (h >> 13)) * 1274126177u;
             return h;
         }
+    }
+
+    /// <summary>
+    /// Deterministic feature placements for one chunk generation operation. Base terrain is sampled
+    /// first, then this plan is applied as a read-only overlay while the chunk is encoded. It is
+    /// deliberately scoped to one generation call: no global cache and no cross-chunk mutable state.
+    /// </summary>
+    internal sealed class FeaturePlacementPlan
+    {
+        private readonly int _chunkMinX;
+        private readonly int _chunkMaxX;
+        private readonly int _chunkMinZ;
+        private readonly int _chunkMaxZ;
+        private readonly int _seed;
+        private readonly OverworldNoiseFields.Fields _fields;
+        private readonly List<FeaturePlacement> _pending = new(256);
+        private FeaturePlacement[] _placements = Array.Empty<FeaturePlacement>();
+        private readonly int[] _columnOffsets = new int[257];
+
+        public int MaxYForChunk { get; private set; } = int.MinValue;
+
+        private FeaturePlacementPlan(int chunkX, int chunkZ, int seed)
+        {
+            _chunkMinX = chunkX << 4;
+            _chunkMaxX = _chunkMinX + 15;
+            _chunkMinZ = chunkZ << 4;
+            _chunkMaxZ = _chunkMinZ + 15;
+            _seed = seed;
+            _fields = OverworldNoiseFields.For(seed);
+            Build();
+        }
+
+        public static FeaturePlacementPlan Build(int chunkX, int chunkZ, int seed)
+            => new(chunkX, chunkZ, seed);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGet(int x, int y, int z, out int block)
+        {
+            if (x < _chunkMinX || x > _chunkMaxX || z < _chunkMinZ || z > _chunkMaxZ)
+            {
+                block = 0;
+                return false;
+            }
+
+            var column = ((x - _chunkMinX) << 4) | (z - _chunkMinZ);
+            for (var index = _columnOffsets[column]; index < _columnOffsets[column + 1]; index++)
+            {
+                var placement = _placements[index];
+                if (placement.Y != y) continue;
+                block = placement.Block;
+                return true;
+            }
+
+            block = 0;
+            return false;
+        }
+
+        private void Build()
+        {
+            var minTreeCellX = FloorDiv(_chunkMinX, TreeCellSize) - 1;
+            var maxTreeCellX = FloorDiv(_chunkMaxX, TreeCellSize) + 1;
+            var minTreeCellZ = FloorDiv(_chunkMinZ, TreeCellSize) - 1;
+            var maxTreeCellZ = FloorDiv(_chunkMaxZ, TreeCellSize) + 1;
+
+            // Add trees in the same coordinate order as SampleTree's candidate traversal. This
+            // preserves deterministic first-writer precedence if sparse structures overlap.
+            for (var cellX = minTreeCellX; cellX <= maxTreeCellX; cellX++)
+            for (var cellZ = minTreeCellZ; cellZ <= maxTreeCellZ; cellZ++)
+            {
+                if (!TryTreeAnchor(cellX, cellZ, _seed, _fields, out var x, out var z, out var trunkHeight))
+                    continue;
+
+                var surface = SurfaceY(x, z, _seed, _fields);
+                if (surface < SeaLevel)
+                    continue;
+
+                var top = surface + trunkHeight;
+                if (x >= _chunkMinX - TreeCanopyRadius && x <= _chunkMaxX + TreeCanopyRadius
+                    && z >= _chunkMinZ - TreeCanopyRadius && z <= _chunkMaxZ + TreeCanopyRadius)
+                    MaxYForChunk = Math.Max(MaxYForChunk, top + 1);
+
+                for (var y = surface + 1; y <= top; y++)
+                    AddTree(x, y, z, Blocks.OakLog);
+
+                for (var y = top - 2; y <= top + 1; y++)
+                for (var dx = -2; dx <= 2; dx++)
+                for (var dz = -2; dz <= 2; dz++)
+                {
+                    var lx = Math.Abs(dx);
+                    var lz = Math.Abs(dz);
+                    if (y == top + 1 && (lx > 1 || lz > 1)) continue;
+                    if (y == top - 2 && lx == 2 && lz == 2) continue;
+                    if (y <= top && dx == 0 && dz == 0) continue;
+                    AddTree(x + dx, y, z + dz, Blocks.OakLeaves);
+                }
+            }
+
+            var minRuinCellX = FloorDiv(_chunkMinX, RuinCellSize);
+            var maxRuinCellX = FloorDiv(_chunkMaxX, RuinCellSize);
+            var minRuinCellZ = FloorDiv(_chunkMinZ, RuinCellSize);
+            var maxRuinCellZ = FloorDiv(_chunkMaxZ, RuinCellSize);
+            for (var cellX = minRuinCellX; cellX <= maxRuinCellX; cellX++)
+            for (var cellZ = minRuinCellZ; cellZ <= maxRuinCellZ; cellZ++)
+            {
+                var h = Hash(cellX, cellZ, _seed ^ RuinSalt);
+                if ((h % 11) != 0) continue;
+
+                var x = cellX * RuinCellSize + 8 + (int)(h % 16);
+                var z = cellZ * RuinCellSize + 8 + (int)((h >> 8) % 16);
+                var surface = SurfaceY(x, z, _seed, _fields);
+                if (surface < SeaLevel) continue;
+
+                for (var dx = 0; dx <= 4; dx++)
+                for (var dz = 0; dz <= 4; dz++)
+                {
+                    AddRuin(x + dx, surface, z + dz, Blocks.Cobblestone);
+                    if ((dx, dz) is (0, 0) or (0, 4) or (4, 0) or (4, 4))
+                        AddRuin(x + dx, surface + 1, z + dz, Blocks.Cobblestone);
+                    else if (dx is >= 1 and <= 3 && dz is >= 1 and <= 3
+                             && (dx == 1 || dx == 3 || dz == 1 || dz == 3))
+                        AddRuin(x + dx, surface + 1, z + dz, Blocks.OakPlanks);
+                }
+            }
+
+            FinalizePlacements();
+        }
+
+        private void AddTree(int x, int y, int z, int block)
+            => AddPlacement(x, y, z, block);
+
+        private void AddRuin(int x, int y, int z, int block)
+            => AddPlacement(x, y, z, block);
+
+        private void AddPlacement(int x, int y, int z, int block)
+        {
+            if (x < _chunkMinX || x > _chunkMaxX || z < _chunkMinZ || z > _chunkMaxZ)
+                return;
+
+            var localX = x - _chunkMinX;
+            var localZ = z - _chunkMinZ;
+            for (var index = 0; index < _pending.Count; index++)
+            {
+                var existing = _pending[index];
+                if (existing.LocalX == localX && existing.LocalZ == localZ && existing.Y == y)
+                    return;
+            }
+
+            _pending.Add(new FeaturePlacement((byte)localX, (byte)localZ, y, block));
+        }
+
+        private void FinalizePlacements()
+        {
+            _pending.Sort(static (left, right) =>
+            {
+                var leftColumn = (left.LocalX << 4) | left.LocalZ;
+                var rightColumn = (right.LocalX << 4) | right.LocalZ;
+                var columnOrder = leftColumn.CompareTo(rightColumn);
+                return columnOrder != 0 ? columnOrder : left.Y.CompareTo(right.Y);
+            });
+
+            Array.Clear(_columnOffsets, 0, _columnOffsets.Length);
+            foreach (var placement in _pending)
+                _columnOffsets[((placement.LocalX << 4) | placement.LocalZ) + 1]++;
+
+            for (var column = 1; column < _columnOffsets.Length; column++)
+                _columnOffsets[column] += _columnOffsets[column - 1];
+
+            _placements = _pending.ToArray();
+        }
+
+        private readonly struct FeaturePlacement
+        {
+            public readonly byte LocalX;
+            public readonly byte LocalZ;
+            public readonly int Y;
+            public readonly int Block;
+
+            public FeaturePlacement(byte localX, byte localZ, int y, int block)
+            {
+                LocalX = localX;
+                LocalZ = localZ;
+                Y = y;
+                Block = block;
+            }
+        }
+
     }
 }

@@ -12,6 +12,13 @@ namespace Zenith.Gameplay.Systems;
 /// </summary>
 sealed class InventorySystem : IGameSystem
 {
+    // Q-drop toss: forward from the player's yaw (same yaw-only convention ProjectileSystem already
+    // uses for arrow launch — pitch is not factored in there either), fixed upward hop. Visual only:
+    // Zenith doesn't run per-tick floor-drop physics, so the client's own local simulation carries
+    // the arc from this one initial velocity.
+    private const float DropTossSpeed = 0.3f;
+    private const float DropTossUpwardVelocity = 0.2f;
+
     private readonly PlayerManager _players;
     private readonly World.World _world;
     private readonly RecipeRegistry _recipes;
@@ -143,8 +150,18 @@ sealed class InventorySystem : IGameSystem
                         $"Ignored stale container close from {player.Username}: {intent.WindowId}/{intent.WindowType}.");
                     return;
                 }
-                if (intent.WindowId != InventoryWindowIntent.UnknownWindowId &&
-                    (active.WindowId != intent.WindowId || active.WindowType != intent.WindowType))
+                // Phase XXVI fix: WindowType ("ContainerType" on the wire) is NOT validated here —
+                // confirmed against both PocketMine (onClientRemoveWindow only ever reasons about
+                // windowId, the packet's ContainerType field is never even read) and Dragonfly
+                // (ContainerCloseHandler switches purely on WindowID; ContainerType is only echoed
+                // back in the ack, never compared). A real client was observed sending a stale/
+                // unrelated ContainerType (247) on an otherwise-correct close (WindowId matched the
+                // open chest exactly) — the previous WindowType comparison rejected that as
+                // "mismatched", leaving the session open server-side and producing a rapid-fire
+                // reopen loop client-side as it kept retrying. gophertunnel's own doc comment on this
+                // field confirms it exists to validate a *server-initiated* close on the client side,
+                // not something the server should validate on an incoming client-initiated close.
+                if (intent.WindowId != InventoryWindowIntent.UnknownWindowId && active.WindowId != intent.WindowId)
                 {
                     player.Session.Context.Logger.Debug(
                         $"Ignored mismatched container close from {player.Username}: {intent.WindowId}/{intent.WindowType} (active {active.WindowId}/{active.WindowType}).");
@@ -356,9 +373,13 @@ sealed class InventorySystem : IGameSystem
             var x = (int)MathF.Floor(player.PositionX);
             var y = (int)MathF.Floor(player.PositionY);
             var z = (int)MathF.Floor(player.PositionZ);
+            var radians = player.Yaw * (MathF.PI / 180f);
+            var velocityX = -MathF.Sin(radians) * DropTossSpeed;
+            var velocityZ = MathF.Cos(radians) * DropTossSpeed;
             ok = FloorDropFanout.TryDepositBatch(
                 _world, _players, online, x, y, z, pendingDrops,
-                FloorDropFanout.PlayerThrowPickupDelay);
+                FloorDropFanout.PlayerThrowPickupDelay, searchRadius: 3,
+                velocityX, DropTossUpwardVelocity, velocityZ);
         }
 
         if (!ok)

@@ -16,6 +16,14 @@ world:
   spawn-chunk-radius: 4
   # Columns before PLAYER_SPAWN (0..spawn-chunk-radius). Default 2 = ready-disk; view ring streams after.
   spawn-ready-radius: 2
+  # Independent per-player publication budgets; tune only with diagnostics.
+  pre-spawn-columns-per-tick: 8
+  chunk-stream-columns-per-tick: 4
+  # Fixed, bounded generation worker pool (ADR §111) — not an automatic ProcessorCount scale-up.
+  # Raise only after measuring tick headroom with the worldgen diagnostics.
+  chunk-generation-workers: 4
+  # Immutable base-column cache for shared warm reads across players. 0 disables it.
+  chunk-generation-cache-columns: 1024
   # terrain: flat   # default — classic stone/grass at Y -61
   # terrain: noise  # overworld band + biomes/caves/ore; fresh world folder recommended
   # seed: 1

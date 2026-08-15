@@ -1347,6 +1347,13 @@ public class IntentContractTests
         Assert.Empty(fx.Transport.Captured);
 
         new ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
+        Assert.True(SpinWait.SpinUntil(
+            () =>
+            {
+                FlushRaknet(fx.Players);
+                return fx.Transport.Captured.Count > 0;
+            },
+            TimeSpan.FromSeconds(5)));
         FlushRaknet(fx.Players);
         Assert.NotEmpty(fx.Transport.Captured);
     }
@@ -1368,47 +1375,101 @@ public class IntentContractTests
         Assert.False(player.Chunks.Knows(0, 0));
     }
 
+    /// <summary>
+    /// Phase XXVI post-impl audit: this used to drive the legacy bulk `CompletePreSpawn` shortcut,
+    /// which is dead in production since `StartPendingPreSpawn` always goes through the streaming
+    /// `PreSpawnLoad` path now. Rewritten to submit a real pre-spawn request and prove publication
+    /// still only happens through `Tick` (via `PumpStreamingPreSpawn`), not synchronously at submit.
+    /// </summary>
     [Fact]
-    public async Task ChunkStreamSystem_applies_pre_spawn_completion_only_on_tick()
+    public void ChunkStreamSystem_streaming_pre_spawn_publishes_only_through_tick()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddPlayer("pre-spawn", isInGame: false);
-        var column = await fx.World.GetOrCreateColumnAsync(0, 0);
-        var snapshot = new PlayerChunkTracker.PreSpawnSnapshot(0, 0, 0, 0, 0, 64, 0);
-        player.Chunks.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Success(snapshot, [column], 1));
+        Assert.True(player.Chunks.TrySubmitPreSpawn(viewRadius: 0));
 
         Assert.False(player.IsSpawning);
+        Assert.False(player.Chunks.Knows(0, 0));
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        new ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
+        var system = new ChunkStreamSystem(fx.World);
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            FlushRaknet(fx.Players);
+            system.Tick(fx.Clock, fx.Players.Online);
+            return player.IsSpawning;
+        }, TimeSpan.FromSeconds(2)));
 
-        Assert.True(player.IsSpawning);
         Assert.True(player.Chunks.Knows(0, 0));
         FlushRaknet(fx.Players);
         Assert.NotEmpty(fx.Transport.Captured);
     }
 
+    /// <summary>
+    /// Phase XXVI post-impl audit: the original version of this test also drove the dead bulk
+    /// `CompletePreSpawn` path, so it never actually exercised `PumpStreamingPreSpawn`'s own
+    /// per-tick publish budget — the entire point of ADR §111's "never stall a tick" guarantee.
+    /// Rewritten to submit a real, oversized pre-spawn request and assert the known-column count
+    /// never grows by more than the configured per-tick budget in any single tick.
+    /// </summary>
     [Fact]
-    public async Task ChunkStreamSystem_bounds_pre_spawn_publication_per_tick()
+    public void ChunkStreamSystem_bounds_streaming_pre_spawn_publication_per_tick()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddPlayer("large-pre-spawn", isInGame: false);
-        var columns = await fx.World.GetRadiusAsync(0, 0, radius: 3); // 49 > cap 32
-        var snapshot = new PlayerChunkTracker.PreSpawnSnapshot(3, 3, 0, 0, 0, 64, 0);
-        player.Chunks.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Success(snapshot, columns, 1));
+        const int viewRadius = 3; // 49 columns, comfortably above the per-tick budget
+        Assert.True(player.Chunks.TrySubmitPreSpawn(viewRadius));
+
         var system = new ChunkStreamSystem(fx.World);
+        var fullViewCount = (viewRadius * 2 + 1) * (viewRadius * 2 + 1);
+        var budget = Math.Min(
+            ChunkStreamSystem.MaxPreSpawnColumnsPerTick,
+            fx.Context.Config.World.PreSpawnColumnsPerTick);
 
-        system.Tick(fx.Clock, fx.Players.Online);
         var known = new List<(int X, int Z)>();
-        player.Chunks.CopyKnown(known);
-        Assert.Equal(ChunkStreamSystem.MaxPreSpawnColumnsPerTick, known.Count);
-        Assert.False(player.IsSpawning);
+        var previousCount = 0;
+        var sawAnyPublish = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (previousCount < fullViewCount && DateTime.UtcNow < deadline)
+        {
+            FlushRaknet(fx.Players);
+            system.Tick(fx.Clock, fx.Players.Online);
+            player.Chunks.CopyKnown(known);
+            var delta = known.Count - previousCount;
+            Assert.True(delta <= budget, $"tick published {delta} columns, budget is {budget}");
+            if (delta > 0) sawAnyPublish = true;
+            previousCount = known.Count;
+            if (delta == 0) Thread.Yield();
+        }
 
-        system.Tick(fx.Clock, fx.Players.Online);
-        Assert.True(player.IsSpawning);
+        Assert.True(sawAnyPublish, "expected at least one tick to publish columns within the budget");
+        Assert.Equal(fullViewCount, previousCount);
+    }
+
+    [Fact]
+    public void ChunkStreamSystem_releases_spawn_after_ready_radius_before_full_view_is_loaded()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddPlayer("streaming-pre-spawn", isInGame: false);
+        const int viewRadius = 4;
+        Assert.True(player.Chunks.TrySubmitPreSpawn(viewRadius));
+
+        var system = new ChunkStreamSystem(fx.World);
+        var fullViewCount = (viewRadius * 2 + 1) * (viewRadius * 2 + 1);
+        var known = new List<(int X, int Z)>();
+        var readyObserved = SpinWait.SpinUntil(() =>
+        {
+            FlushRaknet(fx.Players);
+            system.Tick(fx.Clock, fx.Players.Online);
+            player.Chunks.CopyKnown(known);
+            return player.IsSpawning;
+        }, TimeSpan.FromSeconds(10));
+
+        Assert.True(readyObserved, "spawn must be released after the central ready radius is transmitted");
         player.Chunks.CopyKnown(known);
-        Assert.Equal(columns.Count, known.Count);
+        Assert.InRange(known.Count, 1, fullViewCount - 1);
+        Assert.False(player.IsInGame);
     }
 
     [Fact]
