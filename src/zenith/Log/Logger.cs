@@ -15,6 +15,8 @@ public partial class Logger : ILogger
     public LogLevel LogLevel { get; set; } = LogLevel.All;
     public string Format { get; set; } = "<b>{level}</b> \u2192 {message}";
 
+    public bool IsDebugEnabled => IsValid(LogLevel.Debug);
+
     public Dictionary<LogLevel, string> CustomLevelColorMap { get; set; } = LevelColorMap;
 
     /// <summary>
