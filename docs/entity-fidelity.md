@@ -123,7 +123,7 @@ is `0x29` (41). Fixed in Phase XXIII — `ActorEventPacket` now correctly owns `
 | Bat | CLOSE (bounded turn, per-tick not per-wander-leg) | PARITY | PARITY | UNKNOWN | N/A |
 | Fish | CLOSE (bounded turn, per-tick not per-wander-leg) | PARITY | PARITY | UNKNOWN | N/A |
 | Minecart | PARITY (intentionally instant, matches vehicle physics) | PARITY | PARITY | UNKNOWN | N/A |
-| Enderman | MISSING (never sets yaw at all — teleport doesn't orient the actor toward anything) | PARITY | PARITY | UNKNOWN | SIMPLIFIED |
+| Enderman | ~~MISSING~~ **PARITY as of Phase XXVI** (aggro tick now sets Yaw toward its target — `EndermanSystem.TickAggro`) | PARITY | PARITY | UNKNOWN | SIMPLIFIED |
 
 ## Projectile self-hit fix (found while investigating the crash above)
 
@@ -170,7 +170,7 @@ Six findings from the user's first real-client pass, classified and resolved:
 | All | Head doesn't move independently of body | MISSING VANILLA BEHAVIOR | Not yet implemented — see "Known gaps"; this is Part 4-6 work (a real head/body look model), deferred as its own follow-up rather than rushed. |
 | Player | Mobs could damage a Creative-mode player | BUG | `PlayerDamage.Apply` never checked `GameMode` at all. Fixed: Creative is immune to ordinary damage; Void is the deliberate vanilla-matching exception (falling out of the world still kills Creative players, ADR §40/§73). |
 | All mobs | "Hitbox (bbox) placeholder" | BUG/SIMPLIFIED | Two distinct things bundled in this report: (1) **visual** hitbox — confirmed real: every mob except Zombie/Bat sent Scale-only metadata, no Width/Height at all, so the client fell back on undefined dimensions. Fixed with real per-species Bedrock hitbox values (`WriteMobDimensionMetadata`). (2) **combat reach** — confirmed still a placeholder: `AttackDistance = 2.25f` is copy-pasted across nearly every species (same value `PlayerMeleeSystem` uses for player-vs-player), not derived from real per-species size. Not fixed this round — a real AABB-based reach system is a larger cross-cutting change; recorded as an open gap. |
-| Floor drops | Picked-up items don't visually disappear from the ground | UNKNOWN — likely stale state | Investigated at length; the pickup/removal code path (`TakeItemActorPacket`, `FloorDropStore`) checks out correctly against gophertunnel's wire format and Zenith's own runtime-id bookkeeping. Leading hypothesis: this is residual "ghost" floor-drop entities left in `FloorDropStore` from the *previous* session's now-fixed `Snapshot()` crash bug (items that got added to inventory before the crash but never got their removal signal sent, in the same still-running server process). **Needs retest on a freshly restarted server** to confirm whether it's actually resolved or a distinct bug. |
+| Floor drops | Picked-up items don't visually disappear from the ground | **BUG (root cause found, fixed)** | The earlier "residual ghost state" hypothesis was wrong — this reproduced deterministically on every full pickup, fresh server or not. `FloorDropSystem`'s pickup loop only ever sent `TakeItemActorPacket` (the pickup *animation*), never `RemoveActorPacket`. `TakeItemActor` alone does not despawn the actor client-side (confirmed against both PocketMine and Dragonfly, which always pair it with a real removal) — Zenith's own packet doc comment incorrectly asserted otherwise. Since a full pickup also removes the cell from `FloorDropStore` immediately, no later despawn tick could ever catch it either — the entity was orphaned client-side forever. Fixed: `FloorDropSystem` now also sends `RemoveActorPacket` on a full pickup, matching the despawn and partial-pickup-republish paths, which already did this correctly. |
 | Inventory/chests | Closing then reopening a container never works again | BUG (confirmed root cause) | Real Bedrock clients send `ContainerClose.WindowId = 0xFF` ("unknown") in some situations instead of echoing the real window id — documented in PocketMine's `InventoryManager::onClientRemoveWindow` ("since 1.21.100 and probably earlier"). Zenith's exact-match validation silently rejected that as a stale close and never cleared `player.OpenContainer`, permanently locking every future container open. Fixed: `0xFF` is now treated as "close whatever is currently open," matching PocketMine's documented workaround. |
 | Golem | Attacks the player unprovoked | MISSING VANILLA BEHAVIOR | Confirmed via Minecraft Wiki research: naturally-spawned Iron Golems are passive until a player attacks the golem itself (self-defense) or attacks a villager near it. Zenith's Golem was built in Phase XVIII as an intentional "boss" pressure-test (always-hostile, enrage/slam at low health) — a real, documented design choice at the time, now revised. Fixed: Golem stays passive until provoked by either trigger; retains that player as its target the same way Zombie/Spider do. Zenith has no village/reputation system, so the "attacked a villager" trigger uses proximity + a 10s recency window (`Player.LastVillagerAttack`) instead of Minecraft's full popularity/reputation model — documented as SIMPLIFIED, not PARITY. |
 
@@ -322,10 +322,13 @@ already correct) — only one real gap there, noted below.
   closed in Phase XXV**: death resets XP to zero, and `PlayerDataBlob` v3 persists
   health/hunger/saturation/exhaustion alongside pose and XP. Effects are still not persisted
   (timed, expected to lapse naturally — a smaller, deliberately deferred gap).
-- **`BreakDuration`'s tool-efficiency-vs-tier-mismatch formula diverges from vanilla's** — a
-  wood pickaxe on a diamond-tier block should still dig faster than bare hands (no drop, but faster
-  time); Zenith resets to 1.0× speed on any tier mismatch. Currently a no-op (no registered block
-  has a tier gap yet), becomes a real bug the moment one is added.
+- ~~`BreakDuration`'s tool-efficiency-vs-tier-mismatch formula diverges from vanilla's~~ — **closed
+  in Phase XXVI**. This had been mis-tracked as a latent no-op ("no registered block has a tier gap
+  yet"); the Phase XXVI audit found it was already live — ore `DigProfile`s existed with
+  `RequiresCorrectToolForDrops=true` and no tier field at all, so a wood pickaxe already harvested
+  diamond identically to a diamond pickaxe. `DigProfile.MinHarvestTier` now gates the drop by tier;
+  a kind-matched-but-under-tier tool still digs at its own speed, just without the drop. See
+  `docs/decisions.md` §110 and `docs/history/phases/phase-xxvi-survival-gameplay-findings.md`.
 
 **Confirmed clean (no bug found):** chunk/palette encoding (sub-chunk version, index ordering, bit
 widths); block-placement self-suffocation/obstruction checks; LevelDB overlay write queue (no

@@ -64,6 +64,76 @@ public class CaveCarverTests
     }
 
     [Fact]
+    public void Cave_column_mask_matches_segment_queries()
+    {
+        const int seed = 1776;
+        const int chunkX = -3;
+        const int chunkZ = 4;
+        Span<int> surfaces = stackalloc int[256];
+        Span<OverworldBiomeKind> biomes = stackalloc OverworldBiomeKind[256];
+        OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out _);
+
+        using var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, seed);
+        caves.PrepareColumnMask(surfaces);
+        for (var lx = 0; lx < 16; lx++)
+        for (var lz = 0; lz < 16; lz++)
+        {
+            var x = (chunkX << 4) + lx;
+            var z = (chunkZ << 4) + lz;
+            var surface = surfaces[(lx << 4) | lz];
+            for (var y = OverworldCaveContext.MaskMinY; y <= Math.Min(120, surface + 4); y++)
+                Assert.Equal(caves.IsCarvedBruteForce(x, y, z, surface), caves.IsCarved(x, y, z, surface));
+        }
+    }
+
+    [Fact]
+    public void Segment_bounds_reject_points_outside_expanded_box()
+    {
+        Assert.False(OverworldCaveCarver.IsWithinSegment(
+            px: 0, py: 0, pz: 4,
+            x0: 0, y0: 0, z0: 0,
+            x1: 3, y1: 0, z1: 0,
+            radius: 1));
+        Assert.True(OverworldCaveCarver.IsWithinSegment(
+            px: 3, py: 1, pz: 0,
+            x0: 0, y0: 0, z0: 0,
+            x1: 3, y1: 0, z1: 0,
+            radius: 1));
+    }
+
+    [Fact]
+    public void Feature_plan_preserves_column_sampling()
+    {
+        const int seed = 31415;
+        const int chunkX = -2;
+        const int chunkZ = 3;
+        Span<int> surfaces = stackalloc int[256];
+        Span<OverworldBiomeKind> biomes = stackalloc OverworldBiomeKind[256];
+        OverworldTerrainSampler.FillColumnSurfaces(chunkX, chunkZ, seed, surfaces, biomes, out _);
+
+        using var caves = OverworldCaveContext.ForColumn(chunkX, chunkZ, seed);
+        var features = OverworldTerrainSampler.FeaturePlacementPlan.Build(chunkX, chunkZ, seed);
+        Assert.Equal(
+            OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(chunkX, chunkZ, seed),
+            OverworldTerrainSampler.MaxTreeCanopyYAffectingChunk(chunkX, chunkZ, seed, features));
+        for (var lx = 0; lx < 16; lx++)
+        for (var lz = 0; lz < 16; lz++)
+        {
+            var x = (chunkX << 4) + lx;
+            var z = (chunkZ << 4) + lz;
+            var index = (lx << 4) | lz;
+            for (var y = -16; y <= 96; y += 4)
+            {
+                var uncached = OverworldTerrainSampler.SampleNoiseBlockAtSurface(
+                    x, y, z, seed, surfaces[index], caves, biomes[index]);
+                var cached = OverworldTerrainSampler.SampleNoiseBlockAtSurface(
+                    x, y, z, seed, surfaces[index], caves, biomes[index], features);
+                Assert.Equal(uncached, cached);
+            }
+        }
+    }
+
+    [Fact]
     public void Cave_region_has_connected_air_volume()
     {
         const int seed = 21;

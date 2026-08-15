@@ -140,6 +140,40 @@ public class ChestLidTests
         Assert.NotNull(player.OpenChest);
     }
 
+    /// <summary>
+    /// Phase XXVI — real-run log evidence: a client sent Close(WindowId=2, WindowType=247) against an
+    /// active chest session of (WindowId=2, WindowType=0/Chest). WindowId matched exactly; only the
+    /// otherwise-unvalidated WindowType field differed. The strict WindowType comparison rejected this
+    /// as "mismatched," leaving the session open server-side while the client believed it had closed —
+    /// observed as a rapid-fire reopen loop as the client kept retrying. Confirmed against both
+    /// PocketMine (`onClientRemoveWindow` never reads ContainerType at all) and Dragonfly
+    /// (`ContainerCloseHandler` switches purely on WindowID) that a real client's ContainerType on
+    /// close is not meaningful to validate.
+    /// </summary>
+    [Fact]
+    public void InventorySystem_closes_the_active_chest_even_when_the_client_sends_an_unrelated_window_type()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("stale-window-type");
+        fx.World.Chests.Ensure(7, 73, 33);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(7, 73, 33)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+
+        Assert.True(player.SubmitWindowIntent(
+            InventoryWindowIntent.Close((byte)InventoryContainerMap.WindowChest, 247)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Null(player.OpenChest);
+        Assert.Equal(0, fx.World.Chests.OpenerCount(7, 73, 33));
+
+        // Must still be able to reopen cleanly afterward — the actual observed symptom.
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(7, 73, 33)));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.OpenChest);
+        Assert.Equal(1, fx.World.Chests.OpenerCount(7, 73, 33));
+    }
+
     [Fact]
     public void InventorySystem_can_open_the_player_inventory_again_after_closing_it()
     {

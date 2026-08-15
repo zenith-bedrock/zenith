@@ -17,6 +17,7 @@ public class WorldgenColumnBenchmarks
     private NoiseTerrainProvider _noise = null!;
     private LevelChunkPacket _flatPacket = null!;
     private LevelChunkPacket _noisePacket = null!;
+    private OverworldCaveContext _caveQueries = null!;
     private int _chunkCursor;
 
     [GlobalSetup]
@@ -24,6 +25,7 @@ public class WorldgenColumnBenchmarks
     {
         Blocks.EnsureLoaded();
         _noise = new NoiseTerrainProvider(Seed);
+        _caveQueries = OverworldCaveContext.ForColumn(0, 0, Seed);
 
         var (flatCount, flatPayload) = ChunkPayloads.BuildFlatOverworld();
         _flatPacket = new LevelChunkPacket
@@ -70,6 +72,71 @@ public class WorldgenColumnBenchmarks
         using var ctx = OverworldCaveContext.ForColumn(x, 0, Seed);
         return ctx.SegmentCount;
     }
+
+    /// <summary>Spatial cave query cost over the same 16x16x96 sample window.</summary>
+    [Benchmark]
+    public int Noise_CaveSpatialQueries()
+    {
+        var carved = 0;
+        for (var x = 0; x < 16; x++)
+        for (var z = 0; z < 16; z++)
+        for (var y = -32; y < 64; y++)
+            if (_caveQueries.IsCarved(x, y, z, surfaceY: 80)) carved++;
+        return carved;
+    }
+
+    /// <summary>Reference cost for the same query window; validates the spatial index payoff.</summary>
+    [Benchmark]
+    public int Noise_CaveBruteForceQueries()
+    {
+        var carved = 0;
+        for (var x = 0; x < 16; x++)
+        for (var z = 0; z < 16; z++)
+        for (var y = -32; y < 64; y++)
+            if (_caveQueries.IsCarvedBruteForce(x, y, z, surfaceY: 80)) carved++;
+        return carved;
+    }
+
+    /// <summary>Legacy ore path: hashes neighboring vein cells for every host voxel.</summary>
+    [Benchmark]
+    public int Noise_OreLegacyQueries()
+    {
+        var ores = 0;
+        for (var x = 0; x < 16; x++)
+        for (var z = 0; z < 16; z++)
+        for (var y = Blocks.FlatMinY; y <= OverworldOrePlacer.ColumnMaxOreY; y++)
+        {
+            var host = y < 0 ? Blocks.Deepslate : Blocks.Stone;
+            if (OverworldOrePlacer.TryReplaceHost(host, x, y, z, Seed) != 0) ores++;
+        }
+        return ores;
+    }
+
+    /// <summary>Column DOD ore path: hashes each neighboring vein cell once.</summary>
+    [Benchmark]
+    public int Noise_OrePlannedQueries()
+    {
+        Span<OreCell> cells = stackalloc OreCell[OverworldOrePlacer.MaxColumnCellCount];
+        var count = OverworldOrePlacer.FillColumnCells(
+            0, 0, Seed, cells,
+            out var minCellX, out var minCellY, out var minCellZ,
+            out var widthX, out var widthY, out var widthZ);
+        var view = cells[..count];
+        var ores = 0;
+        for (var x = 0; x < 16; x++)
+        for (var z = 0; z < 16; z++)
+        for (var y = Blocks.FlatMinY; y <= OverworldOrePlacer.ColumnMaxOreY; y++)
+        {
+            if (OverworldOrePlacer.TryReplaceHost(
+                    y < 0, x, y, z, view,
+                    minCellX, minCellY, minCellZ, widthX, widthY, widthZ) != 0)
+                ores++;
+        }
+        return ores;
+    }
+
+    [GlobalCleanup]
+    public void Cleanup() => _caveQueries.Dispose();
 
     /// <summary>Wire encode of a pre-built flat LevelChunk.</summary>
     [Benchmark]

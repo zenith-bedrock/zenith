@@ -27,13 +27,11 @@ static class BreakDuration
 
         var tool = held.IsItem ? Tools.AsTool(held.Value) : ToolInfo.None;
         var canHarvest = IsHarvestable(profile, tool);
-        var speed = 1.0;
-        if (IsEffective(profile, tool))
-        {
-            speed = tool.BaseMiningEfficiency;
-            if (!canHarvest)
-                speed = 1.0;
-        }
+        // Speed depends only on tool *kind* matching (Phase XXVI) — a wood pickaxe on a diamond-tier
+        // block still digs faster than bare hands, it just doesn't harvest the drop. Kind-matched-
+        // but-under-tier is now a real case (see MinHarvestTier); previously resetting to 1.0x here
+        // was a no-op since harvestability and effectiveness both only ever checked Kind.
+        var speed = IsEffective(profile, tool) ? tool.BaseMiningEfficiency : 1.0;
 
         var damage = speed / profile.DestroySpeed / (canHarvest ? 30.0 : 100.0);
         if (damage >= 1.0)
@@ -49,6 +47,6 @@ static class BreakDuration
     {
         if (profile.HarvestTool == ToolKind.None)
             return true;
-        return tool.Kind == profile.HarvestTool;
+        return tool.Kind == profile.HarvestTool && tool.Tier >= profile.MinHarvestTier;
     }
 }

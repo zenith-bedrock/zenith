@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Zenith.World;
 
 /// <summary>
@@ -8,8 +10,11 @@ static class OverworldOrePlacer
 {
     internal const int VeinCellSize = 8;
     internal const int VeinRadius = 2;
+    internal const int ColumnMinOreY = Blocks.FlatMinY;
+    internal const int ColumnMaxOreY = 120;
+    internal const int MaxColumnCellCount = 4 * 25 * 4;
 
-    private const int OreSalt = unchecked((int)0x0EE0E001u);
+    internal const int OreSalt = unchecked((int)0x0EE0E001u);
 
     /// <summary>Non-zero ore runtime id when <paramref name="hostBlock"/> should be replaced.</summary>
     public static int TryReplaceHost(int hostBlock, int worldX, int worldY, int worldZ, int seed)
@@ -41,6 +46,85 @@ static class OverworldOrePlacer
         return 0;
     }
 
+    /// <summary>
+    /// Builds the fixed cell grid needed by one 16x16 column. The stack-owned caller reuses these
+    /// immutable cell values for every voxel, eliminating repeated Hash3/origin work.
+    /// </summary>
+    internal static int FillColumnCells(
+        int baseX,
+        int baseZ,
+        int seed,
+        Span<OreCell> cells,
+        out int minCellX,
+        out int minCellY,
+        out int minCellZ,
+        out int widthX,
+        out int widthY,
+        out int widthZ)
+    {
+        minCellX = FloorDiv(baseX - VeinRadius, VeinCellSize);
+        var maxCellX = FloorDiv(baseX + 15 + VeinRadius, VeinCellSize);
+        minCellY = FloorDiv(ColumnMinOreY - VeinRadius, VeinCellSize);
+        var maxCellY = FloorDiv(ColumnMaxOreY + VeinRadius, VeinCellSize);
+        minCellZ = FloorDiv(baseZ - VeinRadius, VeinCellSize);
+        var maxCellZ = FloorDiv(baseZ + 15 + VeinRadius, VeinCellSize);
+        widthX = maxCellX - minCellX + 1;
+        widthY = maxCellY - minCellY + 1;
+        widthZ = maxCellZ - minCellZ + 1;
+        var count = checked(widthX * widthY * widthZ);
+        if (count > cells.Length)
+            throw new ArgumentException("Ore cell buffer is too small for a column.", nameof(cells));
+
+        var index = 0;
+        for (var cx = minCellX; cx <= maxCellX; cx++)
+        for (var cy = minCellY; cy <= maxCellY; cy++)
+        for (var cz = minCellZ; cz <= maxCellZ; cz++)
+            cells[index++] = OreCell.Create(cx, cy, cz, seed);
+
+        return count;
+    }
+
+    /// <summary>
+    /// Takes <paramref name="deep"/> directly rather than a host block id — unlike the per-point
+    /// overload above, this one is only ever called from the full-column generation hot path, which
+    /// already knows deep/shallow from its own worldY branch. Re-deriving it here via
+    /// <see cref="Blocks.Stone"/>/<see cref="Blocks.Deepslate"/> property comparisons measured as a
+    /// real, avoidable cost per voxel (profiling — each access re-checks <c>EnsureLoaded()</c>).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int TryReplaceHost(
+        bool deep,
+        int worldX,
+        int worldY,
+        int worldZ,
+        ReadOnlySpan<OreCell> cells,
+        int minCellX,
+        int minCellY,
+        int minCellZ,
+        int widthX,
+        int widthY,
+        int widthZ)
+    {
+        var minX = FloorDiv(worldX - VeinRadius, VeinCellSize);
+        var maxX = FloorDiv(worldX + VeinRadius, VeinCellSize);
+        var minY = FloorDiv(worldY - VeinRadius, VeinCellSize);
+        var maxY = FloorDiv(worldY + VeinRadius, VeinCellSize);
+        var minZ = FloorDiv(worldZ - VeinRadius, VeinCellSize);
+        var maxZ = FloorDiv(worldZ + VeinRadius, VeinCellSize);
+
+        for (var cx = minX; cx <= maxX; cx++)
+        for (var cy = minY; cy <= maxY; cy++)
+        for (var cz = minZ; cz <= maxZ; cz++)
+        {
+            var index = ((cx - minCellX) * widthY + (cy - minCellY)) * widthZ + (cz - minCellZ);
+            var ore = TryVeinAtCell(in cells[index], worldX, worldY, worldZ, deep);
+            if (ore != 0)
+                return ore;
+        }
+
+        return 0;
+    }
+
     private static int TryVeinAtCell(
         int cellX,
         int cellY,
@@ -63,6 +147,16 @@ static class OverworldOrePlacer
             return 0;
 
         return PickOreBlock(worldY, h, deepslateHost);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int TryVeinAtCell(in OreCell cell, int worldX, int worldY, int worldZ, bool deepslateHost)
+    {
+        if ((cell.Hash % 7) != 0)
+            return 0;
+        if (Chebyshev(worldX, worldY, worldZ, cell.OriginX, cell.OriginY, cell.OriginZ) > VeinRadius)
+            return 0;
+        return PickOreBlock(worldY, cell.Hash, deepslateHost);
     }
 
     /// <summary>
@@ -97,6 +191,7 @@ static class OverworldOrePlacer
         return 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Chebyshev(int ax, int ay, int az, int bx, int by, int bz)
     {
         var dx = Math.Abs(ax - bx);
@@ -105,13 +200,17 @@ static class OverworldOrePlacer
         return Math.Max(dx, Math.Max(dy, dz));
     }
 
-    private static int FloorDiv(int value, int divisor)
+    // Called 6x per TryReplaceHost invocation (min/max cell per axis) — a hot per-voxel path during
+    // full-column generation. AggressiveInlining lets RyuJIT constant-fold `divisor` at call sites
+    // that pass the VeinCellSize literal, turning the division into a shift instead of an idiv.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int FloorDiv(int value, int divisor)
     {
         if (value >= 0) return value / divisor;
         return (value - (divisor - 1)) / divisor;
     }
 
-    private static uint Hash3(int x, int y, int z, int seed)
+    internal static uint Hash3(int x, int y, int z, int seed)
     {
         unchecked
         {
@@ -122,5 +221,31 @@ static class OverworldOrePlacer
             h = (h ^ (h >> 13)) * 1274126177u;
             return h;
         }
+    }
+}
+
+readonly struct OreCell
+{
+    public readonly uint Hash;
+    public readonly int OriginX;
+    public readonly int OriginY;
+    public readonly int OriginZ;
+
+    private OreCell(uint hash, int originX, int originY, int originZ)
+    {
+        Hash = hash;
+        OriginX = originX;
+        OriginY = originY;
+        OriginZ = originZ;
+    }
+
+    public static OreCell Create(int cellX, int cellY, int cellZ, int seed)
+    {
+        var hash = OverworldOrePlacer.Hash3(cellX, cellY, cellZ, seed ^ OverworldOrePlacer.OreSalt);
+        return new OreCell(
+            hash,
+            cellX * OverworldOrePlacer.VeinCellSize + (int)(hash % (uint)OverworldOrePlacer.VeinCellSize),
+            cellY * OverworldOrePlacer.VeinCellSize + (int)((hash >> 4) % (uint)OverworldOrePlacer.VeinCellSize),
+            cellZ * OverworldOrePlacer.VeinCellSize + (int)((hash >> 8) % (uint)OverworldOrePlacer.VeinCellSize));
     }
 }

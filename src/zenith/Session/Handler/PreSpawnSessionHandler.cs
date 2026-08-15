@@ -9,8 +9,9 @@ namespace Zenith.Session.Handler;
 /// <summary>
 /// Estado entre StartGame e loading completo.
 /// Ordem (ADR §70): ChunkRadiusUpdated → NetworkChunkPublisherUpdate →
-/// LevelChunks (ready-disk) → inventory seed → PlayStatus(PLAYER_SPAWN).
-/// Ready-disk is <c>world.spawn-ready-radius</c>; ChunkStream fills the view ring while spawning.
+/// LevelChunks (center-first stream) → inventory seed → PlayStatus(PLAYER_SPAWN).
+/// <c>world.spawn-ready-radius</c> is the central readiness threshold; the remaining view ring
+/// continues streaming after PLAYER_SPAWN, as in PocketMine/Dragonfly.
 /// </summary>
 class PreSpawnSessionHandler : ISessionHandler
 {

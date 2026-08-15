@@ -194,6 +194,22 @@ public class TerrainProviderTests
     }
 
     [Fact]
+    public async Task StreamRadiusAsync_preserves_radius_order_without_changing_column_results()
+    {
+        var world = new World.World(new InMemoryChunkStorage(), terrain: new MarkerTerrain());
+        var streamed = new List<ColumnReadResult>();
+        await foreach (var column in world.StreamRadiusAsync(10, -4, radius: 2))
+            streamed.Add(column);
+
+        var materialized = await world.GetRadiusAsync(10, -4, radius: 2);
+        Assert.Equal(materialized.Count, streamed.Count);
+        Assert.Equal(materialized.Select(column => column.Base.Coord), streamed.Select(column => column.Base.Coord));
+        Assert.Equal(
+            materialized.Select(column => column.Base.ExtraPayload),
+            streamed.Select(column => column.Base.ExtraPayload));
+    }
+
+    [Fact]
     public void TerrainProviders_Create_selects_mode()
     {
         Assert.IsType<FlatTerrainProvider>(TerrainProviders.Create(TerrainProviders.ModeFlat, 1));

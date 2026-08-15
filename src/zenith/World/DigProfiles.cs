@@ -3,12 +3,16 @@ namespace Zenith.World;
 /// <summary>
 /// Sparse dig capability per block runtime id (ADR §55).
 /// <see cref="DestroySpeed"/> = Endstone dump destroy_speed / wiki hardness.
+/// <see cref="MinHarvestTier"/> (Phase XXVI) = lowest <see cref="ToolTier"/> of
+/// <see cref="HarvestTool"/> kind that still drops loot; <see cref="ToolTier.None"/> (default) means
+/// "any tier of the right kind" — the pre-Phase-XXVI behavior every non-ore profile still uses.
 /// </summary>
 readonly record struct DigProfile(
     double DestroySpeed,
     ToolKind HarvestTool,
     ToolKind EffectiveTool,
-    bool RequiresCorrectToolForDrops);
+    bool RequiresCorrectToolForDrops,
+    ToolTier MinHarvestTier = ToolTier.None);
 
 /// <summary>Dig profile table — missing entry = Survival cannot dig (no silent default).</summary>
 static class DigProfiles
@@ -36,13 +40,14 @@ static class DigProfiles
         double destroySpeed,
         ToolKind harvestTool,
         ToolKind effectiveTool,
-        bool requiresCorrectTool)
+        bool requiresCorrectTool,
+        ToolTier minHarvestTier = ToolTier.None)
     {
         lock (Gate)
         {
             if (!_loaded)
                 LoadCuratedUnlocked();
-            RegisterUnlocked(blockRuntimeId, destroySpeed, harvestTool, effectiveTool, requiresCorrectTool);
+            RegisterUnlocked(blockRuntimeId, destroySpeed, harvestTool, effectiveTool, requiresCorrectTool, minHarvestTier);
         }
     }
 
@@ -65,14 +70,15 @@ static class DigProfiles
         double destroySpeed,
         ToolKind harvestTool,
         ToolKind effectiveTool,
-        bool requiresCorrectTool)
+        bool requiresCorrectTool,
+        ToolTier minHarvestTier = ToolTier.None)
     {
         lock (Gate)
         {
             if (!_loaded)
                 LoadCuratedUnlocked();
             var had = ByBlockRuntimeId.TryGetValue(blockRuntimeId, out var previous);
-            RegisterUnlocked(blockRuntimeId, destroySpeed, harvestTool, effectiveTool, requiresCorrectTool);
+            RegisterUnlocked(blockRuntimeId, destroySpeed, harvestTool, effectiveTool, requiresCorrectTool, minHarvestTier);
             return new OverrideScope(blockRuntimeId, had, previous);
         }
     }
@@ -103,20 +109,25 @@ static class DigProfiles
         RegisterUnlocked(Blocks.Cobblestone, 2.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
         RegisterUnlocked(Blocks.Deepslate, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
 
-        RegisterUnlocked(Blocks.CoalOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.IronOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.CopperOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.GoldOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DiamondOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.LapisOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.RedstoneOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateCoalOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateIronOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateCopperOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateGoldOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateDiamondOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateLapisOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
-        RegisterUnlocked(Blocks.DeepslateRedstoneOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        // Phase XXVI — minimum harvest tier per vanilla-adjacent reference (coal: any pickaxe;
+        // iron/copper/lapis: stone+; gold/diamond/redstone: iron+). Previously every ore only
+        // gated on ToolKind==Pickaxe, so a bare wood pickaxe harvested diamond exactly as well as a
+        // diamond pickaxe (only break *speed* differed) — a real, live bug once ore DigProfiles
+        // existed, not the "no-op until a tier gap is registered" the earlier audit assumed.
+        RegisterUnlocked(Blocks.CoalOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Wood);
+        RegisterUnlocked(Blocks.IronOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.CopperOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.GoldOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
+        RegisterUnlocked(Blocks.DiamondOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
+        RegisterUnlocked(Blocks.LapisOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.RedstoneOre, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
+        RegisterUnlocked(Blocks.DeepslateCoalOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Wood);
+        RegisterUnlocked(Blocks.DeepslateIronOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.DeepslateCopperOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.DeepslateGoldOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
+        RegisterUnlocked(Blocks.DeepslateDiamondOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
+        RegisterUnlocked(Blocks.DeepslateLapisOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Stone);
+        RegisterUnlocked(Blocks.DeepslateRedstoneOre, 4.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true, ToolTier.Iron);
 
         _loaded = true;
     }
@@ -126,10 +137,11 @@ static class DigProfiles
         double destroySpeed,
         ToolKind harvestTool,
         ToolKind effectiveTool,
-        bool requiresCorrectTool)
+        bool requiresCorrectTool,
+        ToolTier minHarvestTier = ToolTier.None)
     {
         ByBlockRuntimeId[blockRuntimeId] = new DigProfile(
-            destroySpeed, harvestTool, effectiveTool, requiresCorrectTool);
+            destroySpeed, harvestTool, effectiveTool, requiresCorrectTool, minHarvestTier);
     }
 
     private sealed class OverrideScope(

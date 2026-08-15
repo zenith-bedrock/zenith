@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Zenith.World;
 
 /// <summary>
@@ -48,17 +50,63 @@ static class OverworldCaveCarver
         CollectCheeseSegment(chunkX, chunkZ, seed, into);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsWithinSegment(
         int px, int py, int pz,
         int x0, int y0, int z0,
         int x1, int y1, int z1,
         int radius)
     {
+        var minX = (x0 < x1 ? x0 : x1) - radius;
+        var maxX = (x0 > x1 ? x0 : x1) + radius;
+        var minY = (y0 < y1 ? y0 : y1) - radius;
+        var maxY = (y0 > y1 ? y0 : y1) + radius;
+        var minZ = (z0 < z1 ? z0 : z1) - radius;
+        var maxZ = (z0 > z1 ? z0 : z1) + radius;
+        return IsWithinSegment(
+            px, py, pz, x0, y0, z0, x1, y1, z1, radius,
+            minX, maxX, minY, maxY, minZ, maxZ,
+            x1 - x0, y1 - y0, z1 - z0,
+            (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0));
+    }
+
+    /// <summary>
+    /// Hot-path variant for a precomputed segment. Bounds are part of the segment value and must
+    /// include the radius, exactly as the shape above does.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsWithinSegment(
+        int px, int py, int pz,
+        int x0, int y0, int z0,
+        int x1, int y1, int z1,
+        int radius,
+        int minX, int maxX,
+        int minY, int maxY,
+        int minZ, int maxZ)
+    {
+        return IsWithinSegment(
+            px, py, pz, x0, y0, z0, x1, y1, z1, radius,
+            minX, maxX, minY, maxY, minZ, maxZ,
+            x1 - x0, y1 - y0, z1 - z0,
+            (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsWithinSegment(
+        int px, int py, int pz,
+        int x0, int y0, int z0,
+        int x1, int y1, int z1,
+        int radius,
+        int minX, int maxX,
+        int minY, int maxY,
+        int minZ, int maxZ,
+        int dx, int dy, int dz, int lenSq)
+    {
         var radiusSq = radius * radius;
-        var dx = x1 - x0;
-        var dy = y1 - y0;
-        var dz = z1 - z0;
-        var lenSq = dx * dx + dy * dy + dz * dz;
+        // Candidates come from an XZ bucket, but most are far away in Y (or near an endpoint).
+        // Rejecting the expanded box avoids projection division and distance math for them.
+        if (px < minX || px > maxX || py < minY || py > maxY || pz < minZ || pz > maxZ)
+            return false;
 
         if (lenSq == 0)
             return DistanceSquared(px, py, pz, x0, y0, z0) <= radiusSq;
@@ -74,10 +122,16 @@ static class OverworldCaveCarver
         if (dot >= lenSq)
             return DistanceSquared(px, py, pz, x1, y1, z1) <= radiusSq;
 
-        var cx = x0 + (dx * dot) / lenSq;
-        var cy = y0 + (dy * dot) / lenSq;
-        var cz = z0 + (dz * dot) / lenSq;
-        return DistanceSquared(px, py, pz, cx, cy, cz) <= radiusSq;
+        // Compare the squared perpendicular distance as an integer cross-product instead of
+        // constructing the projected point with three integer divisions. The endpoint branches
+        // above preserve the finite-segment behavior; this branch is the capsule's interior.
+        // Coordinates and segment lengths are bounded by one chunk neighborhood, so Int64 is
+        // ample while avoiding floating-point nondeterminism.
+        var exCross = (long)ey * dz - (long)ez * dy;
+        var eyCross = (long)ez * dx - (long)ex * dz;
+        var ezCross = (long)ex * dy - (long)ey * dx;
+        var crossSquared = exCross * exCross + eyCross * eyCross + ezCross * ezCross;
+        return crossSquared <= (long)radiusSq * lenSq;
     }
 
     private static void CollectWormSegments(
@@ -163,6 +217,7 @@ static class OverworldCaveCarver
         return 3;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int DistanceSquared(int ax, int ay, int az, int bx, int by, int bz)
     {
         var dx = ax - bx;

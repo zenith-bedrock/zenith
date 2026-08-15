@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Channels;
 using Zenith.Gameplay.Runtime;
 using Zenith.Protocol;
 using Zenith.Player;
@@ -20,19 +22,21 @@ sealed class ChunkStreamSystem : IGameSystem
 {
     /// <summary>Máximo de novos loads iniciados por jogador por tick (anti-burst).</summary>
     public const int MaxStartsPerTick = 8;
-    /// <summary>Bound ready-spawn LevelChunk publication so a configured large radius cannot stall one tick.</summary>
+    /// <summary>Maximum ready-spawn LevelChunk packets published by one player in one tick.</summary>
     public const int MaxPreSpawnColumnsPerTick = 32;
-    /// <summary>Bound ready-spawn overlay publication independently from base terrain columns.</summary>
-    public const int MaxPreSpawnOverlaysPerTick = 128;
+    /// <summary>Maximum completed post-spawn columns transmitted by one player in one tick.</summary>
+    public const int MaxCompletedStreamsPerTick = 4;
 
     private readonly World.World _world;
+    private readonly WorldGenerationDiagnostics? _generationDiagnostics;
     private readonly List<(int X, int Z)> _knownScratch = new();
     private readonly Dictionary<global::Zenith.Player.Player, PreSpawnPublication> _preSpawnPublications = new();
     private readonly List<global::Zenith.Player.Player> _stalePreSpawnScratch = new();
 
-    public ChunkStreamSystem(World.World world)
+    public ChunkStreamSystem(World.World world, WorldGenerationDiagnostics? generationDiagnostics = null)
     {
         _world = world;
+        _generationDiagnostics = generationDiagnostics;
     }
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -44,11 +48,17 @@ sealed class ChunkStreamSystem : IGameSystem
         foreach (var player in online)
         {
             StartPendingPreSpawn(player);
-            DrainCompletedPreSpawn(player);
             PumpPreSpawnPublication(player);
             ApplySpawnReady(player, online);
             DrainCompletedStreams(player);
             if (!player.IsInGame && !player.IsSpawning) continue;
+            // A pre-spawn publication release early (ADR §111 spawn-ready barrier) sets IsSpawning
+            // while its own PreSpawnLoad is still streaming the remainder of the view in the
+            // background. The regular per-tick view-streaming block below exists for post-load
+            // re-streaming (the player moving to newly-visible chunks) — running it concurrently
+            // with an active pre-spawn publication would TryBegin the same still-loading
+            // coordinates a second time, double-publishing them through two separate budgets.
+            if (_preSpawnPublications.ContainsKey(player)) continue;
             var radius = player.Chunks.Radius;
             if (radius < 0) continue;
 
@@ -132,49 +142,43 @@ sealed class ChunkStreamSystem : IGameSystem
             (int)MathF.Floor(player.PositionZ));
         player.Chunks.Radius = request.ViewRadius;
 
-        var columnCount = (readyRadius * 2 + 1) * (readyRadius * 2 + 1);
+        var readyColumnCount = (readyRadius * 2 + 1) * (readyRadius * 2 + 1);
+        var viewColumnCount = (request.ViewRadius * 2 + 1) * (request.ViewRadius * 2 + 1);
         player.Session.Context.Logger.Info(
-            $"PreSpawn loading ready-disk radius {readyRadius} ({columnCount} columns, view={request.ViewRadius}) " +
+            $"PreSpawn streaming view radius {request.ViewRadius} ({viewColumnCount} columns), " +
+            $"spawn-ready radius {readyRadius} ({readyColumnCount} central columns) " +
             $"for {player.Username} @ chunk {snapshot.CenterChunkX},{snapshot.CenterChunkZ}…");
-        _ = LoadPreSpawnAsync(player.Chunks, snapshot);
+        var load = new PreSpawnLoad(snapshot);
+        _preSpawnPublications[player] = new PreSpawnPublication(load);
+        _ = LoadPreSpawnAsync(load);
     }
 
-    private async Task LoadPreSpawnAsync(PlayerChunkTracker tracker, PlayerChunkTracker.PreSpawnSnapshot snapshot)
+    private async Task LoadPreSpawnAsync(PreSpawnLoad load)
     {
         var watch = Stopwatch.StartNew();
-        try
+        var diagnosticsScope = _generationDiagnostics is null
+            ? default
+            : _generationDiagnostics.BeginPreSpawnLoad();
+        using (diagnosticsScope)
         {
-            var columns = await _world.GetRadiusAsync(
-                snapshot.CenterChunkX, snapshot.CenterChunkZ, snapshot.ReadyRadius).ConfigureAwait(false);
-            watch.Stop();
-            tracker.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Success(snapshot, columns, watch.ElapsedMilliseconds));
+            try
+            {
+                await foreach (var column in _world.StreamRadiusAsync(
+                                   load.Snapshot.CenterChunkX,
+                                   load.Snapshot.CenterChunkZ,
+                                   load.Snapshot.ViewRadius,
+                                   load.CancellationToken).ConfigureAwait(false))
+                    await load.Writer.WriteAsync(column, load.CancellationToken).ConfigureAwait(false);
+
+                watch.Stop();
+                load.Complete(null, watch.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                watch.Stop();
+                load.Complete(ex, watch.ElapsedMilliseconds);
+            }
         }
-        catch (Exception ex)
-        {
-            watch.Stop();
-            tracker.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Failure(snapshot, ex.Message, watch.ElapsedMilliseconds));
-        }
-    }
-
-    private void DrainCompletedPreSpawn(global::Zenith.Player.Player player)
-    {
-        if (!player.Chunks.TryConsumePreSpawnCompletion(out var completion))
-            return;
-
-        if (player.Session.RakSession.IsClosed || player.IsInGame || player.IsSpawning)
-            return;
-
-        if (!completion.Succeeded)
-        {
-            player.Session.Context.Logger.Error($"PreSpawn chunk load failed for {player.Username}: {completion.Error}");
-            player.Session.Disconnect();
-            return;
-        }
-
-        _preSpawnPublications[player] = new PreSpawnPublication(completion);
-        player.Session.Context.Logger.Info(
-            $"PreSpawn loaded {completion.Columns!.Count} columns for {player.Username} in " +
-            $"{completion.LoadElapsedMilliseconds} ms; publishing from gameplay tick…");
     }
 
     private void PumpPreSpawnPublication(global::Zenith.Player.Player player)
@@ -182,77 +186,127 @@ sealed class ChunkStreamSystem : IGameSystem
         if (!_preSpawnPublications.TryGetValue(player, out var publication))
             return;
 
-        if (player.Session.RakSession.IsClosed || player.IsInGame || player.IsSpawning)
+        if (player.Session.RakSession.IsClosed
+            || (player.IsInGame && !publication.SpawnReleased)
+            || (player.IsSpawning && !publication.SpawnReleased))
         {
+            publication.Load.Cancel();
             _preSpawnPublications.Remove(player);
             return;
         }
 
+        PumpStreamingPreSpawn(player, publication);
+    }
+
+    private void PumpStreamingPreSpawn(
+        global::Zenith.Player.Player player,
+        PreSpawnPublication publication)
+    {
+        var load = publication.Load;
         var session = player.Session;
-        var snapshot = publication.Completion.Snapshot;
-        var columns = publication.Completion.Columns!;
-        if (!publication.PublisherSent)
+        var diagnosticsScope = _generationDiagnostics is null
+            ? default
+            : _generationDiagnostics.BeginPreSpawnPublish();
+        using (diagnosticsScope)
         {
-            session.Protocol.World.SendChunkPublisher(
-                snapshot.BlockX, snapshot.BlockY, snapshot.BlockZ,
-                radiusBlocks: Math.Max(snapshot.ViewRadius, 0) * 16);
-            _ = player.Chunks.PublisherCenterChanged(snapshot.CenterChunkX, snapshot.CenterChunkZ);
-            publication.PublisherSent = true;
-        }
-
-        var columnsSent = 0;
-        while (publication.ColumnIndex < columns.Count && columnsSent < MaxPreSpawnColumnsPerTick)
-        {
-            var column = columns[publication.ColumnIndex++];
-            var bas = column.Base;
-            session.Protocol.World.PublishChunks([
-                new ChunkColumn(bas.Coord.X, bas.Coord.Z, bas.DimensionId, bas.SubChunkCount, bas.ExtraPayload)
-            ]);
-            player.Chunks.RememberMany([(bas.Coord.X, bas.Coord.Z)]);
-            publication.PayloadBytes += bas.ExtraPayload.LongLength;
-            publication.Envelopes++;
-            columnsSent++;
-        }
-
-        var overlaysSent = 0;
-        while (publication.ColumnIndex == columns.Count && publication.OverlayColumnIndex < columns.Count &&
-               overlaysSent < MaxPreSpawnOverlaysPerTick)
-        {
-            var overlays = columns[publication.OverlayColumnIndex].Overlays;
-            while (publication.OverlayIndex < overlays.Count && overlaysSent < MaxPreSpawnOverlaysPerTick)
+            var snapshot = load.Snapshot;
+            if (!publication.PublisherSent)
             {
-                var overlay = overlays[publication.OverlayIndex++];
-                session.Protocol.World.SendUpdateBlock(overlay.X, overlay.Y, overlay.Z, overlay.BlockRuntimeId);
-                overlaysSent++;
+                session.Protocol.World.SendChunkPublisher(
+                    snapshot.BlockX, snapshot.BlockY, snapshot.BlockZ,
+                    radiusBlocks: Math.Max(snapshot.ViewRadius, 0) * 16);
+                _ = player.Chunks.PublisherCenterChanged(snapshot.CenterChunkX, snapshot.CenterChunkZ);
+                publication.PublisherSent = true;
             }
 
-            if (publication.OverlayIndex == overlays.Count)
+            var columnsSent = 0;
+            var publishBudget = Math.Min(
+                MaxPreSpawnColumnsPerTick,
+                session.Context.Config.World.PreSpawnColumnsPerTick);
+            while (columnsSent < publishBudget)
             {
-                publication.OverlayColumnIndex++;
-                publication.OverlayIndex = 0;
+                if (!publication.HasPendingColumn)
+                {
+                    if (!load.Reader.TryRead(out var pendingColumn))
+                        break;
+                    publication.PendingColumn = pendingColumn;
+                }
+
+                publication.HasPendingColumn = true;
+                var orderChannel = publication.SpawnReleased
+                    ? NetworkSession.WorldStreamOrderChannel
+                    : NetworkSession.DefaultOrderChannel;
+                if (!session.QueueWorldColumn(publication.PendingColumn, orderChannel, out var sequence))
+                    return;
+
+                var column = publication.PendingColumn;
+                publication.HasPendingColumn = false;
+                publication.ColumnIndex++;
+                publication.LastQueuedSequence = sequence;
+                if (Math.Abs(column.Base.Coord.X - snapshot.CenterChunkX) <= snapshot.ReadyRadius
+                    && Math.Abs(column.Base.Coord.Z - snapshot.CenterChunkZ) <= snapshot.ReadyRadius)
+                {
+                    publication.ReadyColumnsQueued++;
+                    if (publication.ReadyColumnsQueued >= publication.ReadyColumnsRequired)
+                        publication.ReadyBarrierSequence = sequence;
+                }
+                player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
+                publication.PayloadBytes += column.Base.ExtraPayload.LongLength;
+                publication.Envelopes++;
+                _generationDiagnostics?.RecordPreSpawnPublished(1, column.Base.ExtraPayload.LongLength);
+                columnsSent++;
+            }
+
+            if (load.Error is not null)
+            {
+                player.Session.Context.Logger.Error(
+                    $"PreSpawn chunk load failed for {player.Username}: {load.Error.Message}");
+                if (!publication.SpawnReleased)
+                {
+                    load.Cancel();
+                    _preSpawnPublications.Remove(player);
+                    player.Session.Disconnect();
+                }
+                else
+                {
+                    _preSpawnPublications.Remove(player);
+                    load.Dispose();
+                }
+                return;
+            }
+
+            if (!publication.SpawnReleased)
+            {
+                if (publication.ReadyBarrierSequence == 0
+                    || session.WorldStreamCompletedThrough < publication.ReadyBarrierSequence)
+                    return;
+
+                session.Protocol.World.SendWorldSpawnPosition(snapshot.BlockX, snapshot.BlockY, snapshot.BlockZ);
+                session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+                session.Protocol.Inventory.SendUiInventoryContent(player);
+                session.Protocol.Inventory.SendArmorContent(player.Inventory);
+                session.Protocol.Entity.SendMovePlayerTeleport(
+                    (ulong)player.RuntimeId,
+                    player.PositionX, player.PositionY, player.PositionZ,
+                    player.Pitch, player.Yaw, player.HeadYaw);
+                session.Protocol.World.SendSpawnComplete();
+                publication.SpawnReleased = true;
+                session.Context.Logger.Info(
+                    $"PreSpawn readiness reached for {player.Username}: " +
+                    $"{publication.ReadyColumnsQueued}/{publication.ReadyColumnsRequired} central columns, " +
+                    $"{publication.ColumnIndex} columns queued; continuing view stream in background " +
+                    $"(load {load.LoadElapsedMilliseconds} ms)");
+                session.SetHandler(new SpawnResponseSessionHandler());
+            }
+
+            if (load.Reader.Completion.IsCompleted
+                && !publication.HasPendingColumn
+                && session.WorldStreamIdle)
+            {
+                _preSpawnPublications.Remove(player);
+                load.Dispose();
             }
         }
-
-        if (publication.ColumnIndex != columns.Count || publication.OverlayColumnIndex != columns.Count)
-            return;
-
-        // PocketMine PreSpawn: inventory before PLAYER_SPAWN (not only after initialized).
-        session.Protocol.World.SendWorldSpawnPosition(snapshot.BlockX, snapshot.BlockY, snapshot.BlockZ);
-        session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-        session.Protocol.Inventory.SendUiInventoryContent(player);
-        session.Protocol.Inventory.SendArmorContent(player.Inventory);
-        session.Protocol.Entity.SendMovePlayerTeleport(
-            (ulong)player.RuntimeId,
-            player.PositionX, player.PositionY, player.PositionZ,
-            player.Pitch, player.Yaw, player.HeadYaw);
-        session.Protocol.World.SendSpawnComplete();
-        session.Context.Logger.Info(
-            $"PreSpawn publish done for {player.Username}: {columns.Count} columns, " +
-            $"{publication.Envelopes} envelopes, ~{publication.PayloadBytes} payload bytes — " +
-            "waiting SetLocalPlayerAsInitialized");
-
-        _preSpawnPublications.Remove(player);
-        session.SetHandler(new SpawnResponseSessionHandler());
     }
 
     private void RemoveOfflinePreSpawnPublications(IReadOnlyList<global::Zenith.Player.Player> online)
@@ -268,20 +322,74 @@ sealed class ChunkStreamSystem : IGameSystem
         }
 
         foreach (var player in _stalePreSpawnScratch)
+        {
+            if (_preSpawnPublications.TryGetValue(player, out var publication))
+                publication.Load.Cancel();
             _preSpawnPublications.Remove(player);
+        }
     }
 
     private sealed class PreSpawnPublication
     {
-        public PreSpawnPublication(PlayerChunkTracker.PreSpawnCompletion completion) => Completion = completion;
+        public PreSpawnPublication(PreSpawnLoad load)
+        {
+            Load = load;
+            ReadyColumnsRequired = (load.Snapshot.ReadyRadius * 2 + 1) * (load.Snapshot.ReadyRadius * 2 + 1);
+        }
 
-        public PlayerChunkTracker.PreSpawnCompletion Completion { get; }
+        public PreSpawnLoad Load { get; }
         public bool PublisherSent { get; set; }
         public int ColumnIndex { get; set; }
-        public int OverlayColumnIndex { get; set; }
-        public int OverlayIndex { get; set; }
         public long PayloadBytes { get; set; }
         public int Envelopes { get; set; }
+        public bool HasPendingColumn { get; set; }
+        public ColumnReadResult PendingColumn { get; set; }
+        public int ReadyColumnsRequired { get; }
+        public int ReadyColumnsQueued { get; set; }
+        public long ReadyBarrierSequence { get; set; }
+        public long LastQueuedSequence { get; set; }
+        public bool SpawnReleased { get; set; }
+    }
+
+    private sealed class PreSpawnLoad : IDisposable
+    {
+        private readonly CancellationTokenSource _shutdown = new();
+
+        public PreSpawnLoad(PlayerChunkTracker.PreSpawnSnapshot snapshot)
+        {
+            Snapshot = snapshot;
+            var channel = Channel.CreateBounded<ColumnReadResult>(new BoundedChannelOptions(32)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = true,
+                AllowSynchronousContinuations = false
+            });
+            Reader = channel.Reader;
+            Writer = channel.Writer;
+        }
+
+        public PlayerChunkTracker.PreSpawnSnapshot Snapshot { get; }
+        public ChannelReader<ColumnReadResult> Reader { get; }
+        public ChannelWriter<ColumnReadResult> Writer { get; }
+        public CancellationToken CancellationToken => _shutdown.Token;
+        public Exception? Error { get; private set; }
+        public long LoadElapsedMilliseconds { get; private set; }
+
+        public void Complete(Exception? error, long elapsedMilliseconds)
+        {
+            Error = error;
+            LoadElapsedMilliseconds = elapsedMilliseconds;
+            Writer.TryComplete(error);
+        }
+
+        public void Cancel() => _shutdown.Cancel();
+
+        public void Dispose()
+        {
+            _shutdown.Cancel();
+            _shutdown.Dispose();
+        }
     }
 
     private async Task StreamAsync(PlayerChunkTracker tracker, int chunkX, int chunkZ, int epoch)
@@ -300,7 +408,11 @@ sealed class ChunkStreamSystem : IGameSystem
     private void DrainCompletedStreams(global::Zenith.Player.Player player)
     {
         var tracker = player.Chunks;
-        while (tracker.TryConsumeCompletedStream(out var completion))
+        var published = 0;
+        var publishBudget = Math.Min(
+            MaxCompletedStreamsPerTick,
+            player.Session.Context.Config.World.ChunkStreamColumnsPerTick);
+        while (published < publishBudget && tracker.TryConsumeCompletedStream(out var completion))
         {
             if (!tracker.IsStreamCurrent(completion.ChunkX, completion.ChunkZ, completion.Epoch))
                 continue;
@@ -321,7 +433,14 @@ sealed class ChunkStreamSystem : IGameSystem
                 continue;
             }
 
-            ColumnSend.EmitToSession(player.Session, completion.Column);
+            if (!player.Session.QueueWorldColumn(completion.Column, NetworkSession.WorldStreamOrderChannel))
+            {
+                if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))
+                    _generationDiagnostics?.RecordDropped();
+                continue;
+            }
+
+            published++;
         }
     }
 }

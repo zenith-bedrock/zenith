@@ -52,6 +52,30 @@ sealed class ServerConfig
 
         /// <summary>Seed for <c>noise</c> terrain; ignored for flat.</summary>
         public int Seed { get; set; } = 1;
+
+        /// <summary>
+        /// Maximum concurrent CPU-bound base-column generations. The broker (not the thread pool)
+        /// is the concurrency boundary — this is a fixed, explicit worker count, never an automatic
+        /// <c>ProcessorCount</c> scale-up. Default of 4 balances a single-worker join path (scale
+        /// harness: radius 2 at ~2.25s with one worker vs. ~0.84s with four) against still being a
+        /// small, bounded pool; raise further only after measuring tick headroom (ADR §111).
+        /// </summary>
+        public int ChunkGenerationWorkers { get; set; } = 4;
+
+        /// <summary>
+        /// Maximum number of immutable base columns retained in memory for shared warm reads.
+        /// Zero disables the cache; the default is bounded and does not persist terrain.
+        /// </summary>
+        public int ChunkGenerationCacheColumns { get; set; } = 1024;
+
+        /// <summary>
+        /// Maximum LevelChunk columns queued for a player before PLAYER_SPAWN in one gameplay tick.
+        /// The code keeps a hard safety ceiling; this value tunes latency versus burst size.
+        /// </summary>
+        public int PreSpawnColumnsPerTick { get; set; } = 8;
+
+        /// <summary>Maximum completed post-spawn columns published for one player per tick.</summary>
+        public int ChunkStreamColumnsPerTick { get; set; } = 4;
     }
 
     /// <summary>
@@ -199,6 +223,18 @@ sealed class ServerConfig
             throw new InvalidOperationException(
                 $"world.spawn-ready-radius must be 0..spawn-chunk-radius " +
                 $"(got ready={World.SpawnReadyRadius}, view={World.SpawnChunkRadius}).");
+        if (World.ChunkGenerationWorkers is < 1 or > 64)
+            throw new InvalidOperationException(
+                $"world.chunk-generation-workers must be 1..64 (got {World.ChunkGenerationWorkers}).");
+        if (World.ChunkGenerationCacheColumns is < 0 or > 65_536)
+            throw new InvalidOperationException(
+                $"world.chunk-generation-cache-columns must be 0..65536 (got {World.ChunkGenerationCacheColumns}).");
+        if (World.PreSpawnColumnsPerTick is < 1 or > 64)
+            throw new InvalidOperationException(
+                $"world.pre-spawn-columns-per-tick must be 1..64 (got {World.PreSpawnColumnsPerTick}).");
+        if (World.ChunkStreamColumnsPerTick is < 1 or > 32)
+            throw new InvalidOperationException(
+                $"world.chunk-stream-columns-per-tick must be 1..32 (got {World.ChunkStreamColumnsPerTick}).");
         if (string.IsNullOrWhiteSpace(World.Name))
             throw new InvalidOperationException("world.name must not be empty.");
         World.Terrain = TerrainProviders.NormalizeMode(World.Terrain);

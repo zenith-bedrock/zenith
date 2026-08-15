@@ -350,13 +350,21 @@ sealed class EntityProtocol
         });
     }
 
-    /// <summary>Dropped item entity at cell center (ADR §26 wire). Velocity always zero in MVP.</summary>
+    /// <summary>
+    /// Dropped item entity at cell center (ADR §26 wire). Velocity is server-decided once at spawn
+    /// (a toss, e.g. Q-drop) — Zenith does not run per-tick floor-drop physics, so the client's own
+    /// local simulation owns the toss arc from here; a merged/republished cell always passes zero
+    /// (it's already settled, not a fresh toss).
+    /// </summary>
     public void SendAddItemActor(
         long entityRuntimeId,
         NetworkItemStack item,
         float x,
         float y,
-        float z)
+        float z,
+        float velocityX = 0f,
+        float velocityY = 0f,
+        float velocityZ = 0f)
     {
         _session.SendDataPacket(new AddItemActorPacket
         {
@@ -366,6 +374,9 @@ sealed class EntityProtocol
             PositionX = x,
             PositionY = y,
             PositionZ = z,
+            VelocityX = velocityX,
+            VelocityY = velocityY,
+            VelocityZ = velocityZ,
             FromFishing = false
         });
     }
@@ -571,11 +582,13 @@ sealed class EntityProtocol
     /// Adapts an authoritative floor-drop stack to the Bedrock item representation before
     /// transmitting its actor. Gameplay owns whether a drop exists; wire conversion stays here.
     /// </summary>
-    public void SendFloorDropActor(long entityRuntimeId, StackId stackId, int count, float x, float y, float z)
+    public void SendFloorDropActor(
+        long entityRuntimeId, StackId stackId, int count, float x, float y, float z,
+        float velocityX = 0f, float velocityY = 0f, float velocityZ = 0f)
     {
         var item = _session.Protocol.Inventory.DescribeStack(stackId, count);
         if (item.NetworkId == 0) return; // invalid/air item crashes Bedrock near player
-        SendAddItemActor(entityRuntimeId, item, x, y, z);
+        SendAddItemActor(entityRuntimeId, item, x, y, z, velocityX, velocityY, velocityZ);
     }
 
     public void SendTakeItemActor(ulong itemEntityRuntimeId, ulong takerEntityRuntimeId)

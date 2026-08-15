@@ -91,6 +91,7 @@ todas as métricas. Isso é correto para observabilidade e evita bloquear writer
 | Runtime | alocações da thread do tick, heap managed, coleções Gen0/1/2 |
 | Protocol/session | packets e bytes de game packet enviados/recebidos |
 | Transporte | datagramas UDP enviados/recebidos e banda estimada in/out |
+| Worldgen | colunas solicitadas/geradas/carregadas/falhas/coalescidas/cache-hit/dropped, in-flight, profundidade/pico/backpressure da fila, duração de coluna, sampling/encode e PreSpawn |
 
 `tick.tps` é armazenado multiplicado por 1.000 para preservar três casas decimais em um gauge
 inteiro. `network.bandwidth.*` é uma estimativa em bytes por segundo entre duas amostras de
@@ -166,6 +167,34 @@ problema acontece e compare:
 
 Os números não substituem profiling de CPU/memória quando for necessário, mas tornam explícito
 qual hipótese deve ser investigada primeiro.
+
+### Worldgen e PreSpawn
+
+Worldgen usa o mesmo layout fixo, com nomes sob `gameplay.worldgen.*`. O boundary de uma coluna
+registra requests, geração, carga de storage, falhas, coalescing, `in-flight` e duração agregada. O fluxo de
+PreSpawn registra separadamente duração de carga, duração de publicação, colunas e bytes
+publicados. Não há métrica por bloco, coordenada, seed ou jogador.
+
+Dentro do payload, `column.sampling` mede a amostragem de voxels/ruído e `column.encode` mede a
+serialização/compressão dos sub-chunks. Em mundos com vários workers, `queue.depth` é a fila
+observada no instante da amostra e `queue.peak` é o maior backlog observado desde a criação do
+runtime; ambos devem ser lidos junto com `queue.wait` e `queue.backpressure`.
+
+Isso permite separar quatro hipóteses sem instrumentação ad-hoc: geração repetida, espera/pressão
+de concorrência, materialização de payload e fan-out de publicação. Para CPU detalhada, use o
+benchmark/profiler; diagnostics só conserva a evidência agregada de runtime.
+
+O harness de escala pode ser executado fora do BenchmarkDotNet:
+
+```powershell
+dotnet run -c Release --project src/zenith.Benchmarks --no-build -- `
+  --worldgen-scale --radii 0,1,2,4,8,16,24,32,48,64,96,128,160,192,224,256 `
+  --players 1,2,4,8 --timeout-seconds 120
+```
+
+Raios acima de 32 são cenários de estabilidade/extremo e não alteram o limite da configuração
+produtiva. O harness omite múltiplos jogadores acima de radius 16 por segurança; use uma matriz
+menor de raios operacionais para medir tempestades de joins, por exemplo `--radii 2,4,8,16`.
 
 ## Verificação e overhead
 

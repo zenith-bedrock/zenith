@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Systems;
+using Zenith.Packets;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
@@ -46,6 +47,60 @@ public class FloorDropSystemPickupTests
             .Where(slot => slot.Id == StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:string")))
             .Sum(slot => slot.Count);
         Assert.Equal(2, stringCount);
+    }
+
+    /// <summary>
+    /// Phase XXVI — a full pickup only ever sent TakeItemActor (the pickup animation), never
+    /// RemoveActor. TakeItemActor alone does not despawn the entity on a Bedrock client (confirmed
+    /// against PocketMine/Dragonfly, which always pair it with a real removal) — without RemoveActor,
+    /// and with the cell already gone from the store so no later despawn tick can catch it either,
+    /// the item stayed rendered on the ground forever after being picked up.
+    /// </summary>
+    [Fact]
+    public void Full_pickup_sends_RemoveActor_so_the_client_does_not_keep_rendering_it()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("looter");
+        ClearInventory(player);
+        player.PositionX = 0f;
+        player.PositionY = Blocks.FlatSpawnY;
+        player.PositionZ = 0f;
+
+        const long entityRuntimeId = 555;
+        Assert.True(fx.World.FloorDrops.TryAddOrMerge(
+            0, (int)Blocks.FlatSpawnY, 0, StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:string")), 1,
+            entityRuntimeIdIfNew: entityRuntimeId, out _, pickupDelayTicks: 0));
+
+        FlushRaknet(fx.Players);
+        while (fx.Transport.Captured.TryDequeue(out _)) { }
+
+        new FloorDropSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
+        FlushRaknet(fx.Players);
+
+        var expected = new RemoveActorPacket { ActorUniqueId = entityRuntimeId }.Encode().ToArray();
+        Assert.Contains(expected, ConcatCaptured(fx));
+    }
+
+    private static void FlushRaknet(PlayerManager players)
+    {
+        foreach (var p in players.Online)
+            p.Session.RakSession.Tick();
+    }
+
+    private static byte[] ConcatCaptured(IntentTestFixture fx)
+    {
+        var total = 0;
+        foreach (var chunk in fx.Transport.Captured)
+            total += chunk.Length;
+        var buf = new byte[total];
+        var offset = 0;
+        foreach (var chunk in fx.Transport.Captured)
+        {
+            chunk.CopyTo(buf, offset);
+            offset += chunk.Length;
+        }
+
+        return buf;
     }
 
     [Fact]

@@ -183,6 +183,12 @@ sealed class EndermanSystem : IGameSystem
         var dz = target.PositionZ - enderman.PositionZ;
         var distanceSquared = dx * dx + dz * dz;
 
+        // Phase XXVI — Enderman previously never set Yaw at all (entity-fidelity audit finding):
+        // teleporting toward/attacking a target didn't orient the actor to face them. Snap-facing on
+        // every aggro tick matches teleport's own instant, non-gradual movement model — no smoothed
+        // turn like GroundMobMovement's walking chase needs.
+        enderman.Yaw = LookMath.YawTowards(dx, dz);
+
         if (distanceSquared > AttackDistance * AttackDistance && clock.CurrentTick >= enderman.NextAttackTick)
         {
             enderman.NextAttackTick = clock.CurrentTick + (ulong)AggroTeleportCooldownTicks;

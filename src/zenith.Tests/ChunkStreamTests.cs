@@ -105,7 +105,7 @@ public class PlayerChunkTrackerTests
     }
 
     [Fact]
-    public void PreSpawn_request_and_completion_are_bounded_handoffs()
+    public void PreSpawn_request_is_a_bounded_handoff()
     {
         var t = new PlayerChunkTracker();
         Assert.True(t.TrySubmitPreSpawn(viewRadius: 4));
@@ -114,11 +114,9 @@ public class PlayerChunkTrackerTests
         Assert.Equal(4, request.ViewRadius);
         Assert.False(t.TryConsumePreSpawnRequest(out _));
 
-        var snapshot = new PlayerChunkTracker.PreSpawnSnapshot(4, 2, 0, 0, 0, 64, 0);
-        t.CompletePreSpawn(PlayerChunkTracker.PreSpawnCompletion.Failure(snapshot, "storage failed", 12));
-        Assert.True(t.TryConsumePreSpawnCompletion(out var completion));
-        Assert.False(completion.Succeeded);
-        Assert.Equal("storage failed", completion.Error);
-        Assert.False(t.TryConsumePreSpawnCompletion(out _));
+        // Consuming the request clears the pending flag — a second submission is accepted again.
+        // (The gameplay owner is the one that must not re-submit while a load is still streaming;
+        // ChunkStreamSystem's own _preSpawnPublications tracks that, not the tracker.)
+        Assert.True(t.TrySubmitPreSpawn(viewRadius: 6));
     }
 }

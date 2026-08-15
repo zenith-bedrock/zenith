@@ -1,5 +1,6 @@
 using Zenith.Diagnostics;
 using Zenith.Raknet;
+using Zenith.World;
 
 namespace Zenith.Server;
 
@@ -28,6 +29,29 @@ sealed class ServerRuntimeDiagnostics
     private readonly GaugeMetric _datagramsReceived;
     private readonly GaugeMetric _bandwidthOut;
     private readonly GaugeMetric _bandwidthIn;
+    private readonly CounterMetric _worldgenColumnsRequested;
+    private readonly CounterMetric _worldgenColumnsGenerated;
+    private readonly CounterMetric _worldgenColumnsLoaded;
+    private readonly CounterMetric _worldgenColumnsFailed;
+    private readonly CounterMetric _worldgenColumnsCoalesced;
+    private readonly CounterMetric _worldgenColumnsCacheHit;
+    private readonly CounterMetric _worldgenColumnsDropped;
+    private readonly GaugeMetric _worldgenColumnsInFlight;
+    private readonly TimingMetric _worldgenColumn;
+    private readonly TimingMetric _worldgenSurface;
+    private readonly TimingMetric _worldgenCaves;
+    private readonly TimingMetric _worldgenFeatures;
+    private readonly TimingMetric _worldgenPayload;
+    private readonly TimingMetric _worldgenSampling;
+    private readonly TimingMetric _worldgenEncode;
+    private readonly TimingMetric _worldgenPreSpawnLoad;
+    private readonly TimingMetric _worldgenPreSpawnPublish;
+    private readonly CounterMetric _worldgenPreSpawnColumns;
+    private readonly CounterMetric _worldgenPreSpawnBytes;
+    private readonly TimingMetric _worldgenQueueWait;
+    private readonly CounterMetric _worldgenQueueBackpressure;
+    private readonly GaugeMetric _worldgenQueueDepth;
+    private readonly GaugeMetric _worldgenQueuePeak;
     private long _lastSentBytes;
     private long _lastReceivedBytes;
     private int _sampleTicks;
@@ -36,6 +60,7 @@ sealed class ServerRuntimeDiagnostics
     public TimingMetric Tick { get; }
     public IReadOnlyDictionary<string, TimingMetric> Systems { get; }
     public DiagnosticsIncidentBuffer Incidents { get; }
+    public WorldGenerationDiagnostics Worldgen { get; }
 
     public ServerRuntimeDiagnostics()
     {
@@ -89,8 +114,56 @@ sealed class ServerRuntimeDiagnostics
         _datagramsReceived = builder.Gauge("network.datagrams.received");
         _bandwidthOut = builder.Gauge("network.bandwidth.out-bytes-per-second");
         _bandwidthIn = builder.Gauge("network.bandwidth.in-bytes-per-second");
+        _worldgenColumnsRequested = builder.Counter("gameplay.worldgen.columns.requested");
+        _worldgenColumnsGenerated = builder.Counter("gameplay.worldgen.columns.generated");
+        _worldgenColumnsLoaded = builder.Counter("gameplay.worldgen.columns.loaded");
+        _worldgenColumnsFailed = builder.Counter("gameplay.worldgen.columns.failed");
+        _worldgenColumnsCoalesced = builder.Counter("gameplay.worldgen.columns.coalesced");
+        _worldgenColumnsCacheHit = builder.Counter("gameplay.worldgen.columns.cache-hit");
+        _worldgenColumnsDropped = builder.Counter("gameplay.worldgen.columns.dropped");
+        _worldgenColumnsInFlight = builder.Gauge("gameplay.worldgen.columns.in-flight");
+        _worldgenColumn = builder.Timing("gameplay.worldgen.column");
+        _worldgenSurface = builder.Timing("gameplay.worldgen.column.surface");
+        _worldgenCaves = builder.Timing("gameplay.worldgen.column.caves");
+        _worldgenFeatures = builder.Timing("gameplay.worldgen.column.features");
+        _worldgenPayload = builder.Timing("gameplay.worldgen.column.payload");
+        _worldgenSampling = builder.Timing("gameplay.worldgen.column.sampling");
+        _worldgenEncode = builder.Timing("gameplay.worldgen.column.encode");
+        _worldgenPreSpawnLoad = builder.Timing("gameplay.worldgen.pre-spawn.load");
+        _worldgenPreSpawnPublish = builder.Timing("gameplay.worldgen.pre-spawn.publish");
+        _worldgenPreSpawnColumns = builder.Counter("gameplay.worldgen.pre-spawn.columns");
+        _worldgenPreSpawnBytes = builder.Counter("gameplay.worldgen.pre-spawn.bytes");
+        _worldgenQueueWait = builder.Timing("gameplay.worldgen.queue.wait");
+        _worldgenQueueBackpressure = builder.Counter("gameplay.worldgen.queue.backpressure");
+        _worldgenQueueDepth = builder.Gauge("gameplay.worldgen.queue.depth");
+        _worldgenQueuePeak = builder.Gauge("gameplay.worldgen.queue.peak");
         Runtime = builder.Build();
         Incidents = new DiagnosticsIncidentBuffer(Runtime);
+        Worldgen = new WorldGenerationDiagnostics(
+            Runtime,
+            _worldgenColumnsRequested,
+            _worldgenColumnsGenerated,
+            _worldgenColumnsLoaded,
+            _worldgenColumnsFailed,
+            _worldgenColumnsCoalesced,
+            _worldgenColumnsCacheHit,
+            _worldgenColumnsDropped,
+            _worldgenColumnsInFlight,
+            _worldgenColumn,
+            _worldgenSurface,
+            _worldgenCaves,
+            _worldgenFeatures,
+            _worldgenPayload,
+            _worldgenSampling,
+            _worldgenEncode,
+            _worldgenPreSpawnLoad,
+            _worldgenPreSpawnPublish,
+            _worldgenPreSpawnColumns,
+            _worldgenPreSpawnBytes,
+            _worldgenQueueWait,
+            _worldgenQueueBackpressure,
+            _worldgenQueueDepth,
+            _worldgenQueuePeak);
     }
 
     public TimingMetric System(string name) => Systems[name];

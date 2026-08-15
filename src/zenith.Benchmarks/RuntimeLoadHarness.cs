@@ -7,6 +7,7 @@ using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Systems;
 using Zenith.Player;
 using Zenith.Raknet;
+using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Log;
 using Zenith.Raknet.Stream;
 using Zenith.Server;
@@ -27,6 +28,13 @@ internal static class RuntimeLoadHarness
     public static int Run(string[] args)
     {
         var options = LoadOptions.Parse(args);
+        if (options.WorldgenStream)
+        {
+            foreach (var playerCount in options.PlayerCounts)
+                Print(RunWorldgenStream(
+                    playerCount, options.Ticks, options.WorldgenRadius, options.WorldgenWorkers));
+            return 0;
+        }
         if (options.WorldInteraction)
         {
             foreach (var playerCount in options.PlayerCounts)
@@ -133,6 +141,43 @@ internal static class RuntimeLoadHarness
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes);
+    }
+
+    private static LoadResult RunWorldgenStream(int playerCount, int ticks, int radius, int workers)
+    {
+        using var host = new RuntimeHost(
+            playerCount,
+            streamChunks: true,
+            chunkRadius: radius,
+            noiseTerrain: true,
+            generationWorkers: workers,
+            instrumentWorldgen: true);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocationBefore = GC.GetAllocatedBytesForCurrentThread();
+        var gcBefore = GcCounts.Capture();
+        var elapsed = new long[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetTimestamp() - started;
+            Thread.Sleep(1);
+        }
+
+        var result = LoadResult.Create(
+            "worldgen-stream",
+            playerCount,
+            ticks,
+            elapsed,
+            GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
+            GcCounts.Capture() - gcBefore,
+            host.Transport.Datagrams,
+            host.Transport.Bytes);
+        host.PrintWorldgenDiagnostics(radius);
+        return result;
     }
 
     /// <summary>
@@ -350,10 +395,12 @@ internal static class RuntimeLoadHarness
             (result.TargetActorCount == 0 ? "" :
                 $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} moveSkipped={result.MoveSkippedFanout} actorRemoved={result.RemovedActors} removeFanout={result.RemoveFanout}"));
 
-    private sealed class RuntimeHost
+    private sealed class RuntimeHost : IDisposable
     {
         private readonly List<Player.Player> _players = [];
+        private readonly List<NetworkSession> _sessions = [];
         private readonly PlayerManager _playerManager;
+        private bool _disposed;
 
         public RecordingRakNetServer Transport { get; } = new();
         public GameLoop Loop { get; }
@@ -365,6 +412,7 @@ internal static class RuntimeLoadHarness
         public SkeletonSystem? Skeletons { get; }
         public World.World World { get; }
         private WorldInteractionDiagnostics? WorldDiagnostics { get; }
+        private ServerRuntimeDiagnostics? RuntimeDiagnostics { get; }
 
         public RuntimeHost(
             int playerCount,
@@ -373,7 +421,11 @@ internal static class RuntimeLoadHarness
             bool includeProjectileSystem = false,
             bool includeZombieSystem = false,
             bool includeMixedRoster = false,
-            bool includeWorldInteractionDiagnostics = false)
+            bool includeWorldInteractionDiagnostics = false,
+            int chunkRadius = 1,
+            bool noiseTerrain = false,
+            int generationWorkers = 1,
+            bool instrumentWorldgen = false)
         {
             if (playerCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(playerCount));
@@ -383,20 +435,32 @@ internal static class RuntimeLoadHarness
             var players = new PlayerManager();
             _playerManager = players;
             var clock = new GameClock();
-            var world = new World.World(new InMemoryChunkStorage(), logger);
+            RuntimeDiagnostics = instrumentWorldgen ? new ServerRuntimeDiagnostics() : null;
+            var terrain = noiseTerrain
+                ? new NoiseTerrainProvider(seed: 42, RuntimeDiagnostics?.Worldgen)
+                : null;
+            var config = new ServerConfig();
+            config.World.ChunkGenerationWorkers = generationWorkers;
+            var world = new World.World(
+                new InMemoryChunkStorage(),
+                logger,
+                terrain,
+                RuntimeDiagnostics?.Worldgen,
+                generationWorkers);
             World = world;
             WorldDiagnostics = includeWorldInteractionDiagnostics ? new WorldInteractionDiagnostics() : null;
             var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
             var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
             var context = new ServerContext(logger, players, new EventBus(logger), clock, world,
-                new ServerConfig(), blockPalette, itemPalette, RecipeRegistry.CreateDefault(), CreativeCatalog.CreateDefault());
+                config, blockPalette, itemPalette, RecipeRegistry.CreateDefault(), CreativeCatalog.CreateDefault(),
+                RuntimeDiagnostics);
 
             Loop = new GameLoop(
                 clock,
                 players,
                 logger,
-                WorldDiagnostics?.Runtime,
-                WorldDiagnostics?.Tick ?? default);
+                RuntimeDiagnostics?.Runtime ?? WorldDiagnostics?.Runtime,
+                RuntimeDiagnostics?.Tick ?? WorldDiagnostics?.Tick ?? default);
             Loop.Register(new TimeSyncSystem());
             Loop.Register(new MovementSystem(players));
             Loop.Register(new ChatSystem());
@@ -488,7 +552,13 @@ internal static class RuntimeLoadHarness
                 Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative));
             Loop.Register(new EquipmentSystem());
             if (includeChunkStream)
-                Loop.Register(new ChunkStreamSystem(world));
+            {
+                var chunkStream = new ChunkStreamSystem(world, RuntimeDiagnostics?.Worldgen);
+                if (RuntimeDiagnostics is { } diagnostics)
+                    Loop.Register(chunkStream, diagnostics.System("chunk-stream"));
+                else
+                    Loop.Register(chunkStream);
+            }
 
             for (var i = 0; i < playerCount; i++)
             {
@@ -504,10 +574,10 @@ internal static class RuntimeLoadHarness
                 {
                     IsInGame = true,
                     PositionX = i * 4,
-                    PositionY = Blocks.FlatSpawnY,
+                    PositionY = noiseTerrain ? world.SampleSpawnFeetY(0, 0) : Blocks.FlatSpawnY,
                     PositionZ = 0,
                 };
-                player.Chunks.Radius = streamChunks ? 1 : -1;
+                player.Chunks.Radius = streamChunks ? chunkRadius : -1;
                 // Survival normally receives the curated starter hotbar. The harness owns its
                 // fixture state, so clear it before establishing the one conserved test stack.
                 for (var slot = 0; slot < PlayerInventory.FullInventorySize; slot++)
@@ -517,7 +587,25 @@ internal static class RuntimeLoadHarness
                 if (!players.TryAdd(player))
                     throw new InvalidOperationException("Synthetic player registration failed.");
                 _players.Add(player);
+                _sessions.Add(session);
             }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            foreach (var session in _sessions)
+            {
+                if (!session.RakSession.IsClosed)
+                    session.RakSession.Disconnect(DisconnectReason.ServerDisconnect);
+
+                session.HandleClose(DisconnectReason.ServerDisconnect);
+            }
+
+            World.StopGenerationAsync().AsTask().GetAwaiter().GetResult();
         }
 
         public void Warmup()
@@ -549,6 +637,30 @@ internal static class RuntimeLoadHarness
             Loop.TickOnce();
             foreach (var player in _players)
                 player.Session.RakSession.Tick();
+        }
+
+        public void PrintWorldgenDiagnostics(int radius)
+        {
+            if (RuntimeDiagnostics is not { } diagnostics)
+                return;
+
+            var snapshot = diagnostics.Runtime.CaptureSnapshot();
+            static long Value(Zenith.Diagnostics.DiagnosticsSnapshot snapshot, string name) =>
+                snapshot.Metrics.First(metric => metric.Name == name).Value;
+            Console.WriteLine(
+                $"worldgen-stream radius={radius} generated={Value(snapshot, "gameplay.worldgen.columns.generated")} " +
+                $"coalesced={Value(snapshot, "gameplay.worldgen.columns.coalesced")} " +
+                $"queuePeak={Value(snapshot, "gameplay.worldgen.queue.peak")} " +
+                $"backpressure={Value(snapshot, "gameplay.worldgen.queue.backpressure")} " +
+                $"payloadMs={AverageMilliseconds(snapshot, "gameplay.worldgen.column.payload"):F3}");
+        }
+
+        private static double AverageMilliseconds(Zenith.Diagnostics.DiagnosticsSnapshot snapshot, string name)
+        {
+            var metric = snapshot.Metrics.First(item => item.Name == name);
+            return metric.Count == 0
+                ? 0d
+                : metric.TotalStopwatchTicks * 1000d / snapshot.StopwatchFrequency / metric.Count;
         }
 
         public void ValidateSteadyState()
@@ -998,7 +1110,10 @@ internal static class RuntimeLoadHarness
         bool ZombieBehavior,
         bool InterestScaling,
         bool ActivationPressure,
-        bool MixedRoster)
+        bool MixedRoster,
+        bool WorldgenStream,
+        int WorldgenRadius,
+        int WorldgenWorkers)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -1011,6 +1126,9 @@ internal static class RuntimeLoadHarness
             var interestScaling = false;
             var activationPressure = false;
             var mixedRoster = false;
+            var worldgenStream = false;
+            var worldgenRadius = 4;
+            var worldgenWorkers = 2;
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -1031,11 +1149,18 @@ internal static class RuntimeLoadHarness
                     activationPressure = true;
                 else if (args[i] == "--mixed-roster")
                     mixedRoster = true;
+                else if (args[i] == "--worldgen-stream")
+                    worldgenStream = true;
+                else if (args[i] == "--radius" && i + 1 < args.Length)
+                    worldgenRadius = int.Parse(args[++i]);
+                else if (args[i] == "--workers" && i + 1 < args.Length)
+                    worldgenWorkers = int.Parse(args[++i]);
             }
 
-            if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0)
+            if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0 ||
+                worldgenRadius is < 0 or > 32 || worldgenWorkers is < 1 or > 64)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure, mixedRoster);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure, mixedRoster, worldgenStream, worldgenRadius, worldgenWorkers);
         }
     }
 
