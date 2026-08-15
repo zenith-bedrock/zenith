@@ -9,9 +9,9 @@ behind it. Purpose per the phase brief: identify missing behavior and guide futu
 decisions, not to justify a generic AI framework.
 
 Runtime split: **Zombie, Skeleton, Spider, Cow** are ECS-based (own `ComponentStore<T>` under
-`src/zenith/Ecs/`, ticked by a matching `Gameplay/Systems/*System.cs`). **Creeper, Enderman, Golem,
-Bat, Villager** remain legacy hand-written classes in `src/zenith/Gameplay/` with their own store
-class — outside ECS, per ADR §99/§106/§107's evidence-gated migration (only six of the eleven
+`src/zenith/Ecs/`, ticked by a matching `Gameplay/Entities/*System.cs`). **Creeper, Enderman, Golem,
+Bat, Villager** remain legacy hand-written classes in `src/zenith/Gameplay/Entities/` with their own
+store class — outside ECS, per ADR §99/§106/§107's evidence-gated migration (only six of the eleven
 species were ever migrated; the rest stay put until a concrete capability need, not "completeness").
 Fish is passive/no-combat and omitted below.
 

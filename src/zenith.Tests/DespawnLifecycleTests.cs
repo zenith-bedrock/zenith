@@ -1,6 +1,7 @@
-using Zenith.Gameplay;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 

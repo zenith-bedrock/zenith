@@ -11,7 +11,7 @@ Zenith names should make **layer** and **outcome** obvious. This is the SSOT for
 | `Handle*` | `void` | Inbound packet path: decode → validate → `Submit*` (no world mutate) | `Session/Handler` |
 | `Submit*` | `void` / `bool` | Enqueue intent / overwrite-latest input | `Player/` |
 | `TryConsume*` | `bool` | Drain one pending intent/input | `Player/` |
-| `Apply*` | `void` / `bool` | System applies an intent; may mutate domain if gates pass | `Gameplay/Systems` |
+| `Apply*` | `void` / `bool` | System applies an intent; may mutate domain if gates pass | `Gameplay/<Domain>` |
 | `Try*` | `bool` | Fallible op; `false` is expected (not exceptional) | any layer |
 | `Is*` / `Can*` | `bool` | Predicate only — **must not** mutate | any layer |
 | `Send*` | `void` | Build DTO + transmit via session | `Protocol/` only |
@@ -49,7 +49,7 @@ Patterns:
 
 ```text
 Session/Handler     Handle*  →  Submit* / TrySubmit*
-Gameplay/Systems    Apply* / Abort*If* / Update*If*  →  Protocol.Send* / *Fanout / Relay*
+Gameplay/<Domain>   Apply* / Abort*If* / Update*If*  →  Protocol.Send* / *Fanout / Relay*
 Protocol/           Send* only (no Decide)
 Packets/            Encode / Decode / Read / Write (no Send/Apply)
 Player/             Submit* / TryConsume* / Begin* / Abort* / Mark*

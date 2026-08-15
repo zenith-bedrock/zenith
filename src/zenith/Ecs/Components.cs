@@ -1,4 +1,4 @@
-using Zenith.Gameplay;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Ecs;
 

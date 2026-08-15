@@ -1,10 +1,10 @@
-using Zenith.Gameplay;
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Protocol;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Inventory;
+using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Tests;
 

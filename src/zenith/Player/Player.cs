@@ -1,6 +1,6 @@
-using Zenith.Gameplay;
 using Zenith.Session;
 using Zenith.World;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Player;
 
@@ -168,12 +168,12 @@ class Player
     /// <summary>Player level (Phase XI.4) — <c>minecraft:player.level</c>. Mutated only via <see cref="AddExperience"/>/<see cref="SetExperience"/>.</summary>
     public int ExperienceLevel { get; private set; }
 
-    /// <summary>Points earned toward <see cref="ExperienceLevel"/>'s next level — never exceeds <see cref="Gameplay.PlayerExperience.PointsToNextLevel"/>.</summary>
+    /// <summary>Points earned toward <see cref="ExperienceLevel"/>'s next level — never exceeds <see cref="PlayerExperience.PointsToNextLevel"/>.</summary>
     public int ExperiencePoints { get; private set; }
 
     /// <summary>GameLoop-owned gain; applies every level-up the addition crosses (Phase XI.4).</summary>
     internal void AddExperience(int amount) =>
-        (ExperienceLevel, ExperiencePoints) = Gameplay.PlayerExperience.AddPoints(ExperienceLevel, ExperiencePoints, amount);
+        (ExperienceLevel, ExperiencePoints) = PlayerExperience.AddPoints(ExperienceLevel, ExperiencePoints, amount);
 
     /// <summary>Login hydrate only — bypasses level-up math since the saved pair is already valid.</summary>
     public void SetExperience(int level, int points)

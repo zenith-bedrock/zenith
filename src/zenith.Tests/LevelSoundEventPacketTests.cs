@@ -1,10 +1,9 @@
-using Zenith.Gameplay;
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Raknet.Stream;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Tests;
 

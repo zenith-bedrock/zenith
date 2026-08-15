@@ -1,11 +1,11 @@
 using System.Net;
-using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 using Xunit;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 

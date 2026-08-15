@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Session;
 using Zenith.Player;
 using Zenith.World;
+using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Protocol;
 

@@ -1,6 +1,6 @@
 using Zenith.Gameplay.Runtime;
-using Zenith.Gameplay.Systems;
 using Xunit;
+using Zenith.Gameplay.Entities;
 
 namespace Zenith.Tests;
 

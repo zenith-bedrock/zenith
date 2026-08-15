@@ -1,5 +1,5 @@
-using Zenith.Gameplay;
 using Xunit;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 

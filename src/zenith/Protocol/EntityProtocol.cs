@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Survival;
 using Zenith.Packets;
 using Zenith.Session;
 using Zenith.World;
@@ -692,14 +693,14 @@ sealed class EntityProtocol
     /// <summary>
     /// Projects a live <see cref="global::Zenith.Player.Player"/>'s current UpdateAttributes payload
     /// (Health/Hunger/Experience) in one call (Phase XII) — every one of six call sites had been
-    /// hand-computing the same <c>(level, progress)</c> pair via <see cref="Gameplay.PlayerExperience.Progress"/>
+    /// hand-computing the same <c>(level, progress)</c> pair via <see cref="PlayerExperience.Progress"/>
     /// before this existed. Still a plain wire projection, not a state model: it reads
     /// <paramref name="player"/> and sends, nothing more.
     /// </summary>
     public void SendPlayerAttributes(global::Zenith.Player.Player player) =>
         SendDefaultAttributes(
             (ulong)player.RuntimeId, player.Health, player.Hunger,
-            player.ExperienceLevel, Gameplay.PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints));
+            player.ExperienceLevel, PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints));
 
     /// <summary>Replicates only the current health of an already-spawned actor.</summary>
     public void SendHealth(ulong actorRuntimeId, float health, float maximum)

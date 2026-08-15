@@ -126,8 +126,13 @@ libs/
 src/
   zenith/
     Gameplay/
-      Runtime/     # GameLoop, GameClock, IGameSystem
-      Systems/     # TimeSyncSystem, MovementSystem, BlockDigSystem, BlockEditSystem, …
+      Runtime/         # GameLoop, GameClock, IGameSystem
+      Commands/        # CommandCatalog, CommandRuntime
+      Entities/        # mob species (ZombieSystem, CowSystem, …) + shared combat/movement/lifecycle helpers (DamageDispatch, GroundMobMovement, ActorInterest, …)
+      Survival/        # player vitals/state (HealthState, HungerSystem, EffectSystem, PlayerDamage, PlayerExperience, ArmorMitigation, FoodItems, MovementSystem, …)
+      WorldInteraction/ # BlockDigSystem, BlockEditSystem, GravitySystem, FloorDropSystem, ChunkStreamSystem
+      Inventory/       # InventorySystem, EquipmentSystem, RecipeRegistry, CreativeCatalog
+      Replication/     # cross-domain fanout (BlockCrackFanout, ChestLidFanout, ArmorFanout, …), ChatSystem, GameModeSystem, TimeSyncSystem
     World/         # World façade, Dimension, IChunkStorage, Blocks, Noise/ (FastNoiseLite), chests, floor drops
     Player/        # Player, intents, inventory, manager
     Server/        # ZenithServer, ServerContext, config, identity
@@ -140,6 +145,8 @@ src/
 ```
 
 Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Network/`.
+
+`Gameplay/` é organizado por domínio, não por mecanismo de execução: `IGameSystem` já é tratado como execution model (não como boundary — regra acima), então um antigo `Systems/` flat (agrupava tudo que "roda no tick", independente de domínio) foi abandonado. Um contribuidor deve prever a pasta pelo domínio/responsabilidade do código, não vasculhar um diretório único. Não recriar `Common/Utils/Helpers/Misc/Core/Managers/Shared/Infrastructure/Services/` dentro de `Gameplay/`.
 
 ## Blocos / itens — fundação (§55)
 

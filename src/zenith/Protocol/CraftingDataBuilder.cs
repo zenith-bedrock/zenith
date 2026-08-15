@@ -1,6 +1,6 @@
-using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.World;
+using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Protocol;
 

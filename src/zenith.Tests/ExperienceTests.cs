@@ -1,8 +1,8 @@
-using Zenith.Gameplay;
-using Zenith.Gameplay.Systems;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 
@@ -90,7 +90,7 @@ public class ExperienceTests
         var ecsStores = new Zenith.Ecs.EntityRuntime();
         var zombies = new ZombieSystem(fx.World, fx.Players, ecsStores, fx.Context.ItemPalette);
         var minecarts = new MinecartSystem(fx.World, fx.Players, ecsStores, fx.Context.ItemPalette);
-        var damage = new Zenith.Gameplay.DamageDispatch();
+        var damage = new Zenith.Gameplay.Entities.DamageDispatch();
         damage.Register(zombies.Owns, zombies.TryApplyDamage);
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
         var projectiles = new ProjectileSystem(fx.World, fx.Players, ecsStores, damage);
