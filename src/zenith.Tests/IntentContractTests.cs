@@ -2,9 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using Zenith.Ecs;
 using Zenith.Event;
-using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Session;
@@ -16,6 +14,11 @@ using Zenith.Raknet.Stream;
 using Zenith.Server;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Inventory;
+using Zenith.Gameplay.Replication;
+using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Tests;
 

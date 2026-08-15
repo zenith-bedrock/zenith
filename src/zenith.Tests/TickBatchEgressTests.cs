@@ -1,9 +1,9 @@
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 

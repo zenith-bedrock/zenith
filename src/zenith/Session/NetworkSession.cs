@@ -2,7 +2,6 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Threading.Channels;
 using Zenith.Event;
-using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Server;

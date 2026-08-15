@@ -1,6 +1,5 @@
 using System.Net;
 using Zenith.Gameplay.Runtime;
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Raknet.Enumerator;
@@ -8,6 +7,7 @@ using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 

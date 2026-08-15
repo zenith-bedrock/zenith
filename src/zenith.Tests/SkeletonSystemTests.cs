@@ -1,9 +1,10 @@
 using Zenith.Ecs;
-using Zenith.Gameplay;
-using Zenith.Gameplay.Systems;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Tests;
 

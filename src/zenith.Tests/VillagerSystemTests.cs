@@ -1,9 +1,8 @@
 using System.Linq;
-using Zenith.Gameplay;
-using Zenith.Gameplay.Systems;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
 
 namespace Zenith.Tests;
 

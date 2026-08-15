@@ -2,9 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using Zenith.Diagnostics;
 using Zenith.Event;
-using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
-using Zenith.Gameplay.Systems;
 using Zenith.Player;
 using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
@@ -14,6 +12,11 @@ using Zenith.Server;
 using Zenith.Session;
 using Zenith.Session.Handler;
 using Zenith.World;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Inventory;
+using Zenith.Gameplay.Replication;
+using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Benchmarks;
 
@@ -482,7 +485,7 @@ internal static class RuntimeLoadHarness
                 if (includeProjectileSystem)
                 {
                     var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
-                    var damage = new Zenith.Gameplay.DamageDispatch();
+                    var damage = new Zenith.Gameplay.Entities.DamageDispatch();
                     damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
                     damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
                     Projectiles = new ProjectileSystem(world, players, entities, damage);
@@ -507,7 +510,7 @@ internal static class RuntimeLoadHarness
                 Cows = cowSystem;
                 var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
                 Spiders = spiderSystem;
-                var damage = new Zenith.Gameplay.DamageDispatch();
+                var damage = new Zenith.Gameplay.Entities.DamageDispatch();
                 damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
                 damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
                 damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);

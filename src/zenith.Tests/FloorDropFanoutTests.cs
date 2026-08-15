@@ -1,8 +1,10 @@
-using Zenith.Gameplay;
 using Zenith.Player;
 using Zenith.Raknet.Stream;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Inventory;
+using Zenith.Gameplay.Replication;
 
 namespace Zenith.Tests;
 

@@ -1,7 +1,7 @@
-using Zenith.Gameplay;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Tests;
 

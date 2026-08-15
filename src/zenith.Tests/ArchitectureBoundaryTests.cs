@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using Zenith.Gameplay;
 using Xunit;
+using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Tests;
 

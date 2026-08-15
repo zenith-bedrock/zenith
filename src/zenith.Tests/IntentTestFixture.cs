@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using Zenith.Event;
-using Zenith.Gameplay;
 using Zenith.Gameplay.Runtime;
-using Zenith.Gameplay.Systems;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Raknet;
@@ -14,6 +12,7 @@ using Zenith.Session;
 using Zenith.Session.Handler;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Tests;
 

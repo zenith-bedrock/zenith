@@ -1,8 +1,8 @@
-using Zenith.Gameplay;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
+using Zenith.Gameplay.Replication;
 
 namespace Zenith.Tests;
 
