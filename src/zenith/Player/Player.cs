@@ -803,11 +803,26 @@ class Player
     /// <summary>
     /// Strict targeted variant for consumers whose candidate set contains players. Unlike the
     /// legacy characterization helper above, an absent target can never be promoted into a hit.
+    /// <paramref name="isKnownTarget"/> lets the caller resolve the id against its own index (e.g.
+    /// <c>PlayerManager.GetByRuntimeId</c>) without pre-selecting a candidate: this only consumes
+    /// when the pending target resolves to something the caller actually owns, so an id from a
+    /// different owner (a mob, in the shared RuntimeId space — see
+    /// <c>PlayerManager.AllocateRuntimeId</c>) is left untouched for that owner's own system to
+    /// consume later.
     /// </summary>
-    internal bool TryConsumeTargetedAttackIntent(long expectedTargetActorRuntimeId) =>
-        _attackIntent.TryConsumeIf(
-            target => target is { } targetRuntimeId && targetRuntimeId == expectedTargetActorRuntimeId,
-            out _);
+    internal bool TryConsumeTargetedAttackIntent(Predicate<long> isKnownTarget, out long targetActorRuntimeId)
+    {
+        if (_attackIntent.TryConsumeIf(
+                target => target is { } id && isKnownTarget(id),
+                out var consumed))
+        {
+            targetActorRuntimeId = consumed!.Value;
+            return true;
+        }
+
+        targetActorRuntimeId = default;
+        return false;
+    }
 
     /// <summary>
     /// Phase XXIII-B — vanilla-parity Golem aggro trigger: iron golems are passive until a player
