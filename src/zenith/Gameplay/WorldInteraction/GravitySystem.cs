@@ -155,7 +155,8 @@ sealed class GravitySystem : IGameSystem
             // Someone else already claimed our current cell while we were airborne — rest one
             // cell above it instead of overwriting (matches vanilla: a falling block that finds
             // its target occupied settles on top rather than replacing what landed first).
-            if (cellY >= Blocks.FlatMinY && _world.GetBlock(entry.LandX, cellY, entry.LandZ) != World.World.AirRuntimeId)
+            // Phase XXIX: water no longer counts — a block falling into a lake keeps sinking.
+            if (cellY >= Blocks.FlatMinY && Blocks.BlocksMovement(_world.GetBlock(entry.LandX, cellY, entry.LandZ)))
             {
                 entry.LandY = cellY + 1;
                 _landedScratch.Add(entry);
@@ -170,7 +171,7 @@ sealed class GravitySystem : IGameSystem
                 continue;
             }
 
-            if (_world.GetBlock(entry.LandX, belowY, entry.LandZ) != World.World.AirRuntimeId)
+            if (Blocks.BlocksMovement(_world.GetBlock(entry.LandX, belowY, entry.LandZ)))
             {
                 entry.LandY = cellY;
                 _landedScratch.Add(entry);
@@ -210,7 +211,7 @@ sealed class GravitySystem : IGameSystem
         bool deferCascade)
     {
         var landY = entry.LandY;
-        while (landY - 1 >= Blocks.FlatMinY && _world.GetBlock(entry.LandX, landY - 1, entry.LandZ) == World.World.AirRuntimeId)
+        while (landY - 1 >= Blocks.FlatMinY && !Blocks.BlocksMovement(_world.GetBlock(entry.LandX, landY - 1, entry.LandZ)))
             landY--;
 
         if (landY - 1 < Blocks.FlatMinY)
@@ -266,7 +267,7 @@ sealed class GravitySystem : IGameSystem
         var belowY = y - 1;
         if (belowY < Blocks.FlatMinY)
             return true;
-        return _world.GetBlock(x, belowY, z) == World.World.AirRuntimeId;
+        return !Blocks.BlocksMovement(_world.GetBlock(x, belowY, z));
     }
 
     private void EnqueueAbove(int x, int y, int z, bool defer)

@@ -290,8 +290,14 @@ sealed class ProjectileSystem : IGameSystem
         return null;
     }
 
+    /// <summary>
+    /// Phase XXIX: excludes fluid from projectile collision — matches PocketMine-MP and Dragonfly
+    /// (neither gives a liquid block a collision box, so arrows structurally pass through water
+    /// rather than splashing on it; see docs/history/phases/phase-xxix-ground-actor-physics-findings.md).
+    /// A deliberate behavior change from the old "any non-air block hits" rule, not an oversight.
+    /// </summary>
     private bool HitsWorld(float x, float y, float z) =>
-        _world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z)) != World.World.AirRuntimeId;
+        Blocks.BlocksMovement(_world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z)));
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
     {

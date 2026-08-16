@@ -31,6 +31,9 @@ sealed class Villager : IDamageableActor
     public HealthState Health { get; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Phase XXIX: downward fall-speed magnitude — the legacy-roster equivalent of an ECS actor's <c>Velocity.Y</c>.</summary>
+    internal float VerticalFallSpeed { get; set; }
+
     /// <summary>
     /// Minimal inventory-shaped data: what this villager has to offer. No slot indices, no stack
     /// splitting, no transaction — the smallest thing that lets the architecture question

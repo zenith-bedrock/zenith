@@ -331,7 +331,7 @@ sealed class MinecartSystem : IGameSystem
 
         var x = pos.X + vel.X;
         var z = pos.Z + vel.Z;
-        if (GroundMobMovement.CanStandAt(_world, x, pos.Y, z))
+        if (GroundMobMovement.IsSupportedGroundCell(_world, x, pos.Y, z))
         {
             ref var p = ref _stores.Positions.GetRef(id);
             p.X = x;

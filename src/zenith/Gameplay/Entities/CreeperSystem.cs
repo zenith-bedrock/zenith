@@ -95,7 +95,10 @@ sealed class CreeperSystem : IGameSystem
             }
 
             if (creeper.IsActive)
+            {
+                ApplyGravity(creeper);
                 ReconcileViewers(creeper, online);
+            }
         }
 
         _replicated.RemoveWhere(pair => !_creepers.Active.Any(c => c.EntityId == pair.CreeperId) ||
@@ -340,11 +343,22 @@ sealed class CreeperSystem : IGameSystem
         var length = MathF.Sqrt(lengthSquared);
         var stepX = creeper.PositionX + dx / length * MovePerTick;
         var stepZ = creeper.PositionZ + dz / length * MovePerTick;
-        if (!GroundMobMovement.CanStandAt(_world, stepX, creeper.PositionY, stepZ)) return;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, creeper.PositionX, creeper.PositionY, creeper.PositionZ, stepX, stepZ, out var resolvedY)) return;
 
         creeper.PositionX = stepX;
+        creeper.PositionY = resolvedY;
         creeper.PositionZ = stepZ;
         creeper.Yaw = LookMath.MoveYawTowards(creeper.Yaw, LookMath.YawTowards(dx, dz), LookMath.DefaultMaxTurnDegreesPerTick);
+    }
+
+    /// <summary>Phase XXIX: one tick of gravity/falling/landing — see VillagerSystem's identical helper for why fields always round-trip.</summary>
+    private void ApplyGravity(Creeper creeper)
+    {
+        var y = creeper.PositionY;
+        var fallSpeed = creeper.VerticalFallSpeed;
+        GroundMobMovement.ResolveVertical(_world, creeper.PositionX, creeper.PositionZ, ref y, ref fallSpeed, out _);
+        creeper.PositionY = y;
+        creeper.VerticalFallSpeed = fallSpeed;
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)

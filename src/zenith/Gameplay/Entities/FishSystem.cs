@@ -8,7 +8,7 @@ namespace Zenith.Gameplay.Entities;
 
 /// <summary>
 /// Phase XX, Priority 2 — second non-ground-navigation mob, and a third distinct movement-validity
-/// rule (after <see cref="GroundMobMovement.CanStandAt"/> and Bat's bespoke flight clearance):
+/// rule (after <see cref="GroundMobMovement.TryMoveHorizontal"/> and Bat's bespoke flight clearance):
 /// <see cref="TrySwim"/> requires the destination cell to BE water, not merely have air/support
 /// nearby. Combat/loot/XP/despawn/replication all reuse <see cref="GroundMobCombat"/>/
 /// <see cref="DespawnLifecycle"/>/<see cref="ActorInterest"/> unmodified. See the three-way

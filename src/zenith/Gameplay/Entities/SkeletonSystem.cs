@@ -98,6 +98,7 @@ sealed class SkeletonSystem : IGameSystem
 
             var target = FindTarget(id, online);
             MaintainRange(id, target);
+            ApplyGravity(id);
             ReconcileViewers(id, online);
             TryRangedAttack(id, target, clock, online);
         }
@@ -146,11 +147,23 @@ sealed class SkeletonSystem : IGameSystem
     private bool TryMove(EntityId id, float x, float z)
     {
         if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.CanStandAt(_world, x, pos.Y, z)) return false;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
         ref var p = ref _stores.Positions.GetRef(id);
         p.X = x;
+        p.Y = resolvedY;
         p.Z = z;
         return true;
+    }
+
+    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
+    private void ApplyGravity(EntityId id)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        ref var vel = ref _stores.Velocities.GetRef(id);
+        var y = pos.Y;
+        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.Y = y;
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)
@@ -237,6 +250,7 @@ sealed class SkeletonSystem : IGameSystem
         var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
                  ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Skeleton.");
         _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) });
+        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
         _stores.Despawn.Set(id, new DespawnTracking());
         _skeletons.Set(id, new SkeletonState());
         return id;

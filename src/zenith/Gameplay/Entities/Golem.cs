@@ -33,6 +33,9 @@ sealed class Golem : IDamageableActor
     public HealthState Health { get; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Phase XXIX: downward fall-speed magnitude — the legacy-roster equivalent of an ECS actor's <c>Velocity.Y</c>.</summary>
+    internal float VerticalFallSpeed { get; set; }
+
     /// <summary>Phase transition state — GolemSystem-owned, checked once per tick against a health fraction.</summary>
     internal bool IsEnraged { get; set; }
 

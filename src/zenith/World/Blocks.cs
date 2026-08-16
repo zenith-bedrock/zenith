@@ -52,6 +52,7 @@ static class Blocks
     private static HashSet<int>? _chestIds;
     private static HashSet<int>? _placeableIds;
     private static HashSet<int>? _gravityIds;
+    private static HashSet<int>? _fluidIds;
     private static Dictionary<int, string>? _nameByRuntime;
     private static BlockPalette? _palette;
     private static bool _loaded;
@@ -160,6 +161,9 @@ static class Blocks
             _chestEast
         ];
         _gravityIds = [_sand, _gravel];
+        // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
+        // Extend this set, not a scattered `== Blocks.Water` check, the day a second fluid lands.
+        _fluidIds = [_water];
         _nameByRuntime = new Dictionary<int, string>
         {
             [_air] = "minecraft:air",
@@ -234,6 +238,44 @@ static class Blocks
         EnsureLoaded();
         return _gravityIds is not null && _gravityIds.Contains(runtimeId);
     }
+
+    /// <summary>Literal empty air. Never occupies, never supports (Phase XXIX).</summary>
+    public static bool IsAir(int runtimeId)
+    {
+        EnsureLoaded();
+        return runtimeId == _air;
+    }
+
+    /// <summary>
+    /// Water (and any future fluid — see <see cref="LoadCore"/>). Has no collision box of its own:
+    /// never blocks occupancy and never supports a ground actor, a falling block, or a projectile
+    /// (Phase XXIX — replaces the old "any non-air block is solid" assumption that let ground mobs
+    /// stand on water). Cross-referenced against PocketMine-MP's <c>Liquid::recalculateCollisionBoxes</c>
+    /// (always empty) and Basalt/Dragonfly's block-permutation flags — see
+    /// docs/history/phases/phase-xxix-ground-actor-physics-findings.md.
+    /// </summary>
+    public static bool IsFluid(int runtimeId)
+    {
+        EnsureLoaded();
+        return _fluidIds is not null && _fluidIds.Contains(runtimeId);
+    }
+
+    /// <summary>
+    /// Real solid collision — not air, not a fluid. The one physical fact <see cref="BlocksMovement"/>
+    /// and <see cref="CanSupportGroundActor"/> both reduce to today; kept as two named call shapes
+    /// since a future consumer (e.g. a partial-height block) may legitimately need to diverge, but
+    /// there is exactly one classification underneath until that happens.
+    /// </summary>
+    private static bool IsSolid(int runtimeId) => !IsAir(runtimeId) && !IsFluid(runtimeId);
+
+    /// <summary>Blocks body occupancy for any actor's feet/head cell. Air and fluid are both occupiable.</summary>
+    public static bool BlocksMovement(int runtimeId) => IsSolid(runtimeId);
+
+    /// <summary>A ground actor may rest on this block. Water is explicitly excluded — the Phase XXIX fix.</summary>
+    public static bool CanSupportGroundActor(int runtimeId) => IsSolid(runtimeId);
+
+    /// <summary>An actor's body may occupy this cell (air or fluid) — the inverse of <see cref="BlocksMovement"/>.</summary>
+    public static bool CanOccupy(int runtimeId) => !BlocksMovement(runtimeId);
 
     /// <summary>World block rid for a cardinal facing; unknown → south item form.</summary>
     public static int ChestForFacing(string cardinalDirection)
@@ -331,6 +373,7 @@ static class Blocks
             _chestIds = null;
             _placeableIds = null;
             _gravityIds = null;
+            _fluidIds = null;
             _nameByRuntime = null;
             _palette = null;
         }

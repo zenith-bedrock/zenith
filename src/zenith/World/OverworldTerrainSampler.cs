@@ -161,7 +161,7 @@ static class OverworldTerrainSampler
         {
             if (SampleNoiseBlock(worldX, feet, worldZ, seed) == Blocks.Air
                 && SampleNoiseBlock(worldX, feet + 1, worldZ, seed) == Blocks.Air
-                && SampleNoiseBlock(worldX, feet - 1, worldZ, seed) != Blocks.Air)
+                && Blocks.CanSupportGroundActor(SampleNoiseBlock(worldX, feet - 1, worldZ, seed)))
                 return feet;
             feet++;
         }
