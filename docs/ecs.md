@@ -195,7 +195,7 @@ All `struct`, default (internal) accessibility.
 | Component | Fields | Shared by |
 |---|---|---|
 | `Position` | `X, Y, Z, Yaw` | Zombie, Minecart, Projectile |
-| `Velocity` | `X, Y, Z` | Zombie (knockback), Minecart (rolling+steering), Projectile (ballistic) — shared *data*, per-system behavior |
+| `Velocity` | `X, Y, Z` | Zombie (knockback), Minecart (rolling+steering), Projectile (ballistic), and — since Phase XXIX — every ECS ground mob's `.Y` reused as gravity fall-speed (Zombie, Cow, Skeleton, Spider) — shared *data*, per-system behavior |
 | `HealthComponent` | `HealthState State` | Zombie, Minecart (wraps the existing `HealthState` class — one authoritative instance) |
 | `ActorIdentity` | `ActorUniqueId (long), ActorRuntimeId (ulong)` | Zombie, Minecart, Projectile — Bedrock wire identity, deliberately separate from `EntityId` |
 | `DespawnTracking` | `LastSeenNearPlayerTick (ulong)` | Zombie, Minecart only — **not** Projectile, which uses pure-age lifetime (`ProjectileState.AgeTicks`), a deliberate non-universal-lifecycle choice consistent with `docs/entities.md`'s "no fake universal components" rule |
@@ -216,9 +216,25 @@ only *looked* similar but the behavior was owned by one feature:
 - `SkeletonState { NextShotTick (ulong) }` (Phase XXII)
 - `SpiderState { TargetPlayerRuntimeId (long?), NextAttackTick (ulong) }` (Phase XXII — same shape as `ZombieState` by construction; kept separate since nothing queries "any entity with a retained target" across species)
 
-Cow/Skeleton/Spider do **not** carry a `Velocity` component — none of the three ever reads or writes
-one (no knockback, no rolling motion, no ballistic integration), so attaching it would be dead data.
-`Velocity` remains Zombie/Minecart/Projectile-only, consistent with "no fake universal components."
+Cow/Skeleton/Spider originally carried no `Velocity` component — none of the three read or wrote
+`X`/`Z` (no knockback, no rolling motion, no ballistic integration). Phase XXIX attached it to all
+three anyway, reusing only `.Y` as gravity fall-speed: every ECS ground mob needed the same per-tick
+downward-speed state, `Velocity` already existed as exactly that shape of shared data, and adding a
+second component for one float would have been the "fake universal component" this rule warns
+against, not avoiding it. See `docs/history/phases/phase-xxix-ground-actor-physics-findings.md`.
+
+### Ground locomotion (`GroundMobMovement`, Phase XXIX)
+
+Ground mob movement is resolved through `Gameplay/Entities/GroundMobMovement.cs`, a stateless
+resolver over primitives (world + position + desired delta), not an ECS system — both the ECS roster
+above and the legacy roster (`Villager`/`Golem`/`Creeper`, plain classes with a `VerticalFallSpeed`
+field standing in for `Velocity.Y`) call the same two static methods, `TryMoveHorizontal` (occupancy +
+one-block step-up, no support requirement) and `ResolveVertical` (gravity/falling/landing). Real
+physical support/occupancy/fluid classification lives on `Blocks` (`IsAir`/`IsFluid`/`CanOccupy`/
+`CanSupportGroundActor`/`BlocksMovement`), replacing the old "any non-air block is solid ground"
+assumption. Minecart's rolling fallback and Enderman's teleport-landing check use the narrower
+`IsSupportedGroundCell` instead — neither walks continuously or needs a vertical model. See the phase
+findings doc for the full research and design rationale.
 
 ---
 

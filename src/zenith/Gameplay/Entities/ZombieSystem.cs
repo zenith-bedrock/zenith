@@ -95,6 +95,7 @@ sealed class ZombieSystem : IGameSystem
             if (target is not null)
                 AdvanceTowardTarget(id, target);
             TryAttackPlayer(id, target, clock, online);
+            ApplyGravity(id);
             ReconcileViewers(id, online);
         }
 
@@ -245,10 +246,11 @@ sealed class ZombieSystem : IGameSystem
 
         var x = pos.X + vel.X;
         var z = pos.Z + vel.Z;
-        if (GroundMobMovement.CanStandAt(_world, x, pos.Y, z))
+        if (GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY))
         {
             ref var p = ref _stores.Positions.GetRef(id);
             p.X = x;
+            p.Y = resolvedY;
             p.Z = z;
         }
 
@@ -363,11 +365,26 @@ sealed class ZombieSystem : IGameSystem
     private bool TryMove(EntityId id, float x, float z)
     {
         if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.CanStandAt(_world, x, pos.Y, z)) return false;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
         ref var p = ref _stores.Positions.GetRef(id);
         p.X = x;
+        p.Y = resolvedY;
         p.Z = z;
         return true;
+    }
+
+    /// <summary>
+    /// Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a
+    /// downward fall-speed magnitude (same field Zombie's own knockback already writes X/Z of).
+    /// </summary>
+    private void ApplyGravity(EntityId id)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        ref var vel = ref _stores.Velocities.GetRef(id);
+        var y = pos.Y;
+        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.Y = y;
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)

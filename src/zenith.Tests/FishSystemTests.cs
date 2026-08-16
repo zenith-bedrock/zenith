@@ -77,6 +77,37 @@ public sealed class FishSystemTests
         Assert.True(fish.PositionX != startX || fish.PositionY != startY || fish.PositionZ != startZ);
     }
 
+    /// <summary>
+    /// Phase XXIX regression: FishSystem never calls <see cref="GroundMobMovement"/> — it stays on
+    /// its own water-occupancy rule (<c>TrySwim</c>) — so the new ground-locomotion resolver and
+    /// gravity model must have zero effect on fish movement.
+    /// </summary>
+    [Fact]
+    public void Fish_water_behavior_is_not_broken()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("angler");
+        player.PositionX = 1000;
+        player.PositionZ = 1000;
+        var world = fx.World;
+        var y = Blocks.FlatSpawnY;
+        for (var x = -2; x <= 2; x++)
+            for (var z = -2; z <= 2; z++)
+                for (var dy = -1; dy <= 1; dy++)
+                    world.SetBlock(x, y + dy, z, Blocks.Water);
+        var store = new FishStore();
+        var fish = new Fish(fx.Players.AllocateRuntimeId(), 99, 0, y, 0);
+        Assert.True(store.TryAdd(fish));
+        var system = new FishSystem(world, fx.Players, store, fx.Context.ItemPalette, new Random(3));
+
+        for (var i = 0; i < 100; i++)
+        {
+            system.Tick(fx.Clock, fx.Players.Online);
+            Assert.Equal(Blocks.Water, world.GetBlock(
+                (int)MathF.Floor(fish.PositionX), (int)MathF.Floor(fish.PositionY), (int)MathF.Floor(fish.PositionZ)));
+        }
+    }
+
     [Fact]
     public void Fish_never_attacks_or_damages_a_nearby_player()
     {

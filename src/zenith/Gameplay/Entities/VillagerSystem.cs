@@ -79,6 +79,7 @@ sealed class VillagerSystem : IGameSystem
             if (!villager.IsActive) continue;
             TryHandleInteraction(villager, online, clock);
             Wander(villager, clock);
+            ApplyGravity(villager);
             ReconcileViewers(villager, online);
         }
 
@@ -251,10 +252,26 @@ sealed class VillagerSystem : IGameSystem
     /// <summary>Concrete Villager rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
     private bool TryMove(Villager villager, float x, float z)
     {
-        if (!GroundMobMovement.CanStandAt(_world, x, villager.PositionY, z)) return false;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, villager.PositionX, villager.PositionY, villager.PositionZ, x, z, out var resolvedY)) return false;
         villager.PositionX = x;
+        villager.PositionY = resolvedY;
         villager.PositionZ = z;
         return true;
+    }
+
+    /// <summary>
+    /// Phase XXIX: one tick of gravity/falling/landing. Villager has no ECS store to take a real
+    /// <c>ref</c> into, so <paramref name="villager"/>'s fields round-trip through locals — always
+    /// written back regardless of <see cref="GroundMobMovement.ResolveVertical"/>'s return value,
+    /// since "already grounded" still resets the fall-speed field to zero.
+    /// </summary>
+    private void ApplyGravity(Villager villager)
+    {
+        var y = villager.PositionY;
+        var fallSpeed = villager.VerticalFallSpeed;
+        GroundMobMovement.ResolveVertical(_world, villager.PositionX, villager.PositionZ, ref y, ref fallSpeed, out _);
+        villager.PositionY = y;
+        villager.VerticalFallSpeed = fallSpeed;
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)

@@ -28,6 +28,9 @@ sealed class Creeper : IDamageableActor
     public HealthState Health { get; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Phase XXIX: downward fall-speed magnitude — the legacy-roster equivalent of an ECS actor's <c>Velocity.Y</c>.</summary>
+    internal float VerticalFallSpeed { get; set; }
+
     /// <summary>Concrete target identity — same shape as Zombie's, CreeperSystem-owned.</summary>
     internal long? TargetPlayerRuntimeId { get; set; }
 

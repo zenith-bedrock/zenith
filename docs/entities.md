@@ -58,14 +58,14 @@ recorded as **confirmed differences**, not gaps to close.
 **Phase XVII note:** "Flying Mob" is listed as its own row for readability, but `Bat` is not a
 separate runtime type from `IDamageableActor`'s perspective — it implements the same interface as
 every ground mob and reuses `GroundMobCombat`/`GroundMobLifecycle` unmodified. Only its movement
-(`BatSystem.TryFly`, bespoke, not `GroundMobMovement.CanStandAt`) differs. See
+(`BatSystem.TryFly`, bespoke, not `GroundMobMovement.TryMoveHorizontal`) differs. See
 [phase-xvii findings, Priority 1](history/phases/phase-xvii-runtime-pressure-findings.md) for why this was kept
 as one interface rather than split.
 
 **Phase XX note:** "Swimming Mob" is the same situation — `Fish` is a third confirmation (after
 Bat, Minecart) that the interface (renamed this phase to `IDamageableActor`, see §10) describes a
 runtime shape broader than "ground" or "mob." `FishSystem.TrySwim` is its own third distinct
-movement-validity predicate, alongside `GroundMobMovement.CanStandAt` (ground) and `BatSystem
+movement-validity predicate, alongside `GroundMobMovement.TryMoveHorizontal` (ground) and `BatSystem
 .TryFly` (flight) — see [phase-xx findings, Priority 2](history/phases/phase-xx-runtime-relationships-findings.md)
 for the three-way comparison.
 
@@ -99,8 +99,8 @@ YES = concrete field/method exists. PARTIAL = the concept exists but not as a fi
 | Persistence | YES | NO | NO | NO | NO |
 | Interest visibility | N/A | YES `ActorInterest.Includes` (all 11 species, via the shared `ViewerReconciliation.Sync` extracted in Phase XX) | YES `ActorInterest.Includes`, same shared `ViewerReconciliation.Sync` | PARTIAL — chunk-knowledge, not `ActorInterest` | NO — unconditional broadcast |
 | Interaction (beyond attack) | N/A | YES (real) — Villager trade, Cow feed, and Minecart mount/dismount (Phase XX, superseding Phase XIX's push) all consume `InventoryTransactionPacket.ActorInteract` via `Player.TryConsumeInteractIntent`; every other species still attack-only | NO | YES — pickup via AABB reach check | NO |
-| AI | N/A | YES — per-species (chase, wander, fuse, teleport, 3D wander, phase-based boss); ground movement via `GroundMobMovement.CanStandAt`, flight via Bat's bespoke `TryFly`, swimming via Fish's bespoke `TrySwim` (Phase XX, a third distinct validity rule); Minecart has none at all — moves only when ridden | NO | NO | NO |
-| Physics | Client-authoritative movement, not reviewed here | NO gravity; `CanStandAt`/`TryFly`/`TrySwim` step validity only | YES — gravity (`GravityPerTick`), block-hit detection | NO | YES — gravity + drag (`Gravity`, `DragFactor`) + landing/collision |
+| AI | N/A | YES — per-species (chase, wander, fuse, teleport, 3D wander, phase-based boss); ground movement via `GroundMobMovement.TryMoveHorizontal`, flight via Bat's bespoke `TryFly`, swimming via Fish's bespoke `TrySwim` (Phase XX, a third distinct validity rule); Minecart has none at all — moves only when ridden | NO | NO | NO |
+| Physics | Client-authoritative movement, not reviewed here | Phase XXIX — real gravity/falling/landing/step-up for ground-walking species (`GroundMobMovement.ResolveVertical`, same 0.08/0.98/3.92 constants as `GravityPerTick` below); Minecart/Enderman keep step-validity-only (`IsSupportedGroundCell`, no vertical model); `TryFly`/`TrySwim` unaffected | YES — gravity (`GravityPerTick`), block-hit detection | NO | YES — gravity + drag (`Gravity`, `DragFactor`) + landing/collision |
 
 The goal of this matrix is not to identify components to build. It is to make visible which
 capabilities are genuinely repeated (Position across all categories; Lifetime as *two different
@@ -495,7 +495,8 @@ mob-applied effect).
 `Minecart` — no AI, no targeting, no wander, no gravity, moves only via
 `MinecartSystem.TryHandleInteraction` (the third `ActorInteract` consumer) then coasts under
 friction. Still implements `IGroundMob` and reuses `GroundMobCombat`/`GroundMobMovement
-.CanStandAt`/`GroundMobLifecycle` unmodified. No new runtime category emerged — see §1's Phase XIX
+.IsSupportedGroundCell`/`GroundMobLifecycle` unmodified (Minecart never gained gravity/step-up —
+see Phase XXIX's scope note). No new runtime category emerged — see §1's Phase XIX
 note. What remains untested: real bidirectional player-riding (a player controlling an entity's
 movement in real time), deliberately deferred rather than built speculatively — see rejected
 approaches in the phase findings.

@@ -100,6 +100,7 @@ sealed class GolemSystem : IGameSystem
             if (golem.IsEnraged)
                 TrySlam(golem, online, clock);
 
+            ApplyGravity(golem);
             ReconcileViewers(golem, online);
         }
 
@@ -240,10 +241,21 @@ sealed class GolemSystem : IGameSystem
     /// <summary>Concrete Golem rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
     private bool TryMove(Golem golem, float x, float z)
     {
-        if (!GroundMobMovement.CanStandAt(_world, x, golem.PositionY, z)) return false;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, golem.PositionX, golem.PositionY, golem.PositionZ, x, z, out var resolvedY)) return false;
         golem.PositionX = x;
+        golem.PositionY = resolvedY;
         golem.PositionZ = z;
         return true;
+    }
+
+    /// <summary>Phase XXIX: one tick of gravity/falling/landing — see VillagerSystem's identical helper for why fields always round-trip.</summary>
+    private void ApplyGravity(Golem golem)
+    {
+        var y = golem.PositionY;
+        var fallSpeed = golem.VerticalFallSpeed;
+        GroundMobMovement.ResolveVertical(_world, golem.PositionX, golem.PositionZ, ref y, ref fallSpeed, out _);
+        golem.PositionY = y;
+        golem.VerticalFallSpeed = fallSpeed;
     }
 
     private void TryAttackPlayer(Golem golem, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online)

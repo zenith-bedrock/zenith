@@ -48,6 +48,31 @@ public sealed class BatSystemTests
         Assert.True(bat.PositionX != startX || bat.PositionZ != startZ || bat.PositionY != startY);
     }
 
+    /// <summary>
+    /// Phase XXIX regression: BatSystem never calls <see cref="GroundMobMovement"/> — flight uses its
+    /// own bespoke clearance check, no gravity, no fall-speed field — so the new ground-locomotion
+    /// resolver and gravity model must have zero effect on a bat suspended mid-air.
+    /// </summary>
+    [Fact]
+    public void Bat_flight_is_not_affected_by_ground_gravity()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("distant-spelunker");
+        player.PositionX = 1000;
+        player.PositionZ = 1000;
+        var store = new BatStore();
+        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 20, 0);
+        Assert.True(store.TryAdd(bat));
+        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(4));
+
+        for (var i = 0; i < 100; i++)
+            system.Tick(fx.Clock, fx.Players.Online);
+
+        // A ground actor left this high with no support would fall ~4 blocks/tick and hit terrain
+        // long before 100 ticks. A bat has no fall-speed state and no gravity, so it stays airborne.
+        Assert.True(bat.PositionY > Blocks.FlatSpawnY);
+    }
+
     [Fact]
     public void Bat_never_attacks_or_damages_a_nearby_player()
     {

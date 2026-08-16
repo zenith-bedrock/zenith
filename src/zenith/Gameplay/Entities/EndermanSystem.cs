@@ -218,7 +218,7 @@ sealed class EndermanSystem : IGameSystem
         for (var attempt = 0; attempt < TeleportCandidateAttempts; attempt++)
         {
             var candidateY = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
-            if (GroundMobMovement.CanStandAt(_world, x, candidateY, z))
+            if (GroundMobMovement.IsSupportedGroundCell(_world, x, candidateY, z))
             {
                 enderman.PositionX = x;
                 enderman.PositionY = candidateY;
