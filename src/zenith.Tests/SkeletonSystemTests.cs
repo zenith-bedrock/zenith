@@ -10,14 +10,18 @@ namespace Zenith.Tests;
 
 public sealed class SkeletonSystemTests
 {
-    private static ProjectileSystem CreateProjectileSystem(IntentTestFixture fx, EntityRuntime stores)
+    private static ProjectileSystem CreateProjectileSystem(IntentTestFixture fx, EntityRuntime stores) =>
+        CreateProjectileSystem(fx, stores, out _);
+
+    private static ProjectileSystem CreateProjectileSystem(IntentTestFixture fx, EntityRuntime stores, out PlayerSpatialIndex spatial)
     {
         var zombies = new ZombieSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
         var minecarts = new MinecartSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
         var damage = new DamageDispatch();
         damage.Register(zombies.Owns, zombies.TryApplyDamage);
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
-        return new ProjectileSystem(fx.World, fx.Players, stores, damage);
+        spatial = new PlayerSpatialIndex();
+        return new ProjectileSystem(fx.World, fx.Players, stores, damage, spatial);
     }
 
     private static HealthState Health(SkeletonSystem system, EntityId id)
@@ -173,7 +177,7 @@ public sealed class SkeletonSystemTests
         var target = fx.AddInGamePlayer("victim");
         target.PositionY = 100f;
         var stores = new EntityRuntime();
-        var projectileSystem = CreateProjectileSystem(fx, stores);
+        var projectileSystem = CreateProjectileSystem(fx, stores, out var spatial);
         var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
         system.SpawnSkeleton(target.PositionX + 10f, target.PositionY, target.PositionZ);
 
@@ -183,6 +187,7 @@ public sealed class SkeletonSystemTests
         {
             fx.Clock.Advance();
             system.Tick(fx.Clock, fx.Players.Online);
+            spatial.Rebuild(fx.Players.Online); // mirrors PlayerSpatialIndexSystem's tick-ordering role
             projectileSystem.Tick(fx.Clock, fx.Players.Online);
         }
 

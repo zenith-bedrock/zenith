@@ -466,6 +466,8 @@ internal static class RuntimeLoadHarness
                 RuntimeDiagnostics?.Tick ?? WorldDiagnostics?.Tick ?? default);
             Loop.Register(new TimeSyncSystem());
             Loop.Register(new MovementSystem(players));
+            var playerSpatial = new PlayerSpatialIndex();
+            Loop.Register(new PlayerSpatialIndexSystem(playerSpatial));
             Loop.Register(new ChatSystem());
             Loop.Register(new GameModeSystem());
             ZombieSystem? zombieSystem = null;
@@ -488,7 +490,7 @@ internal static class RuntimeLoadHarness
                     var damage = new Zenith.Gameplay.Entities.DamageDispatch();
                     damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
                     damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
-                    Projectiles = new ProjectileSystem(world, players, entities, damage);
+                    Projectiles = new ProjectileSystem(world, players, entities, damage, playerSpatial);
                     if (WorldDiagnostics is { } projectileTimings)
                         Loop.Register(Projectiles, projectileTimings.Projectile);
                     else
@@ -515,7 +517,7 @@ internal static class RuntimeLoadHarness
                 damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
                 damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
                 damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
-                Projectiles = new ProjectileSystem(world, players, entities, damage);
+                Projectiles = new ProjectileSystem(world, players, entities, damage, playerSpatial);
                 var skeletonSystem = new SkeletonSystem(world, players, entities, Projectiles, itemPalette);
                 Skeletons = skeletonSystem;
                 damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
