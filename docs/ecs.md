@@ -116,6 +116,23 @@ the current entity, is safe. There is no deferred command buffer in this first E
 
 Only 2- and 3-arity queries exist because no current system needs more.
 
+### `ChunkSpatialIndex<T>` (`Gameplay/Entities/ChunkSpatialIndex.cs`, Phase XXVIII)
+
+Not part of the ECS core — lives under `Gameplay/Entities/` since it's actor-gameplay acceleration,
+not component storage — but built to sit directly on top of `Query`'s output. A small chunk-bucketed
+(16×16 block, `ChunkMath.BlockToChunk`) candidate index: `Insert(item, x, z)`, `Clear()`,
+`EnumerateNearby(x, z, radius)` (allocation-free struct enumerator, same idiom as `Query2`/`Query3`
+above). It answers "which candidates occupy these nearby chunks?" only — every exact
+distance/height/state check stays with the caller, and it never decides gameplay. It is a **derived**
+structure, rebuilt from whichever store owns position truth (never incremental — see the findings
+doc for why), not authoritative storage in its own right.
+
+Two instances exist today: an `EntityId`-keyed one private to `ProjectileSystem` (ECS damageable
+actors, rebuilt once per `Tick` from `Query.With(Health, Positions)`), and a `Player.Player`-keyed
+`PlayerSpatialIndex` shared across systems, rebuilt by `PlayerSpatialIndexSystem` right after
+`MovementSystem`. Full audit, ownership rationale, and before/after benchmarks:
+[`phase-xxviii-spatial-query-scaling-findings.md`](history/phases/phase-xxviii-spatial-query-scaling-findings.md).
+
 ### `RuntimeIdIndex`
 
 ```csharp

@@ -22,10 +22,10 @@ public sealed class ProjectileSystemTests
         var fx = new IntentTestFixture();
         var owner = fx.AddInGamePlayer("owner");
         owner.Yaw = -90f; // +X
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
 
         owner.SubmitProjectileIntent();
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         var id = Assert.Single(system.Projectiles);
         Assert.True(system.ProjectileStates.TryGet(id, out var state));
@@ -40,18 +40,18 @@ public sealed class ProjectileSystemTests
         var fx = new IntentTestFixture();
         var owner = fx.AddInGamePlayer("owner");
         owner.Yaw = -90f;
-        var system = CreateSystem(fx, out var zombies, out _);
+        var system = CreateSystem(fx, out var zombies, out _, out var spatial);
         var zombieId = zombies.SpawnZombie(1f, owner.PositionY, owner.PositionZ);
         zombies.TryApplyDamage(zombieId, DamageSource.Generic, 14f, fx.Players.Online, fx.Clock.CurrentTick);
         fx.Clock.AdvanceBy(11); // past the hit-invulnerability window — the arrow is a distinct, later hit.
 
         owner.SubmitProjectileIntent();
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         Assert.Empty(system.Projectiles);
         Assert.False(zombies.Stores.Entities.IsAlive(zombieId));
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Empty(system.Projectiles);
     }
 
@@ -60,13 +60,86 @@ public sealed class ProjectileSystemTests
     {
         var fx = new IntentTestFixture();
         var target = fx.AddInGamePlayer("target");
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
         system.TrySpawnFromActor(999, 0.4f, target.PositionY + 1f, target.PositionZ, -0.1f, 0f, 0f, fx.Players.Online);
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         Assert.Empty(system.Projectiles);
         Assert.Equal(14f, target.Health);
+    }
+
+    /// <summary>Phase XXVIII characterization — the chunk-based candidate index must still find a hit whose actor sits in the neighboring chunk, not only the chunk containing the projectile's own position.</summary>
+    [Fact]
+    public void Projectile_hits_a_damageable_actor_just_across_a_chunk_boundary()
+    {
+        var fx = new IntentTestFixture();
+        var owner = fx.AddInGamePlayer("owner");
+        owner.PositionY = 100f;
+        var system = CreateSystem(fx, out var zombies, out _, out var spatial);
+        var zombieId = zombies.SpawnZombie(16.1f, 100f, 0f); // chunk (1, 0)
+
+        // Explicit spawn one step from the target so the very first Advance() lands inside HitRadius,
+        // straddling the chunk boundary at x=16 (chunk (0,0) -> chunk (1,0)).
+        SpawnRaw(system, fx, owner.RuntimeId, 15.7f, 100f, 0f, 0.4f, 0f, 0f);
+
+        Tick(system, spatial, fx);
+
+        Assert.True(zombies.Stores.Health.TryGet(zombieId, out var health));
+        Assert.True(health.State.Current < health.State.Maximum);
+    }
+
+    /// <summary>Phase XXVIII characterization — an actor well outside HitRadius of every position the projectile occupies this tick must never be hit, chunk membership notwithstanding.</summary>
+    [Fact]
+    public void Projectile_ignores_a_damageable_actor_far_outside_hit_radius()
+    {
+        var fx = new IntentTestFixture();
+        var owner = fx.AddInGamePlayer("owner");
+        owner.PositionY = 100f;
+        var system = CreateSystem(fx, out var zombies, out _, out var spatial);
+        var zombieId = zombies.SpawnZombie(500f, 100f, 500f);
+
+        SpawnRaw(system, fx, owner.RuntimeId, 0f, 100f, 0f, 0.1f, 0f, 0f);
+        Tick(system, spatial, fx);
+
+        Assert.True(zombies.Stores.Health.TryGet(zombieId, out var health));
+        Assert.Equal(health.State.Maximum, health.State.Current);
+        Assert.Single(system.Projectiles); // still in flight, no hit consumed it
+    }
+
+    /// <summary>Phase XXVIII characterization — a mob-fired projectile can hit a player across the same chunk boundary the ECS-actor case above exercises.</summary>
+    [Fact]
+    public void Projectile_hits_a_player_just_across_a_chunk_boundary()
+    {
+        var fx = new IntentTestFixture();
+        var target = fx.AddInGamePlayer("target");
+        target.PositionX = 16.1f; // chunk (1, 0)
+        var system = CreateSystem(fx, out _, out _, out var spatial);
+
+        // ownerRuntimeId 999 is not any online player's RuntimeId, matching how a mob-fired arrow
+        // is allowed to hit players (see FindHitPlayer's doc comment).
+        SpawnRaw(system, fx, 999, 15.7f, target.PositionY + 1f, target.PositionZ, 0.4f, 0f, 0f);
+
+        Tick(system, spatial, fx);
+
+        Assert.True(target.Health < target.MaxHealth);
+    }
+
+    /// <summary>Phase XXIII-B regression, re-verified directly against the new candidate resolution: a projectile spawned at its own shooter's position must never damage that shooter.</summary>
+    [Fact]
+    public void Projectile_never_hits_its_own_shooter_actor()
+    {
+        var fx = new IntentTestFixture();
+        var observer = fx.AddInGamePlayer("observer");
+        var system = CreateSystem(fx, out var zombies, out _, out var spatial);
+        var zombieId = zombies.SpawnZombie(10f, observer.PositionY, 0f);
+        Assert.True(zombies.Stores.Identities.TryGet(zombieId, out var identity));
+
+        SpawnRaw(system, fx, (long)identity.ActorRuntimeId, 10f, observer.PositionY, 0f, 0f, 0f, 0f);
+        Tick(system, spatial, fx);
+
+        Assert.True(zombies.Stores.Health.TryGet(zombieId, out var health));
+        Assert.Equal(health.State.Maximum, health.State.Current);
     }
 
     [Fact]
@@ -74,11 +147,11 @@ public sealed class ProjectileSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("observer");
-        var system = CreateSystem(fx, out var zombies, out _);
+        var system = CreateSystem(fx, out var zombies, out _, out var spatial);
         var zombieId = zombies.SpawnZombie(20f, player.PositionY, 0f);
         system.TrySpawnFromActor(player.RuntimeId, 0f, -60.5f, 0f, 0f, -0.1f, 0f, fx.Players.Online);
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         Assert.Empty(system.Projectiles);
         Assert.True(zombies.Stores.Health.TryGet(zombieId, out var health));
@@ -91,10 +164,10 @@ public sealed class ProjectileSystemTests
         var fx = new IntentTestFixture();
         var observer = fx.AddInGamePlayer("observer");
         observer.Chunks.Radius = -1;
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
         var id = SpawnRaw(system, fx, 999, 0.4f, -57f, 0f, 0f, 0f, 0f);
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         Assert.Equal(0, system.ReplicatedMoveCount);
         Assert.True(system.ReplicatedMoveSkippedCount > 0);
@@ -110,16 +183,16 @@ public sealed class ProjectileSystemTests
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
         first.Yaw = -90f;
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
         first.SubmitProjectileIntent();
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Single(system.Projectiles);
         var before = fx.Transport.Captured.Count;
 
         var late = fx.AddInGamePlayer("late");
         late.Chunks.Radius = 1;
         late.Chunks.RememberMany([(0, 0)]);
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         foreach (var player in fx.Players.Online)
             player.Session.RakSession.Tick();
 
@@ -132,21 +205,21 @@ public sealed class ProjectileSystemTests
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = -1;
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
         var id = SpawnRaw(system, fx, first.RuntimeId, 0.5f, -57f, 0.5f, 0f, 0f, 0f);
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         var late = fx.AddInGamePlayer("late");
         late.Chunks.Radius = -1;
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Equal(2, system.ReplicatedSpawnCount);
 
         late.IsInGame = false;
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Equal(1, system.ReplicatedRemovalCount);
 
         late.IsInGame = true;
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Equal(3, system.ReplicatedSpawnCount);
         Assert.True(system.Stores.Entities.IsAlive(id));
     }
@@ -164,20 +237,20 @@ public sealed class ProjectileSystemTests
         owner.Chunks.RememberMany([(0, 0)]);
         distant.Chunks.RememberMany([(8, 8)]);
         owner.Yaw = -90f;
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
 
         owner.SubmitProjectileIntent();
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Equal(1, system.ReplicatedSpawnCount);
 
         distant.Chunks.RememberMany([(0, 0)]);
         Assert.Single(system.Projectiles);
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Single(system.Projectiles);
         Assert.Equal(2, system.ReplicatedSpawnCount);
 
         distant.Chunks.Forget(0, 0);
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
         Assert.Equal(1, system.ReplicatedRemovalCount);
     }
 
@@ -190,10 +263,10 @@ public sealed class ProjectileSystemTests
         west.Chunks.Radius = east.Chunks.Radius = 1;
         west.Chunks.RememberMany([(0, 0)]);
         east.Chunks.RememberMany([(1, 0)]);
-        var system = CreateSystem(fx, out _, out _);
+        var system = CreateSystem(fx, out _, out _, out var spatial);
         SpawnRaw(system, fx, west.RuntimeId, 15.8f, 100f, 0.5f, 0.5f, 0f, 0f);
 
-        system.Tick(fx.Clock, fx.Players.Online);
+        Tick(system, spatial, fx);
 
         Assert.Equal(2, system.ReplicatedSpawnCount);
         Assert.Equal(1, system.ReplicatedRemovalCount);
@@ -215,7 +288,21 @@ public sealed class ProjectileSystemTests
         return system.Projectiles[^1];
     }
 
-    private static ProjectileSystem CreateSystem(IntentTestFixture fx, out ZombieSystem zombies, out MinecartSystem minecarts)
+    /// <summary>
+    /// Mirrors production ordering (<c>PlayerSpatialIndexSystem</c> rebuilds right after
+    /// <c>MovementSystem</c>, before any mob/projectile system ticks) without needing the full
+    /// GameLoop: rebuild this tick's player snapshot, then tick <paramref name="system"/>.
+    /// </summary>
+    private static void Tick(ProjectileSystem system, PlayerSpatialIndex spatial, IntentTestFixture fx)
+    {
+        spatial.Rebuild(fx.Players.Online);
+        system.Tick(fx.Clock, fx.Players.Online);
+    }
+
+    private static ProjectileSystem CreateSystem(IntentTestFixture fx, out ZombieSystem zombies, out MinecartSystem minecarts) =>
+        CreateSystem(fx, out zombies, out minecarts, out _);
+
+    private static ProjectileSystem CreateSystem(IntentTestFixture fx, out ZombieSystem zombies, out MinecartSystem minecarts, out PlayerSpatialIndex spatial)
     {
         var stores = new EntityRuntime();
         zombies = new ZombieSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
@@ -223,7 +310,8 @@ public sealed class ProjectileSystemTests
         var damage = new DamageDispatch();
         damage.Register(zombies.Owns, zombies.TryApplyDamage);
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
-        return new ProjectileSystem(fx.World, fx.Players, stores, damage);
+        spatial = new PlayerSpatialIndex();
+        return new ProjectileSystem(fx.World, fx.Players, stores, damage, spatial);
     }
 
     /// <summary>
@@ -245,7 +333,7 @@ public sealed class ProjectileSystemTests
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
         damage.Register(cows.Owns, cows.TryApplyDamage);
         damage.Register(spiders.Owns, spiders.TryApplyDamage);
-        return new ProjectileSystem(fx.World, fx.Players, stores, damage);
+        return new ProjectileSystem(fx.World, fx.Players, stores, damage, new PlayerSpatialIndex());
     }
 
     [Fact]
@@ -315,7 +403,7 @@ public sealed class ProjectileSystemTests
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
         damage.Register(cows.Owns, cows.TryApplyDamage);
         damage.Register(spiders.Owns, spiders.TryApplyDamage);
-        var system = new ProjectileSystem(fx.World, fx.Players, stores, damage);
+        var system = new ProjectileSystem(fx.World, fx.Players, stores, damage, new PlayerSpatialIndex());
         var skeletons = new SkeletonSystem(fx.World, fx.Players, stores, system, fx.Context.ItemPalette);
         damage.Register(skeletons.Owns, skeletons.TryApplyDamage);
 

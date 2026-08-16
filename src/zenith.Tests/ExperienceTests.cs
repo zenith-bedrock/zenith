@@ -93,7 +93,7 @@ public class ExperienceTests
         var damage = new Zenith.Gameplay.Entities.DamageDispatch();
         damage.Register(zombies.Owns, zombies.TryApplyDamage);
         damage.Register(minecarts.Owns, minecarts.TryApplyDamage);
-        var projectiles = new ProjectileSystem(fx.World, fx.Players, ecsStores, damage);
+        var projectiles = new ProjectileSystem(fx.World, fx.Players, ecsStores, damage, new PlayerSpatialIndex());
         var system = new SkeletonSystem(fx.World, fx.Players, ecsStores, projectiles, fx.Context.ItemPalette);
         var id = system.SpawnSkeleton(player.PositionX + 1, player.PositionY, player.PositionZ);
         Assert.True(ecsStores.Health.TryGet(id, out var health));

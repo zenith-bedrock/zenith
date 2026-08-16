@@ -16,13 +16,16 @@ namespace Zenith.Gameplay.Entities;
 ///
 /// Also where the old <c>ProjectileSystem → ZombieStore</c> coupling (audited per the phase brief,
 /// item 21) was replaced with a real cross-species hit query: <see cref="FindHitDamageableActor"/>
-/// walks <c>Query.With(stores.Health, stores.Positions)</c> — the driving store is Health,
+/// resolves candidates against <c>_actorSpatial</c>, a chunk-bucketed index rebuilt once per Tick
+/// from <c>Query.With(stores.Health, stores.Positions)</c> — the driving store is Health,
 /// deliberately, since only migrated damageable actors have one and projectiles don't, making it
 /// the smaller set to iterate. Which system actually owns the hit entity and applies the damage is
 /// resolved via <see cref="DamageDispatch"/> (Phase XXII) — a small registered-handler list, not a
-/// hardcoded per-species chain and not a global spatial index (neither was warranted at these actor
-/// counts — see docs/history/phases/phase-xxi-ecs-foundation-findings.md and
-/// docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md).
+/// hardcoded per-species chain. A global/generic spatial index was not warranted at Phase
+/// XXI/XXII's actor counts; Phase XXVIII's own audit is what justified this local, single-consumer
+/// <see cref="ChunkSpatialIndex{T}"/> use — see docs/history/phases/phase-xxi-ecs-foundation-findings.md,
+/// docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md and
+/// docs/history/phases/phase-xxviii-spatial-query-scaling-findings.md.
 /// </summary>
 sealed class ProjectileSystem : IGameSystem
 {
@@ -53,18 +56,26 @@ sealed class ProjectileSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<ProjectileState> _projectiles;
     private readonly DamageDispatch _damage;
+    private readonly PlayerSpatialIndex _playerSpatial;
+    // Phase XXVIII — ECS damageable-actor candidates only (Health+Position), owned and rebuilt
+    // once per Tick from the same Query.With(Health, Positions) this system already drove. Not
+    // shared cross-system: no other current consumer needs "which damageable ECS actors are near
+    // X/Z," so keeping this local avoids a cross-system ownership/ordering question a shared index
+    // would raise for no proven benefit yet (see docs/history/phases/phase-xxviii-spatial-query-scaling-findings.md).
+    private readonly ChunkSpatialIndex<EntityId> _actorSpatial = new();
     private readonly HashSet<(long EntityId, long PlayerId)> _replicated = [];
     private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPosition> _lastProjected = [];
     private readonly List<RawActorPose> _moveBatch = [];
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
 
-    public ProjectileSystem(World.World world, PlayerManager players, EntityRuntime stores, DamageDispatch damage)
+    public ProjectileSystem(World.World world, PlayerManager players, EntityRuntime stores, DamageDispatch damage, PlayerSpatialIndex playerSpatial)
     {
         _world = world;
         _players = players;
         _stores = stores;
         _projectiles = new ComponentStore<ProjectileState>(stores.Entities);
         _damage = damage;
+        _playerSpatial = playerSpatial;
     }
 
     internal IReadOnlyList<EntityId> Projectiles => _projectiles.Entities;
@@ -92,6 +103,18 @@ sealed class ProjectileSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         SpawnFromPlayerInputs(online);
+
+        // Rebuilt once per Tick, not per projectile: every projectile this tick shares the same
+        // authoritative snapshot of "which ECS damageable actors occupy which chunk." A candidate
+        // that dies to an earlier projectile in this same loop is still safely rejected below —
+        // TryGet/Has re-checks live component presence at hit-test time, never trusts a cached
+        // position/liveness from the bucket itself (see ChunkSpatialIndex's own doc comment).
+        _actorSpatial.Clear();
+        foreach (var candidateId in Query.With(_stores.Health, _stores.Positions))
+        {
+            _stores.Positions.TryGet(candidateId, out var candidatePos);
+            _actorSpatial.Insert(candidateId, candidatePos.X, candidatePos.Z);
+        }
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_projectiles.Entities);
@@ -148,7 +171,7 @@ sealed class ProjectileSystem : IGameSystem
             return;
         }
 
-        var player = FindHitPlayer(state.OwnerRuntimeId, nextX, nextY, nextZ, online);
+        var player = FindHitPlayer(state.OwnerRuntimeId, nextX, nextY, nextZ);
         if (player is not null)
         {
             // Knockback direction follows the arrow's own flight, not the shooter's position —
@@ -191,8 +214,12 @@ sealed class ProjectileSystem : IGameSystem
     /// </summary>
     private EntityId? FindHitDamageableActor(float x, float y, float z, long ownerRuntimeId)
     {
-        foreach (var candidateId in Query.With(_stores.Health, _stores.Positions))
+        // The spatial index only narrows which chunks to look in — every exact check below (owner
+        // exclusion, Health/Position still present, X/Z radius, Y hitbox) is unchanged from before
+        // this phase, run against live component state, never cached bucket data.
+        foreach (var candidateId in _actorSpatial.EnumerateNearby(x, z, HitRadius))
         {
+            if (!_stores.Health.Has(candidateId)) continue; // may have died earlier this same tick
             if (_stores.Identities.TryGet(candidateId, out var identity) && identity.ActorRuntimeId == (ulong)ownerRuntimeId)
                 continue;
             if (!_stores.Positions.TryGet(candidateId, out var pos)) continue;
@@ -243,18 +270,17 @@ sealed class ProjectileSystem : IGameSystem
         }
     }
 
-    private static Player.Player? FindHitPlayer(long ownerRuntimeId, float x, float y, float z,
-        IReadOnlyList<Player.Player> online)
+    private Player.Player? FindHitPlayer(long ownerRuntimeId, float x, float y, float z)
     {
-        foreach (var player in online)
-        {
-            // The existing player snowball slice only targets Zombies/Minecarts. Concrete ranged
-            // actors use an id not owned by an online player, which lets their projectile affect
-            // players without silently introducing player-vs-player combat in this phase.
-            if (player.RuntimeId == ownerRuntimeId) return null;
-        }
+        // The existing player snowball slice only targets Zombies/Minecarts. Concrete ranged
+        // actors use an id not owned by an online player, which lets their projectile affect
+        // players without silently introducing player-vs-player combat in this phase. Was an O(N)
+        // online scan; PlayerManager already indexes RuntimeId -> Player (Player Melee Execution
+        // Model phase), so this is now a direct O(1) lookup instead of a second full scan.
+        if (_players.GetByRuntimeId(ownerRuntimeId) is not null) return null;
 
-        foreach (var player in online)
+        // Spatial index narrows candidates only; every exact check below is unchanged.
+        foreach (var player in _playerSpatial.EnumerateNearby(x, z, HitRadius))
         {
             if (!player.IsInGame || player.IsDead || player.RuntimeId == ownerRuntimeId) continue;
             if (MathF.Abs(player.PositionX - x) > HitRadius || MathF.Abs(player.PositionZ - z) > HitRadius) continue;

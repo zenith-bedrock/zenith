@@ -104,7 +104,7 @@ class ZenithServer
         var fish = new FishStore();
         var diagnostics = new ServerRuntimeDiagnostics();
         var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
-        RegisterEarlySystems(gameLoop, players, diagnostics);
+        var playerSpatial = RegisterEarlySystems(gameLoop, players, diagnostics);
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
@@ -145,7 +145,7 @@ class ZenithServer
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities, creepers, endermen,
-            bats, villagers, golems, fish, itemPalette, recipes, creative);
+            bats, villagers, golems, fish, itemPalette, recipes, creative, playerSpatial);
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative, diagnostics);
@@ -195,15 +195,20 @@ class ZenithServer
     /// palettes/world exist. Grouped here so the constructor reads as one sequence of named steps
     /// instead of interleaving registration with palette/world bootstrap.
     /// </summary>
-    private static void RegisterEarlySystems(GameLoop gameLoop, PlayerManager players, ServerRuntimeDiagnostics diagnostics)
+    private static PlayerSpatialIndex RegisterEarlySystems(GameLoop gameLoop, PlayerManager players, ServerRuntimeDiagnostics diagnostics)
     {
         gameLoop.Register(new TimeSyncSystem(), diagnostics.System("time-sync"));
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
         gameLoop.Register(new MovementSystem(players), diagnostics.System("movement"));
+        // Phase XXVIII — rebuilds from this tick's just-applied pose, so every later system (this
+        // tick) queries current, not stale, player positions. See PlayerSpatialIndexSystem.
+        var playerSpatial = new PlayerSpatialIndex();
+        gameLoop.Register(new PlayerSpatialIndexSystem(playerSpatial), diagnostics.System("player-spatial-index"));
         // ItemUseOnActor player targets are resolved after movement established this tick's pose.
         gameLoop.Register(new PlayerMeleeSystem(players), diagnostics.System("player-melee"));
         gameLoop.Register(new ChatSystem(), diagnostics.System("chat"));
         gameLoop.Register(new GameModeSystem(), diagnostics.System("game-mode"));
+        return playerSpatial;
     }
 
     /// <summary>
@@ -225,7 +230,8 @@ class ZenithServer
         FishStore fishStore,
         ItemPalette itemPalette,
         RecipeRegistry recipes,
-        CreativeCatalog creative)
+        CreativeCatalog creative,
+        PlayerSpatialIndex playerSpatial)
     {
         var gravity = new GravitySystem(world, players);
         // Phase XXI/XXII — ECS-authoritative roster. DamageDispatch (Phase XXII) is built once and
@@ -242,7 +248,7 @@ class ZenithServer
         damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
         var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
         damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
-        var projectileSystem = new ProjectileSystem(world, players, entities, damage);
+        var projectileSystem = new ProjectileSystem(world, players, entities, damage, playerSpatial);
         var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette);
         damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
 
