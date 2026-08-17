@@ -100,7 +100,10 @@ sealed class GameLoop
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Fatal game system failure in {system.GetType().Name}: {ex}");
+                    var elapsed = Stopwatch.GetElapsedTime(started);
+                    _logger.Error(
+                        $"Fatal game system failure: system={system.GetType().Name} tick={_clock.CurrentTick} " +
+                        $"onlinePlayers={_onlineScratch.Count} elapsedInTick={elapsed.TotalMilliseconds:F1}ms: {ex}");
                     throw;
                 }
                 finally { systemScope.Dispose(); }
