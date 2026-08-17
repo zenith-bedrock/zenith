@@ -10,31 +10,40 @@ namespace Zenith.World;
 /// Colunas: <c>c:x:z</c> (unchanged, exact single-key lookup). Overlay/chest keys are now binary,
 /// chunk-prefixed (<see cref="WorldStorageKeys.ChunkPrefix"/>), enabling <see cref="LoadOverlaysForChunkAsync"/>
 /// / <see cref="LoadChestsForChunkAsync"/> as a Seek + prefix walk instead of a full-table scan.
-/// Overlay Puts enfileiram e retornam sem esperar disco (worker único sob <c>_gate</c>).
+/// <para/>
+/// Overlay/chest/inventory/armor/playerdata/world-metadata Puts all enqueue onto one write queue and
+/// return without waiting on disk (ADR §41 — GameLoop never waits); a single background worker drains
+/// it at a bounded interval (<see cref="WriteWorkerPollMs"/>), not on unbounded thread-pool scheduling
+/// (ADR §124 — replaces the earlier per-call <c>Task.Run</c> pattern, which had no bound on how long a
+/// queued write could sit unexecuted under thread-pool pressure before a crash).
 /// </summary>
 sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 {
+    /// <summary>Worst-case time a queued write can sit undrained before a crash loses it (ADR §124)
+    /// — the worker polls at least this often even with no signal, and every enqueue also signals it
+    /// immediately. Matches the interval the earlier overlay-only worker already used.</summary>
+    private const int WriteWorkerPollMs = 50;
+
     private readonly DB _db;
     private readonly object _gate = new();
-    private readonly ConcurrentQueue<OverlayWrite> _overlayWrites = new();
-    private readonly ConcurrentDictionary<Task, byte> _pendingDiskTasks = new();
-    private readonly AutoResetEvent _overlaySignal = new(false);
-    private readonly Thread _overlayWorker;
+    private readonly ConcurrentQueue<PendingWrite> _pendingWrites = new();
+    private readonly AutoResetEvent _writeSignal = new(false);
+    private readonly Thread _writeWorker;
     private volatile bool _stopping;
     private bool _disposed;
 
-    private readonly record struct OverlayWrite(int X, int Y, int Z, int BlockRuntimeId, bool Delete);
+    private readonly record struct PendingWrite(byte[] Key, byte[]? Value, bool Delete);
 
     public LevelDbChunkStorage(string directory)
     {
         Directory.CreateDirectory(directory);
         _db = new DB(new Options { CreateIfMissing = true }, directory);
-        _overlayWorker = new Thread(OverlayWorkerLoop)
+        _writeWorker = new Thread(WriteWorkerLoop)
         {
             IsBackground = true,
-            Name = "LevelDb-OverlayWriter"
+            Name = "LevelDb-Writer"
         };
-        _overlayWorker.Start();
+        _writeWorker.Start();
     }
 
     public ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
@@ -79,10 +88,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-
-        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, blockRuntimeId, Delete: false));
-        _overlaySignal.Set();
+        EnqueueWrite(WorldStorageKeys.Overlay(x, y, z), BitConverter.GetBytes(blockRuntimeId), delete: false);
         return ValueTask.CompletedTask;
     }
 
@@ -90,10 +96,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask DeleteOverlayAsync(int x, int y, int z, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-
-        _overlayWrites.Enqueue(new OverlayWrite(x, y, z, BlockRuntimeId: 0, Delete: true));
-        _overlaySignal.Set();
+        EnqueueWrite(WorldStorageKeys.Overlay(x, y, z), null, delete: true);
         return ValueTask.CompletedTask;
     }
 
@@ -163,29 +166,15 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                _db.Put(ChestKey(x, y, z), blob);
-            }
-        }, cancellationToken));
+        EnqueueWrite(WorldStorageKeys.Chest(x, y, z), blob, delete: false);
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                _db.Delete(ChestKey(x, y, z));
-            }
-        }, cancellationToken));
+        EnqueueWrite(WorldStorageKeys.Chest(x, y, z), null, delete: true);
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask ForEachChestAsync(Action<int, int, int, byte[]> visitor, CancellationToken cancellationToken = default)
@@ -253,68 +242,42 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                _db.Put(WorldStorageKeys.Inventory(uuid), blob);
-            }
-        }, cancellationToken));
+        EnqueueWrite(WorldStorageKeys.Inventory(uuid), blob, delete: false);
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(WorldStorageKeys.Inventory(uuid), cancellationToken));
+        return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(WorldStorageKeys.Inventory(uuid), cancellationToken));
     }
 
     public ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                _db.Put(WorldStorageKeys.Armor(uuid), blob);
-            }
-        }, cancellationToken));
+        EnqueueWrite(WorldStorageKeys.Armor(uuid), blob, delete: false);
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(WorldStorageKeys.Armor(uuid), cancellationToken));
+        return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(WorldStorageKeys.Armor(uuid), cancellationToken));
     }
 
     public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                _db.Put(WorldStorageKeys.PlayerData(uuid), blob);
-            }
-        }, cancellationToken));
+        EnqueueWrite(WorldStorageKeys.PlayerData(uuid), blob, delete: false);
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<byte[]?>(GetUuidBlobAwaitedAsync(WorldStorageKeys.PlayerData(uuid), cancellationToken));
+        return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(WorldStorageKeys.PlayerData(uuid), cancellationToken));
     }
 
-    /// <summary>
-    /// One fixed key, read/written only at server startup (before any concurrent chunk/overlay
-    /// traffic) — no need for the pending-task-await race guard <see cref="GetUuidBlobAwaitedAsync"/>
-    /// uses for hot-path player data.
-    /// </summary>
     public ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -339,96 +302,72 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     public ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
-        return Track(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var terrainBytes = Encoding.UTF8.GetBytes(metadata.Terrain);
-            var blob = new byte[4 + terrainBytes.Length];
-            BitConverter.GetBytes(metadata.Seed).CopyTo(blob, 0);
-            terrainBytes.CopyTo(blob, 4);
-            lock (_gate)
-            {
-                _db.Put(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey), blob);
-            }
-        }, cancellationToken));
+        var terrainBytes = Encoding.UTF8.GetBytes(metadata.Terrain);
+        var blob = new byte[4 + terrainBytes.Length];
+        BitConverter.GetBytes(metadata.Seed).CopyTo(blob, 0);
+        terrainBytes.CopyTo(blob, 4);
+        EnqueueWrite(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey), blob, delete: false);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
-    /// Await in-flight Puts before read — fast quit→rejoin otherwise races Put and loads miss (S39b / §60).
+    /// Force-drains the write queue before reading (S39b / §60 — fast quit→rejoin otherwise races a
+    /// still-queued Put and loads a miss). Draining is synchronous and cheap enough to call inline:
+    /// it processes whatever's queued right now under <see cref="_gate"/>, the same work the
+    /// background worker would do, just not waiting up to <see cref="WriteWorkerPollMs"/> for it.
     /// </summary>
-    private async Task<byte[]?> GetUuidBlobAwaitedAsync(byte[] key, CancellationToken cancellationToken)
+    private Task<byte[]?> GetKeyBlobAwaitedAsync(byte[] key, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var pending = _pendingDiskTasks.Keys.ToArray();
-        if (pending.Length > 0)
-        {
-            try
-            {
-                await Task.WhenAll(pending).WaitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception)
-            {
-                // Still attempt Get — best-effort after failed/canceled Puts.
-            }
-        }
-
-        return await Task.Run(() =>
+        return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            DrainPendingWrites();
             lock (_gate)
             {
                 return _db.TryGet(key, out var mem) ? mem.ToArray() : null;
             }
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
     }
 
     public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var pending = _pendingDiskTasks.Keys.ToArray();
-        if (pending.Length > 0)
-            await Task.WhenAll(pending).WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        _overlaySignal.Set();
-        // Brief yield so overlay worker can drain; then force-drain under gate.
+        _writeSignal.Set();
+        // Brief yield so the write worker can drain; then force-drain under gate ourselves too, so
+        // FlushAsync's guarantee doesn't depend on the worker thread actually having run by now.
         await Task.Yield();
-        DrainOverlayWrites();
+        DrainPendingWrites();
     }
 
-    private ValueTask Track(Task task)
+    private void EnqueueWrite(byte[] key, byte[]? value, bool delete)
     {
-        _pendingDiskTasks[task] = 0;
-        _ = task.ContinueWith(
-            t => _pendingDiskTasks.TryRemove(t, out _),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-        return new ValueTask(task);
+        ObjectDisposedException.ThrowIf(_stopping || _disposed, this);
+        _pendingWrites.Enqueue(new PendingWrite(key, value, delete));
+        _writeSignal.Set();
     }
 
-    private void OverlayWorkerLoop()
+    private void WriteWorkerLoop()
     {
         while (!_stopping)
         {
-            _overlaySignal.WaitOne(50);
-            DrainOverlayWrites();
+            _writeSignal.WaitOne(WriteWorkerPollMs);
+            DrainPendingWrites();
         }
 
-        DrainOverlayWrites();
+        DrainPendingWrites();
     }
 
-    private void DrainOverlayWrites()
+    private void DrainPendingWrites()
     {
-        while (_overlayWrites.TryDequeue(out var write))
+        while (_pendingWrites.TryDequeue(out var write))
         {
-            var key = WorldStorageKeys.Overlay(write.X, write.Y, write.Z);
             lock (_gate)
             {
                 if (write.Delete)
-                    _db.Delete(key);
+                    _db.Delete(write.Key);
                 else
-                    _db.Put(key, BitConverter.GetBytes(write.BlockRuntimeId));
+                    _db.Put(write.Key, write.Value!);
             }
         }
     }
@@ -443,18 +382,16 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 
     private static byte[] ColumnKey(ChunkCoord coord) => WorldStorageKeys.Column(coord);
 
-    private static byte[] ChestKey(int x, int y, int z) => WorldStorageKeys.Chest(x, y, z);
-
     public void Dispose()
     {
         if (_disposed) return;
         _stopping = true;
-        _overlaySignal.Set();
-        _overlayWorker.Join(TimeSpan.FromSeconds(5));
-        DrainOverlayWrites();
+        _writeSignal.Set();
+        _writeWorker.Join(TimeSpan.FromSeconds(5));
+        DrainPendingWrites();
         lock (_gate) _db.Close();
         _db.Dispose();
-        _overlaySignal.Dispose();
+        _writeSignal.Dispose();
         _disposed = true;
     }
 }
