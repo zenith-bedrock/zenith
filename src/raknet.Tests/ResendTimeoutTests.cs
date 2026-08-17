@@ -26,9 +26,9 @@ public class ResendTimeoutTests
     private sealed class ProbeSession : RakNetSession
     {
         public void SeedBackup(uint sequence, long sentAtMs, List<Frame> frames) =>
-            OutputBackup[sequence] = (sentAtMs, frames);
+            UnacknowledgedFrameSets[sequence] = (sentAtMs, frames);
 
-        public int BackupCount => OutputBackup.Count;
+        public int UnacknowledgedCount => UnacknowledgedFrameSets.Count;
     }
 
     private static List<Frame> DecodeFrames(RecordingServer server)
@@ -102,6 +102,6 @@ public class ResendTimeoutTests
 
         var sent = DecodeFrames(server);
         Assert.DoesNotContain(sent, f => f.MessageIndex == 9);
-        Assert.Equal(1, session.BackupCount); // still outstanding, untouched
+        Assert.Equal(1, session.UnacknowledgedCount); // still outstanding, untouched
     }
 }
