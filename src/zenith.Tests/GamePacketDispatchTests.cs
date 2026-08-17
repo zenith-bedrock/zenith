@@ -203,4 +203,37 @@ public class GamePacketDispatchTests
         Assert.Single(recorder2.Received);
         Assert.Equal((44, (byte)0x09), recorder2.Received[0]);
     }
+
+    /// <summary>
+    /// The server only ever advertises ZLIB in NetworkSettingsPacket, so a compliant client never
+    /// sends the Snappy prefix (0x01). A batch declaring it must be rejected outright instead of
+    /// silently parsing still-compressed bytes as plaintext subpacket data.
+    /// </summary>
+    [Fact]
+    public void Snappy_compressed_batch_is_rejected_instead_of_misparsed()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("snappy-dispatcher");
+        var recorder = new RecordingHandler();
+        player.Session.SetHandler(recorder);
+
+        var writer = new BinaryStream();
+        writer.WriteByte(PacketCompression.SNAPPY);
+        writer.Write(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF });
+        var wireBatch = writer.TakeOwnedBuffer();
+
+        var stream = new BinaryStream(wireBatch);
+        var threw = false;
+        try
+        {
+            player.Session.HandleGamePacket(ref stream);
+        }
+        catch (NotSupportedException)
+        {
+            threw = true;
+        }
+
+        Assert.True(threw);
+        Assert.Empty(recorder.Received);
+    }
 }

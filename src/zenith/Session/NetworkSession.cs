@@ -350,7 +350,13 @@ class NetworkSession
                 stream = new BinaryStream(decompressed, decompressedLength);
             }
 
-            // TODO: snappy compression
+            if (compressionType == PacketCompression.SNAPPY)
+            {
+                // The server only ever advertises ZLIB in NetworkSettingsPacket (LoginSessionHandler),
+                // so a compliant client never sends this prefix. Rejecting it explicitly avoids
+                // silently parsing still-compressed bytes as plaintext packet data.
+                throw new NotSupportedException("Snappy-compressed game packet received, but Snappy decompression is not implemented.");
+            }
 
             // Inbound batch framing (Phase XXVII): each subpacket used to be copied into its own
             // byte[] (GamePacket.Decode) purely so it could be handed to a handler that immediately

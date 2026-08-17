@@ -38,6 +38,10 @@ public sealed class GameLoopTests
         Assert.Equal(0, following.TickCount);
         Assert.Single(logger.Errors);
         Assert.Contains("Fatal game system failure", logger.Errors[0]);
+        Assert.Contains("system=ThrowingSystem", logger.Errors[0]);
+        Assert.Contains("tick=1", logger.Errors[0]);
+        Assert.Contains("onlinePlayers=0", logger.Errors[0]);
+        Assert.Contains("elapsedInTick=", logger.Errors[0]);
     }
 
     [Fact]
