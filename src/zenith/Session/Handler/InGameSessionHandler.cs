@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using Zenith.Raknet.Stream;
 using Zenith.Packets;
@@ -57,85 +58,70 @@ partial class InGameSessionHandler : ISessionHandler
         }
     }
 
+    /// <summary>
+    /// One delegate per packet ID, resolved once at startup instead of a per-call `switch`.
+    /// `BinaryStream` is passed by `ref`, so this cannot be `Action&lt;&gt;` — needs a named delegate.
+    /// See ADR §113 (docs/decisions.md) for why this registry-map shape was introduced (mirrors
+    /// `CommandCatalog`'s `Dictionary&lt;string, CommandDefinition&gt;` precedent) and why it is
+    /// scoped to this handler only, not project-wide. Frozen because this is a build-once,
+    /// read-on-every-inbound-packet table — <see cref="FrozenDictionary{TKey,TValue}"/> trades
+    /// slower construction (paid once, at class init) for faster lookup than <see cref="Dictionary{TKey,TValue}"/>.
+    /// </summary>
+    private delegate void PacketHandler(NetworkSession session, ref BinaryStream stream);
+
+    /// <summary>Packets the server acknowledges but intentionally takes no action on.</summary>
+    private static void HandleNoOp(NetworkSession session, ref BinaryStream stream) { }
+
+    /// <summary>IDs that only need an acknowledgement — grouped here instead of repeating
+    /// <see cref="HandleNoOp"/> once per dictionary entry.</summary>
+    private static readonly ProtocolInfo[] NoOpPacketIds =
+    [
+        ProtocolInfo.MOVE_PLAYER_PACKET,
+        ProtocolInfo.ANIMATE_PACKET,
+        ProtocolInfo.LEVEL_SOUND_EVENT_PACKET,
+        ProtocolInfo.EMOTE_LIST_PACKET,
+        ProtocolInfo.MODAL_FORM_RESPONSE_PACKET,
+        ProtocolInfo.SERVER_SETTINGS_REQUEST_PACKET,
+        ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET,
+        ProtocolInfo.SET_PLAYER_INVENTORY_OPTIONS_PACKET,
+    ];
+
+    private static readonly FrozenDictionary<int, PacketHandler> Handlers = BuildHandlers();
+
+    private static FrozenDictionary<int, PacketHandler> BuildHandlers()
+    {
+        // `.Add(...)` (not indexer assignment `[key] = value`) deliberately: a duplicate key
+        // throws ArgumentException here at static init, so a copy-paste mistake fails loudly at
+        // startup instead of silently overwriting one handler with another at runtime — the same
+        // safety a duplicate `case` label got from the compiler in the switch this replaced.
+        var map = new Dictionary<int, PacketHandler>
+        {
+            { (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET, HandleAuthInput },
+            { (int)ProtocolInfo.TEXT_PACKET, HandleText },
+            { (int)ProtocolInfo.COMMAND_REQUEST_PACKET, HandleCommandRequest },
+            { (int)ProtocolInfo.PLAYER_ACTION_PACKET, HandlePlayerAction },
+            { (int)ProtocolInfo.RESPAWN_PACKET, HandleRespawn },
+            { (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET, HandleInventoryTransaction },
+            { (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET, HandleItemStackRequest },
+            { (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET, HandleRequestChunkRadius },
+            { (int)ProtocolInfo.MOB_EQUIPMENT_PACKET, HandleMobEquipment },
+            { (int)ProtocolInfo.INTERACT_PACKET, HandleInteract },
+            { (int)ProtocolInfo.CONTAINER_CLOSE_PACKET, HandleContainerClose },
+            { (int)ProtocolInfo.REQUEST_ABILITY_PACKET, HandleRequestAbility },
+            { (int)ProtocolInfo.DISCONNECT_PACKET, HandleDisconnect },
+            { (int)ProtocolInfo.PLAYER_SKIN_PACKET, HandlePlayerSkin },
+            { (int)ProtocolInfo.EMOTE_PACKET, HandleEmote },
+        };
+        foreach (var id in NoOpPacketIds)
+            map.Add((int)id, HandleNoOp);
+        return map.ToFrozenDictionary();
+    }
+
     public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
     {
-        switch (header.Id)
-        {
-            case (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET:
-                HandleAuthInput(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.TEXT_PACKET:
-                HandleText(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.COMMAND_REQUEST_PACKET:
-                HandleCommandRequest(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.PLAYER_ACTION_PACKET:
-                HandlePlayerAction(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.RESPAWN_PACKET:
-                HandleRespawn(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET:
-                HandleInventoryTransaction(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET:
-                HandleItemStackRequest(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET:
-                HandleRequestChunkRadius(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.MOVE_PLAYER_PACKET:
-                return true;
-
-            case (int)ProtocolInfo.MOB_EQUIPMENT_PACKET:
-                HandleMobEquipment(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.INTERACT_PACKET:
-                HandleInteract(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.CONTAINER_CLOSE_PACKET:
-                HandleContainerClose(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.REQUEST_ABILITY_PACKET:
-                HandleRequestAbility(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.DISCONNECT_PACKET:
-                HandleDisconnect(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.PLAYER_SKIN_PACKET:
-                HandlePlayerSkin(session, ref stream);
-                return true;
-
-            case (int)ProtocolInfo.ANIMATE_PACKET:
-            case (int)ProtocolInfo.LEVEL_SOUND_EVENT_PACKET:
-            case (int)ProtocolInfo.EMOTE_LIST_PACKET:
-            case (int)ProtocolInfo.MODAL_FORM_RESPONSE_PACKET:
-            case (int)ProtocolInfo.SERVER_SETTINGS_REQUEST_PACKET:
-            case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
-            case (int)ProtocolInfo.SET_PLAYER_INVENTORY_OPTIONS_PACKET:
-                return true;
-
-            case (int)ProtocolInfo.EMOTE_PACKET:
-                HandleEmote(session, ref stream);
-                return true;
-
-            default:
-                return false;
-        }
+        if (!Handlers.TryGetValue(header.Id, out var handler)) return false;
+        handler(session, ref stream);
+        return true;
     }
 
     private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)

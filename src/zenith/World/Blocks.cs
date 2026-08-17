@@ -7,7 +7,10 @@ namespace Zenith.World;
 /// <remarks>
 /// Known debt (ADR §25): ainda estático. Cresceu a set lista mínima de variedade sem migrar
 /// pra <c>ServerContext</c> nesta leva — chest/crafting usam os mesmos ids; migrar o façade
-/// quando recipes/chest store já estabilizarem.
+/// quando recipes/chest store já estabilizarem. ADR §112 adicionou <see cref="IBlockRegistry"/>/
+/// <see cref="BlockRegistry"/> como seam injetável atrás desta classe (delega pra cá, não move
+/// call sites) — código novo que precisar de uma dependência testável deve preferir
+/// <c>ServerContext.BlockRegistry</c> em vez de chamar esta façade diretamente.
 /// </remarks>
 static class Blocks
 {

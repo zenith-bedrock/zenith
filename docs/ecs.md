@@ -377,6 +377,29 @@ behavior the way Phase XIV–XX's evidence trail already established. Forcing th
 phase's window to hit a roster-parity number would have been "migrate to fill a table," explicitly
 rejected as a goal by this phase's own brief.
 
+### Per-species re-evaluation tracker
+
+The "migrate when gameplay work already needs to touch it" trigger above requires knowing, per
+species, what kind of touch counts. Phase XXIX's ground-actor gravity/support rewrite already
+touched 5 of these 6 files (Creeper, Enderman — teleport-landing check only, Fish, Golem,
+Villager; Bat was deliberately excluded, it never had a vertical model). That was shared physics
+infrastructure, not species-specific pressure — no bug was fixed in one species and missed in
+another, no feature needed identical behavior across species and got written twice — so the gate
+did **not** fire for any of them from that alone. This table exists so the next PR that touches one
+of these species doesn't have to re-derive that judgment from scratch:
+
+| Species | Touched in | Re-evaluate when |
+|---|---|---|
+| Creeper | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | another entity needs area-damage-on-death |
+| Enderman | Phase XXIX (partial — teleport-landing check only, not the full gravity resolver) | another entity needs damage-triggered aggro or teleport |
+| Bat | Aug 2026 domain reorg only; excluded from Phase XXIX by design | any species needs a flight/3D-wander movement model |
+| Villager | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | a trade UI / NPC shop needs non-player inventory-shaped data |
+| Golem | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | another entity needs per-tick phase/state branching |
+| Fish | Phase XXIX (partial — swim-validity path is distinct from the gravity resolver) | another aquatic entity (e.g. squid) needs swim physics |
+
+No migration is proposed or scheduled by this table — it is evidence bookkeeping only, so the
+retirement trigger stays evaluable without re-reading git history each time.
+
 **No maintenance-cost signal has appeared either**: no bug has been fixed in one combat helper and
 missed in the other; no feature has needed to work identically across both and been written twice.
 `DamageDispatch` (below) absorbed the one real cross-cutting pressure point (Projectile's target
