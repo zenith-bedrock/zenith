@@ -37,7 +37,7 @@ public class ReliableReceiveTests
         public int FragmentQueueCount => FragmentsQueue.Count;
 
         public void SeedBackup(uint sequence, List<Frame> frames) =>
-            OutputBackup[sequence] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), frames);
+            UnacknowledgedFrameSets[sequence] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), frames);
     }
 
     private static Frame GameFrame(uint messageIndex, uint orderIndex = 0) => new()

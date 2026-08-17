@@ -15,5 +15,9 @@ public enum DisconnectReason
     ServerDisconnect,
 
     /// <summary>Nenhum pacote foi recebido do cliente dentro do timeout.</summary>
-    Timeout
+    Timeout,
+
+    /// <summary>Fila de saída (pendente + aguardando ACK) excedeu o limite por sessão — o peer não
+    /// está drenando rápido o bastante, seja por conexão lenta ou tráfego malicioso.</summary>
+    OutputBacklogExceeded
 }

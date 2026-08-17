@@ -63,7 +63,7 @@ public class RakNetSession
     protected readonly HashSet<Frame> OutputFrames = new();
 
     /// <summary>
-    /// Timestamp is the "sent at" wall-clock time (ms) — <see cref="ResendStaleBackupLocked"/> uses
+    /// Timestamp is the "sent at" wall-clock time (ms) — <see cref="ResendStaleUnacknowledgedLocked"/> uses
     /// it to retransmit a reliable FrameSet that was never ACKed *or* NACKed. Retransmission was
     /// previously NACK-only: if the one NACK datagram reporting the loss was itself dropped by UDP
     /// (exactly as likely as any other datagram), the peer never learned it was missing and the
@@ -71,12 +71,18 @@ public class RakNetSession
     /// finding, Phase XXIII-B polish pass). No RTT estimation exists yet, so the timeout is a fixed,
     /// conservative value rather than adaptive — see <see cref="ResendTimeoutMs"/>.
     /// </summary>
-    protected readonly Dictionary<uint, (long SentAtMs, List<Frame> Frames)> OutputBackup = new();
+    protected readonly Dictionary<uint, (long SentAtMs, List<Frame> Frames)> UnacknowledgedFrameSets = new();
 
     // Mantido em paralelo a OutputFrames em vez de recalculado via LINQ Sum a cada
     // QueueFrame: eram O(n) por chamada (O(n²) num burst de frames), e esse é
     // literalmente o hot path de todo Send/SendFrame.
     private int _outputFramesByteLength;
+
+    /// <summary>Same incremental-counter reasoning as <see cref="_outputFramesByteLength"/>, for
+    /// <see cref="UnacknowledgedFrameSets"/> — the structure most likely to actually grow unbounded (it only
+    /// shrinks on ACK/resend, not every tick), so it's the one <see cref="MaxOutputBacklogBytes"/>
+    /// most needs to see.</summary>
+    private long _unacknowledgedFrameSetsByteLength;
 
     protected uint OutputSequence;
     protected int OutputSplitIndex;
@@ -87,6 +93,15 @@ public class RakNetSession
     /// contra Tick / Incoming / fan-out cross-session no GameLoop.
     /// </summary>
     private readonly object _sessionLock = new();
+
+    // Sem isso, uma sessão cujo peer não drena rápido o bastante (conexão lenta, ou tráfego
+    // malicioso que nunca ACKa) acumula FrameSets aguardando ACK indefinidamente — RAM sem limite
+    // por sessão (cross-reference audit finding, same family as MAX_CONCURRENT_FRAGMENTED_MESSAGES).
+    // Generous relative to any real gameplay burst (chunk streaming already has its own bounded
+    // channel — NetworkSession.WorldStreamQueueCapacity); a session that needs more than this
+    // outstanding isn't keeping up regardless of cause.
+    private const long MaxOutputBacklogBytes = 8 * 1024 * 1024;
+    private bool _overBudgetDisconnecting;
 
     private bool _closed;
 
@@ -146,22 +161,22 @@ public class RakNetSession
         {
             FlushAcknowledgeLocked<ACK>(ReceivedFrameSequences);
             FlushAcknowledgeLocked<NACK>(LostFrameSequences);
-            ResendStaleBackupLocked(now);
+            ResendStaleUnacknowledgedLocked(now);
 
             SendQueueLocked(OutputFrames.Count);
         }
     }
 
-    /// <summary>Fixed, conservative resend timeout — see <see cref="OutputBackup"/>'s doc comment.</summary>
+    /// <summary>Fixed, conservative resend timeout — see <see cref="UnacknowledgedFrameSets"/>'s doc comment.</summary>
     private const long ResendTimeoutMs = 1500;
 
     /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
-    private void ResendStaleBackupLocked(long now)
+    private void ResendStaleUnacknowledgedLocked(long now)
     {
-        if (OutputBackup.Count == 0) return;
+        if (UnacknowledgedFrameSets.Count == 0) return;
 
         List<uint>? stale = null;
-        foreach (var (sequence, entry) in OutputBackup)
+        foreach (var (sequence, entry) in UnacknowledgedFrameSets)
         {
             if (now - entry.SentAtMs < ResendTimeoutMs) continue;
             (stale ??= new List<uint>()).Add(sequence);
@@ -170,12 +185,21 @@ public class RakNetSession
 
         foreach (var sequence in stale)
         {
-            if (!OutputBackup.Remove(sequence, out var entry)) continue;
+            if (!UnacknowledgedFrameSets.Remove(sequence, out var entry)) continue;
+            _unacknowledgedFrameSetsByteLength -= FramesByteLength(entry.Frames);
             // Same "resend as-backed-up" requirement as HandleNack: QueueFrameLocked re-batches
             // into a fresh FrameSet without re-deriving reliability identity.
             foreach (var frame in entry.Frames)
                 QueueFrameLocked(frame, Priority.Immediate);
         }
+    }
+
+    private static long FramesByteLength(List<Frame> frames)
+    {
+        long total = 0;
+        foreach (var frame in frames)
+            total += frame.GetByteLength();
+        return total;
     }
 
     /// <summary>Drains a pending ACK/NACK sequence set into its packet and sends it - ACK and
@@ -213,11 +237,12 @@ public class RakNetSession
             Packets = OutputFrames.Take(count).ToList()
         };
         // The wire only carries 24 bits (WriteTriad/ReadTriad) — wrapping the in-memory counter to
-        // match keeps OutputBackup's keys aligned with what a peer's ACK/NACK actually reports once
+        // match keeps UnacknowledgedFrameSets' keys aligned with what a peer's ACK/NACK actually reports once
         // a long-lived session crosses 2^24 FrameSets (cross-reference audit finding).
         OutputSequence = (OutputSequence + 1) & SequenceMask;
 
-        OutputBackup[frameSet.Sequence] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), frameSet.Packets);
+        UnacknowledgedFrameSets[frameSet.Sequence] = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), frameSet.Packets);
+        _unacknowledgedFrameSetsByteLength += FramesByteLength(frameSet.Packets);
 
         foreach (var frame in frameSet.Packets)
         {
@@ -241,6 +266,19 @@ public class RakNetSession
     /// <summary>Caller must hold <see cref="_sessionLock"/>.</summary>
     private void SendFrameLocked(Frame frame, Priority priority)
     {
+        // _overBudgetDisconnecting guards re-entrancy: Disconnect() below sends its own frame
+        // through this same method (SendFrame → lock(_sessionLock), reentrant-safe same-thread),
+        // and that frame must go through even though the backlog is still over budget.
+        if (!_overBudgetDisconnecting && _outputFramesByteLength + _unacknowledgedFrameSetsByteLength > MaxOutputBacklogBytes)
+        {
+            _overBudgetDisconnecting = true;
+            Server.Logger?.Warning(
+                $"[{EndPoint}] Output backlog exceeded {MaxOutputBacklogBytes} bytes " +
+                $"({_outputFramesByteLength + _unacknowledgedFrameSetsByteLength} pending+unacked); disconnecting.");
+            Disconnect(DisconnectReason.OutputBacklogExceeded);
+            return;
+        }
+
         // OrderChannel fora de 0..MAX_ORDER_CHANNELS-1 crashava nos arrays de índice.
         if (!Frame.IsValidOrderChannel(frame.OrderChannel))
         {
@@ -355,7 +393,8 @@ public class RakNetSession
         {
             foreach (var sequence in ack.Sequences)
             {
-                OutputBackup.Remove(sequence);
+                if (UnacknowledgedFrameSets.Remove(sequence, out var entry))
+                    _unacknowledgedFrameSetsByteLength -= FramesByteLength(entry.Frames);
             }
         }
     }
@@ -367,7 +406,8 @@ public class RakNetSession
         {
             foreach (var sequence in nack.Sequences)
             {
-                if (!OutputBackup.Remove(sequence, out var entry)) continue;
+                if (!UnacknowledgedFrameSets.Remove(sequence, out var entry)) continue;
+                _unacknowledgedFrameSetsByteLength -= FramesByteLength(entry.Frames);
                 foreach (var frame in entry.Frames)
                 {
                     // Retransmit the frame AS-BACKED-UP — do not route through SendFrameLocked,
