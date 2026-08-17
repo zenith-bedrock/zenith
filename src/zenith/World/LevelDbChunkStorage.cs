@@ -43,13 +43,14 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         return new ValueTask<ChunkColumnData?>(Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            byte[]? bytes;
+            ReadOnlyMemory<byte> mem;
             lock (_gate)
             {
-                bytes = _db.Get(ColumnKey(coord));
+                if (!_db.TryGet(ColumnKey(coord), out mem)) return null;
             }
 
-            if (bytes is null || bytes.Length < 8) return null;
+            var bytes = mem.ToArray();
+            if (bytes.Length < 8) return null;
             var subChunkCount = BitConverter.ToInt32(bytes, 0);
             var dimensionId = BitConverter.ToInt32(bytes, 4);
             var payload = bytes.AsSpan(8).ToArray();
@@ -109,10 +110,10 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                 while (it.IsValid())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key();
-                    if (keyBytes is null || keyBytes.Length < OverlayPrefix.Length)
+                    var keyBytes = it.Key().Span;
+                    if (keyBytes.Length < OverlayPrefix.Length)
                         break;
-                    if (!StartsWith(keyBytes, OverlayPrefix))
+                    if (!keyBytes.StartsWith(OverlayPrefix))
                         break;
 
                     var key = Encoding.UTF8.GetString(keyBytes);
@@ -122,9 +123,9 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                         continue;
                     }
 
-                    var value = it.Value();
-                    if (value is not null && value.Length >= 4)
-                        visitor(x, y, z, BitConverter.ToInt32(value, 0));
+                    var value = it.Value().Span;
+                    if (value.Length >= 4)
+                        visitor(x, y, z, BitConverter.ToInt32(value));
 
                     it.Next();
                 }
@@ -173,10 +174,10 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                 while (it.IsValid())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key();
-                    if (keyBytes is null || keyBytes.Length < ChestPrefix.Length)
+                    var keyBytes = it.Key().Span;
+                    if (keyBytes.Length < ChestPrefix.Length)
                         break;
-                    if (!StartsWith(keyBytes, ChestPrefix))
+                    if (!keyBytes.StartsWith(ChestPrefix))
                         break;
 
                     var key = Encoding.UTF8.GetString(keyBytes);
@@ -187,8 +188,8 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                     }
 
                     var value = it.Value();
-                    if (value is not null && value.Length > 0)
-                        visitor(x, y, z, value);
+                    if (value.Length > 0)
+                        visitor(x, y, z, value.ToArray());
 
                     it.Next();
                 }
@@ -267,15 +268,17 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         return new ValueTask<WorldMetadata?>(Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            byte[]? bytes;
+            ReadOnlyMemory<byte> mem;
             lock (_gate)
             {
-                bytes = _db.Get(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey));
+                if (!_db.TryGet(Encoding.UTF8.GetBytes(WorldStorageKeys.WorldMetadataKey), out mem))
+                    return (WorldMetadata?)null;
             }
 
-            if (bytes is null || bytes.Length < 5) return (WorldMetadata?)null;
-            var seed = BitConverter.ToInt32(bytes, 0);
-            var terrain = Encoding.UTF8.GetString(bytes, 4, bytes.Length - 4);
+            var bytes = mem.Span;
+            if (bytes.Length < 5) return (WorldMetadata?)null;
+            var seed = BitConverter.ToInt32(bytes);
+            var terrain = Encoding.UTF8.GetString(bytes.Slice(4));
             return new WorldMetadata(terrain, seed);
         }, cancellationToken));
     }
@@ -322,7 +325,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
-                return _db.Get(key);
+                return _db.TryGet(key, out var mem) ? mem.ToArray() : null;
             }
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -380,17 +383,6 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     private static byte[] ColumnKey(ChunkCoord coord) => WorldStorageKeys.Column(coord);
 
     private static byte[] ChestKey(int x, int y, int z) => WorldStorageKeys.Chest(x, y, z);
-
-    private static bool StartsWith(byte[] data, byte[] prefix)
-    {
-        if (data.Length < prefix.Length) return false;
-        for (var i = 0; i < prefix.Length; i++)
-        {
-            if (data[i] != prefix[i]) return false;
-        }
-
-        return true;
-    }
 
     public void Dispose()
     {
