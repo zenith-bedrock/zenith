@@ -1450,6 +1450,29 @@ public class IntentContractTests
         Assert.Equal(fullViewCount, previousCount);
     }
 
+    /// <summary>
+    /// ADR §114 — residency for the whole pre-spawn square must be acquired synchronously in the
+    /// same tick the request is consumed, before StreamRadiusAsync's hydration even starts.
+    /// Otherwise a same-tick eviction sweep could evict a chunk mid-join (hydrated, zero viewers)
+    /// before RememberMany ever gets a chance to acquire it later, column by column.
+    /// </summary>
+    [Fact]
+    public void ChunkStreamSystem_acquires_residency_for_the_whole_pre_spawn_square_before_streaming_starts()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddPlayer("pre-spawn-residency", isInGame: false);
+        const int viewRadius = 2;
+        Assert.True(player.Chunks.TrySubmitPreSpawn(viewRadius));
+
+        var system = new ChunkStreamSystem(fx.World);
+        FlushRaknet(fx.Players);
+        system.Tick(fx.Clock, fx.Players.Online); // consumes the pre-spawn request this tick
+
+        for (var x = -viewRadius; x <= viewRadius; x++)
+        for (var z = -viewRadius; z <= viewRadius; z++)
+            Assert.True(fx.World.ChunkResidency.HasViewers(x, z), $"chunk ({x},{z}) should have a viewer");
+    }
+
     [Fact]
     public void ChunkStreamSystem_releases_spawn_after_ready_radius_before_full_view_is_loaded()
     {

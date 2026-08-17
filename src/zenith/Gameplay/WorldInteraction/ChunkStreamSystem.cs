@@ -145,6 +145,16 @@ sealed class ChunkStreamSystem : IGameSystem
             (int)MathF.Floor(player.PositionZ));
         player.Chunks.Radius = request.ViewRadius;
 
+        // ADR §114 — acquire residency for the whole pre-spawn square up front, before
+        // StreamRadiusAsync (and the hydration it triggers) starts below. RememberMany's own
+        // Acquire (further down, per column as it's dequeued) would otherwise leave every one of
+        // these chunks hydrated-but-zero-viewers for however many ticks the publish budget takes to
+        // drain them all — a window a same-tick eviction sweep could (rarely, harmlessly, but
+        // needlessly) evict a chunk mid-join. Acquiring the exact same square here closes it.
+        PlayerChunkTracker.ForEachInSquare(
+            snapshot.CenterChunkX, snapshot.CenterChunkZ, request.ViewRadius,
+            (x, z) => _world.ChunkResidency.Acquire(x, z));
+
         var readyColumnCount = (readyRadius * 2 + 1) * (readyRadius * 2 + 1);
         var viewColumnCount = (request.ViewRadius * 2 + 1) * (request.ViewRadius * 2 + 1);
         player.Session.Context.Logger.Info(
@@ -253,9 +263,10 @@ sealed class ChunkStreamSystem : IGameSystem
                     if (publication.ReadyColumnsQueued >= publication.ReadyColumnsRequired)
                         publication.ReadyBarrierSequence = sequence;
                 }
-                var remembered = player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
-                foreach (var (rx, rz) in remembered)
-                    _world.ChunkResidency.Acquire(rx, rz);
+                // Residency for this coord was already acquired up front in StartPendingPreSpawn
+                // (the whole pre-spawn square, before streaming/hydration started) — RememberMany
+                // here only updates _known, no separate Acquire.
+                player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
                 publication.PayloadBytes += column.Base.ExtraPayload.LongLength;
                 publication.Envelopes++;
                 _generationDiagnostics?.RecordPreSpawnPublished(1, column.Base.ExtraPayload.LongLength);

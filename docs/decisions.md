@@ -2483,7 +2483,12 @@ first surfaced four corrections to the original plan (all confirmed with the use
    `ForgetOutsideRadius`, `TryAbandon`, and `RememberMany` — the pre-spawn path §114's original options
    didn't account for), plus `PlayerQuitEvent` cleanup (a disconnecting player never calls
    `ForgetOutsideRadius`/`TryAbandon` for their remaining known chunks, which would otherwise leak
-   those chunks as permanently "viewed").
+   those chunks as permanently "viewed"). A first pass had `RememberMany`'s own return value drive
+   `Acquire`, which meant a pre-spawning player's chunks were *hydrated* (via `StreamRadiusAsync`)
+   before residency ever saw a viewer for them — a same-tick sweep could (rarely, harmlessly, since
+   nothing on disk is touched) evict a chunk mid-join. Fixed before shipping: `StartPendingPreSpawn`
+   now acquires the whole pre-spawn square synchronously, in the same tick the request is consumed,
+   before `StreamRadiusAsync`/hydration starts; `RememberMany`'s call site no longer double-acquires.
 
 Shape: hydrate-on-first-touch replaces `World`'s old boot-time full-table load (hooked into
 `GetOrCreateColumnCoreAsync`, race-free for free via `_generationBroker`'s existing per-coordinate
@@ -2502,9 +2507,11 @@ correlative operator signal, not proof the feature "worked" (see point 1).
 `ChunkResidencySystem.cs` (new), `PlayerChunkTracker.cs` (`ForgetOutsideRadius`/`RememberMany` now
 return what changed), `ZenithServer.cs`, `ServerConfig.cs`. New tests:
 `LevelDbChunkStoragePerChunkTests`, `ChunkResidencyIndexTests`, `ChunkResidencyEvictionTests`,
-`ChunkResidencySystemTests`, plus `WorldStorageKeys`/`PlayerChunkTracker` coverage for the new
-key format and return values. `docs/adr/0114-resident-chunk-state.md` is now historical context
-only — this entry is the current record.
+`ChunkResidencySystemTests`,
+`IntentContractTests.ChunkStreamSystem_acquires_residency_for_the_whole_pre_spawn_square_before_streaming_starts`
+(point 4's fix), plus `WorldStorageKeys`/`PlayerChunkTracker` coverage for the new key format and
+return values. `docs/adr/0114-resident-chunk-state.md` is now historical context only — this entry
+is the current record.
 
 ## Explicit non-goals (so far)
 
