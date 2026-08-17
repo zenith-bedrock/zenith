@@ -59,12 +59,51 @@ public class TerrainProviderTests
     public void WorldStorageKeys_round_trip_overlay_and_chest()
     {
         var ov = WorldStorageKeys.Overlay(1, -60, 2);
-        Assert.True(WorldStorageKeys.TryParseOverlay(System.Text.Encoding.UTF8.GetString(ov), out var x, out var y, out var z));
+        Assert.True(WorldStorageKeys.TryParseOverlay(ov, out var x, out var y, out var z));
         Assert.Equal((1, -60, 2), (x, y, z));
 
         var ct = WorldStorageKeys.Chest(-3, 10, 4);
-        Assert.True(WorldStorageKeys.TryParseChest(System.Text.Encoding.UTF8.GetString(ct), out x, out y, out z));
+        Assert.True(WorldStorageKeys.TryParseChest(ct, out x, out y, out z));
         Assert.Equal((-3, 10, 4), (x, y, z));
+    }
+
+    [Fact]
+    public void WorldStorageKeys_round_trip_negative_coordinates_across_chunk_boundaries()
+    {
+        foreach (var (x, y, z) in new[] { (-1, -64, -1), (-16, 0, -16), (-17, 320, -17), (0, -63, 0), (15, 100, -15) })
+        {
+            var ov = WorldStorageKeys.Overlay(x, y, z);
+            Assert.True(WorldStorageKeys.TryParseOverlay(ov, out var px, out var py, out var pz));
+            Assert.Equal((x, y, z), (px, py, pz));
+
+            var ct = WorldStorageKeys.Chest(x, y, z);
+            Assert.True(WorldStorageKeys.TryParseChest(ct, out px, out py, out pz));
+            Assert.Equal((x, y, z), (px, py, pz));
+        }
+    }
+
+    [Fact]
+    public void WorldStorageKeys_overlay_and_chest_share_the_same_chunk_prefix()
+    {
+        var ov = WorldStorageKeys.Overlay(20, 5, -20);
+        var ct = WorldStorageKeys.Chest(21, 5, -19);
+        var prefix = WorldStorageKeys.ChunkPrefix(1, -2);
+
+        Assert.True(ov.AsSpan().StartsWith(prefix));
+        Assert.True(ct.AsSpan().StartsWith(prefix));
+
+        var otherChunkPrefix = WorldStorageKeys.ChunkPrefix(2, -2);
+        Assert.False(ov.AsSpan().StartsWith(otherChunkPrefix));
+    }
+
+    [Fact]
+    public void WorldStorageKeys_TryParseOverlay_rejects_a_chest_key_and_vice_versa()
+    {
+        var ov = WorldStorageKeys.Overlay(1, 2, 3);
+        var ct = WorldStorageKeys.Chest(1, 2, 3);
+
+        Assert.False(WorldStorageKeys.TryParseChest(ov, out _, out _, out _));
+        Assert.False(WorldStorageKeys.TryParseOverlay(ct, out _, out _, out _));
     }
 
     [Fact]

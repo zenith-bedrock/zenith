@@ -76,6 +76,14 @@ sealed class ServerConfig
 
         /// <summary>Maximum completed post-spawn columns published for one player per tick.</summary>
         public int ChunkStreamColumnsPerTick { get; set; } = 4;
+
+        /// <summary>
+        /// Ticks between resident-chunk-state eviction sweeps (ADR §114) — how often chunks with no
+        /// current viewer get their overlays/chests dropped from RAM. Default 1200 (60s at 20 TPS);
+        /// no grace period beyond the sweep interval itself — evict-then-rehydrate on a boundary
+        /// oscillation is cheap since the underlying data was never dropped from ZLDB.
+        /// </summary>
+        public int ChunkResidencySweepIntervalTicks { get; set; } = 1200;
     }
 
     /// <summary>
@@ -235,6 +243,9 @@ sealed class ServerConfig
         if (World.ChunkStreamColumnsPerTick is < 1 or > 32)
             throw new InvalidOperationException(
                 $"world.chunk-stream-columns-per-tick must be 1..32 (got {World.ChunkStreamColumnsPerTick}).");
+        if (World.ChunkResidencySweepIntervalTicks < 20)
+            throw new InvalidOperationException(
+                $"world.chunk-residency-sweep-interval-ticks must be >= 20 (got {World.ChunkResidencySweepIntervalTicks}).");
         if (string.IsNullOrWhiteSpace(World.Name))
             throw new InvalidOperationException("world.name must not be empty.");
         World.Terrain = TerrainProviders.NormalizeMode(World.Terrain);

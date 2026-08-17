@@ -5,15 +5,15 @@ using Zenith.LevelDB;
 namespace Zenith.World;
 
 /// <summary>
-/// Backend LevelDB — Zenith keys via <see cref="WorldStorageKeys"/> (not Mojang BDS format).
-/// Colunas: <c>c:x:z</c>. Overlay permanente: <c>ov:x:y:z</c> → int32 LE runtime id.
+/// Backend LevelDB — Zenith keys via <see cref="WorldStorageKeys"/> (not Mojang BDS format, though
+/// the overlay/chest key layout mirrors BDS's fixed-width chunk-prefix shape — ADR §114).
+/// Colunas: <c>c:x:z</c> (unchanged, exact single-key lookup). Overlay/chest keys are now binary,
+/// chunk-prefixed (<see cref="WorldStorageKeys.ChunkPrefix"/>), enabling <see cref="LoadOverlaysForChunkAsync"/>
+/// / <see cref="LoadChestsForChunkAsync"/> as a Seek + prefix walk instead of a full-table scan.
 /// Overlay Puts enfileiram e retornam sem esperar disco (worker único sob <c>_gate</c>).
 /// </summary>
 sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
 {
-    private static readonly byte[] OverlayPrefix = WorldStorageKeys.OverlayPrefixBytes;
-    private static readonly byte[] ChestPrefix = WorldStorageKeys.ChestPrefixBytes;
-
     private readonly DB _db;
     private readonly object _gate = new();
     private readonly ConcurrentQueue<OverlayWrite> _overlayWrites = new();
@@ -106,30 +106,57 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             lock (_gate)
             {
                 using var it = _db.CreateIterator();
-                it.Seek(OverlayPrefix);
+                it.SeekToFirst();
                 while (it.IsValid())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var keyBytes = it.Key().Span;
-                    if (keyBytes.Length < OverlayPrefix.Length)
-                        break;
-                    if (!keyBytes.StartsWith(OverlayPrefix))
-                        break;
-
-                    var key = Encoding.UTF8.GetString(keyBytes);
-                    if (!WorldStorageKeys.TryParseOverlay(key, out var x, out var y, out var z))
+                    if (WorldStorageKeys.TryParseOverlay(keyBytes, out var x, out var y, out var z))
                     {
-                        it.Next();
-                        continue;
+                        var value = it.Value().Span;
+                        if (value.Length >= 4)
+                            visitor(x, y, z, BitConverter.ToInt32(value));
                     }
-
-                    var value = it.Value().Span;
-                    if (value.Length >= 4)
-                        visitor(x, y, z, BitConverter.ToInt32(value));
 
                     it.Next();
                 }
             }
+        }, cancellationToken));
+    }
+
+    /// <summary>Per-chunk seek: chunkX/chunkZ occupy a fixed 8-byte key prefix (ADR §114), so
+    /// finding one chunk's overlays is a Seek + StartsWith walk instead of a full-table scan.</summary>
+    public ValueTask<IReadOnlyList<BlockOverride>> LoadOverlaysForChunkAsync(int chunkX, int chunkZ, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<IReadOnlyList<BlockOverride>>(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var prefix = WorldStorageKeys.ChunkPrefix(chunkX, chunkZ);
+            var results = new List<BlockOverride>();
+            lock (_gate)
+            {
+                using var it = _db.CreateIterator();
+                it.Seek(prefix);
+                while (it.IsValid())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var keyBytes = it.Key().Span;
+                    if (!keyBytes.StartsWith(prefix))
+                        break;
+
+                    if (WorldStorageKeys.TryParseOverlay(keyBytes, out var x, out var y, out var z))
+                    {
+                        var value = it.Value().Span;
+                        if (value.Length >= 4)
+                            results.Add(new BlockOverride(x, y, z, BitConverter.ToInt32(value)));
+                    }
+
+                    it.Next();
+                }
+            }
+
+            return (IReadOnlyList<BlockOverride>)results;
         }, cancellationToken));
     }
 
@@ -170,30 +197,56 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
             lock (_gate)
             {
                 using var it = _db.CreateIterator();
-                it.Seek(ChestPrefix);
+                it.SeekToFirst();
                 while (it.IsValid())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var keyBytes = it.Key().Span;
-                    if (keyBytes.Length < ChestPrefix.Length)
-                        break;
-                    if (!keyBytes.StartsWith(ChestPrefix))
-                        break;
-
-                    var key = Encoding.UTF8.GetString(keyBytes);
-                    if (!WorldStorageKeys.TryParseChest(key, out var x, out var y, out var z))
+                    if (WorldStorageKeys.TryParseChest(keyBytes, out var x, out var y, out var z))
                     {
-                        it.Next();
-                        continue;
+                        var value = it.Value();
+                        if (value.Length > 0)
+                            visitor(x, y, z, value.ToArray());
                     }
-
-                    var value = it.Value();
-                    if (value.Length > 0)
-                        visitor(x, y, z, value.ToArray());
 
                     it.Next();
                 }
             }
+        }, cancellationToken));
+    }
+
+    /// <summary>Per-chunk seek, mirrors <see cref="LoadOverlaysForChunkAsync"/> (ADR §114).</summary>
+    public ValueTask<IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>> LoadChestsForChunkAsync(int chunkX, int chunkZ, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>>(Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var prefix = WorldStorageKeys.ChunkPrefix(chunkX, chunkZ);
+            var results = new List<(int, int, int, byte[])>();
+            lock (_gate)
+            {
+                using var it = _db.CreateIterator();
+                it.Seek(prefix);
+                while (it.IsValid())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var keyBytes = it.Key().Span;
+                    if (!keyBytes.StartsWith(prefix))
+                        break;
+
+                    if (WorldStorageKeys.TryParseChest(keyBytes, out var x, out var y, out var z))
+                    {
+                        var value = it.Value();
+                        if (value.Length > 0)
+                            results.Add((x, y, z, value.ToArray()));
+                    }
+
+                    it.Next();
+                }
+            }
+
+            return (IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>)results;
         }, cancellationToken));
     }
 
@@ -377,6 +430,14 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
                 else
                     _db.Put(key, BitConverter.GetBytes(write.BlockRuntimeId));
             }
+        }
+    }
+
+    public bool TryGetProperty(string property, out string value)
+    {
+        lock (_gate)
+        {
+            return _db.GetProperty(property, out value);
         }
     }
 

@@ -21,6 +21,13 @@ sealed class ChestStore
     private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
     /// <summary>Open UI viewers per cell (runtime id) — lid BlockEvent on 0→1 / 1→0 (§28).</summary>
     private readonly Dictionary<(int X, int Y, int Z), HashSet<long>> _openers = new();
+    /// <summary>
+    /// Secondary index by chunk (ADR §114 — resident-chunk-state eviction needs "which chests are in
+    /// this chunk" without scanning all of <see cref="_chests"/>). SSOT remains <see cref="_chests"/>;
+    /// both updated only via <see cref="TryEnsure"/> / <see cref="RemoveAndDump"/>, mirroring
+    /// <c>World._overlaysByChunk</c>'s no-drift discipline.
+    /// </summary>
+    private readonly Dictionary<(int Cx, int Cz), HashSet<(int X, int Y, int Z)>> _byChunk = new();
     private readonly ILogger? _logger;
     private int _softCapWarned;
 
@@ -96,6 +103,7 @@ sealed class ChestStore
         for (var i = 0; i < SingleSize; i++)
             slots[i] = InventorySlot.Empty;
         _chests[key] = slots;
+        AddToChunkIndex(x, z, key);
         return true;
     }
 
@@ -168,6 +176,8 @@ sealed class ChestStore
         if (!_chests.Remove((x, y, z), out var slots))
             return list;
 
+        RemoveFromChunkIndex(x, z, (x, y, z));
+
         foreach (var s in slots)
         {
             if (!s.IsEmpty)
@@ -175,6 +185,42 @@ sealed class ChestStore
         }
 
         return list;
+    }
+
+    /// <summary>Chest positions currently resident in chunk (chunkX, chunkZ) — ADR §114 eviction sweep.</summary>
+    public IReadOnlyCollection<(int X, int Y, int Z)> PositionsInChunk(int chunkX, int chunkZ) =>
+        _byChunk.TryGetValue((chunkX, chunkZ), out var bucket) ? bucket : Array.Empty<(int, int, int)>();
+
+    /// <summary>Removes a chest from RAM without dumping its contents or clearing openers — used by
+    /// eviction (ADR §114), which persists first via <c>World.PersistChest</c> and must not drop
+    /// items or disturb an open UI (callers gate on <see cref="OpenerCount"/> == 0 first).</summary>
+    public bool Evict(int x, int y, int z)
+    {
+        if (!_chests.Remove((x, y, z)))
+            return false;
+        RemoveFromChunkIndex(x, z, (x, y, z));
+        return true;
+    }
+
+    private void AddToChunkIndex(int x, int z, (int X, int Y, int Z) key)
+    {
+        var chunk = (ChunkMath.BlockToChunk(x), ChunkMath.BlockToChunk(z));
+        if (!_byChunk.TryGetValue(chunk, out var bucket))
+        {
+            bucket = new HashSet<(int, int, int)>();
+            _byChunk[chunk] = bucket;
+        }
+        bucket.Add(key);
+    }
+
+    private void RemoveFromChunkIndex(int x, int z, (int X, int Y, int Z) key)
+    {
+        var chunk = (ChunkMath.BlockToChunk(x), ChunkMath.BlockToChunk(z));
+        if (!_byChunk.TryGetValue(chunk, out var bucket))
+            return;
+        bucket.Remove(key);
+        if (bucket.Count == 0)
+            _byChunk.Remove(chunk);
     }
 
     public InventorySlot[] CaptureSnapshot(int x, int y, int z)

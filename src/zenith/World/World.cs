@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,12 @@ sealed class World
     /// both updated only via <see cref="StoreOverlay"/> / <see cref="RemoveOverlay"/> (no drift).
     /// </summary>
     private readonly ConcurrentDictionary<(int Cx, int Cz), ConcurrentDictionary<(int X, int Y, int Z), int>> _overlaysByChunk = new();
+    /// <summary>
+    /// Chunks whose overlays/chests have been loaded from <see cref="_storage"/> into RAM (ADR §114).
+    /// Guarded against double-hydration races by <see cref="_generationBroker"/>'s existing
+    /// single-flight coalescing for the same coordinate — no separate lock needed here.
+    /// </summary>
+    private readonly ConcurrentDictionary<(int Cx, int Cz), byte> _hydratedChunks = new();
     private readonly ILogger? _logger;
     private readonly WorldGenerationDiagnostics? _generationDiagnostics;
     private int _softCapWarned;
@@ -40,6 +47,9 @@ sealed class World
     public ChestStore Chests { get; }
     public GravityPendingStore GravityPending { get; }
     public FallingBlockStore FallingBlocks { get; }
+
+    /// <summary>Per-chunk viewer refcount driving eviction (ADR §114) — see <see cref="ChunkResidencyIndex"/>.</summary>
+    public ChunkResidencyIndex ChunkResidency { get; } = new();
 
     /// <summary>Default playable dimension (only one until Nether/End ADR).</summary>
     public Dimension Overworld => _overworld;
@@ -76,14 +86,6 @@ sealed class World
         Chests = new ChestStore(logger);
         GravityPending = new GravityPendingStore(logger);
         FallingBlocks = new FallingBlockStore(logger);
-        storage.ForEachOverlayAsync(StoreOverlay)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
-        storage.ForEachChestAsync((x, y, z, blob) => Chests.TryLoadFromBlob(x, y, z, blob))
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
     }
 
     public void PersistChest(int x, int y, int z)
@@ -235,9 +237,34 @@ sealed class World
         }
     }
 
+    /// <summary>
+    /// First-touch hydrate (ADR §114): loads this chunk's overlays/chests from <see cref="_storage"/>
+    /// into RAM the first time it's requested, replacing the old "load everything at boot" behavior.
+    /// Runs inside <see cref="_generationBroker"/>'s per-coordinate single-flight, so concurrent
+    /// first touches of the same chunk can't double-hydrate.
+    /// </summary>
+    private async ValueTask EnsureHydratedAsync(int chunkX, int chunkZ, CancellationToken ct)
+    {
+        var key = (chunkX, chunkZ);
+        if (_hydratedChunks.ContainsKey(key))
+            return;
+
+        var overlays = await _storage.LoadOverlaysForChunkAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
+        foreach (var o in overlays)
+            StoreOverlay(o.X, o.Y, o.Z, o.BlockRuntimeId);
+
+        var chests = await _storage.LoadChestsForChunkAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
+        foreach (var (x, y, z, blob) in chests)
+            Chests.TryLoadFromBlob(x, y, z, blob);
+
+        _hydratedChunks[key] = 0;
+    }
+
     private async ValueTask<ColumnReadResult> GetOrCreateColumnCoreAsync(
         int chunkX, int chunkZ, CancellationToken ct)
     {
+        await EnsureHydratedAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
+
         var coord = new ChunkCoord(chunkX, chunkZ);
         if (_baseColumnCache.TryGetValue(coord, out var cached))
         {
@@ -439,6 +466,63 @@ sealed class World
             if (bucket.IsEmpty)
                 _overlaysByChunk.TryRemove(chunk, out _);
         }
+    }
+
+    /// <summary>Snapshot of chunk coords currently hydrated (ADR §114) — the sweep's candidate set.</summary>
+    public List<(int X, int Z)> CopyHydratedChunks()
+    {
+        var list = new List<(int X, int Z)>(_hydratedChunks.Count);
+        foreach (var key in _hydratedChunks.Keys)
+            list.Add(key);
+        return list;
+    }
+
+    /// <summary>
+    /// Evicts chunk (chunkX, chunkZ)'s overlays/chests from RAM if nobody currently has it in view
+    /// (ADR §114). Returns false without changing anything if the chunk has a viewer.
+    /// Overlays are already fire-and-forget-persisted on every write (ADR §41 — GameLoop never waits
+    /// on disk), so no explicit flush is needed here. Chests are NOT continuously persisted while
+    /// their UI is open (only on close), so any chest is explicitly persisted just before eviction;
+    /// a chest with an open UI is left resident regardless (belt-and-suspenders — its viewer implies
+    /// someone's nearby even if residency bookkeeping somehow disagrees).
+    /// </summary>
+    public bool TryEvictChunk(int chunkX, int chunkZ)
+    {
+        if (ChunkResidency.HasViewers(chunkX, chunkZ))
+            return false;
+
+        foreach (var (x, y, z) in Chests.PositionsInChunk(chunkX, chunkZ).ToArray())
+        {
+            if (Chests.OpenerCount(x, y, z) > 0)
+                continue;
+            PersistChest(x, y, z);
+            Chests.Evict(x, y, z);
+        }
+
+        if (_overlaysByChunk.TryRemove((chunkX, chunkZ), out var bucket))
+        {
+            foreach (var cell in bucket.Keys)
+                _blockOverrides.TryRemove(cell, out _);
+        }
+
+        _hydratedChunks.TryRemove((chunkX, chunkZ), out _);
+        return true;
+    }
+
+    /// <summary>
+    /// Diagnostic line comparing resident-in-World overlay/chest counts against ZLDB's own always-
+    /// resident dataset size (ADR §114/§121's <c>DB.GetProperty</c>). This is NOT evidence total RAM
+    /// shrank — ZLDB's own memtable holds its whole dataset resident regardless, by design (ADR
+    /// §11/§61) — just a residency ratio operators can watch (how much of the persisted set is
+    /// currently duplicated in World's RAM vs. evicted).
+    /// </summary>
+    public void LogResidencySnapshot()
+    {
+        if (_logger is null) return;
+        var zldbEntries = _storage.TryGetProperty("zldb.num-entries", out var entries) ? entries : "n/a";
+        _logger.Info(
+            $"Chunk residency: {_blockOverrides.Count} overlays / {Chests.Count} chests resident in RAM " +
+            $"across {_hydratedChunks.Count} hydrated chunks (zldb.num-entries={zldbEntries}, mixes every key kind).");
     }
 
     /// <summary>Overlay se existir; senão amostra do terreno base (<see cref="ITerrainProvider"/>).</summary>

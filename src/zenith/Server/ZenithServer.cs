@@ -145,7 +145,8 @@ class ZenithServer
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities, creepers, endermen,
-            bats, villagers, golems, fish, itemPalette, recipes, creative, playerSpatial);
+            bats, villagers, golems, fish, itemPalette, recipes, creative, playerSpatial,
+            config.World.ChunkResidencySweepIntervalTicks);
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative, diagnostics);
@@ -155,6 +156,17 @@ class ZenithServer
         // First real EventBus domain consumers (ADR §78) — join/leave system chat.
         eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
         eventBus.Subscribe<PlayerQuitEvent>(e => PlayerPresenceAnnouncer.OnQuit(Context, e));
+
+        // ADR §114 — a departing player never calls ForgetOutsideRadius/TryAbandon for whatever
+        // chunks are still in their PlayerChunkTracker at disconnect time; without this, those
+        // chunks would leak as permanently "viewed" in ChunkResidencyIndex.
+        eventBus.Subscribe<PlayerQuitEvent>(e =>
+        {
+            var known = new List<(int X, int Z)>();
+            e.Player.Chunks.CopyKnown(known);
+            foreach (var (cx, cz) in known)
+                world.ChunkResidency.Release(cx, cz);
+        });
 
         _sessionListener = new ZenithSessionListener(Context);
         var serverGuid = LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger);
@@ -231,7 +243,8 @@ class ZenithServer
         ItemPalette itemPalette,
         RecipeRegistry recipes,
         CreativeCatalog creative,
-        PlayerSpatialIndex playerSpatial)
+        PlayerSpatialIndex playerSpatial,
+        int chunkResidencySweepIntervalTicks)
     {
         var gravity = new GravitySystem(world, players);
         // Phase XXI/XXII — ECS-authoritative roster. DamageDispatch (Phase XXII) is built once and
@@ -275,6 +288,9 @@ class ZenithServer
         // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
         gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
         gameLoop.Register(new ChunkStreamSystem(world, diagnostics.Worldgen), diagnostics.System("chunk-stream"));
+        gameLoop.Register(
+            new ChunkResidencySystem(world, chunkResidencySweepIntervalTicks),
+            diagnostics.System("chunk-residency"));
 
         return gravity;
     }

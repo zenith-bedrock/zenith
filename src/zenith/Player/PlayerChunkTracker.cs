@@ -162,9 +162,11 @@ sealed class PlayerChunkTracker
 
     /// <summary>
     /// Forget columns outside the view square. Uses a reused scratch list (no LINQ).
-    /// Call when the publisher center chunk changes — not every tick.
+    /// Call when the publisher center chunk changes — not every tick. Returns the coords actually
+    /// forgotten (the same reused buffer — read it before the next call) so callers that track
+    /// residency alongside <c>_known</c> (ADR §114) can release exactly what was removed.
     /// </summary>
-    public void ForgetOutsideRadius(int centerX, int centerZ, int radius)
+    public IReadOnlyList<(int X, int Z)> ForgetOutsideRadius(int centerX, int centerZ, int radius)
     {
         lock (_gate)
         {
@@ -180,19 +182,28 @@ sealed class PlayerChunkTracker
                 _known.Remove(c);
                 _epoch.Remove(c);
             }
+
+            return _scratch;
         }
     }
 
-    public void RememberMany(IEnumerable<(int X, int Z)> coords)
+    /// <summary>Returns the subset of <paramref name="coords"/> that were newly added (not already
+    /// known) — callers tracking residency alongside <c>_known</c> (ADR §114) should only acquire
+    /// for those, not every coord passed in.</summary>
+    public List<(int X, int Z)> RememberMany(IEnumerable<(int X, int Z)> coords)
     {
+        var added = new List<(int X, int Z)>();
         lock (_gate)
         {
             foreach (var c in coords)
             {
                 if (!_known.Add(c)) continue;
                 _epoch[c] = _nextEpoch++;
+                added.Add(c);
             }
         }
+
+        return added;
     }
 
     public bool PublisherCenterChanged(int chunkX, int chunkZ)

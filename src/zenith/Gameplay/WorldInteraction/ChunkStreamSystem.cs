@@ -74,7 +74,9 @@ sealed class ChunkStreamSystem : IGameSystem
 
             if (player.Chunks.PublisherCenterChanged(cx, cz))
             {
-                player.Chunks.ForgetOutsideRadius(cx, cz, radius);
+                var forgotten = player.Chunks.ForgetOutsideRadius(cx, cz, radius);
+                foreach (var (fx, fz) in forgotten)
+                    _world.ChunkResidency.Release(fx, fz);
                 player.Session.Protocol.World.SendChunkPublisher(
                     blockX: (int)Math.Floor(player.PositionX),
                     blockY: (int)Math.Floor(player.PositionY),
@@ -89,6 +91,7 @@ sealed class ChunkStreamSystem : IGameSystem
             {
                 if (started >= MaxStartsPerTick) return;
                 if (!player.Chunks.TryBegin(x, z, out var epoch)) return;
+                _world.ChunkResidency.Acquire(x, z);
                 started++;
                 StartStream(player, x, z, epoch);
             });
@@ -250,7 +253,9 @@ sealed class ChunkStreamSystem : IGameSystem
                     if (publication.ReadyColumnsQueued >= publication.ReadyColumnsRequired)
                         publication.ReadyBarrierSequence = sequence;
                 }
-                player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
+                var remembered = player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
+                foreach (var (rx, rz) in remembered)
+                    _world.ChunkResidency.Acquire(rx, rz);
                 publication.PayloadBytes += column.Base.ExtraPayload.LongLength;
                 publication.Envelopes++;
                 _generationDiagnostics?.RecordPreSpawnPublished(1, column.Base.ExtraPayload.LongLength);
@@ -421,6 +426,7 @@ sealed class ChunkStreamSystem : IGameSystem
             {
                 if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))
                 {
+                    _world.ChunkResidency.Release(completion.ChunkX, completion.ChunkZ);
                     player.Session.Context.Logger.Warning(
                         $"Chunk stream failed for {player.Username} @ {completion.ChunkX},{completion.ChunkZ}: {completion.Error}");
                 }
@@ -429,14 +435,18 @@ sealed class ChunkStreamSystem : IGameSystem
 
             if (!player.IsInGame && !player.IsSpawning)
             {
-                tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch);
+                if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))
+                    _world.ChunkResidency.Release(completion.ChunkX, completion.ChunkZ);
                 continue;
             }
 
             if (!player.Session.QueueWorldColumn(completion.Column, NetworkSession.WorldStreamOrderChannel))
             {
                 if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))
+                {
+                    _world.ChunkResidency.Release(completion.ChunkX, completion.ChunkZ);
                     _generationDiagnostics?.RecordDropped();
+                }
                 continue;
             }
 
