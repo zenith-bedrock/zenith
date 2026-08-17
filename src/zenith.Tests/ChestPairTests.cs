@@ -162,6 +162,7 @@ public class ChestPairTests
         await world.FlushPersistenceAsync();
 
         var reloaded = new World.World(storage);
+        await reloaded.GetOrCreateColumnAsync(0, 0); // ADR §114 — chests hydrate lazily on first touch
         Assert.Equal(9, reloaded.Chests.Get(10, 64, 10, 1).Count);
         Assert.Equal(3, reloaded.Chests.Get(11, 64, 10, 2).Count);
         Assert.Equal(Blocks.Dirt, reloaded.Chests.Get(10, 64, 10, 1).Id.Value);

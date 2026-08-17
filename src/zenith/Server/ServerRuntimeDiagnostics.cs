@@ -94,7 +94,8 @@ sealed class ServerRuntimeDiagnostics
             ["hunger"] = builder.Timing("tick.system.hunger", "tick"),
             ["effect"] = builder.Timing("tick.system.effect", "tick"),
             ["equipment"] = builder.Timing("tick.system.equipment", "tick"),
-            ["chunk-stream"] = builder.Timing("tick.system.chunk-stream", "tick")
+            ["chunk-stream"] = builder.Timing("tick.system.chunk-stream", "tick"),
+            ["chunk-residency"] = builder.Timing("tick.system.chunk-residency", "tick")
         };
         _overBudgetTicks = builder.Counter("tick.over-budget");
         _tps = builder.Gauge("tick.tps");

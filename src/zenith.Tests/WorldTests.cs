@@ -183,9 +183,10 @@ public class WorldOverlayTests
             {
                 using var storage = new LevelDbChunkStorage(dir);
                 var world = new World.World(storage);
+                var column = await world.GetOrCreateColumnAsync(0, 0); // ADR §114 — hydrate on first touch
+                await world.GetOrCreateColumnAsync(1, 0);
                 Assert.Equal(Blocks.Stone, world.GetBlock(1, -60, 2));
                 Assert.Equal(Blocks.Dirt, world.GetBlock(20, -60, 2));
-                var column = await world.GetOrCreateColumnAsync(0, 0);
                 Assert.Contains(column.Overlays, o => o.X == 1 && o.Z == 2 && o.BlockRuntimeId == Blocks.Stone);
                 Assert.DoesNotContain(column.Overlays, o => o.X == 20);
                 Assert.Single(world.GetOverlaysInColumn(1, 0));

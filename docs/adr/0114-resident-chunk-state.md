@@ -1,7 +1,13 @@
 # ADR §114 — Resident chunk state: a hydrate/evict design, not yet implemented
 
-**Status: design only.** This ADR documents a problem and a recommended direction. It does not
-ship code, and no file outside `docs/` changes as part of it. It exists so a future session that
+**Status: superseded by ADR §123 (`docs/decisions.md`), which implemented this.** Kept as historical
+context — re-verifying this design against current code before implementing surfaced several
+corrections (RAM-ceiling framing, `FloorDropStore` scope, key-format feasibility, residency-tracking
+approach) recorded in §123, not here. Read §123 for what actually shipped; the analysis below is the
+original problem framing only.
+
+**Original status: design only.** This ADR documents a problem and a recommended direction. It does
+not ship code, and no file outside `docs/` changes as part of it. It exists so a future session that
 picks this up doesn't have to re-derive the analysis from scratch.
 
 ## Context

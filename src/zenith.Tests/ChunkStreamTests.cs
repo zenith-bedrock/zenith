@@ -70,6 +70,19 @@ public class PlayerChunkTrackerTests
         Assert.True(t.TryBegin(0, 1));
     }
 
+    /// <summary>ADR §114 — callers (ChunkStreamSystem) use the returned "newly added" subset to
+    /// drive ChunkResidencyIndex.Acquire without double-counting an already-known coord.</summary>
+    [Fact]
+    public void RememberMany_returns_only_the_newly_added_coords()
+    {
+        var t = new PlayerChunkTracker();
+        var first = t.RememberMany([(0, 0), (1, 0)]);
+        Assert.Equal([(0, 0), (1, 0)], first);
+
+        var second = t.RememberMany([(1, 0), (2, 0)]); // (1,0) already known
+        Assert.Equal([(2, 0)], second);
+    }
+
     [Fact]
     public void ForgetOutsideRadius_allows_restream_on_reentry()
     {
@@ -79,6 +92,23 @@ public class PlayerChunkTrackerTests
         t.ForgetOutsideRadius(centerX: 0, centerZ: 0, radius: 2);
         Assert.False(t.TryBegin(0, 0, out _)); // still in radius → still known
         Assert.True(t.TryBegin(5, 0, out _)); // forgotten → can begin again
+    }
+
+    /// <summary>ADR §114 — callers use the returned coords to release exactly what was forgotten.</summary>
+    [Fact]
+    public void ForgetOutsideRadius_returns_exactly_the_forgotten_coords()
+    {
+        var t = new PlayerChunkTracker();
+        Assert.True(t.TryBegin(0, 0, out _));
+        Assert.True(t.TryBegin(5, 0, out _));
+        Assert.True(t.TryBegin(0, 5, out _));
+
+        var forgotten = t.ForgetOutsideRadius(centerX: 0, centerZ: 0, radius: 2);
+
+        Assert.Equal(2, forgotten.Count);
+        Assert.Contains((5, 0), forgotten);
+        Assert.Contains((0, 5), forgotten);
+        Assert.DoesNotContain((0, 0), forgotten);
     }
 
     [Fact]
