@@ -22,6 +22,7 @@ class ServerContext
     public World.World World { get; }
     public ServerConfig Config { get; }
     public BlockPalette BlockPalette { get; }
+    public IBlockRegistry BlockRegistry { get; }
     public ItemPalette ItemPalette { get; }
     public RecipeRegistry Recipes { get; }
     public CreativeCatalog Creative { get; }
@@ -48,6 +49,7 @@ class ServerContext
         World = world;
         Config = config;
         BlockPalette = blockPalette;
+        BlockRegistry = new BlockRegistry();
         ItemPalette = itemPalette;
         Recipes = recipes;
         Creative = creative;

@@ -1907,6 +1907,107 @@ fixture and migration decision.
 See [`docs/adr/0111-world-generation-pipeline.md`](adr/0111-world-generation-pipeline.md) and the
 world-generation plan for the staged implementation and benchmark gates.
 
+### 112. `IBlockRegistry` introduced as an interface seam ahead of the static façade, not a migration
+
+**Choice:** Add `IBlockRegistry`/`BlockRegistry` (`src/zenith/World/`) and expose `ServerContext.BlockRegistry`.
+`BlockRegistry` is a thin wrapper delegating every member to the existing static `Blocks` façade — same
+underlying palette state, zero behavioral change. None of `Blocks`' 234 production call sites or 923 test
+call sites (47 test files call `Blocks.Load`/`EnsureLoaded`/`ResetForTests` directly for isolation) were
+touched or need to be.
+
+**Why:** §25 kept `Blocks` static and named its own migration trigger — a second palette/dimension, or the
+block/inventory domain being touched again for a reason big enough to justify moving every call site. Neither
+has fired. But the blast radius of a full migration (234 production + 923 test call sites, several in
+per-tick hot paths — `GravitySystem`, `GroundMobMovement`, `ProjectileSystem`) is large enough that doing it
+opportunistically, one call site at a time whenever a PR happens to touch a neighboring line, risks landing
+half-migrated. Dragonfly's `world.BlockRegistry` is the applicable precedent: a static, `init()`-populated
+registry kept behind an interface specifically so tests (and, here, future call sites) can depend on the seam
+without forcing the underlying storage to change on the same day.
+
+**What this is not:** not a reversal of §25, not a schedule for migrating the 234 call sites, not a claim
+that `Blocks` becoming a static façade was a mistake. §25's original trigger is unchanged and still governs
+when (if ever) existing call sites move off `Blocks.*` onto `Context.BlockRegistry`.
+
+**Status (ago 2026):** Shipped — `IBlockRegistry.cs`, `BlockRegistry.cs`, `ServerContext.BlockRegistry`. New
+code that wants an instance-injectable, test-swappable block classification seam should take `IBlockRegistry`
+via `ServerContext` instead of calling the static façade directly; existing call sites are unchanged and stay
+valid.
+
+### 113. `InGameSessionHandler` dispatch becomes a registry map, scoped to this one handler
+
+**Choice:** Replace `InGameSessionHandler.HandleDataPacket`'s `switch (header.Id)` (15 named cases, 1 bare
+no-op case, 7 grouped no-op cases, `default`) with a `private static readonly FrozenDictionary<int,
+PacketHandler> Handlers` (`System.Collections.Frozen`), built once via `BuildHandlers()`, where
+`PacketHandler` is a named delegate (`void(NetworkSession, ref BinaryStream)` — `BinaryStream` is passed by
+`ref`, so `Action<>` cannot represent it). `FrozenDictionary` over a plain `Dictionary`: this table is built
+exactly once and read on every inbound in-game packet — the read-heavy, build-once shape `FrozenDictionary` is
+designed for, trading its slower one-time construction for faster lookup than `Dictionary` on every
+subsequent read. `HandleDataPacket` becomes a two-line lookup-and-invoke. No handler method body changed;
+every existing `private static void HandleXxx(NetworkSession, ref BinaryStream)` across the four
+`InGameSessionHandler` partials is reused unchanged as a dictionary value. The 8 cases that previously just
+`return true` with no action are grouped into a `NoOpPacketIds` array mapped to one shared `HandleNoOp` in a
+loop inside `BuildHandlers()` — preserving the original switch's compact "these N ids, one behavior" shape
+instead of repeating `HandleNoOp` on 8 separate dictionary-literal lines. Registration uses `.Add(key, value)`
+(via `{ key, value }` collection-initializer syntax and `map.Add(...)` in the loop), not indexer assignment
+(`[key] = value`) — a duplicate key throws `ArgumentException` at static init instead of silently overwriting
+one handler with another at runtime, preserving the compile-time duplicate-`case`-label safety the switch
+had (caught in review before this shipped: the first draft used indexer assignment, which built and passed
+tests but would have accepted a duplicate `ProtocolInfo` key silently). Scoped to `InGameSessionHandler`
+only — `LoginSessionHandler` (2 cases), `ResourcePacksSessionHandler` (different shape, dispatches on a
+status enum not a packet ID) and `PreSpawnSessionHandler`/`SpawnResponseSessionHandler` (smaller switches)
+are unchanged.
+
+**Why now, revisiting §76 and the project non-goals list:** both explicitly left a centralized packet-dispatch
+table as *out of scope, not rejected* — §76 only ever covered per-packet-class `Encode`/`Decode`/`Id` codegen
+and said any dispatch-table proposal "needs its own ADR"; the non-goals list echoed the same deferral, citing
+the risk of the freeze-listed `Dispatcher` abstraction (`ARCHITECTURE.md`) without proven need. The honest
+justification here is **not** a new functional bug or perf pressure — none exists. It is that `CommandCatalog`
+(`src/zenith/Gameplay/Commands/CommandCatalog.cs`) already uses this exact shape
+(`Dictionary<string, CommandDefinition>`, built once, looked up per dispatch) for a sibling domain (command
+routing by name), and that precedent already cleared the freeze-list bar for "map key to handler, built once
+at startup, hand-registered not reflected/generated." Applying the same already-accepted shape to a second
+domain (packet-ID routing) is not introducing a new abstraction category — it is closing a consistency gap
+the wire-codegen ADR (§76) explicitly declined to rule on because dispatch was a different architectural
+layer than it was scoped to touch.
+
+**What this is not:** not codegen — the dictionary is hand-written, not generated from `[GamePacket]`
+metadata (§76's generator still stops at `Encode`/`Decode`/`Id`, unrelated to this). Not a project-wide
+rewrite — the other three session handlers keep their plain `switch` because none of them are large enough
+to have motivated this in the first place. The `FrozenDictionary` choice is a genuine (if minor) lookup-speed
+improvement over a `switch` on this many cases, but that is a secondary benefit of the data structure picked,
+not the reason this change was made — the primary point is call-site/testability consistency with
+`CommandCatalog`.
+
+**Amends:** the non-goals list entry "Generated/centralized packet-dispatch table replacing the per-handler
+`switch` statements" is narrowed — a *generated* dispatch table (derived from `[GamePacket]` or any other
+codegen source) remains a non-goal; a *hand-written* registry map, scoped to one handler with a demonstrated
+same-codebase precedent, is not.
+
+**Status (ago 2026):** Shipped — `InGameSessionHandler.cs`'s `Handlers` frozen dictionary, `NoOpPacketIds`
+group, and two-line `HandleDataPacket`. 1019/1019 `zenith.Tests` green, no behavioral change (every case in
+the original switch has a matching dictionary entry, checked 1:1 against the original as an implementation
+checklist).
+
+### 114. Resident chunk state (overlay/chest/floor-drop hydrate + evict) — design only, not shipped
+
+**Choice:** Record a design-only ADR for bounding the RAM growth of `_blockOverrides`/`ChestStore`/
+`FloorDropStore` (loaded entirely at boot today, never evicted — ADR §36's `SoftCap` only blocks
+*new* keys). No code ships with this entry.
+
+**Why:** the 2026-08-16 architecture audit flagged this as the most likely long-uptime operational
+risk among its findings. A naive fix (evict a chunk's overlays when its last viewer leaves, mirroring
+`_baseColumnCache`'s existing FIFO eviction or dragonfly's `closeUnusedChunks`) would silently drop
+unpersisted player edits, because — unlike `_baseColumnCache`'s regenerable terrain — nothing loads
+overlays/chests back in per-chunk today; everything is bulk-loaded once at boot. Hydrate has to exist
+before evict is safe. This is design work, not urgent implementation, at alpha scale/uptime.
+
+See [`docs/adr/0114-resident-chunk-state.md`](adr/0114-resident-chunk-state.md) for the full
+hydrate → resident → flush → evict lifecycle design, the `IChunkStorage` API gap
+(`LoadOverlaysForChunkAsync`/`LoadChestsForChunkAsync` don't exist yet), and the open question
+(viewer-count aggregation vs. periodic GC sweep) left for whoever implements this.
+
+**Status (ago 2026):** Design recorded, not implemented. `World.cs`/`IChunkStorage.cs` unchanged.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
@@ -1919,6 +2020,6 @@ Recorded so we don't “accidentally” implement them:
 - Plugin-facing command registration/discovery and public permission hooks; the protocol-independent first slice is allowed by ADR §100
 - Protocol bump solely to chase client log version numbers when login already completes
 - Actor/EventHandler frameworks copied from other engines
-- Generated/centralized packet-dispatch table replacing the per-handler `switch` statements (§76 — wire codegen stops at `Encode`/`Decode`/`Id`, dispatch is a separate ADR if ever pursued)
+- A *generated* packet-dispatch table (derived from `[GamePacket]` or any other codegen source) replacing the per-handler `switch` statements (§76 — wire codegen stops at `Encode`/`Decode`/`Id`). **Narrowed by §113**: a *hand-written* registry map for one handler with a demonstrated same-codebase precedent (`CommandCatalog`) is not covered by this non-goal — `InGameSessionHandler` already uses one; the other three session handlers still use a plain `switch` and this non-goal still applies to them until similarly justified.
 
 When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
