@@ -46,7 +46,7 @@ docker compose up --build
 - [x] **S35** Survival 2×2 craft (cadeia planks→chest OK)
 - [x] **S41** peer sees crack / limpa
 - [x] Overlay: graceful restart keeps placed blocks *(Dokploy/local restart; literal “100 blocks” count not required)*
-- [x] Crash soft check: place blocks → brief pause → hard kill (`kill -9` / `taskkill /F`) → restart → overlays/world that already hit WAL survived *(Jul 2026 — OK; bag/`inv:`/`ct:` recent still not guaranteed without `FlushAsync`)*
+- [x] Crash soft check: place blocks → brief pause → hard kill (`kill -9` / `taskkill /F`) → restart → overlays/world that already hit WAL survived *(Jul 2026 — OK; bag/`inv:`/`ct:` recent still not guaranteed without `FlushAsync`)* — **superseded by ADR §124 (ago 2026):** every `LevelDbChunkStorage` Put (overlay/chest/inventory/armor/playerdata) now enqueues onto one queue drained by a background worker polling every 50ms, replacing per-call `Task.Run` (which had no bound on scheduling delay under thread-pool pressure). Concrete guarantee: a mutation can be lost to a hard kill only if it lands in the ≤50ms window before the worker's next drain; `FlushAsync`/graceful `Dispose` still drain everything unconditionally. See `LevelDbChunkStorageDurabilityTests`.
 
 ## Tag & publish
 
