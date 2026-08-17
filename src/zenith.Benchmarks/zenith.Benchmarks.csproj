@@ -13,6 +13,7 @@
     <ProjectReference Include="..\zenith\zenith.csproj" />
     <ProjectReference Include="..\raknet\raknet.csproj" />
     <ProjectReference Include="..\..\libs\diagnostics\diagnostics.csproj" />
+    <ProjectReference Include="..\..\libs\leveldb\leveldb.csproj" />
   </ItemGroup>
 
 </Project>

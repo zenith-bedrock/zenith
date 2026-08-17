@@ -75,6 +75,14 @@ public sealed class WorldGenerationDiagnosticsTests
             () => Value(runtime.CaptureSnapshot(), "gameplay.worldgen.columns.requested") == 2,
             CoordinationTimeout));
         secondCancellation.Cancel();
+
+        // `request.Task.WaitAsync(ct)` (World.GetOrCreateColumnAsync) resolves `second` as canceled
+        // independently of the shared generation completing — it doesn't need `terrain.Release` to
+        // be set at all. Wait for that resolution *before* releasing the terrain, rather than
+        // racing Cancel() against Release.Set() and hoping cancellation wins: under heavy thread-pool
+        // load (e.g. right after running concurrency benchmarks) the two can reorder, and `second`
+        // can observe the coalesced generation's successful result instead of its own cancellation.
+        Assert.True(SpinWait.SpinUntil(() => second.IsCompleted, CoordinationTimeout));
         terrain.Release.Set();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await second);

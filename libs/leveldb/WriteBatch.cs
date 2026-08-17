@@ -17,19 +17,21 @@ public sealed class WriteBatch
 
     public int Count => (int)_count;
 
-    public void Put(byte[] key, byte[] value)
+    /// <summary>Size of the encoded ops buffered so far, in bytes (mirrors real LevelDB's
+    /// <c>WriteBatch::ApproximateSize</c> — intended for metrics, tied to the encoding above and
+    /// not a stable/public format guarantee).</summary>
+    public int ApproximateSize => (int)_ops.Length;
+
+    public void Put(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
     {
-        ArgumentNullException.ThrowIfNull(key);
-        ArgumentNullException.ThrowIfNull(value);
         _ops.WriteByte(OpPut);
         KvFraming.WriteLengthPrefixed(_ops, key);
         KvFraming.WriteLengthPrefixed(_ops, value);
         _count++;
     }
 
-    public void Delete(byte[] key)
+    public void Delete(ReadOnlySpan<byte> key)
     {
-        ArgumentNullException.ThrowIfNull(key);
         _ops.WriteByte(OpDelete);
         KvFraming.WriteLengthPrefixed(_ops, key);
         _count++;

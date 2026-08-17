@@ -2008,6 +2008,420 @@ hydrate → resident → flush → evict lifecycle design, the `IChunkStorage` A
 
 **Status (ago 2026):** Design recorded, not implemented. `World.cs`/`IChunkStorage.cs` unchanged.
 
+### 115. Zenith.LevelDB (ZLDB) robustness pass — checksums, typed I/O exceptions, reusable snapshots
+
+**Choice:** Harden ZLDB within its existing, already-decided shape (§11: RAM `SortedDictionary` +
+WAL + one snapshot, no compaction/multi-level LSM) rather than move toward a fuller LSM engine.
+Compared `libs/leveldb/*.cs` against `mojang-leveldb` (Mojang's real C++ LevelDB fork, cloned
+locally) specifically for correctness/robustness technique, not to import compaction/block-cache/
+Bloom-filter machinery — those remain non-goals per §11/§61, not revisited here. Four changes:
+
+1. **WAL checksums** (`Crc32.cs`, `Journal.cs`). Every record gets a
+   `type:u8 | crc:u32 | bodyLen:u32 | body` envelope; `crc` covers type+body, not `bodyLen` —
+   mirroring real LevelDB's WAL record checksum strategy (CRC32C over type+payload, length field
+   excluded), using plain CRC-32 instead of CRC32C/Castagnoli since ZLDB's format is already
+   explicitly non-compatible with Mojang/RocksDB (no reader needs the same polynomial). Replay now
+   distinguishes a torn tail (crash mid-append — silent EOF, as before) from a structurally-complete
+   record whose CRC doesn't match (genuine corruption — stops replay there, reports via the new
+   `DB.OnCorruption` hook, doesn't trust anything after it). This closes the exact gap the README's
+   own "Optional later (not P1)" list had named ("WAL framing + CRC (torn last record)") — not new
+   scope, executing a debt the library already flagged on itself.
+2. **Snapshot checksum** (`TableFile.cs`). One trailing CRC-32 over the whole `.ldb` payload
+   (built in RAM first, consistent with ZLDB's existing "entire dataset fits in RAM" constraint —
+   unlike real LevelDB's per-block trailers, which exist specifically to avoid buffering an entire
+   multi-file SSTable, not a concern here). A magic-byte mismatch still means "foreign/stale file,
+   treat as empty" (unchanged); a magic match with a bad CRC now throws `InvalidDataException`
+   instead of silently loading (or discarding) corrupted product data.
+3. **Typed I/O exceptions** (`LevelDbIOException.cs`, an `IOException` subtype — existing
+   `catch (IOException)` call sites, including the mid-flush crash test, keep working unchanged).
+   Wraps raw `IOException`/`UnauthorizedAccessException` from the WAL append/flush path (`Write`)
+   and the snapshot write / `CURRENT` publish path (`FlushSnapshotUnlocked`), preserving the
+   original as `InnerException`. Logical format errors (bad `CURRENT`, corrupted snapshot, bad
+   batch encoding) keep their existing `InvalidOperationException`/`InvalidDataException` — not
+   wrapped, already clear.
+4. **Reusable `Snapshot`** (`Snapshot.cs`). `CreateIterator()` already built a consistent
+   point-in-time copy of the dataset per call (real isolation, confirmed correct) but recreated
+   that O(n) copy on every call with no way to reuse one materialized view for several point reads.
+   `DB.GetSnapshot()` now returns that same copy as a named, reusable `Snapshot` (`Get`/
+   `CreateIterator`); `CreateIterator()` is now a thin wrapper over it. Not real MVCC (no sequence
+   numbers, no tombstone filtering, unlike real LevelDB's `GetSnapshot`/`SequenceNumber` mechanism)
+   — a full copy-per-snapshot is a proportionate, much simpler equivalent given ZLDB's RAM-resident
+   scope.
+
+**Why now, not a bigger rewrite:** the trigger was investigating "resident chunk state" (evicting
+World's overlay/chest RAM by chunk), which surfaced that ZLDB's on-disk overlay/chest keys are
+per-block, not chunk-prefixed — a genuine, separate, larger question deferred back to §114's scope.
+That investigation is what surfaced these more urgent, better-scoped ZLDB gaps in the process. None
+of the four changes here touch key schema, compaction, or `World`/`IChunkStorage` — pure hardening
+of the storage engine's own already-decided shape.
+
+**Non-goals reaffirmed, not revisited:** compaction, multi-level LSM, block cache, Bloom filters
+(§11/§61); directory-level fsync after the `CURRENT` rename (confirmed real LevelDB doesn't do this
+either — an accepted upstream risk, not a ZLDB-specific gap); sequence-numbered MVCC.
+
+**Status (ago 2026):** Shipped — `Crc32.cs`, `LevelDbIOException.cs`, `Snapshot.cs`, `Journal.cs`/
+`TableFile.cs`/`DB.cs` updated. `libs/leveldb.Tests` grew from 11 to 15 cases (WAL mid-stream
+corruption + `OnCorruption` reporting, corrupted-snapshot rejection, snapshot isolation,
+`LevelDbIOException` contract); all 15 green, full `zenith.sln` build/test unaffected.
+
+### 116. `DB.Destroy`/`DB.Repair` — the two ops-facing capabilities §115 left out
+
+**Choice:** Continue the §115 comparison against `mojang-leveldb`'s full public `DB`/`Options`/
+`WriteBatch` API surface (not just WAL/snapshot internals this time) to find what else is missing.
+Most of it is correctly non-applicable (block cache, Bloom filters, compression, pluggable
+`Comparator`/`Env`, `CompactRange`, `max_open_files`/`block_size`/etc. — all multi-file-LSM-era
+knobs ZLDB's RAM+WAL+snapshot shape has no use for, reaffirming §11/§61, not revisited). Two
+capabilities were genuine, proportionate gaps and are now shipped:
+
+1. **`DB.Destroy(directory)`** — deletes exactly ZLDB's own files (`LOCK`, `CURRENT`/`CURRENT.tmp`,
+   numbered `*.log`/`*.ldb`), not the directory wholesale; removes the directory itself only if
+   nothing else remains. Mirrors real LevelDB's `DestroyDB`, safer than a caller's own
+   `Directory.Delete(dir, recursive: true)`.
+2. **`DB.Repair(directory, options)`** — the direct, valuable follow-on to §115's checksum work: a
+   corrupted snapshot previously meant `Open()` threw and the directory stayed unopenable with no
+   recovery path. `Repair` is an **explicit, separate static call — never automatic**. Product
+   decision made deliberately (not the only option considered): `Open()`/the public constructor
+   must keep failing loudly on corruption by default; a corrupted DB silently limping back to life
+   on the next boot would risk masking real corruption as normal operation. An operator opts into
+   `Repair` on purpose. Internally implemented as an existing-machinery reuse, not new recovery
+   logic: a private constructor overload opens tolerantly (treats a checksum-failed snapshot as
+   "absent," same fallback path already used for a foreign/non-ZLDB `CURRENT` target), then the
+   normal open sequence's own flush-and-rewrite step produces a clean `CURRENT`/snapshot/journal as
+   a side effect. Scope is honestly narrower than real LevelDB's repair (which recovers individual
+   valid blocks/SSTables from a partially-damaged multi-file store) — ZLDB's single whole-file
+   snapshot checksum has no finer granularity, so a failed snapshot is discarded entirely, not
+   partially salvaged; only the WAL's own partial-replay tolerance (already existed pre-§115)
+   carries data through `Repair`.
+
+**Why now:** direct continuation of §115, at the user's request to keep comparing against
+`mojang-leveldb` for what ZLDB still lacks. Same non-goal boundary as §115 — nothing here is
+compaction/LSM-adjacent.
+
+**Status (ago 2026):** Shipped — `DB.Destroy`, `DB.Repair`, private tolerant-open constructor
+overload. `libs/leveldb.Tests` grew from 15 to 19 cases (Destroy file-scoping + no-op-on-missing,
+Repair discarding a corrupted snapshot + reopening cleanly, Repair no-op-on-healthy-DB); all 19
+green, full `zenith.sln` build/test unaffected.
+
+### 117. `LOCK` becomes a real OS-level exclusive lock, not a marker file
+
+**Choice:** Continued the §115/§116 comparison against `mojang-leveldb` and found the most
+consequential gap of the three passes: ZLDB's `LOCK` file was created (`if (!File.Exists) WriteAllText`)
+but never actually held open exclusively — nothing stopped two `DB` instances, same process or
+different processes, from opening the same directory at once. Each would run its own independent
+`_mem`/`_journal`/`_nextFileNum`, silently clobbering the other's WAL/snapshot on flush — the
+underlying reason real LevelDB's `Env::LockFile` (POSIX `flock`, Windows `LockFileEx`) exists at
+all. Fixed: `Open()` now opens `LOCK` with `FileShare.None` and holds that `FileStream` for the
+DB's entire lifetime; `.NET`'s own file-sharing model gives mandatory locking for free (no
+per-OS P/Invoke needed, unlike native LevelDB's `Env` abstraction). A second open on the same
+directory now throws `InvalidOperationException` immediately instead of corrupting data silently
+later.
+
+**Regression caught during this same pass, not shipped separately:** the first version acquired the
+lock but only released it on a *successful* `Open()` — an `Open()` that throws partway through
+(e.g. `TableFile.TryLoadInto`'s `InvalidDataException` on a corrupted snapshot, thrown well after
+the lock is taken) leaked the lock handle, permanently locking the directory out of any future
+attempt, including `Repair` — which needs to reopen the very directory `Open()` just failed on to
+do its job. Fixed in the same pass: the constructor now wraps `Open()` in try/catch and releases
+`_journal`/`_lockHandle` on any exception before rethrowing. Caught by a dedicated regression test,
+not by accident.
+
+**Why now:** third and (for now) final pass of the `mojang-leveldb` comparison the user asked to
+continue after §115/§116. Same non-goal boundary as both — no compaction/LSM territory touched.
+
+**Status (ago 2026):** Shipped — `DB.cs`'s lock acquisition/release, constructor-level cleanup on a
+failed open. `libs/leveldb.Tests` grew from 19 to 22 cases (concurrent-open rejection, lock release
+on `Close()`, lock release on a failed `Open()`); all 22 green, full `zenith.sln`
+build/1019-test run unaffected.
+
+### 118. ZLDB read path: reader/writer lock, zero-alloc `TryGet`, span-based writes
+
+**Choice:** Fourth pass of the `mojang-leveldb` comparison, this time at the user's explicit
+request to draw performance inspiration from engines like RocksDB (still bounded by §11/§61's
+non-negotiable shape: RAM `SortedDictionary` + WAL + one snapshot, no compaction/LSM). Investigated
+the literal terms the user cited — "Mutex, MutexGuard, ConcurrentBufferPool into Database's Read
+Path" — against every cloned reference repo (`mojang-leveldb`, `dragonfly`, `gophertunnel`,
+`PowerNukkitX`, `pocketmine`, etc.): zero matches. Not a quote, a design direction to execute.
+
+1. **Reader/writer lock replaces the single mutex.** `_gate` (a plain `object`) → `_lock`
+   (`ReaderWriterLockSlim`, `NoRecursion`), with two small `readonly struct IDisposable` guards
+   (`ReadGuard`/`WriteGuard`) giving the same `using (...)` RAII ergonomics the old `lock` block
+   had. `TryGet`/`CreateIterator`/`GetSnapshot` take the read lock (concurrent with each other now,
+   previously fully serialized); `Write`/`Close`/the flush they trigger take the write lock
+   (unchanged: still fully exclusive — ZLDB's single-writer model doesn't change, only reads stop
+   blocking other reads).
+2. **`TryGet` replaces `Get` outright — removed, not kept alongside.** Investigated `MemTable`
+   closely first: `Put`/`Delete` always clone key/value *on write* and never mutate an
+   already-stored array in place — a later write to the same key swaps in a brand-new array, never
+   edits the old one. That means any array already handed to a caller stays valid and immutable
+   forever, which made `DB.Get`'s defensive `(byte[])value.Clone()` before every return provably
+   redundant. `TryGet(byte[] key, out ReadOnlyMemory<byte> value)` returns the `MemTable`-owned
+   array directly. The key parameter deliberately stays `byte[]`, not `ReadOnlySpan<byte>`:
+   `SortedDictionary` (what `MemTable` is built on, to preserve iteration order without
+   reimplementing a tree) has no span-based lookup overload the way `Dictionary` gained recently —
+   accepting a span for the key would force a temporary allocation to do the lookup, making this
+   method *more* allocating on the key side than today, not less. Spanifying only where it's
+   honestly a win, not for API uniformity's own sake.
+3. **`Put`/`Delete`/`WriteBatch.Put`/`WriteBatch.Delete` accept `ReadOnlySpan<byte>`.** A durable KV
+   store must materialize an owned copy internally either way — this doesn't remove that copy — but
+   it removes the requirement that the *caller* already own a `byte[]` before calling; a caller can
+   now build a key in a `stackalloc` buffer without allocating first. `byte[]` still compiles at
+   every existing call site unchanged (implicit conversion to `ReadOnlySpan<byte>`).
+4. **`GetSnapshot`/`CreateIterator` stop cloning key+value per entry.** `snap[(byte[])k.Clone()] =
+   (byte[])v.Clone()` → `snap[k] = v` — safe under the same copy-on-write discipline as (2). This
+   was the single most expensive point in the read path: an O(n) clone of the *entire* live
+   dataset, on every `ForEachOverlayAsync`/`ForEachChestAsync` boot-time scan. `Iterator.Key()`/
+   `Value()` and the new `Snapshot.TryGet` follow the same `ReadOnlyMemory<byte>` shape.
+5. **`LevelDbChunkStorage.cs`** (the sole consumer, confirmed by grep — nothing else in the repo
+   references `Zenith.LevelDB`) updated to the new signatures. `Put`/`Delete` call sites needed no
+   change (implicit span conversion); `Get` call sites became `TryGet(...).ToArray()`, and
+   `ForEachOverlayAsync`/`ForEachChestAsync`'s manual `StartsWith` helper was deleted in favor of
+   the built-in `ReadOnlySpan<byte>.StartsWith` extension.
+
+**Honest limit of the "zero-alloc" claim:** `IChunkStorage`'s public contract (used throughout
+`src/zenith/World/*.cs` and beyond) still returns `byte[]?` and is **not** touched by this ADR. For
+a single-key read reached through `LevelDbChunkStorage`, the clone this ADR removes from inside
+`DB.TryGet` reappears as one `.ToArray()` at `LevelDbChunkStorage`'s own boundary — the allocation
+*moves*, it doesn't disappear end-to-end, for that specific path. The gain that *is* complete with
+no asterisk: the `GetSnapshot`/`CreateIterator` O(n) clone elimination (item 4), and the removal of
+allocation *pressure* on write-path callers (item 3). Modernizing `IChunkStorage` itself to close
+the remaining gap is real, deliberately-out-of-scope follow-up work, not started here.
+
+**Non-goals reaffirmed:** `ArrayPool<byte>`/buffer pooling — investigated and rejected for this
+pass; the actual win was eliminating unnecessary clones the existing copy-on-write discipline
+already made redundant, not pooling (which would buy rent/return complexity and use-after-return
+risk without a concrete, measured hot path that needs it). Swapping `SortedDictionary` for a
+span-lookup-capable structure — no proven need; the key side was never the expensive part.
+Compaction/multi-level LSM/block cache/Bloom filters — still §11/§61, untouched.
+
+**Status (ago 2026):** Shipped — `DB.cs` (lock model, `TryGet`, span `Put`/`Delete`,
+`GetSnapshot`), `WriteBatch.cs`, `Iterator.cs`, `Snapshot.cs`, `LevelDbChunkStorage.cs`. All 22
+`libs/leveldb.Tests` cases updated to the new API and green (behavior unchanged, only call-site
+shape); full `zenith.sln` build and 1019-case `zenith.Tests` run unaffected.
+
+### 119. ZLDB read path becomes lock-free — §118's reader/writer lock didn't deliver, benchmarks proved it
+
+**Choice:** At the user's explicit request to dig deeper — "gaps, performance problems from a
+dedicated benchmark, concurrency, multi-threading" — added a real `BenchmarkDotNet` benchmark
+project (`src/zenith.Benchmarks/LevelDbBenchmarks.cs`,
+`LevelDbConcurrencyBenchmarks`, `LevelDbLockPrimitiveBenchmarks`) instead of reasoning about
+locking from code review alone. The result reversed §118's own conclusion.
+
+**What the benchmark found:** §118's `ReaderWriterLockSlim` does **not** deliver the "concurrent
+reads stop blocking each other" benefit it was introduced for. Measured with 8 threads each doing
+20,000 `TryGet` calls on the same `DB`:
+
+| Threads | §118 (RWLS) total time | Throughput |
+|---|---|---|
+| 1 | 709.5 us | 28.2M ops/s |
+| 2 | 1,412.3 us | 28.3M ops/s |
+| 4 | 3,238.7 us | 24.7M ops/s |
+| 8 | 8,513.6 us | 18.8M ops/s |
+
+Total throughput **fell** as concurrency rose — the opposite of the intended effect. Isolated the
+cause with a dedicated comparison (`LevelDbLockPrimitiveBenchmarks`, same read-only
+`SortedDictionary` lookup guarded three ways): both a plain mutex and `ReaderWriterLockSlim` were
+**18-20x slower than no lock at all** at 8 threads. Distinct-keys-per-thread and same-key variants
+scaled identically, ruling out cache-line contention on shared tree nodes — the bottleneck was the
+lock's own acquire/release bookkeeping, not the data being protected. `ReaderWriterLockSlim` was
+also measurably *worse* than a plain mutex at low contention (1 thread: 43% slower) because its
+internal state tracking costs more per acquisition even uncontended — it only ever broke even with
+a plain mutex, never clearly won, across every thread count tested.
+
+**Fix: eliminate the read-side lock, not swap the primitive.** `MemTable` (`MemTable.cs`) now holds
+an `ImmutableSortedDictionary<byte[], byte[]?>` behind a single field, published via
+`Volatile.Write` after each mutation — never mutated in place. A reader does a plain
+`Volatile.Read` of the current reference and operates on that snapshot; an immutable collection
+can't be observed half-updated, so `TryGet`/`GetSnapshot`/`CreateIterator` need **no lock at all**.
+`DB`'s lock (`_writeGate`, a plain `object`) now exists purely to serialize `Write`/`Close`/flush —
+necessary because WAL append and memtable mutation must stay atomic together for durability, not
+because the dictionary itself needs protecting from readers anymore. `_closed` became `volatile
+bool` so lock-free readers still observe a `Close()` on another thread correctly.
+
+**Result, same benchmark, after the fix:**
+
+| Threads | Before (RWLS) | After (lock-free) | Speedup | Throughput after |
+|---|---|---|---|---|
+| 1 | 709.5 us | 548.2 us | 23% faster | 36.5M ops/s |
+| 2 | 1,412.3 us | 646.4 us | 54% faster | 61.9M ops/s |
+| 4 | 3,238.7 us | 707.7 us | 78% faster | 113.0M ops/s |
+| 8 | 8,513.6 us | 784.9 us | 91% faster | 203.8M ops/s (**10.8x** §118's number) |
+
+Throughput now scales roughly with thread count instead of degrading — genuine parallelism, not
+just "no deadlock." Single-threaded `TryGet` remains ~100-130ns, 0 bytes allocated
+(`LevelDbBenchmarks`). `Put` got measurably more expensive per call (~7.4us, some allocation) —
+`ImmutableSortedDictionary.SetItem` path-copies on every write, versus a mutable dictionary's
+cheaper in-place insert. Accepted deliberately: writes are already single-writer/serialized by
+`_writeGate` regardless, ZLDB's actual write pattern is sparse per-tick overlay edits (not
+write-heavy bulk load), and the entire point of this pass was fixing the read path.
+
+**Empirical validation, not just benchmark numbers:** added two concurrency stress tests
+(`libs/leveldb.Tests`) that exercise the new lock-free design directly rather than trusting the
+reasoning alone — many threads doing concurrent `Put`+`CreateIterator`+`TryGet` against distinct
+keys (validates no lost writes, no corruption, no deadlock: final count must exactly match
+`writerCount * writesPerWriter`), and a same-hot-key overwrite race where every concurrent read
+must observe one complete, self-consistent version of the value or none — never a torn mix of an
+old and a new write's bytes (validates the copy-on-write safety claim `TryGet` depends on). Both
+green across repeated runs.
+
+**Two unrelated pre-existing bugs found and fixed while investigating, not caused by this pass:**
+1. `Options.OnCorruption` was `public static` on `DB` — wrong for a class that can legitimately
+   have more than one instance open at once (multiple worlds, or `Repair` opening one internally):
+   setting it on one instance silently affected every `DB` in the process, and only ever fired for
+   whichever instance happened to still be replaying its WAL when set. Moved to
+   `Options.OnCorruption` (per-instance, read once during that instance's `Open`).
+2. A genuinely flaky test unrelated to ZLDB
+   (`WorldGenerationDiagnosticsTests.World_coalesces_concurrent_column_generation_without_sharing_cancellation`)
+   surfaced under the heavy thread-pool load these benchmarks/stress tests generate. Root cause:
+   the test raced `secondCancellation.Cancel()` against `terrain.Release.Set()`, assuming
+   cancellation would always "win" — but `World.GetOrCreateColumnAsync`'s
+   `request.Task.WaitAsync(ct)` resolves the canceled branch independently of the shared
+   generation completing, so under scheduler pressure the two could reorder and the second caller
+   would observe the coalesced generation's successful result instead of its own cancellation.
+   Fixed by waiting for `second.IsCompleted` (which `WaitAsync`'s cancellation path satisfies
+   without needing the terrain released) *before* releasing the terrain, removing the race instead
+   of hoping for a favorable order. Separately, found the wider cause class: `Tools`/`Blocks`/etc.
+   are process-wide statics with a locked mutation path but a lock-free fast-read path once loaded
+   — safe within one test class, not safe against a *different* xUnit test class concurrently
+   resetting/reloading the same static state, which xUnit runs in parallel by default. Added
+   `src/zenith.Tests/xunit.runner.json` (`parallelizeTestCollections: false`) rather than
+   redesigning every static loader — a deliberate test-infra trade (slower local/CI runs, ~1m20s →
+   ~2m for the full suite, still well inside the CI timeout) over a much larger, riskier product
+   change to fix a test-only symptom.
+
+**Why now, not before:** direct continuation of §115-118 at the user's request to keep going
+deeper — benchmarks and concurrency stress tests are the natural next step after §118 shipped a
+locking change that turned out, once measured, not to be the right one.
+
+**Non-goals reaffirmed:** multi-writer lock-freedom (still single-writer via `_writeGate`, by
+design — WAL/memtable atomicity needs it); compaction/multi-level LSM/block cache/Bloom filters —
+still §11/§61.
+
+**Status (ago 2026):** Shipped — `MemTable.cs` rewritten (`ImmutableSortedDictionary` + atomic
+swap), `DB.cs` lock model simplified to write-only exclusion, `Options.OnCorruption`. New:
+`src/zenith.Benchmarks/LevelDbBenchmarks.cs`, `LevelDbLockPrimitiveBenchmarks.cs`; two new
+concurrency stress tests in `libs/leveldb.Tests` (24 cases total, up from 22). Collateral fixes:
+`WorldGenerationDiagnosticsTests.cs` race condition, `src/zenith.Tests/xunit.runner.json`. Full
+`zenith.sln` build and 1019-case `zenith.Tests` run green, repeated multiple times for stability.
+
+### 120. `Seek` becomes O(log n), `Destroy`/`Repair` refuse when locked, extensive edge-case coverage
+
+**Choice:** Continued the deep-dive at the user's explicit request to keep finding architecture
+gaps and fix them, with "extensive tests covering every minimal detail and complex case." Full
+re-read of every file in `libs/leveldb/` surfaced two real gaps beyond what §115-119 covered, both
+fixed, plus a large new test file.
+
+1. **`Iterator.Seek` was O(n), not O(log n).** `Snapshot`/`Iterator` were backed by
+   `SortedDictionary<byte[],byte[]>`, and `Seek` walked it with a linear `while (_enum.MoveNext())`
+   scan comparing every key until finding the target — `SortedDictionary` exposes no
+   binary-searchable view (unlike `SortedSet<T>.GetViewBetween`), so there was no way to seek
+   faster than a full scan through that type's public API. Separately, `DB.GetSnapshot` built that
+   `SortedDictionary` by re-inserting each of `MemTable.LiveEntries()`'s entries one at a time
+   (O(n log n)) — wasted work, since `LiveEntries()` already returns entries in `ByteComparer`
+   order (it iterates the already-sorted `ImmutableSortedDictionary` §119 gave `MemTable`). Fixed
+   both by dropping `SortedDictionary` entirely: `Snapshot`/`Iterator` now hold the sorted
+   `IReadOnlyList<KeyValuePair<byte[],byte[]>>` `LiveEntries()` already produces, and a shared
+   `SortedEntrySearch.LowerBound` binary-searches it directly for both `Snapshot.TryGet` and
+   `Iterator.Seek`. `GetSnapshot` is now a direct O(n) copy, `Seek` is O(log n).
+2. **`Destroy`/`Repair` could silently corrupt an actively-open DB.** Neither checked the `LOCK`
+   file before acting. `Repair` opening its own tolerant `DB` instance already inherited §117's
+   lock check and would correctly fail if another instance held the directory open, but `Destroy`
+   went straight to best-effort per-file deletes — if another process/instance had the directory
+   open, those deletes would mostly fail with sharing violations that `TryDeleteBestEffort`
+   silently swallows, but not *uniformly*: `CURRENT`/orphan `.ldb` files (not held open long-term)
+   could still be deleted successfully while `LOCK`/the active journal file failed, leaving the
+   other instance's directory in a half-destroyed state while it kept running, with the caller
+   believing `Destroy` had simply succeeded. Fixed: `Destroy` now probes `LOCK` the same way
+   `Open()` acquires it, before touching anything, and throws `InvalidOperationException` if
+   another instance holds it — refusing cleanly instead of silently partially succeeding.
+3. **Extensive new test file** (`libs/leveldb.Tests/LevelDbEdgeCaseTests.cs`, 66 new cases,
+   `libs/leveldb.Tests` total 22 → 66): `Seek`/binary-search correctness (exact match at every
+   position, landing between two keys, before-first, past-last, empty snapshot, a 500-entry
+   shuffled-insert full-iteration ordering check), `Destroy`/`Repair` refusing-when-locked (and
+   `Destroy` succeeding once the lock is released), empty key/value round-trip, a 2MB value
+   round-tripping through both WAL and a flushed snapshot, same-key put/delete churn surviving
+   WAL replay to the exact last write, tombstone lifecycle (`DropTombstones` actually shrinks the
+   live set and deleted keys don't resurrect; `GetSnapshot` excludes tombstones even pre-flush),
+   multiple `Iterator`s over one `Snapshot` used concurrently from different threads, concurrent
+   `Close()` from multiple threads (idempotent, lock released exactly once), `WriteBatch`
+   same-key multi-op last-write-wins (matching the class's own documented example), and direct
+   unit tests of `MemTable`/`ByteComparer`/`Crc32`/`KvFraming` in isolation via
+   `InternalsVisibleTo` (`Crc32` checked against the well-known CRC-32/ISO-HDLC test vector for
+   ASCII "123456789" — 0xCBF43926, matching zlib/PKZIP/`System.IO.Hashing.Crc32`).
+
+**Two more test-infra bugs found and fixed while writing that suite, not caused by this pass:**
+1. `libs/leveldb.Tests` was missing the `xunit.runner.json`
+   (`parallelizeTestCollections: false`) §119 added to `src/zenith.Tests` for the exact same
+   reason — `DB.AfterTableWriteBeforeCurrent`, a static test-only fault-injection hook, leaked
+   from one test class into another running concurrently in a different xUnit collection,
+   surfacing as a spurious `IOException` in an unrelated new test. Same fix applied here.
+2. A genuine arithmetic mistake in a newly-written test
+   (`Same_key_put_delete_churn_survives_crash_and_replay_to_the_last_write`): the original loop
+   ran 50 iterations claiming "the last op is a Put" because "49 % 7 != 0" — but 49 = 7×7, so
+   49 % 7 *is* 0, meaning the actual last op was a `Delete`, not a `Put(49)`. Fixed by using 49
+   iterations (last index 48, 48 % 7 == 6) so the asserted final state matches the code's actual
+   behavior. Caught by the test itself failing, not by review — exactly the kind of complex case
+   the user asked this pass to cover.
+
+**Why now:** direct continuation of §115-119 at the user's explicit request — "identify gaps and
+architecture problems and fix them, extensive tests covering every minimal detail and complex
+case."
+
+**Non-goals reaffirmed:** no change to the CRC algorithm, WAL/snapshot format, or lock model —
+this entry is algorithmic (Seek) and safety (Destroy) hardening within the shape §115-119 already
+established, plus test depth, not a new design direction.
+
+**Status (ago 2026):** Shipped — `Snapshot.cs`/`Iterator.cs` rewritten (sorted-list + binary
+search), `DB.cs` (`GetSnapshot` simplified, `Destroy` lock check), new
+`libs/leveldb.Tests/LevelDbEdgeCaseTests.cs`, `libs/leveldb.Tests/xunit.runner.json`. All 66
+`libs/leveldb.Tests` cases green (repeated 3x for stability), full `zenith.sln` build and
+1019-case `zenith.Tests` run green.
+
+### 121. Closing pass: final `mojang-leveldb` API diff, one more inconsistency fixed
+
+**Choice:** At the user's explicit request for a final "have we covered all the terrain" check
+before closing this line of work, re-diffed ZLDB's shipped surface (§115-120) against real
+LevelDB's full public API (`db.h`/`options.h`/`write_batch.h`, already surveyed in §115/§118's
+research) item by item rather than assuming coverage. Confirmed everything applicable is shipped
+(checksums, real `LockFile`, `Destroy`/`Repair`, lock-free concurrent reads — which now beats real
+LevelDB's own approach for ZLDB's workload, O(log n) `Seek`) and everything unshipped is a
+correctly-scoped non-goal (compaction, block cache, Bloom filter, compression, pluggable
+comparator/env — all multi-file-LSM machinery ZLDB's RAM+WAL+snapshot shape has no use for). Found
+one more real inconsistency and closed two small completeness gaps, all confirmed with the user
+before implementing (a product-behavior change deserved sign-off, not a unilateral call):
+
+1. **A missing `CURRENT` target was always treated as harmless, even when it looked like our own
+   file.** `Open()` had one fallback for "the file `CURRENT` names doesn't exist" — silently reset
+   empty, on the theory it's leftover foreign-format residue (e.g. a native LevelDB `MANIFEST`).
+   But that conflated two different signals: a name that isn't shaped like anything ZLDB would
+   produce (safe — genuinely never ours) and a name that *is* shaped like our own `{n:D6}.ldb`
+   convention but is simply gone (alarming — that file should exist and doesn't, which looks like
+   real data loss). This was inconsistent with §115's own "fail loud on corruption" stance for a
+   CRC-mismatched snapshot. Fixed: a `LooksLikeZldbTableName` check (`.ldb` extension, purely
+   numeric stem — the same lenient shape `EnumerateNumberedFiles` already parses) now makes the
+   first case throw `InvalidDataException`, same treatment as a checksum failure; the second case
+   is unchanged. `Repair`'s `tolerateCorruptSnapshot` flag covers both uniformly, since `Repair`'s
+   own documented policy ("discard the snapshot entirely, rebuild from WAL") already applies
+   either way.
+2. **`DB.GetProperty(string, out string)`** — mirrors real LevelDB's `DB::GetProperty`. ZLDB has no
+   use for most of its property set (`"leveldb.num-files-at-level<N>"`, `"leveldb.sstables"` — all
+   multi-file/leveled-storage concepts), but `MemTable.Count`/`ApproxSize` already existed
+   (§119, unit-tested in isolation, never exposed through `DB`) — `"zldb.num-entries"` and
+   `"zldb.approximate-memory-usage"` give them an actual caller-facing purpose. Unrecognized names
+   return `false`, never throw.
+3. **`WriteBatch.ApproximateSize`** — mirrors `WriteBatch::ApproximateSize`. Trivial (`_ops.Length`
+   as a public property), zero risk, closes a small parity gap noted but deferred back in §118.
+
+**Why now:** explicit closing check requested by the user before ending this line of work — "só
+vamos fechar caso tenhamos coberto todo terreno do leveldb."
+
+**Non-goals reaffirmed:** everything already reaffirmed in §115-120 stays reaffirmed; nothing new
+opened here. `GetApproximateSizes`/`CompactRange` remain correctly out of scope (leveled-storage
+concepts).
+
+**Status (ago 2026):** Shipped — `DB.cs` (`CURRENT`-target check, `GetProperty`), `WriteBatch.cs`
+(`ApproximateSize`). Six new `libs/leveldb.Tests` cases (72 total, up from 66), green across
+repeated runs; full `zenith.sln` build and 1019-case `zenith.Tests` run green.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:
