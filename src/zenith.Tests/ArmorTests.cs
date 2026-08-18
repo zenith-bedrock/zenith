@@ -108,9 +108,10 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("tank");
         EquipDiamondSet(player, fx);
 
-        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
+        var result = PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Melee, 10f, 0);
+        result.Conclude(fx.Players.Online);
 
-        Assert.True(applied);
+        Assert.True(result.Applied);
         Assert.Equal(18f, player.Health); // 10 * (1 - 0.8) = 2 damage
     }
 
@@ -120,7 +121,7 @@ public class ArmorTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bare");
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Melee, 10f, 0).Conclude(fx.Players.Online);
 
         Assert.Equal(10f, player.Health);
     }
@@ -132,7 +133,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("voidtank");
         EquipDiamondSet(player, fx);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, 0).Conclude(fx.Players.Online);
 
         Assert.True(player.IsDead);
     }
@@ -144,7 +145,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("armored-death");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronHelmet(fx)), 1));
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, 0).Conclude(fx.Players.Online);
 
         Assert.True(player.IsDead);
         Assert.True(player.Inventory.GetArmor(PlayerInventory.ArmorHelmetSlot).IsEmpty);
@@ -158,7 +159,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("respawner");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronChestplate(fx)), 1));
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, 0).Conclude(fx.Players.Online);
         Assert.True(player.IsDead);
 
         player.SubmitRespawn();

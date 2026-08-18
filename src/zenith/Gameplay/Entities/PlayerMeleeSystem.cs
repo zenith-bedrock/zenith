@@ -61,14 +61,13 @@ sealed class PlayerMeleeSystem : IGameSystem
             if (dx * dx + dz * dz > reachSquared)
                 continue;
 
-            _ = PlayerDamage.Apply(
+            PlayerDamage.ApplyCore(
                 target,
                 _players,
-                online,
                 DamageSource.MeleeFrom(attacker.RuntimeId),
                 AttackDamage,
                 clock.CurrentTick,
-                dx, dz);
+                dx, dz).Conclude(online);
         }
     }
 }

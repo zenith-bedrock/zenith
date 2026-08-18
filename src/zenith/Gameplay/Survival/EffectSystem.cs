@@ -107,7 +107,7 @@ sealed class EffectSystem : IGameSystem
         if (player.Health <= 1f) return;
 
         var amount = MathF.Min(1f + effect.Amplifier, player.Health - 1f);
-        _ = PlayerDamage.Apply(player, _players, online, DamageSource.Magic, amount, clock.CurrentTick);
+        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, amount, clock.CurrentTick).Conclude(online);
     }
 
     private static void TickRegeneration(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)

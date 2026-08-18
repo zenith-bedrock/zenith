@@ -192,7 +192,7 @@ sealed class GolemSystem : IGameSystem
     {
         if (golem.TargetPlayerRuntimeId is { } retainedId)
         {
-            var retained = online.FirstOrDefault(p => p.RuntimeId == retainedId);
+            var retained = _players.GetByRuntimeId(retainedId);
             if (retained is not null && IsTargetValid(golem, retained))
                 return retained;
             golem.TargetPlayerRuntimeId = null;
@@ -264,7 +264,9 @@ sealed class GolemSystem : IGameSystem
         var dx = target.PositionX - golem.PositionX;
         var dz = target.PositionZ - golem.PositionZ;
         if (dx * dx + dz * dz > AttackDistance * AttackDistance) return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(golem.EntityId), AttackDamage, clock.CurrentTick, dx, dz))
+        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(golem.EntityId), AttackDamage, clock.CurrentTick, dx, dz);
+        result.Conclude(online);
+        if (result.Applied)
         {
             golem.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
@@ -290,7 +292,9 @@ sealed class GolemSystem : IGameSystem
             var dx = player.PositionX - golem.PositionX;
             var dz = player.PositionZ - golem.PositionZ;
             if (dx * dx + dz * dz > radiusSquared) continue;
-            if (PlayerDamage.Apply(player, _players, online, DamageSource.MeleeFrom(golem.EntityId), SlamDamage, clock.CurrentTick, dx, dz))
+            var result = PlayerDamage.ApplyCore(player, _players, DamageSource.MeleeFrom(golem.EntityId), SlamDamage, clock.CurrentTick, dx, dz);
+            result.Conclude(online);
+            if (result.Applied)
                 hitAny = true;
         }
 

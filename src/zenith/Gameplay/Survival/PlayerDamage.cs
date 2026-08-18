@@ -7,6 +7,50 @@ using Zenith.Gameplay.Replication;
 
 namespace Zenith.Gameplay.Survival;
 
+internal enum PlayerDamageOutcome { NotApplied, Hurt, Died }
+
+/// <summary>
+/// Result of <see cref="PlayerDamage.ApplyCore"/> — the peer-list-independent core of a damage
+/// resolution is already done by the time this exists. <see cref="Conclude"/> is the peer-list-
+/// dependent tail, chained in the same expression at every call site so it can't be silently
+/// skipped the way two independent static calls could be. Deliberately not named "Replicate": for
+/// <see cref="PlayerDamageOutcome.Hurt"/> it really is pure notification (safe to reason about as
+/// "just packets"), but for <see cref="PlayerDamageOutcome.Died"/> it also runs
+/// <see cref="ChestLidFanout.ReleaseOpener"/>/<see cref="FloorDropFanout.TryDropDeathLoot"/> —
+/// both bundle a real state mutation (closing the chest, moving inventory into world floor drops)
+/// atomically with their notification, by existing design elsewhere in this codebase, and both need
+/// <c>online</c> for that same atomic commit-and-publish. A death is not actually finished — loot
+/// isn't dropped, an open chest isn't released — until this runs; it is required, not optional,
+/// for that outcome. Every current call site chains it immediately, so this is safe today, but the
+/// name must not imply "purely cosmetic, safe to skip."
+/// </summary>
+internal readonly record struct PlayerDamageResult(
+    PlayerDamageOutcome Outcome, Player.Player Player, PlayerManager Players)
+{
+    public bool Applied => Outcome != PlayerDamageOutcome.NotApplied;
+
+    /// <summary>No-ops for <see cref="PlayerDamageOutcome.NotApplied"/> — callers never need an
+    /// `if` around this call. Re-reads <c>Player.OpenChest</c>/<c>Player.GameMode</c> fresh (still
+    /// valid — <see cref="PlayerDamage.ApplyCore"/> never clears them) instead of threading them
+    /// through the result.</summary>
+    public void Conclude(IReadOnlyList<Player.Player> online)
+    {
+        if (Outcome == PlayerDamageOutcome.NotApplied) return;
+
+        PlayerVisibility.RelayHealth(Player, online);
+        if (Outcome == PlayerDamageOutcome.Hurt)
+        {
+            PlayerVisibility.RelayHurt(Player, online);
+            return;
+        }
+
+        PlayerVisibility.RelayDeath(Player, online);
+        var world = Player.Session.Context.World;
+        if (Player.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, Player);
+        if (Player.GameMode != GameMode.Creative) _ = FloorDropFanout.TryDropDeathLoot(world, Players, online, Player);
+    }
+}
+
 /// <summary>One authoritative Player damage transition shared by concrete gameplay causes.</summary>
 static class PlayerDamage
 {
@@ -20,8 +64,18 @@ static class PlayerDamage
     private const float KnockbackHorizontal = 0.4f;
     private const float KnockbackVertical = 0.4f;
 
-    public static bool Apply(
-        Player.Player player, PlayerManager players, IReadOnlyList<Player.Player> online, DamageSource source, float amount,
+    /// <summary>
+    /// The peer-list-independent core: does this damage land, and what changes as a result.
+    /// Deliberately does not take <c>online</c> — "apply 5 damage to Steve" doesn't need to know
+    /// about every other online player; only <see cref="PlayerDamageResult.Conclude"/> does. Every
+    /// side effect here is self-only (mutates <paramref name="player"/>'s own state, or sends a
+    /// packet only to <paramref name="player"/>'s own client) or has no peer-visible component at
+    /// all. On death, the loot-drop/chest-release side effects are NOT finished here — see
+    /// <see cref="PlayerDamageResult.Conclude"/>'s doc comment for why those genuinely need
+    /// <c>online</c> and can't move into this method.
+    /// </summary>
+    public static PlayerDamageResult ApplyCore(
+        Player.Player player, PlayerManager players, DamageSource source, float amount,
         ulong currentTick, float knockbackDirX = 0f, float knockbackDirZ = 0f)
     {
         // Vanilla-parity: Creative players take no damage from ordinary sources (mob melee,
@@ -29,11 +83,14 @@ static class PlayerDamage
         // not a simplification (found via real-client testing, Phase XXIII-B). Void is the one
         // deliberate exception (established Zenith behavior, ADR §73/§40, matches vanilla — even
         // Creative players die falling out of the world) so it bypasses this guard.
-        if (player.GameMode == GameMode.Creative && source.Cause != DamageCause.Void) return false;
+        if (player.GameMode == GameMode.Creative && source.Cause != DamageCause.Void)
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
 
         var mitigated = ArmorMitigation.Apply(player, source, amount);
         var result = player.ApplyDamage(source, mitigated, currentTick);
-        if (!result.WasApplied) return false;
+        if (!result.WasApplied)
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+
         // Phase XXV — damage exhaustion source (survival only; a Creative death only happens via the
         // deliberate Void exception above, and shouldn't feed the hunger cycle either).
         if (player.GameMode != GameMode.Creative)
@@ -43,13 +100,10 @@ static class PlayerDamage
         if (!result.CausedDeath)
         {
             entity.SendPlayerAttributes(player);
-            PlayerVisibility.RelayHealth(player, online);
-            PlayerVisibility.RelayHurt(player, online);
             ApplyKnockback(player, entity, knockbackDirX, knockbackDirZ);
-            return true;
+            return new PlayerDamageResult(PlayerDamageOutcome.Hurt, player, players);
         }
-        var world = player.Session.Context.World;
-        if (player.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, player);
+
         if (player.Effects.Count > 0)
         {
             // Death clears every timed effect (vanilla parity); tell the owning client each is gone.
@@ -59,17 +113,14 @@ static class PlayerDamage
             player.ClearEffects();
         }
         if (!player.TryFinalizeDeath()) throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");
-        if (player.GameMode != GameMode.Creative) _ = FloorDropFanout.TryDropDeathLoot(world, players, online, player);
         // Phase XXV — vanilla resets experience to zero on death regardless of gamemode (a Creative
         // death only ever happens via the deliberate Void exception above). Previously nothing
         // touched XP on death at all — a real, documented gap from the earlier cross-reference audit.
         player.SetExperience(0, 0);
         entity.SendPlayerAttributes(player);
-        PlayerVisibility.RelayHealth(player, online);
-        PlayerVisibility.RelayDeath(player, online);
         entity.SendDeathInfo(player.DeathCause);
         entity.SendRespawnSearching(player.PositionX, player.PositionY + Blocks.PlayerEyeHeight, player.PositionZ, rid);
-        return true;
+        return new PlayerDamageResult(PlayerDamageOutcome.Died, player, players);
     }
 
     /// <summary>

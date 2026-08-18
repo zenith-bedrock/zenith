@@ -195,8 +195,10 @@ sealed class SpiderSystem : IGameSystem
         if (!IsTargetValid(pos, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
             return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
-                clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z))
+        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
+            clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z);
+        result.Conclude(online);
+        if (result.Applied)
         {
             state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             TryApplyPoison(target, clock);
@@ -247,7 +249,7 @@ sealed class SpiderSystem : IGameSystem
 
         if (state.TargetPlayerRuntimeId is { } retainedId)
         {
-            var retained = online.FirstOrDefault(player => player.RuntimeId == retainedId);
+            var retained = _players.GetByRuntimeId(retainedId);
             if (retained is not null && IsTargetValid(pos, retained, out _))
                 return retained;
             state.TargetPlayerRuntimeId = null;

@@ -177,7 +177,7 @@ sealed class ProjectileSystem : IGameSystem
             // Knockback direction follows the arrow's own flight, not the shooter's position —
             // matches vanilla (an arrow that curved under gravity still knocks the target the way
             // it was actually travelling at impact).
-            PlayerDamage.Apply(player, _players, online, DamageSource.Projectile(state.OwnerRuntimeId), Damage, currentTick, vel.X, vel.Z);
+            PlayerDamage.ApplyCore(player, _players, DamageSource.Projectile(state.OwnerRuntimeId), Damage, currentTick, vel.X, vel.Z).Conclude(online);
             Remove(id, online);
             return;
         }

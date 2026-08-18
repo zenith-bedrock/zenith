@@ -81,7 +81,7 @@ sealed class MinecartSystem : IGameSystem
             ApplyPlayerAttacks(id, online, clock.CurrentTick);
             if (!_stores.Entities.IsAlive(id)) continue;
             TryHandleMountInteraction(id, online);
-            var occupant = ResolveOccupant(id, online);
+            var occupant = ResolveOccupant(id);
             if (occupant is not null)
                 ApplyRiderSteering(id, occupant);
             ApplyRollingMotion(id);
@@ -128,10 +128,10 @@ sealed class MinecartSystem : IGameSystem
         return id;
     }
 
-    private Player.Player? ResolveOccupant(EntityId id, IReadOnlyList<Player.Player> online)
+    private Player.Player? ResolveOccupant(EntityId id)
     {
         if (!_minecarts.TryGet(id, out var occupancy) || occupancy.OccupantPlayerRuntimeId is not { } riderId) return null;
-        return online.FirstOrDefault(p => p.RuntimeId == riderId);
+        return _players.GetByRuntimeId(riderId);
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ sealed class MinecartSystem : IGameSystem
     private void TryReleaseInvalidOccupant(EntityId id, IReadOnlyList<Player.Player> online)
     {
         if (!_minecarts.TryGet(id, out var occupancy) || occupancy.OccupantPlayerRuntimeId is null) return;
-        var occupant = ResolveOccupant(id, online);
+        var occupant = ResolveOccupant(id);
         if (occupant is not null && occupant.IsInGame && !occupant.IsDead) return;
         Dismount(id, online, occupant);
     }
@@ -156,7 +156,7 @@ sealed class MinecartSystem : IGameSystem
         tracking.LastSeenNearPlayerTick = lastSeen;
         if (!shouldDespawn) return false;
 
-        Dismount(id, online, ResolveOccupant(id, online));
+        Dismount(id, online, ResolveOccupant(id));
         if (!_stores.Identities.TryGet(id, out var identity)) return false;
         foreach (var peer in online)
             if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
@@ -217,7 +217,7 @@ sealed class MinecartSystem : IGameSystem
     /// </summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        var occupant = ResolveOccupant(id, online);
+        var occupant = ResolveOccupant(id);
         if (!_stores.Identities.TryGet(id, out var identityBeforeDamage)) return false;
         var actorUniqueId = identityBeforeDamage.ActorUniqueId;
 
