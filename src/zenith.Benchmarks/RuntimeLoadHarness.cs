@@ -31,6 +31,11 @@ internal static class RuntimeLoadHarness
     public static int Run(string[] args)
     {
         var options = LoadOptions.Parse(args);
+        if (options.Soak)
+        {
+            RunSoak(options.SoakPlayers, options.SoakTicks, options.SoakCheckpointTicks);
+            return 0;
+        }
         if (options.WorldgenStream)
         {
             foreach (var playerCount in options.PlayerCounts)
@@ -120,6 +125,65 @@ internal static class RuntimeLoadHarness
             GC.GetAllocatedBytesForCurrentThread() - allocationBefore,
             GcCounts.Capture() - gcBefore,
             host.Transport.Datagrams, host.Transport.Bytes);
+    }
+
+    /// <summary>
+    /// Long-duration steady-state soak, checkpointed periodically instead of only measuring a single
+    /// before/after delta like <see cref="RunSteady"/> — the point is a growth-over-time curve (RSS,
+    /// managed heap, GC counts, tick p99 at each checkpoint), the signal a leak or tick-time drift
+    /// actually looks like ("hour 0 → hour 1 → hour 2 ... RSS climbing" vs. flat).
+    /// <para/>
+    /// Scope note: exercises the same steady-state movement traffic <see cref="RunSteady"/> does, run
+    /// for however many ticks the caller asks for (default: 1 simulated hour, checkpointed every 5
+    /// simulated minutes) — not random join/leave/chunk-streaming/inventory churn. That's a real,
+    /// larger soak scenario worth building later; this is the infrastructure (periodic checkpointing)
+    /// that scenario would reuse, proven correct against the traffic mix already covered elsewhere in
+    /// this harness. Actually running this for hours is a CI/ops decision, not something to launch
+    /// from a chat session — this exists so that decision has somewhere to point.
+    /// </summary>
+    private static void RunSoak(int playerCount, int totalTicks, int checkpointEveryTicks)
+    {
+        var host = new RuntimeHost(playerCount, streamChunks: false);
+        host.Warmup();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Console.WriteLine(
+            $"soak       players={playerCount} totalTicks={totalTicks} ({totalTicks / 20.0 / 60:F1} simulated min) " +
+            $"checkpointEvery={checkpointEveryTicks} ticks");
+        Console.WriteLine(
+            $"{"checkpoint",-12}{"tick",8}{"elapsedSec",12}{"rssMB",10}{"managedMB",11}{"gen0",6}{"gen1",6}{"gen2",6}{"tickP99Ms",11}");
+
+        var checkpointElapsed = new List<long>(checkpointEveryTicks);
+        var checkpointIndex = 0;
+        var runStart = Stopwatch.GetTimestamp();
+        var gcAtLastCheckpoint = GcCounts.Capture();
+        for (var tick = 0; tick < totalTicks; tick++)
+        {
+            host.SubmitSteadyInputs(tick);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            checkpointElapsed.Add(Stopwatch.GetTimestamp() - started);
+            host.ValidateSteadyState();
+
+            if ((tick + 1) % checkpointEveryTicks != 0 && tick != totalTicks - 1)
+                continue;
+
+            var sorted = checkpointElapsed.Order().ToArray();
+            static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
+            var p99 = Ms(sorted[(int)Math.Ceiling(sorted.Length * .99) - 1]);
+            var gcNow = GcCounts.Capture();
+            var gcDelta = gcNow - gcAtLastCheckpoint;
+            gcAtLastCheckpoint = gcNow;
+
+            Console.WriteLine(
+                $"#{checkpointIndex++,-11}{tick + 1,8}{Stopwatch.GetElapsedTime(runStart).TotalSeconds,12:F1}" +
+                $"{Environment.WorkingSet / 1024.0 / 1024.0,10:F1}{GC.GetTotalMemory(forceFullCollection: false) / 1024.0 / 1024.0,11:F1}" +
+                $"{gcDelta.Gen0,6}{gcDelta.Gen1,6}{gcDelta.Gen2,6}{p99,11:F3}");
+
+            checkpointElapsed.Clear();
+        }
     }
 
     private static LoadResult RunChunkBurst(int playerCount, int ticks)
@@ -1118,7 +1182,11 @@ internal static class RuntimeLoadHarness
         bool MixedRoster,
         bool WorldgenStream,
         int WorldgenRadius,
-        int WorldgenWorkers)
+        int WorldgenWorkers,
+        bool Soak,
+        int SoakPlayers,
+        int SoakTicks,
+        int SoakCheckpointTicks)
     {
         public static LoadOptions Parse(string[] args)
         {
@@ -1134,6 +1202,10 @@ internal static class RuntimeLoadHarness
             var worldgenStream = false;
             var worldgenRadius = 4;
             var worldgenWorkers = 2;
+            var soak = false;
+            var soakPlayers = 50;
+            var soakTicks = 20 * 60 * 60; // 1 simulated hour at 20 TPS
+            var soakCheckpointTicks = 20 * 60 * 5; // every 5 simulated minutes
             for (var i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--players" && i + 1 < args.Length)
@@ -1160,12 +1232,21 @@ internal static class RuntimeLoadHarness
                     worldgenRadius = int.Parse(args[++i]);
                 else if (args[i] == "--workers" && i + 1 < args.Length)
                     worldgenWorkers = int.Parse(args[++i]);
+                else if (args[i] == "--soak")
+                    soak = true;
+                else if (args[i] == "--soak-players" && i + 1 < args.Length)
+                    soakPlayers = int.Parse(args[++i]);
+                else if (args[i] == "--soak-ticks" && i + 1 < args.Length)
+                    soakTicks = int.Parse(args[++i]);
+                else if (args[i] == "--soak-checkpoint-ticks" && i + 1 < args.Length)
+                    soakCheckpointTicks = int.Parse(args[++i]);
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0 ||
-                worldgenRadius is < 0 or > 32 || worldgenWorkers is < 1 or > 64)
+                worldgenRadius is < 0 or > 32 || worldgenWorkers is < 1 or > 64 ||
+                soakPlayers <= 0 || soakTicks <= 0 || soakCheckpointTicks <= 0)
                 throw new ArgumentOutOfRangeException(nameof(args), "Player counts and ticks must be positive.");
-            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure, mixedRoster, worldgenStream, worldgenRadius, worldgenWorkers);
+            return new LoadOptions(counts, ticks, Math.Min(ticks, 5), actorCounts, actorPlayers, ticks, worldInteraction, zombieBehavior, interestScaling, activationPressure, mixedRoster, worldgenStream, worldgenRadius, worldgenWorkers, soak, soakPlayers, soakTicks, soakCheckpointTicks);
         }
     }
 
