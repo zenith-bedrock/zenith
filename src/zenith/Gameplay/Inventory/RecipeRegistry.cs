@@ -33,6 +33,7 @@ sealed class RecipeRegistry
     public const uint DiamondShovel = 12;
 
     private readonly Dictionary<uint, Recipe> _byNetId = new();
+    private bool _frozen;
 
     readonly record struct Recipe(uint NetId, (StackId Id, int Count)[] Inputs, StackId Output, int OutCount);
 
@@ -55,30 +56,22 @@ sealed class RecipeRegistry
         var stone = StackId.FromBlock(Blocks.Stone);
 
         var reg = new RecipeRegistry();
-        reg.Register(new Recipe(
-            OakLogToPlanks,
-            [(StackId.FromBlock(Blocks.OakLog), 1)],
-            planks,
-            4));
-        reg.Register(new Recipe(
-            OakPlanksToChest,
-            [(planks, 8)],
-            StackId.FromBlock(Blocks.Chest),
-            1));
+        reg.Register(OakLogToPlanks, [(StackId.FromBlock(Blocks.OakLog), 1)], planks, 4);
+        reg.Register(OakPlanksToChest, [(planks, 8)], StackId.FromBlock(Blocks.Chest), 1);
 
-        reg.Register(new Recipe(PlanksToStick, [(planks, 2)], stick, 4));
+        reg.Register(PlanksToStick, [(planks, 2)], stick, 4);
 
-        reg.Register(new Recipe(WoodenPickaxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_pickaxe"), 1));
-        reg.Register(new Recipe(WoodenAxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_axe"), 1));
-        reg.Register(new Recipe(WoodenShovel, [(planks, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_shovel"), 1));
+        reg.Register(WoodenPickaxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_pickaxe"), 1);
+        reg.Register(WoodenAxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_axe"), 1);
+        reg.Register(WoodenShovel, [(planks, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_shovel"), 1);
 
-        reg.Register(new Recipe(StonePickaxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_pickaxe"), 1));
-        reg.Register(new Recipe(StoneAxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_axe"), 1));
-        reg.Register(new Recipe(StoneShovel, [(stone, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_shovel"), 1));
+        reg.Register(StonePickaxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_pickaxe"), 1);
+        reg.Register(StoneAxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_axe"), 1);
+        reg.Register(StoneShovel, [(stone, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_shovel"), 1);
 
-        reg.Register(new Recipe(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1));
-        reg.Register(new Recipe(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1));
-        reg.Register(new Recipe(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1));
+        reg.Register(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1);
+        reg.Register(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1);
+        reg.Register(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1);
 
         return reg;
     }
@@ -86,7 +79,28 @@ sealed class RecipeRegistry
     private static StackId ToolStack(ItemPalette itemPalette, string name) =>
         StackId.FromItem(itemPalette.Require(name));
 
-    private void Register(in Recipe recipe) => _byNetId[recipe.NetId] = recipe;
+    /// <summary>
+    /// Boot-time-only. Takes plain composition data rather than the private <see cref="Recipe"/>
+    /// type — composition data a caller provides and this registry's internal canonical
+    /// representation stay decoupled, so this signature would still make sense if this method is
+    /// ever promoted beyond <c>private</c> for a real second caller (none exists yet). Kept
+    /// <c>private</c>: <see cref="CreateDefault(ItemPalette)"/> is still the only caller.
+    /// </summary>
+    private void Register(uint netId, (StackId Id, int Count)[] inputs, StackId output, int outCount)
+    {
+        if (_frozen)
+            throw new InvalidOperationException("RecipeRegistry is frozen; register before Freeze().");
+        if (_byNetId.ContainsKey(netId))
+            throw new InvalidOperationException($"Duplicate recipe net id {netId}.");
+        _byNetId[netId] = new Recipe(netId, inputs.ToArray(), output, outCount);
+    }
+
+    /// <summary>
+    /// Marks composition complete — no further <see cref="Register"/> calls are accepted afterward.
+    /// Called once by the composition root right after <see cref="CreateDefault(ItemPalette)"/>,
+    /// before GameLoop starts ticking. Compose → freeze → gameplay reads only.
+    /// </summary>
+    internal void Freeze() => _frozen = true;
 
     /// <summary>Stable ordered snapshot for CraftingData wire (ADR §35) — SSOT for net ids.</summary>
     public IReadOnlyList<RecipeSnapshot> SnapshotRecipes()
@@ -96,7 +110,7 @@ sealed class RecipeRegistry
         {
             list.Add(new RecipeSnapshot(
                 recipe.NetId,
-                recipe.Inputs,
+                recipe.Inputs.ToArray(), // defensive copy — Freeze() must mean existing entries can't be mutated via an escaped array either
                 recipe.Output,
                 recipe.OutCount));
         }
@@ -121,7 +135,7 @@ sealed class RecipeRegistry
 
         output = recipe.Output;
         outCount = recipe.OutCount;
-        inputs = recipe.Inputs;
+        inputs = recipe.Inputs.ToArray(); // defensive copy — same reason as SnapshotRecipes()
         return true;
     }
 
