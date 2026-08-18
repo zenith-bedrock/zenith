@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -81,15 +82,24 @@ public class RakNetServer
     }
 
     /// <param name="serverGuid">Stable LAN identity across restarts; null → random.</param>
-    public RakNetServer(int port, ulong? serverGuid = null)
+    /// <param name="socketBufferBytes">
+    /// Requested OS receive/send socket buffer size (cross-reference audit finding — this used to be
+    /// a hardcoded <c>int.MaxValue</c> with no documented reasoning; the OS clamps a request this
+    /// large to its own actual maximum regardless, so the literal value rarely matters in practice,
+    /// but an unexplained magic number invites exactly that question). Default keeps the prior
+    /// behavior (request the max, let the OS clamp) — picking a specific smaller value instead
+    /// requires measuring packet loss under burst against real network conditions, not guessing, so
+    /// this stays configurable rather than hardcoding a new unmeasured number in its place.
+    /// </param>
+    public RakNetServer(int port, ulong? serverGuid = null, int socketBufferBytes = int.MaxValue)
     {
         Guid = serverGuid ?? GenerateGuid();
-        _listener = CreateListener();
+        _listener = CreateListener(socketBufferBytes);
         RemoteEndPoint = new IPEndPoint(IPAddress.Any, port);
         _unconnected = new UnconnectedRakNet(this);
     }
 
-    private static UdpClient CreateListener()
+    private static UdpClient CreateListener(int socketBufferBytes)
     {
         var listener = new UdpClient
         {
@@ -99,8 +109,8 @@ public class RakNetServer
 
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
         {
-            listener.Client.ReceiveBufferSize = int.MaxValue;
-            listener.Client.SendBufferSize = int.MaxValue;
+            listener.Client.ReceiveBufferSize = socketBufferBytes;
+            listener.Client.SendBufferSize = socketBufferBytes;
         }
 
         if (!OperatingSystem.IsWindows()) return listener;
@@ -310,7 +320,7 @@ public class RakNetServer
     {
         while (!token.IsCancellationRequested)
         {
-            var startTime = DateTime.UtcNow;
+            var startTime = Stopwatch.GetTimestamp();
 
             try
             {
@@ -339,7 +349,7 @@ public class RakNetServer
                 _connectionAttemptLimiter.Cleanup(maxIdleMs: 60_000);
             }
 
-            var elapsed = DateTime.UtcNow - startTime;
+            var elapsed = Stopwatch.GetElapsedTime(startTime);
 
             var delay = RAKNET_TICK - elapsed;
             if (delay > TimeSpan.Zero)
