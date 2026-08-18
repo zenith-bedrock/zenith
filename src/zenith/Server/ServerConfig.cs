@@ -161,6 +161,15 @@ sealed class ServerConfig
     public sealed class NetworkSection
     {
         public int CompressionThreshold { get; set; } = 256;
+
+        /// <summary>
+        /// Requested OS UDP receive/send socket buffer size, in bytes (cross-reference audit
+        /// finding — previously a hardcoded <c>int.MaxValue</c> with no documented reasoning or way
+        /// to tune it without a code change). Default preserves that prior behavior (request the
+        /// max, the OS clamps to its actual ceiling regardless); pick a specific smaller value only
+        /// after measuring packet loss under burst for your deployment, not by guessing.
+        /// </summary>
+        public int SocketBufferBytes { get; set; } = int.MaxValue;
     }
 
     /// <summary>
@@ -264,6 +273,8 @@ sealed class ServerConfig
 
         if (Network.CompressionThreshold < 0)
             throw new InvalidOperationException($"network.compression-threshold must be >= 0 (got {Network.CompressionThreshold}).");
+        if (Network.SocketBufferBytes <= 0)
+            throw new InvalidOperationException($"network.socket-buffer-bytes must be > 0 (got {Network.SocketBufferBytes}).");
 
         Log ??= new LogSection();
         _ = ParseLogLevel(Log.Server, "server");

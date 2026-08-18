@@ -170,7 +170,7 @@ class ZenithServer
 
         _sessionListener = new ZenithSessionListener(Context);
         var serverGuid = LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger);
-        RakNetServer = new RakNetServer(config.Server.Port, serverGuid)
+        RakNetServer = new RakNetServer(config.Server.Port, serverGuid, config.Network.SocketBufferBytes)
         {
             Logger = raknetLogger,
             SessionListener = _sessionListener,
