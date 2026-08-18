@@ -2690,6 +2690,89 @@ correctness surface; verified via the short smoke run above instead.
 **Status (ago 2026):** Shipped — `RakNetServer.cs`, `ServerConfig.cs`, `ZenithServer.cs`. New tests:
 `Validate_rejects_non_positive_socket_buffer_size`, `Validate_accepts_an_explicit_smaller_socket_buffer_size`.
 
+### 129. `online.FirstOrDefault(p => p.RuntimeId == id)` → `PlayerManager.GetByRuntimeId` — finishes a half-done refactor
+
+**Context:** Another external-review finding, this one confirmed to already be half-built into the
+codebase: `PlayerManager` has had `_byRuntimeId`/`GetByRuntimeId` (O(1)) since an earlier pass, and
+its own doc comment says exactly why — "Multiple gameplay consumers already resolve a player from an
+explicit wire-supplied RuntimeId... via an O(N) `online.FirstOrDefault` scan — this index makes that
+resolution O(1) instead." The index was built; the call sites it was built for were never migrated.
+Found and confirmed 8 of them, all in `Gameplay/Entities`: Enderman aggro target, Golem/Creeper/
+Zombie/Spider retained target, Zombie/Villager attacker-for-knockback-or-provocation, Minecart
+occupant resolution.
+
+**Choice:** Swapped all 8 to `_players.GetByRuntimeId(id)` — every site already had `PlayerManager`
+available via its existing constructor injection, so this is a pure O(N)→O(1) swap with identical
+semantics (`_byRuntimeId` is maintained on the exact same `TryAdd`/`Remove` calls that populate
+`online` itself, so the resolvable player set is always identical between the two). Two methods that
+took `online` *only* for this lookup (`CreeperSystem.FindOrAcquireTarget`,
+`MinecartSystem.ResolveOccupant`) had the now-redundant parameter removed — `ResolveOccupant` also
+lost its `static`-incompatible dependency entirely, `FindOrAcquireTarget` went from `static` to an
+instance method since it now needs `_players`.
+
+**Not touched, found real but out of scope for this pass:**
+- `PlayerPresenceAnnouncer.Broadcast` calls `PlayerManager.SnapshotOnline()` (a fresh allocation)
+  instead of reusing `GameLoop`'s per-tick snapshot — confirmed real, but login/quit events may fire
+  from outside the tick-scoped snapshot's valid lifetime/thread, which needs verifying before treating
+  this as a safe swap. Low priority regardless — join/quit is a rare event, not a hot path.
+- A larger, structurally different finding from the same review: several systems
+  (`MovementSystem.ApplyDamage`, `PlayerDamage.Apply`, `BlockDigSystem`, `FloorDropSystem`) take
+  `online` on functions that act on one player, purely so a later step in the same call can fan out a
+  replication effect (`PlayerVisibility.RelayHealth`, `BlockCrackFanout`, etc.). Confirmed accurate by
+  reading `PlayerDamage.Apply`'s body — `online` there is used exclusively for
+  `RelayHealth`/`RelayHurt`/`RelayDeath`/`ChestLidFanout`/`FloorDropFanout`, never for the damage
+  decision itself. Separating "decide the effect on one player" from "replicate the consequence to
+  peers" is architecturally sound and matches this project's own `Gameplay decide; Protocol transmite`
+  principle, but it's a genuinely larger, multi-file refactor of call-site boundaries — not something
+  to fold into an opportunistic-fix pass. Left for a deliberate follow-up, not implemented here.
+
+**Status (ago 2026):** Shipped — `EndermanSystem.cs`, `GolemSystem.cs`, `SpiderSystem.cs`,
+`ZombieSystem.cs`, `CreeperSystem.cs`, `VillagerSystem.cs`, `MinecartSystem.cs`. No new tests — the
+existing 1049-case suite already exercises every one of these target-resolution paths and stayed
+green unchanged, which is exactly the expected signal for a semantics-preserving O(N)→O(1) swap.
+
+### 130. `PlayerDamage` split into `ApplyCore` (decision) + `PlayerDamageResult.Conclude` (peer-list-dependent tail)
+
+**Context:** The follow-up to ADR §129's deferred item — the user explicitly asked for the larger
+"separate gameplay decision from replication" refactor despite the real risk flagged there (death
+handling has several coupled side effects; naively splitting across 9 call sites risks desync).
+Investigated the review's three concrete examples first: `BlockDigSystem.ApplyDig` (a private,
+same-file helper — not a cross-boundary leak, and its 4 branches each pair one mutation with its own
+specific notification, no clean split exists) and `FloorDropSystem` (already correctly structured —
+`Inventory.TryAddUpTo` never took `online`) don't hold up as real decision/replication splits on
+close reading; only `PlayerDamage.Apply` does.
+
+**Choice, and the design correction found mid-implementation:** Rejected two independent static
+calls (`ApplyCore(...)` then a separate `Replicate(...)` the caller must remember to pair — a
+footgun, not a fix) in favor of `ApplyCore` returning a `PlayerDamageResult` whose own
+`.Conclude(online)` the caller chains in the same expression — one statement per call site,
+structurally hard to skip. All 9 callers (`CreeperSystem`, `EndermanSystem`, `GolemSystem` ×2,
+`PlayerMeleeSystem`, `ProjectileSystem`, `SpiderSystem`, `ZombieSystem`, `EffectSystem`,
+`HungerSystem`, `MovementSystem`) migrated.
+
+While implementing, found the initial name — `Replicate` — oversold what the method does. Tracing
+`ChestLidFanout.ReleaseOpener`/`FloorDropFanout.TryDropDeathLoot` (both called from the Died branch)
+showed they aren't pure notification: both bundle a real state mutation (closing the chest in
+`world.Chests`, moving inventory into `world.FloorDrops`) atomically with their packet send, by
+existing design elsewhere in this codebase (`TryDepositBatch`'s own doc comment: "keeps an inventory
+transaction... atomic"), and both need `online` for that same commit-and-publish. A death is not
+actually finished — loot isn't dropped, an open chest isn't released — until this step runs; it is
+required for that outcome, not an optional/skippable notification. Renamed to `Conclude` and
+corrected the doc comments to say this plainly, rather than ship a name that implies "safe to skip"
+for a method that, for one of its two outcomes, is load-bearing. `BlockDigSystem`/`FloorDropSystem`
+got extract-method passes only (named private methods, mutation+notification kept paired) — no
+decision/replication split, since none cleanly exists in either.
+
+**Status (ago 2026):** Shipped — `PlayerDamage.cs` and its 9 callers; `BlockDigSystem.cs`
+(`ApplyActivityPing`/`ApplyAbort`/`ApplyNewBreak`); `FloorDropSystem.cs`
+(`NotifyDespawns`/`TryPickup`/`NotifyPickup`). New test:
+`PlayerDamageGameModeTests.Creative_player_takes_no_melee_damage`/
+`Creative_player_takes_no_projectile_or_generic_damage` now call `ApplyCore(...).Applied` with no
+`Conclude`/`online` involved at all — the actual claim ("apply damage to Steve doesn't need to know
+about every other online player") made directly verifiable rather than just asserted.
+`MovementSystem`'s own movement-fanout batching (`_dirtyPose` → `foreach peer in online`) remains a
+separate, larger, not-yet-scoped follow-up — not touched here.
+
 ## Explicit non-goals (so far)
 
 Recorded so we don't “accidentally” implement them:

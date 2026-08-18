@@ -248,7 +248,7 @@ sealed class CreeperSystem : IGameSystem
             if (distance > ExplosionRadius) continue;
             var damage = ExplosionDamage * (1f - distance / ExplosionRadius);
             if (damage <= 0f) continue;
-            _ = PlayerDamage.Apply(player, _players, online, DamageSource.Generic, damage, currentTick);
+            PlayerDamage.ApplyCore(player, _players, DamageSource.Generic, damage, currentTick).Conclude(online);
         }
 
         var blockUpdates = BreakBlocksInRadius(explosionX, explosionY, explosionZ);
@@ -297,11 +297,11 @@ sealed class CreeperSystem : IGameSystem
         return updates;
     }
 
-    private static Player.Player? FindOrAcquireTarget(Creeper creeper, IReadOnlyList<Player.Player> online)
+    private Player.Player? FindOrAcquireTarget(Creeper creeper, IReadOnlyList<Player.Player> online)
     {
         if (creeper.TargetPlayerRuntimeId is { } retainedId)
         {
-            var retained = online.FirstOrDefault(p => p.RuntimeId == retainedId);
+            var retained = _players.GetByRuntimeId(retainedId);
             if (retained is not null && IsTargetValid(creeper, retained))
                 return retained;
             creeper.TargetPlayerRuntimeId = null;

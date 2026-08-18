@@ -18,7 +18,9 @@ public sealed class PlayerDamageGameModeTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("creative-tank", GameMode.Creative);
 
-        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
+        // ApplyCore alone, no Conclude call — proves the decision itself needs no `online` at all,
+        // not just that it's unused for this outcome.
+        var applied = PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Melee, 10f, 0).Applied;
 
         Assert.False(applied);
         Assert.Equal(player.MaxHealth, player.Health);
@@ -30,8 +32,8 @@ public sealed class PlayerDamageGameModeTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("creative-tank-2", GameMode.Creative);
 
-        Assert.False(PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Projectile(1), 10f, 0));
-        Assert.False(PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Generic, 10f, 0));
+        Assert.False(PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Projectile(1), 10f, 0).Applied);
+        Assert.False(PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Generic, 10f, 0).Applied);
         Assert.Equal(player.MaxHealth, player.Health);
     }
 
@@ -41,9 +43,10 @@ public sealed class PlayerDamageGameModeTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("survival-target", GameMode.Survival);
 
-        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Melee, 10f, 0);
+        var result = PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Melee, 10f, 0);
+        result.Conclude(fx.Players.Online);
 
-        Assert.True(applied);
+        Assert.True(result.Applied);
         Assert.Equal(player.MaxHealth - 10f, player.Health);
     }
 
@@ -54,9 +57,10 @@ public sealed class PlayerDamageGameModeTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("creative-void", GameMode.Creative);
 
-        var applied = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, 0);
+        var result = PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, 0);
+        result.Conclude(fx.Players.Online);
 
-        Assert.True(applied);
+        Assert.True(result.Applied);
         Assert.True(player.IsDead);
     }
 
@@ -75,8 +79,12 @@ public sealed class PlayerDamageGameModeTests
         var withDirection = fx.AddInGamePlayer("knocked");
         var withoutDirection = fx.AddInGamePlayer("not-knocked");
 
-        Assert.True(PlayerDamage.Apply(withDirection, fx.Players, fx.Players.Online, DamageSource.Melee, 4f, 0, 1f, 0f));
-        Assert.True(PlayerDamage.Apply(withoutDirection, fx.Players, fx.Players.Online, DamageSource.Melee, 4f, 0));
+        var withDirectionResult = PlayerDamage.ApplyCore(withDirection, fx.Players, DamageSource.Melee, 4f, 0, 1f, 0f);
+        withDirectionResult.Conclude(fx.Players.Online);
+        var withoutDirectionResult = PlayerDamage.ApplyCore(withoutDirection, fx.Players, DamageSource.Melee, 4f, 0);
+        withoutDirectionResult.Conclude(fx.Players.Online);
+        Assert.True(withDirectionResult.Applied);
+        Assert.True(withoutDirectionResult.Applied);
         Flush(fx);
 
         Assert.True(SentSetActorMotion(fx, withDirection.Session.RakSession.EndPoint));

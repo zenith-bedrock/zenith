@@ -215,7 +215,7 @@ sealed class MovementSystem : IGameSystem
         DamageSource source,
         float amount,
         ulong currentTick) =>
-        _ = PlayerDamage.Apply(player, _players, online, source, amount, currentTick);
+        PlayerDamage.ApplyCore(player, _players, source, amount, currentTick).Conclude(online);
 
     /// <summary>
     /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per block beyond

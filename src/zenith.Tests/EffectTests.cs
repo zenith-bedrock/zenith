@@ -203,7 +203,7 @@ public class EffectTests
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotEmpty(player.Effects);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick).Conclude(fx.Players.Online);
 
         Assert.True(player.IsDead);
         Assert.Empty(player.Effects);
@@ -214,7 +214,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("corpse");
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick).Conclude(fx.Players.Online);
         Assert.True(player.IsDead);
 
         player.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 100));

@@ -35,6 +35,9 @@ sealed class BlockDigSystem : IGameSystem
         }
     }
 
+    /// <summary>Dispatches one dig intent to its matching branch. Each branch owns its own
+    /// mutation and notification together (e.g. "abort" always pairs with "stop crack") — there is
+    /// no decision/replication split to extract here, only a readable name per intent.</summary>
     private void ApplyDig(
         global::Zenith.Player.Player player,
         in DigIntent dig,
@@ -44,24 +47,30 @@ sealed class BlockDigSystem : IGameSystem
         _ = clock;
         if (player.IsDead) return;
 
-        if (dig.IsActivity)
-        {
-            if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-                player.MarkDigActive(dig.StartedTick);
-            return;
-        }
+        if (dig.IsActivity) { ApplyActivityPing(player, dig); return; }
+        if (dig.IsAbort) { ApplyAbort(player, dig, online); return; }
+        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z)) return;
 
-        if (dig.IsAbort)
-        {
-            BlockCrackFanout.Stop(online, player.Session, dig.X, dig.Y, dig.Z);
-            if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-                player.AbortBreak();
-            return;
-        }
+        ApplyNewBreak(player, dig, online);
+    }
 
+    private static void ApplyActivityPing(global::Zenith.Player.Player player, in DigIntent dig)
+    {
         if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-            return;
+            player.MarkDigActive(dig.StartedTick);
+    }
 
+    private static void ApplyAbort(
+        global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        BlockCrackFanout.Stop(online, player.Session, dig.X, dig.Y, dig.Z);
+        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
+            player.AbortBreak();
+    }
+
+    private void ApplyNewBreak(
+        global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
         if (player.TryGetBreakState(out var activeBreak))
             BlockCrackFanout.Stop(online, player.Session, activeBreak.X, activeBreak.Y, activeBreak.Z);
 

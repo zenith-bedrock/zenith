@@ -172,7 +172,7 @@ sealed class EndermanSystem : IGameSystem
     /// <summary>Hostile state: teleport toward the last attacker and swing once in reach, on cooldown.</summary>
     private void TickAggro(Enderman enderman, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        var target = enderman.AggroTargetRuntimeId is { } id ? online.FirstOrDefault(p => p.RuntimeId == id) : null;
+        var target = enderman.AggroTargetRuntimeId is { } id ? _players.GetByRuntimeId(id) : null;
         if (target is null || !target.IsInGame || target.IsDead)
         {
             enderman.AggroTicksRemaining = 0;
@@ -204,7 +204,9 @@ sealed class EndermanSystem : IGameSystem
 
         if (distanceSquared <= AttackDistance * AttackDistance && clock.CurrentTick >= enderman.NextAttackTick)
         {
-            if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(enderman.EntityId), AttackDamage, clock.CurrentTick, dx, dz))
+            var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(enderman.EntityId), AttackDamage, clock.CurrentTick, dx, dz);
+            result.Conclude(online);
+            if (result.Applied)
                 enderman.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
         }
     }

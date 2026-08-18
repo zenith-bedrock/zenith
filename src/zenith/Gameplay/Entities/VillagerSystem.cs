@@ -210,7 +210,7 @@ sealed class VillagerSystem : IGameSystem
         // player swinging at a villager is provocative even if e.g. loot capacity later refuses it.
         if (source.OwnerRuntimeId is { } attackerId)
         {
-            var attacker = online.FirstOrDefault(p => p.RuntimeId == attackerId);
+            var attacker = _players.GetByRuntimeId(attackerId);
             if (attacker is not null)
                 attacker.LastVillagerAttack = (_currentTick, villager.PositionX, villager.PositionZ);
         }

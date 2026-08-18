@@ -178,7 +178,7 @@ public class ExperienceTests
         var player = fx.AddInGamePlayer("hardcore");
         player.AddExperience(50);
 
-        _ = PlayerDamage.Apply(player, fx.Players, fx.Players.Online, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, fx.Clock.CurrentTick).Conclude(fx.Players.Online);
 
         Assert.True(player.IsDead);
         Assert.Equal(0, player.ExperienceLevel);

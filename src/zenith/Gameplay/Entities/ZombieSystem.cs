@@ -207,7 +207,7 @@ sealed class ZombieSystem : IGameSystem
         var applied = TryApplyDamage(id, source, amount, online, currentTick);
         if (applied && _stores.Entities.IsAlive(id) && source.OwnerRuntimeId is { } attackerId)
         {
-            var attacker = online.FirstOrDefault(p => p.RuntimeId == attackerId);
+            var attacker = _players.GetByRuntimeId(attackerId);
             if (attacker is not null)
                 ApplyKnockbackImpulse(id, attacker.PositionX, attacker.PositionZ);
         }
@@ -270,8 +270,10 @@ sealed class ZombieSystem : IGameSystem
         if (!IsTargetValid(pos, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
             return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (PlayerDamage.Apply(target, _players, online, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
-                clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z))
+        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
+            clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z);
+        result.Conclude(online);
+        if (result.Applied)
         {
             state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
@@ -303,7 +305,7 @@ sealed class ZombieSystem : IGameSystem
 
         if (state.TargetPlayerRuntimeId is { } retainedId)
         {
-            var retained = online.FirstOrDefault(player => player.RuntimeId == retainedId);
+            var retained = _players.GetByRuntimeId(retainedId);
             if (retained is not null && IsTargetValid(pos, retained, out _))
                 return retained;
             state.TargetPlayerRuntimeId = null;
