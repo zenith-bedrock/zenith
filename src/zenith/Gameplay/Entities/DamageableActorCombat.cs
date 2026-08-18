@@ -19,6 +19,10 @@ namespace Zenith.Gameplay.Entities;
 /// Fish). Building a fake <c>IDamageableActor</c> wrapper around an ECS entity just to keep
 /// calling <c>GroundMobCombat</c> unchanged was explicitly rejected — see
 /// docs/history/phases/phase-xxi-ecs-foundation-findings.md, "IDamageableActor migration strategy."
+///
+/// A thin adapter over <see cref="DamageableActorCombatCore"/>, same as <see cref="GroundMobCombat"/>
+/// now is — see that class's doc comment for why the two were unified. Public signatures below are
+/// unchanged; every caller of this class is untouched.
 /// </summary>
 static class DamageableActorCombat
 {
@@ -32,19 +36,11 @@ static class DamageableActorCombat
         ulong currentTick,
         Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
     {
-        if (!stores.Positions.TryGet(id, out var pos)) return;
-        if (!stores.Identities.TryGet(id, out var identity)) return;
+        if (!TryBuildView(id, stores, out var view)) return;
 
-        var reachSquared = attackDistance * attackDistance;
-        foreach (var player in online)
-        {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = pos.X - player.PositionX;
-            var dz = pos.Z - player.PositionZ;
-            if (dx * dx + dz * dz > reachSquared) continue;
-            if (!player.TryConsumeAttackIntent(checked((long)identity.ActorRuntimeId))) continue;
-            if (tryApplyDamage(id, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) break;
-        }
+        DamageableActorCombatCore.TryApplyPlayerMeleeAttack(
+            view, online, attackDistance, attackDamage, currentTick,
+            (source, amount, peers, tick) => tryApplyDamage(id, source, amount, peers, tick));
     }
 
     /// <summary>
@@ -71,43 +67,24 @@ static class DamageableActorCombat
         Action<EntityId> destroyActor,
         Action<Player.Player>? onDeathReplicatedToPeer = null)
     {
+        if (!TryBuildView(id, stores, out var view)) return false;
+
+        return DamageableActorCombatCore.TryApplyDamage(
+            view, source, amount, online, world, players, replicated, lootItem, killExperience, actorName,
+            currentTick,
+            destroy: () => destroyActor(id),
+            onDeathReplicatedToPeer);
+    }
+
+    private static bool TryBuildView(EntityId id, EntityRuntime stores, out DamageableActorView view)
+    {
+        view = default;
         if (!stores.Health.TryGet(id, out var healthComponent)) return false;
         if (!stores.Identities.TryGet(id, out var identity)) return false;
         if (!stores.Positions.TryGet(id, out var pos)) return false;
 
-        var health = healthComponent.State;
-        var canDropLoot = FloorDropFanout.CanDeposit(
-            world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y), (int)MathF.Floor(pos.Z), lootItem, 1);
-        if (health.Current <= amount && !canDropLoot) return false;
-
-        var result = health.Apply(source, amount, currentTick);
-        if (!result.WasApplied) return false;
-
-        foreach (var peer in online)
-            if (replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                if (!result.CausedDeath)
-                    peer.Session.Protocol.Entity.SendHurt(identity.ActorRuntimeId);
-            }
-
-        if (!result.CausedDeath) return true;
-
-        if (!FloorDropFanout.TryDeposit(
-                world, players, online, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y), (int)MathF.Floor(pos.Z), lootItem, 1))
-            throw new InvalidOperationException($"A prevalidated {actorName} loot drop could not commit.");
-
-        MobKillReward.AwardExperience(source, killExperience, online);
-
-        foreach (var peer in online)
-            if (replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                peer.Session.Protocol.Entity.SendDeath(identity.ActorRuntimeId);
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                onDeathReplicatedToPeer?.Invoke(peer);
-            }
-
-        destroyActor(id);
+        view = new DamageableActorView(
+            identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, healthComponent.State);
         return true;
     }
 }

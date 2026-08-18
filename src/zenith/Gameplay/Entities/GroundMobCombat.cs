@@ -38,10 +38,17 @@ interface IDamageableActor
 /// Shared ground-mob combat bookkeeping (Phase XIV.1) — extracted after Cow made
 /// <c>ApplyPlayerAttacks</c>/<c>TryApplyDamage</c>/<c>CanDropLoot</c> byte-identical across
 /// ZombieSystem, SkeletonSystem and CowSystem (see
-/// docs/history/phases/phase-xiv-gameplay-expansion-findings.md). Owns exactly: reach-checked melee attack
+/// docs/history/phases/phase-xiv-gameplay-expansion-findings.md). Owns exactly: reach-checked melee
 /// consumption, damage application, health replication, death detection, loot deposit, XP credit,
 /// and death replication/store removal. Does not own, and must never grow to own: spawning, AI,
 /// movement, targeting, or pathfinding — those stay concrete per mob.
+/// <para/>
+/// A thin adapter over <see cref="DamageableActorCombatCore"/> since Phase XXI's ECS split left the
+/// actual damage/loot/XP/replication sequence duplicated byte-for-byte between this class and
+/// <see cref="DamageableActorCombat"/> — only how a mob's state is read (object properties here, ECS
+/// component lookups there) ever differed. Closed without touching either backend's storage model,
+/// which stays split for the documented reasons in <c>docs/ecs.md</c>'s retirement gate. Every
+/// public signature below is unchanged; every caller of this class is untouched.
 /// </summary>
 static class GroundMobCombat
 {
@@ -58,16 +65,9 @@ static class GroundMobCombat
         Func<TMob, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
         where TMob : IDamageableActor
     {
-        var reachSquared = attackDistance * attackDistance;
-        foreach (var player in online)
-        {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = mob.PositionX - player.PositionX;
-            var dz = mob.PositionZ - player.PositionZ;
-            if (dx * dx + dz * dz > reachSquared) continue;
-            if (!player.TryConsumeAttackIntent(checked((long)mob.RuntimeId))) continue;
-            if (tryApplyDamage(mob, DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) break;
-        }
+        DamageableActorCombatCore.TryApplyPlayerMeleeAttack(
+            ToView(mob), online, attackDistance, attackDamage, currentTick,
+            (source, amount, peers, tick) => tryApplyDamage(mob, source, amount, peers, tick));
     }
 
     /// <summary>
@@ -97,42 +97,17 @@ static class GroundMobCombat
     {
         if (!mob.IsActive) return false;
 
-        var canDropLoot = FloorDropFanout.CanDeposit(
-            world, (int)MathF.Floor(mob.PositionX), (int)MathF.Floor(mob.PositionY), (int)MathF.Floor(mob.PositionZ),
-            lootItem, 1);
-        if (mob.Health.Current <= amount && !canDropLoot) return false;
-
-        var result = mob.ApplyDamage(source, amount, currentTick);
-        if (!result.WasApplied) return false;
-
-        foreach (var peer in online)
-            if (replicated.Contains((mob.EntityId, peer.RuntimeId)))
+        return DamageableActorCombatCore.TryApplyDamage(
+            ToView(mob), source, amount, online, world, players, replicated, lootItem, killExperience, mobName,
+            currentTick,
+            destroy: () =>
             {
-                peer.Session.Protocol.Entity.SendHealth(mob.RuntimeId, mob.Health.Current, mob.Health.Maximum);
-                if (!result.CausedDeath)
-                    peer.Session.Protocol.Entity.SendHurt(mob.RuntimeId);
-            }
-
-        if (!result.CausedDeath) return true;
-
-        if (!FloorDropFanout.TryDeposit(
-                world, players, online,
-                (int)MathF.Floor(mob.PositionX), (int)MathF.Floor(mob.PositionY), (int)MathF.Floor(mob.PositionZ),
-                lootItem, 1))
-            throw new InvalidOperationException($"A prevalidated {mobName} loot drop could not commit.");
-
-        MobKillReward.AwardExperience(source, killExperience, online);
-
-        foreach (var peer in online)
-            if (replicated.Remove((mob.EntityId, peer.RuntimeId)))
-            {
-                peer.Session.Protocol.Entity.SendDeath(mob.RuntimeId);
-                peer.Session.Protocol.Entity.SendRemoveActor(mob.EntityId);
-                onDeathReplicatedToPeer?.Invoke(peer);
-            }
-
-        mob.Remove();
-        removeFromStore(mob);
-        return true;
+                mob.Remove();
+                removeFromStore(mob);
+            },
+            onDeathReplicatedToPeer);
     }
+
+    private static DamageableActorView ToView<TMob>(TMob mob) where TMob : IDamageableActor =>
+        new(mob.EntityId, mob.RuntimeId, mob.PositionX, mob.PositionY, mob.PositionZ, mob.Health);
 }
