@@ -273,7 +273,7 @@ public class ArmorTests
                 // an unsplit frame regardless.
                 if (frame.IsSplit()) continue;
 
-                var gameStream = new BinaryStream(frame.Buffer);
+                var gameStream = new BinaryStream(frame.Buffer.ToArray());
                 if (gameStream.ReadByte() != 0xfe || gameStream.ReadByte() != PacketCompression.NONE)
                 {
                     gameStream.Dispose();

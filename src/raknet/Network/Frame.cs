@@ -34,7 +34,7 @@ public class Frame
 
     public SplitPacketInfo? SplitInfo { get; set; }
 
-    public byte[] Buffer { get; set; } = Array.Empty<byte>();
+    public ReadOnlyMemory<byte> Buffer { get; set; } = ReadOnlyMemory<byte>.Empty;
 
     public bool IsSplit() => SplitInfo is not null;
 
@@ -122,7 +122,7 @@ public class Frame
             writer.WriteInt(SplitInfo.Index);
         }
 
-        writer.Write(Buffer);
+        writer.Write(Buffer.Span);
 
         return writer.GetBufferDisposing();
     }

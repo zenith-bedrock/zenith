@@ -46,7 +46,7 @@ public class ReliableReceiveTests
         MessageIndex = messageIndex,
         OrderIndex = orderIndex,
         OrderChannel = 0,
-        Buffer = [(byte)MessageIdentifier.Game, 0x01, 0x02]
+        Buffer = new byte[] { (byte)MessageIdentifier.Game, 0x01, 0x02 }
     };
 
     [Fact]
@@ -87,7 +87,7 @@ public class ReliableReceiveTests
             OrderIndex = 0,
             OrderChannel = 0,
             SplitInfo = new Frame.SplitPacketInfo(Count: 513, Id: 1, Index: 0),
-            Buffer = [0xFE]
+            Buffer = new byte[] { 0xFE }
         });
 
         Assert.False(ok);
@@ -115,7 +115,7 @@ public class ReliableReceiveTests
                 OrderIndex = 0,
                 OrderChannel = 0,
                 SplitInfo = new Frame.SplitPacketInfo(Count: 2, Id: splitId, Index: 0),
-                Buffer = [0xFE]
+                Buffer = new byte[] { 0xFE }
             }));
         }
 
@@ -128,7 +128,7 @@ public class ReliableReceiveTests
             OrderIndex = 0,
             OrderChannel = 0,
             SplitInfo = new Frame.SplitPacketInfo(Count: 2, Id: 99, Index: 0),
-            Buffer = [0xFE]
+            Buffer = new byte[] { 0xFE }
         }));
         Assert.Equal(32, session.FragmentQueueCount);
     }
@@ -149,7 +149,7 @@ public class ReliableReceiveTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [(byte)MessageIdentifier.ConnectedPing, 0, 0, 0, 0, 0, 0, 0, 0]
+            Buffer = new byte[] { (byte)MessageIdentifier.ConnectedPing, 0, 0, 0, 0, 0, 0, 0, 0 }
         };
         session.SeedBackup(7, [backupFrame]);
 

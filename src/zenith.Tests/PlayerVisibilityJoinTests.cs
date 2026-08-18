@@ -85,7 +85,7 @@ public class PlayerVisibilityJoinTests
                 // therefore independently observable without testing RakNet reassembly.
                 if (frame.IsSplit()) continue;
 
-                var gameStream = new BinaryStream(frame.Buffer);
+                var gameStream = new BinaryStream(frame.Buffer.ToArray());
                 if (gameStream.ReadByte() != 0xfe || gameStream.ReadByte() != PacketCompression.NONE)
                 {
                     gameStream.Dispose();

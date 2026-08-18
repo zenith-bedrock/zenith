@@ -328,7 +328,15 @@ public class RakNetSession
                     OrderIndex = frame.OrderIndex,
                     OrderChannel = frame.OrderChannel,
                     SplitInfo = new Frame.SplitPacketInfo(splitSize, splitId, i / maxSize),
-                    Buffer = frame.Buffer.AsSpan(i, chunkLength).ToArray()
+                    // Slice, not copy: a ReadOnlyMemory<byte> slice keeps the GC-owned parent buffer
+                    // alive as long as any fragment referencing it is still reachable (no ArrayPool,
+                    // no use-after-return risk) — zero allocations per fragment instead of one each.
+                    // Bounded worst-case retention: ADR §125's per-session output backlog budget.
+                    // Slice, not copy: a ReadOnlyMemory<byte> slice keeps the GC-owned parent buffer
+                    // alive as long as any fragment referencing it is still reachable (no ArrayPool,
+                    // no use-after-return risk) — zero allocations per fragment instead of one each.
+                    // Bounded worst-case retention: ADR §125's per-session output backlog budget.
+                    Buffer = frame.Buffer.Slice(i, chunkLength)
                 };
 
                 QueueFrameLocked(newFrame, priority);
@@ -588,7 +596,7 @@ public class RakNetSession
                     return false;
                 }
 
-                stream.Write(part.Buffer);
+                stream.Write(part.Buffer.Span);
             }
 
             var newFrame = new Frame
@@ -718,17 +726,17 @@ public class RakNetSession
             }
 
             InputHighestSequenceIndex[frame.OrderChannel] = frame.SequenceIndex + 1;
-            return HandleIncomingBatch(frame.Buffer);
+            return HandleIncomingBatch(frame.Buffer.ToArray());
         }
 
-        if (!Frame.IsOrdered(frame.Reliability)) return HandleIncomingBatch(frame.Buffer);
-        
+        if (!Frame.IsOrdered(frame.Reliability)) return HandleIncomingBatch(frame.Buffer.ToArray());
+
         if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel])
         {
             InputHighestSequenceIndex[frame.OrderChannel] = 0;
             InputOrderIndex[frame.OrderChannel] = frame.OrderIndex + 1;
 
-            HandleIncomingBatch(frame.Buffer);
+            HandleIncomingBatch(frame.Buffer.ToArray());
             var index = InputOrderIndex[frame.OrderChannel];
 
             var outOfOrderQueue = InputOrderingQueue[frame.OrderChannel];
@@ -737,7 +745,7 @@ public class RakNetSession
             {
                 if (outOfOrderQueue.TryGetValue(index, out var frameQueue))
                 {
-                    HandleIncomingBatch(frameQueue.Buffer);
+                    HandleIncomingBatch(frameQueue.Buffer.ToArray());
                     outOfOrderQueue.Remove(index);
                 }
                 else break;

@@ -114,7 +114,7 @@ public class ProtocolGateTests
 
             foreach (var frame in frameSet.Packets)
             {
-                var gameStream = new BinaryStream(frame.Buffer);
+                var gameStream = new BinaryStream(frame.Buffer.ToArray());
                 if (gameStream.ReadByte() != 0xfe)
                 {
                     gameStream.Dispose();

@@ -115,7 +115,7 @@ public class SendFrameInvariantTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 32,
-            Buffer = [1, 2, 3]
+            Buffer = new byte[] { 1, 2, 3 }
         }, RakNetSession.Priority.Normal));
 
         Assert.Null(ex);
@@ -132,7 +132,7 @@ public class SendFrameInvariantTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [1]
+            Buffer = new byte[] { 1 }
         }, RakNetSession.Priority.Normal);
 
         Assert.Equal(1u, session.OrderIndex(0));
@@ -142,14 +142,14 @@ public class SendFrameInvariantTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [2]
+            Buffer = new byte[] { 2 }
         }, RakNetSession.Priority.Normal);
 
         Assert.Equal(2u, session.OrderIndex(0));
         var pending = session.PendingFrames.ToList();
         Assert.Equal(2, pending.Count);
-        Assert.Contains(pending, f => f.OrderIndex == 0 && f.Buffer[0] == 1);
-        Assert.Contains(pending, f => f.OrderIndex == 1 && f.Buffer[0] == 2);
+        Assert.Contains(pending, f => f.OrderIndex == 0 && f.Buffer.Span[0] == 1);
+        Assert.Contains(pending, f => f.OrderIndex == 1 && f.Buffer.Span[0] == 2);
     }
 
     [Fact]
@@ -162,13 +162,13 @@ public class SendFrameInvariantTests
         {
             Reliability = Reliability.ReliableSequenced,
             OrderChannel = 1,
-            Buffer = [1]
+            Buffer = new byte[] { 1 }
         }, RakNetSession.Priority.Normal);
         session.SendFrame(new Frame
         {
             Reliability = Reliability.ReliableSequenced,
             OrderChannel = 1,
-            Buffer = [2]
+            Buffer = new byte[] { 2 }
         }, RakNetSession.Priority.Normal);
 
         Assert.Equal(0u, session.OrderIndex(1));
@@ -195,7 +195,7 @@ public class SendFrameInvariantTests
                 {
                     Reliability = Reliability.ReliableOrdered,
                     OrderChannel = 0,
-                    Buffer = [(byte)i]
+                    Buffer = new byte[] { (byte)i }
                 }, RakNetSession.Priority.Normal);
             }
         });
