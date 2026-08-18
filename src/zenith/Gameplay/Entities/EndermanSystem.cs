@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Protocol;
@@ -8,10 +9,19 @@ namespace Zenith.Gameplay.Entities;
 
 /// <summary>
 /// Second "fundamentally different behavior" ground mob (Phase XV). Combat/loot/XP bookkeeping for
-/// a player-caused kill is shared via <see cref="GroundMobCombat"/>, same as every other ground mob.
-/// Movement is teleportation, never <see cref="ZombieSystem"/>'s incremental chase step, and
-/// aggression is damage-triggered (attacked → hostile for a while) rather than proximity-triggered
-/// (Zombie) or ignite-range-triggered (Creeper). Both are entirely local to this system.
+/// a player-caused kill is shared via <see cref="DamageableActorCombat"/>, same as every other
+/// migrated mob. Movement is teleportation, never <see cref="ZombieSystem"/>'s incremental chase
+/// step, and aggression is damage-triggered (attacked → hostile for a while) rather than
+/// proximity-triggered (Zombie) or ignite-range-triggered (Creeper). Both are entirely local to
+/// this system.
+///
+/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores; only
+/// <see cref="EndermanState"/> (aggro target/window, teleport/attack cooldowns) is feature-specific
+/// and owned here — same shape as <see cref="SpiderState"/>. Enderman never used
+/// <see cref="GroundMobMovement.TryMoveHorizontal"/> (teleportation has no path to walk), so it does
+/// not use <c>Velocity.Y</c> for gravity either — every landing spot is validated directly via
+/// <see cref="GroundMobMovement.IsSupportedGroundCell"/>, unchanged by this migration.
 /// </summary>
 sealed class EndermanSystem : IGameSystem
 {
@@ -33,22 +43,30 @@ sealed class EndermanSystem : IGameSystem
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
-    private readonly EndermanStore _endermen;
+    private readonly EntityRuntime _stores;
+    private readonly ComponentStore<EndermanState> _endermen;
     private readonly StackId _lootItem;
     private readonly Random _random;
-    private readonly HashSet<(long EndermanId, long PlayerId)> _replicated = new();
+    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
+    private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
 
-    public EndermanSystem(World.World world, PlayerManager players, EndermanStore endermen, ItemPalette itemPalette, Random? random = null)
+    public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
         _players = players;
-        _endermen = endermen;
+        _stores = stores;
+        _endermen = new ComponentStore<EndermanState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
         _random = random ?? new Random();
     }
 
-    public EndermanStore Endermen => _endermen;
+    internal IReadOnlyList<EntityId> Endermen => _endermen.Entities;
+    internal EntityRuntime Stores => _stores;
+    internal ComponentStore<EndermanState> EndermanStates => _endermen;
+
+    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity an enderman," nothing more.</summary>
+    internal bool Owns(EntityId id) => _endermen.Has(id);
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
     internal long TeleportCount { get; private set; }
@@ -57,157 +75,204 @@ sealed class EndermanSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_endermen.Active.Count != 0)
+        if (_endermen.Count != 0)
             _bootstrapSpawned = true;
         EnsureBootstrapEnderman(online);
 
-        foreach (var enderman in _endermen.Active.ToArray())
+        _tickScratch.Clear();
+        _tickScratch.AddRange(_endermen.Entities);
+
+        foreach (var id in _tickScratch)
         {
-            if (!enderman.IsActive) continue;
-            if (TryDespawn(enderman, clock, online)) continue;
-            ReconcileViewers(enderman, online);
-            ApplyPlayerAttacks(enderman, online, clock.CurrentTick);
-            if (!enderman.IsActive) continue;
+            if (!_stores.Entities.IsAlive(id)) continue;
+            if (TryDespawn(id, clock, online)) continue;
+            ReconcileViewers(id, online);
+            ApplyPlayerAttacks(id, online, clock.CurrentTick);
+            if (!_stores.Entities.IsAlive(id)) continue;
 
-            if (enderman.AggroTicksRemaining > 0)
-                enderman.AggroTicksRemaining--;
+            ref var state = ref _endermen.GetRef(id);
+            if (state.AggroTicksRemaining > 0)
+                state.AggroTicksRemaining--;
 
-            if (enderman.AggroTicksRemaining > 0)
+            if (state.AggroTicksRemaining > 0)
             {
-                TickAggro(enderman, clock, online);
+                TickAggro(id, clock, online);
             }
             else
             {
-                enderman.AggroTargetRuntimeId = null;
-                TickPassiveTeleport(enderman, clock, online);
+                ref var cleared = ref _endermen.GetRef(id);
+                cleared.AggroTargetRuntimeId = null;
+                TickPassiveTeleport(id, clock, online);
             }
 
-            ReconcileViewers(enderman, online);
+            ReconcileViewers(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !_endermen.Active.Any(e => e.EntityId == pair.EndermanId) ||
-                                        !online.Any(p => p.RuntimeId == pair.PlayerId));
+        _replicated.RemoveWhere(pair => !IsKnownAliveEndermanId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
+    }
+
+    private bool IsKnownAliveEndermanId(long actorUniqueId)
+    {
+        foreach (var id in _endermen.Entities)
+            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
+                return true;
+        return false;
     }
 
     private void EnsureBootstrapEnderman(IReadOnlyList<Player.Player> online)
     {
-        if (_bootstrapSpawned || _endermen.Active.Count != 0) return;
+        if (_bootstrapSpawned || _endermen.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;
         var x = player.PositionX;
         var z = player.PositionZ + SpawnDistance;
         var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
-        var entityId = _players.AllocateRuntimeId();
-        if (_endermen.TryAdd(new Enderman(entityId, (ulong)entityId, x, y, z)))
-            _bootstrapSpawned = true;
+        SpawnEnderman(x, y, z);
+        _bootstrapSpawned = true;
+    }
+
+    /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
+    internal EntityId SpawnEnderman(float x, float y, float z)
+    {
+        var actorUniqueId = _players.AllocateRuntimeId();
+        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
+                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Enderman.");
+        _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) }); // Simplified from vanilla's 40 for parity with the other slices.
+        _stores.Despawn.Set(id, new DespawnTracking()); // No Velocity: teleportation has no path to integrate, unlike every gravity-bound ground mob.
+        _endermen.Set(id, new EndermanState());
+        return id;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(Enderman enderman, GameClock clock, IReadOnlyList<Player.Player> online)
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        ref var tracking = ref _stores.Despawn.GetRef(id);
         var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            enderman.PositionX, enderman.PositionZ, online, DespawnRadius, clock.CurrentTick, enderman.LastSeenNearPlayerTick);
-        enderman.LastSeenNearPlayerTick = lastSeen;
+            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
+        tracking.LastSeenNearPlayerTick = lastSeen;
         if (!shouldDespawn) return false;
 
+        if (!_stores.Identities.TryGet(id, out var identity)) return false;
         foreach (var peer in online)
-            if (_replicated.Remove((enderman.EntityId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendRemoveActor(enderman.EntityId);
-        enderman.Remove();
-        _endermen.Remove(enderman);
+            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+        _stores.DestroyActor(identity.ActorRuntimeId, id);
         DespawnCount++;
         return true;
     }
 
-    private void ReconcileViewers(Enderman enderman, IReadOnlyList<Player.Player> online) =>
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        var health = healthComponent.State;
+
         ViewerReconciliation.Sync(
-            enderman.EntityId, online, _replicated,
-            peer => ActorInterest.Includes(peer, enderman.PositionX, enderman.PositionZ),
+            identity.ActorUniqueId, online, _replicated,
+            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddEnderman(
-                    enderman.EntityId, enderman.RuntimeId, enderman.PositionX, enderman.PositionY, enderman.PositionZ, enderman.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(enderman.RuntimeId, enderman.Health.Current, enderman.Health.Maximum);
+                peer.Session.Protocol.Entity.SendAddEnderman(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
             {
-                peer.Session.Protocol.Entity.SendRemoveActor(enderman.EntityId);
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             });
+    }
 
     /// <summary>A landed player hit both damages the Enderman and provokes it — the one place aggro is triggered.</summary>
-    private void ApplyPlayerAttacks(Enderman enderman, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(enderman, online, AttackDistance, AttackDamage, currentTick, TryApplyDamageAndProvoke);
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick,
+            (eid, source, amount, peers, tick) => TryApplyDamageAndProvoke(eid, source, amount, peers, tick));
 
-    private bool TryApplyDamageAndProvoke(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    private bool TryApplyDamageAndProvoke(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        var applied = TryApplyDamage(enderman, source, amount, online, currentTick);
-        if (applied && enderman.IsActive && source.OwnerRuntimeId is { } attackerId)
+        var applied = TryApplyDamage(id, source, amount, online, currentTick);
+        if (applied && _stores.Entities.IsAlive(id) && source.OwnerRuntimeId is { } attackerId)
         {
-            enderman.AggroTargetRuntimeId = attackerId;
-            enderman.AggroTicksRemaining = AggroDurationTicks;
+            ref var state = ref _endermen.GetRef(id);
+            state.AggroTargetRuntimeId = attackerId;
+            state.AggroTicksRemaining = AggroDurationTicks;
         }
         return applied;
     }
 
-    public bool TryApplyDamage(Enderman enderman, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        GroundMobCombat.TryApplyDamage(
-            enderman, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Enderman", currentTick,
-            removeFromStore: _endermen.Remove,
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        DamageableActorCombat.TryApplyDamage(
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Enderman", currentTick,
+            destroyActor: eid =>
+            {
+                if (_stores.Identities.TryGet(eid, out var identity))
+                    _stores.DestroyActor(identity.ActorRuntimeId, eid);
+            },
             onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
 
     /// <summary>Neutral state: no target, just an occasional random short teleport.</summary>
-    private void TickPassiveTeleport(Enderman enderman, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void TickPassiveTeleport(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (clock.CurrentTick < enderman.NextPassiveTeleportTick) return;
-        enderman.NextPassiveTeleportTick =
+        ref var state = ref _endermen.GetRef(id);
+        if (clock.CurrentTick < state.NextPassiveTeleportTick) return;
+        state.NextPassiveTeleportTick =
             clock.CurrentTick + (ulong)_random.Next(MinPassiveTeleportTicks, MaxPassiveTeleportTicks);
 
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
         var angle = _random.NextSingle() * MathF.PI * 2f;
         var distance = _random.NextSingle() * PassiveTeleportRadius;
-        TryTeleport(enderman, enderman.PositionX + MathF.Cos(angle) * distance, enderman.PositionZ + MathF.Sin(angle) * distance, online);
+        TryTeleport(id, pos.X + MathF.Cos(angle) * distance, pos.Z + MathF.Sin(angle) * distance, online);
     }
 
     /// <summary>Hostile state: teleport toward the last attacker and swing once in reach, on cooldown.</summary>
-    private void TickAggro(Enderman enderman, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void TickAggro(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        var target = enderman.AggroTargetRuntimeId is { } id ? _players.GetByRuntimeId(id) : null;
+        ref var state = ref _endermen.GetRef(id);
+        var target = state.AggroTargetRuntimeId is { } targetId ? _players.GetByRuntimeId(targetId) : null;
         if (target is null || !target.IsInGame || target.IsDead)
         {
-            enderman.AggroTicksRemaining = 0;
-            enderman.AggroTargetRuntimeId = null;
+            state.AggroTicksRemaining = 0;
+            state.AggroTargetRuntimeId = null;
             return;
         }
 
-        var dx = target.PositionX - enderman.PositionX;
-        var dz = target.PositionZ - enderman.PositionZ;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         var distanceSquared = dx * dx + dz * dz;
 
         // Phase XXVI — Enderman previously never set Yaw at all (entity-fidelity audit finding):
         // teleporting toward/attacking a target didn't orient the actor to face them. Snap-facing on
         // every aggro tick matches teleport's own instant, non-gradual movement model — no smoothed
         // turn like GroundMobMovement's walking chase needs.
-        enderman.Yaw = LookMath.YawTowards(dx, dz);
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.Yaw = LookMath.YawTowards(dx, dz);
 
-        if (distanceSquared > AttackDistance * AttackDistance && clock.CurrentTick >= enderman.NextAttackTick)
+        if (distanceSquared > AttackDistance * AttackDistance && clock.CurrentTick >= state.NextAttackTick)
         {
-            enderman.NextAttackTick = clock.CurrentTick + (ulong)AggroTeleportCooldownTicks;
+            ref var s = ref _endermen.GetRef(id);
+            s.NextAttackTick = clock.CurrentTick + (ulong)AggroTeleportCooldownTicks;
             var angle = _random.NextSingle() * MathF.PI * 2f;
             TryTeleport(
-                enderman,
+                id,
                 target.PositionX + MathF.Cos(angle) * AggroTeleportRadius,
                 target.PositionZ + MathF.Sin(angle) * AggroTeleportRadius,
                 online);
             return;
         }
 
-        if (distanceSquared <= AttackDistance * AttackDistance && clock.CurrentTick >= enderman.NextAttackTick)
+        if (distanceSquared <= AttackDistance * AttackDistance && clock.CurrentTick >= state.NextAttackTick)
         {
-            var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(enderman.EntityId), AttackDamage, clock.CurrentTick, dx, dz);
+            if (!_stores.Identities.TryGet(id, out var identity)) return;
+            var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage, clock.CurrentTick, dx, dz);
             result.Conclude(online);
             if (result.Applied)
-                enderman.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+            {
+                ref var s = ref _endermen.GetRef(id);
+                s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+            }
         }
     }
 
@@ -215,18 +280,19 @@ sealed class EndermanSystem : IGameSystem
     /// Reuses GroundMobMovement's position-validity check for the *destination*, not for a walked
     /// step — teleportation has no path, only a landing spot that must be safe to stand on.
     /// </summary>
-    private bool TryTeleport(Enderman enderman, float x, float z, IReadOnlyList<Player.Player> online)
+    private bool TryTeleport(EntityId id, float x, float z, IReadOnlyList<Player.Player> online)
     {
         for (var attempt = 0; attempt < TeleportCandidateAttempts; attempt++)
         {
             var candidateY = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
             if (GroundMobMovement.IsSupportedGroundCell(_world, x, candidateY, z))
             {
-                enderman.PositionX = x;
-                enderman.PositionY = candidateY;
-                enderman.PositionZ = z;
+                ref var p = ref _stores.Positions.GetRef(id);
+                p.X = x;
+                p.Y = candidateY;
+                p.Z = z;
                 TeleportCount++;
-                BroadcastTeleportEffect(enderman, online);
+                BroadcastTeleportEffect(id, online);
                 return true;
             }
 
@@ -238,14 +304,16 @@ sealed class EndermanSystem : IGameSystem
         return false;
     }
 
-    private void BroadcastTeleportEffect(Enderman enderman, IReadOnlyList<Player.Player> online)
+    private void BroadcastTeleportEffect(EntityId id, IReadOnlyList<Player.Player> online)
     {
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
-            if (!_replicated.Contains((enderman.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw((ulong)enderman.EntityId, enderman.PositionX, enderman.PositionY, enderman.PositionZ, flags: 0, yaw: enderman.Yaw, headYaw: enderman.Yaw);
-            peer.Session.Protocol.World.SendLevelSoundEvent("mob.endermen.portal", enderman.PositionX, enderman.PositionY, enderman.PositionZ);
+            if (!_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
+            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, flags: 0, yaw: pos.Yaw, headYaw: pos.Yaw);
+            peer.Session.Protocol.World.SendLevelSoundEvent("mob.endermen.portal", pos.X, pos.Y, pos.Z);
         }
     }
 }

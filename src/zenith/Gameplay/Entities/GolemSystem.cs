@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Protocol;
@@ -10,16 +11,24 @@ namespace Zenith.Gameplay.Entities;
 /// Phase XVIII, Priority 4 — a boss-shaped pressure test on "does behavior complexity exceed what
 /// one concrete System can reasonably own." It does not: phase transition, melee, and the area slam
 /// are three straightforward concrete blocks in this one file, same shape as every other mob
-/// system. No component system was needed. See docs/history/phases/phase-xviii-runtime-pressure-findings.md.
+/// system. No component system was needed beyond the one feature-specific <see cref="GolemState"/>.
+/// See docs/history/phases/phase-xviii-runtime-pressure-findings.md.
 ///
-/// Melee/loot/XP bookkeeping reuses <see cref="GroundMobCombat"/> unmodified. The area slam
+/// Melee/loot/XP bookkeeping reuses <see cref="DamageableActorCombat"/> unmodified. The area slam
 /// (<see cref="TrySlam"/>) is the first mob ability to damage more than one player in a single
-/// action — it turned out to need nothing new: <see cref="PlayerDamage.Apply"/> is already
+/// action — it turned out to need nothing new: <see cref="PlayerDamage.ApplyCore"/> is already
 /// per-player, so looping over everyone in range was sufficient. Player-side knockback was
 /// deliberately NOT added: player position is client-authoritative everywhere else in this
 /// codebase (see docs/entities.md's capability matrix), and inventing server-pushed player
 /// movement for one ability would be exactly the kind of speculative mechanism this project avoids
 /// building ahead of a second real need.
+///
+/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores,
+/// Velocity.Y is reused as gravity fall-speed (Phase XXIX convention), and only
+/// <see cref="GolemState"/> (enrage/target/cooldowns) is feature-specific. The boss-phase branching
+/// and multi-target slam needed no new ECS primitive — both already operated on world-space
+/// coordinates and <see cref="PlayerDamage"/>, independent of what backs Golem's own storage.
 /// </summary>
 sealed class GolemSystem : IGameSystem
 {
@@ -49,23 +58,31 @@ sealed class GolemSystem : IGameSystem
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
-    private readonly GolemStore _golems;
+    private readonly EntityRuntime _stores;
+    private readonly ComponentStore<GolemState> _golems;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long GolemId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long GolemId, long PlayerId), ProjectedPose> _lastProjected = new();
+    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
+    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
+    private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
     private ulong _currentTick;
 
-    public GolemSystem(World.World world, PlayerManager players, GolemStore golems, ItemPalette itemPalette)
+    public GolemSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
-        _golems = golems;
+        _stores = stores;
+        _golems = new ComponentStore<GolemState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
-    public GolemStore Golems => _golems;
+    internal IReadOnlyList<EntityId> Golems => _golems.Entities;
+    internal EntityRuntime Stores => _stores;
+    internal ComponentStore<GolemState> GolemStates => _golems;
+
+    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a golem," nothing more.</summary>
+    internal bool Owns(EntityId id) => _golems.Has(id);
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
     internal long ReplicatedMoveSkippedCount { get; private set; }
@@ -77,108 +94,148 @@ sealed class GolemSystem : IGameSystem
     {
         _currentTick = clock.CurrentTick;
         if (online.Count == 0) return;
-        if (_golems.Active.Count != 0)
+        if (_golems.Count != 0)
             _bootstrapSpawned = true;
         EnsureBootstrapGolem(online);
 
-        foreach (var golem in _golems.Active.ToArray())
+        _tickScratch.Clear();
+        _tickScratch.AddRange(_golems.Entities);
+
+        foreach (var id in _tickScratch)
         {
-            if (!golem.IsActive) continue;
-            if (TryDespawn(golem, clock, online)) continue;
-            ReconcileViewers(golem, online);
-            ApplyPlayerAttacks(golem, online);
-            if (!golem.IsActive) continue;
+            if (!_stores.Entities.IsAlive(id)) continue;
+            if (TryDespawn(id, clock, online)) continue;
+            ReconcileViewers(id, online);
+            ApplyPlayerAttacks(id, online);
+            if (!_stores.Entities.IsAlive(id)) continue;
 
-            golem.IsEnraged = golem.Health.Current <= golem.Health.Maximum * EnrageHealthFraction;
+            if (!_stores.Health.TryGet(id, out var healthComponent)) continue;
+            ref var state = ref _golems.GetRef(id);
+            state.IsEnraged = healthComponent.State.Current <= healthComponent.State.Maximum * EnrageHealthFraction;
 
-            var target = FindProvokedTarget(golem, online);
+            var target = FindProvokedTarget(id, online);
             if (target is not null)
             {
-                AdvanceTowardTarget(golem, target);
-                TryAttackPlayer(golem, target, clock, online);
+                AdvanceTowardTarget(id, target);
+                TryAttackPlayer(id, target, clock, online);
             }
-            if (golem.IsEnraged)
-                TrySlam(golem, online, clock);
+            if (state.IsEnraged)
+                TrySlam(id, online, clock);
 
-            ApplyGravity(golem);
-            ReconcileViewers(golem, online);
+            ApplyGravity(id);
+            ReconcileViewers(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !_golems.Active.Any(g => g.EntityId == pair.GolemId) ||
-                                        !online.Any(p => p.RuntimeId == pair.PlayerId));
+        _replicated.RemoveWhere(pair => !IsKnownAliveGolemId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
         foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
             _lastProjected.Remove(key);
         ReplicateMoves(online);
     }
 
+    private bool IsKnownAliveGolemId(long actorUniqueId)
+    {
+        foreach (var id in _golems.Entities)
+            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
+                return true;
+        return false;
+    }
+
     private void EnsureBootstrapGolem(IReadOnlyList<Player.Player> online)
     {
-        if (_bootstrapSpawned || _golems.Active.Count != 0) return;
+        if (_bootstrapSpawned || _golems.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;
         var x = player.PositionX + SpawnDistance;
         var z = player.PositionZ + SpawnDistance;
         var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
-        var entityId = _players.AllocateRuntimeId();
-        if (_golems.TryAdd(new Golem(entityId, (ulong)entityId, x, y, z)))
-            _bootstrapSpawned = true;
+        SpawnGolem(x, y, z);
+        _bootstrapSpawned = true;
+    }
+
+    /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
+    internal EntityId SpawnGolem(float x, float y, float z)
+    {
+        var actorUniqueId = _players.AllocateRuntimeId();
+        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
+                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Golem.");
+        _stores.Health.Set(id, new HealthComponent { State = new HealthState(100f) });
+        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
+        _stores.Despawn.Set(id, new DespawnTracking());
+        _golems.Set(id, new GolemState());
+        return id;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(Golem golem, GameClock clock, IReadOnlyList<Player.Player> online)
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        ref var tracking = ref _stores.Despawn.GetRef(id);
         var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            golem.PositionX, golem.PositionZ, online, DespawnRadius, clock.CurrentTick, golem.LastSeenNearPlayerTick);
-        golem.LastSeenNearPlayerTick = lastSeen;
+            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
+        tracking.LastSeenNearPlayerTick = lastSeen;
         if (!shouldDespawn) return false;
 
+        if (!_stores.Identities.TryGet(id, out var identity)) return false;
         foreach (var peer in online)
-            if (_replicated.Remove((golem.EntityId, peer.RuntimeId)))
+            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
             {
-                _lastProjected.Remove((golem.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(golem.EntityId);
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             }
-        golem.Remove();
-        _golems.Remove(golem);
+        _stores.DestroyActor(identity.ActorRuntimeId, id);
         DespawnCount++;
         return true;
     }
 
-    private void ReconcileViewers(Golem golem, IReadOnlyList<Player.Player> online) =>
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        var health = healthComponent.State;
+
         ViewerReconciliation.Sync(
-            golem.EntityId, online, _replicated,
-            peer => ActorInterest.Includes(peer, golem.PositionX, golem.PositionZ),
+            identity.ActorUniqueId, online, _replicated,
+            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddGolem(
-                    golem.EntityId, golem.RuntimeId, golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(golem.RuntimeId, golem.Health.Current, golem.Health.Maximum);
-                _lastProjected[(golem.EntityId, peer.RuntimeId)] = new ProjectedPose(golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
+                peer.Session.Protocol.Entity.SendAddGolem(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
             {
-                _lastProjected.Remove((golem.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(golem.EntityId);
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             });
+    }
 
-    private void ApplyPlayerAttacks(Golem golem, IReadOnlyList<Player.Player> online) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(golem, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
 
-    /// <summary>Concrete Golem health/removal operation — same shape as every other ground mob's. A player attacker provokes retaliation (self-defense — vanilla golems always fight back).</summary>
-    public bool TryApplyDamage(Golem golem, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    /// <summary>Concrete Golem health/removal operation — same shape as every other migrated actor's. A player attacker provokes retaliation (self-defense — vanilla golems always fight back).</summary>
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        if (source.OwnerRuntimeId is { } attackerId)
-            golem.TargetPlayerRuntimeId = attackerId;
+        if (source.OwnerRuntimeId is { } attackerId && _golems.Has(id))
+        {
+            ref var state = ref _golems.GetRef(id);
+            state.TargetPlayerRuntimeId = attackerId;
+        }
 
-        return GroundMobCombat.TryApplyDamage(
-            golem, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Golem", currentTick,
-            removeFromStore: _golems.Remove,
+        return DamageableActorCombat.TryApplyDamage(
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Golem", currentTick,
+            destroyActor: gid =>
+            {
+                if (_stores.Identities.TryGet(gid, out var identity))
+                    _stores.DestroyActor(identity.ActorRuntimeId, gid);
+            },
             onDeathReplicatedToPeer: peer =>
             {
-                _lastProjected.Remove((golem.EntityId, peer.RuntimeId));
+                if (_stores.Identities.TryGet(id, out var identity))
+                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
                 ReplicatedRemovalCount++;
             });
     }
@@ -188,14 +245,17 @@ sealed class GolemSystem : IGameSystem
     /// stays passive until provoked (see <see cref="ProvokeWindowTicks"/>'s doc comment), then
     /// retains that specific player as its target the same way Zombie/Spider retain theirs.
     /// </summary>
-    private Player.Player? FindProvokedTarget(Golem golem, IReadOnlyList<Player.Player> online)
+    private Player.Player? FindProvokedTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
-        if (golem.TargetPlayerRuntimeId is { } retainedId)
+        ref var state = ref _golems.GetRef(id);
+        if (!_stores.Positions.TryGet(id, out var pos)) return null;
+
+        if (state.TargetPlayerRuntimeId is { } retainedId)
         {
             var retained = _players.GetByRuntimeId(retainedId);
-            if (retained is not null && IsTargetValid(golem, retained))
+            if (retained is not null && IsTargetValid(pos, retained))
                 return retained;
-            golem.TargetPlayerRuntimeId = null;
+            state.TargetPlayerRuntimeId = null;
         }
 
         foreach (var player in online)
@@ -204,29 +264,30 @@ sealed class GolemSystem : IGameSystem
             if (player.LastVillagerAttack is not { } attack) continue;
             if (_currentTick - attack.Tick > ProvokeWindowTicks) continue;
 
-            var dx = attack.X - golem.PositionX;
-            var dz = attack.Z - golem.PositionZ;
+            var dx = attack.X - pos.X;
+            var dz = attack.Z - pos.Z;
             if (dx * dx + dz * dz > DetectionDistance * DetectionDistance) continue;
 
-            golem.TargetPlayerRuntimeId = player.RuntimeId;
+            state.TargetPlayerRuntimeId = player.RuntimeId;
             return player;
         }
 
         return null;
     }
 
-    private static bool IsTargetValid(Golem golem, Player.Player target)
+    private static bool IsTargetValid(Position pos, Player.Player target)
     {
         if (!target.IsInGame || target.IsDead) return false;
-        var dx = target.PositionX - golem.PositionX;
-        var dz = target.PositionZ - golem.PositionZ;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         return dx * dx + dz * dz <= DetectionDistance * DetectionDistance;
     }
 
-    private void AdvanceTowardTarget(Golem golem, Player.Player target)
+    private void AdvanceTowardTarget(EntityId id, Player.Player target)
     {
-        var dx = target.PositionX - golem.PositionX;
-        var dz = target.PositionZ - golem.PositionZ;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         var distanceSquared = dx * dx + dz * dz;
         if (distanceSquared <= AttackDistance * AttackDistance || distanceSquared <= 0.0001f) return;
 
@@ -234,76 +295,91 @@ sealed class GolemSystem : IGameSystem
         var dxn = dx / length;
         var dzn = dz / length;
         var distance = MathF.Min(MovePerTick, length - AttackDistance);
-        if (TryMove(golem, golem.PositionX + dxn * distance, golem.PositionZ + dzn * distance))
-            golem.Yaw = LookMath.MoveYawTowards(golem.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
+        if (TryMove(id, pos.X + dxn * distance, pos.Z + dzn * distance))
+        {
+            ref var p = ref _stores.Positions.GetRef(id);
+            p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
+        }
     }
 
     /// <summary>Concrete Golem rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
-    private bool TryMove(Golem golem, float x, float z)
+    private bool TryMove(EntityId id, float x, float z)
     {
-        if (!GroundMobMovement.TryMoveHorizontal(_world, golem.PositionX, golem.PositionY, golem.PositionZ, x, z, out var resolvedY)) return false;
-        golem.PositionX = x;
-        golem.PositionY = resolvedY;
-        golem.PositionZ = z;
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.X = x;
+        p.Y = resolvedY;
+        p.Z = z;
         return true;
     }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing — see VillagerSystem's identical helper for why fields always round-trip.</summary>
-    private void ApplyGravity(Golem golem)
+    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
+    private void ApplyGravity(EntityId id)
     {
-        var y = golem.PositionY;
-        var fallSpeed = golem.VerticalFallSpeed;
-        GroundMobMovement.ResolveVertical(_world, golem.PositionX, golem.PositionZ, ref y, ref fallSpeed, out _);
-        golem.PositionY = y;
-        golem.VerticalFallSpeed = fallSpeed;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        ref var vel = ref _stores.Velocities.GetRef(id);
+        var y = pos.Y;
+        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.Y = y;
     }
 
-    private void TryAttackPlayer(Golem golem, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void TryAttackPlayer(EntityId id, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (clock.CurrentTick < golem.NextAttackTick) return;
-        var dx = target.PositionX - golem.PositionX;
-        var dz = target.PositionZ - golem.PositionZ;
+        ref var state = ref _golems.GetRef(id);
+        if (clock.CurrentTick < state.NextAttackTick) return;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         if (dx * dx + dz * dz > AttackDistance * AttackDistance) return;
-        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(golem.EntityId), AttackDamage, clock.CurrentTick, dx, dz);
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage, clock.CurrentTick, dx, dz);
         result.Conclude(online);
         if (result.Applied)
         {
-            golem.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+            ref var s = ref _golems.GetRef(id);
+            s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
-                if (_replicated.Contains((golem.EntityId, peer.RuntimeId)))
-                    peer.Session.Protocol.Entity.SendAttackSwing(golem.RuntimeId);
+                if (_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+                    peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
 
     /// <summary>
     /// Area ability, only reachable once enraged: damages every player within <see cref="SlamRadius"/>
     /// in one action. The first mob ability to hit more than one player at once — turned out to need
-    /// no new primitive, just a loop over <see cref="PlayerDamage.Apply"/>, which was already
+    /// no new primitive, just a loop over <see cref="PlayerDamage.ApplyCore"/>, which was already
     /// per-player and had no assumption baked in that only one player could be hit per call.
     /// </summary>
-    private void TrySlam(Golem golem, IReadOnlyList<Player.Player> online, GameClock clock)
+    private void TrySlam(EntityId id, IReadOnlyList<Player.Player> online, GameClock clock)
     {
-        if (clock.CurrentTick < golem.NextSlamTick) return;
+        ref var state = ref _golems.GetRef(id);
+        if (clock.CurrentTick < state.NextSlamTick) return;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+
         var radiusSquared = SlamRadius * SlamRadius;
         var hitAny = false;
         foreach (var player in online)
         {
             if (!player.IsInGame || player.IsDead) continue;
-            var dx = player.PositionX - golem.PositionX;
-            var dz = player.PositionZ - golem.PositionZ;
+            var dx = player.PositionX - pos.X;
+            var dz = player.PositionZ - pos.Z;
             if (dx * dx + dz * dz > radiusSquared) continue;
-            var result = PlayerDamage.ApplyCore(player, _players, DamageSource.MeleeFrom(golem.EntityId), SlamDamage, clock.CurrentTick, dx, dz);
+            var result = PlayerDamage.ApplyCore(player, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), SlamDamage, clock.CurrentTick, dx, dz);
             result.Conclude(online);
             if (result.Applied)
                 hitAny = true;
         }
 
         if (!hitAny) return;
-        golem.NextSlamTick = clock.CurrentTick + SlamCooldownTicks;
+        ref var s = ref _golems.GetRef(id);
+        s.NextSlamTick = clock.CurrentTick + SlamCooldownTicks;
         SlamCount++;
         foreach (var peer in online)
             if (peer.IsInGame)
-                peer.Session.Protocol.World.SendLevelSoundEvent("mob.irongolem.attack", golem.PositionX, golem.PositionY, golem.PositionZ);
+                peer.Session.Protocol.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)
@@ -311,11 +387,13 @@ sealed class GolemSystem : IGameSystem
         foreach (var peer in online)
         {
             _moveBatch.Clear();
-            foreach (var golem in _golems.Active)
+            foreach (var id in _golems.Entities)
             {
-                var key = (golem.EntityId, peer.RuntimeId);
+                if (!_stores.Identities.TryGet(id, out var identity)) continue;
+                var key = (identity.ActorUniqueId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPose(golem.PositionX, golem.PositionY, golem.PositionZ, golem.Yaw);
+                if (!_stores.Positions.TryGet(id, out var pos)) continue;
+                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                 {
                     ReplicatedMoveSkippedCount++;
@@ -323,12 +401,12 @@ sealed class GolemSystem : IGameSystem
                 }
                 _moveBatch.Add(new RawActorPose
                 {
-                    ActorRuntimeId = golem.RuntimeId,
-                    X = golem.PositionX,
-                    Y = golem.PositionY,
-                    Z = golem.PositionZ,
-                    Yaw = golem.Yaw,
-                    HeadYaw = golem.Yaw
+                    ActorRuntimeId = identity.ActorRuntimeId,
+                    X = pos.X,
+                    Y = pos.Y,
+                    Z = pos.Z,
+                    Yaw = pos.Yaw,
+                    HeadYaw = pos.Yaw
                 });
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;

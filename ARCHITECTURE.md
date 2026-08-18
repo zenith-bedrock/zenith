@@ -82,14 +82,14 @@ A seta de dependência de tipos é sempre unidirecional. Camadas inferiores não
 4. **Packets nunca conhecem domínio** (`Player`, `World`, `Inventory`, …).
 5. **Serializer nunca conhece domínio.**
 6. **Handlers** podem decodificar pacotes inbound, validar segurança do dado (NaN/Infinity) e registrar intenção pendente — **não** alterar posição/inventário/mundo diretamente.
-7. **Evitar novas abstrações** (`Factory`, `Mapper`, `Dispatcher`, `Builder`, `Scheduler`, `Actor`, …) sem necessidade comprovada / limitação concreta. ECS existe desde a Fase XXI (expandido na Fase XXII) apenas para o slice Zombie/Minecart/Projectile/Cow/Skeleton/Spider (ADR §106/§107) — expandir esse slice ou introduzir ECS em outro domínio ainda exige a mesma prova.
+7. **Evitar novas abstrações** (`Factory`, `Mapper`, `Dispatcher`, `Builder`, `Scheduler`, `Actor`, …) sem necessidade comprovada / limitação concreta. ECS existe desde a Fase XXI (expandido na Fase XXII, e novamente na migração Creeper/Enderman/Golem/Fish) apenas para o slice Zombie/Minecart/Projectile/Cow/Skeleton/Spider/Fish/Creeper/Enderman/Golem (ADR §106/§107/§132) — expandir esse slice ou introduzir ECS em outro domínio ainda exige a mesma prova.
 8. Enquanto intenção ↔ pacote for 1:1, os módulos `*Protocol` podem instanciar pacotes diretamente.
 
 ## Infra congelada
 
 Após o GameLoop estável, **não introduzir** Scheduler, Actor Model, Job System, Service Locator, Runtime Manager ou VisibilitySystem só “por limpeza”. Novas camadas só quando uma feature concreta demonstrar limitação da arquitetura atual. Gameplay guia a evolução.
 
-**ECS deixou de ser universalmente congelado a partir da Fase XXI, expandido na Fase XXII** (ADR §106/§107) — existe um ECS real em `src/zenith/Ecs/`, autoritativo para Zombie/Minecart/Projectile/Cow/Skeleton/Spider (6 de 12 espécies). Ver [`docs/ecs.md`](docs/ecs.md) para o que existe e [`docs/phase-xxi-ecs-foundation-findings.md`](docs/history/phases/phase-xxi-ecs-foundation-findings.md)/[`docs/phase-xxii-ecs-roster-consolidation-findings.md`](docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md) para as decisões. Fora desse slice — Player, sessões, inventário, storage, packets, transporte, e as 6 espécies `IDamageableActor` restantes (Creeper, Enderman, Bat, Villager, Golem, Fish) — o congelamento permanece: não introduzir ECS/generalizar o runtime desses domínios sem uma feature concreta forçando, igual a qualquer outra camada nesta lista.
+**ECS deixou de ser universalmente congelado a partir da Fase XXI, expandido na Fase XXII e novamente na migração Creeper/Enderman/Golem/Fish** (ADR §106/§107/§132) — existe um ECS real em `src/zenith/Ecs/`, autoritativo para Zombie/Minecart/Projectile/Cow/Skeleton/Spider/Fish/Creeper/Enderman/Golem (10 de 12 espécies). Ver [`docs/ecs.md`](docs/ecs.md) para o que existe e [`docs/phase-xxi-ecs-foundation-findings.md`](docs/history/phases/phase-xxi-ecs-foundation-findings.md)/[`docs/phase-xxii-ecs-roster-consolidation-findings.md`](docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md) para as decisões. Fora desse slice — Player, sessões, inventário, storage, packets, transporte, e as 2 espécies `IDamageableActor` restantes (Bat, Villager) — o congelamento permanece: não introduzir ECS/generalizar o runtime desses domínios sem uma feature concreta forçando, igual a qualquer outra camada nesta lista.
 
 Fan-out a “todos online” (ex. TimeSync / movimento **quando pose dirty**, ADR §44) é aceitável neste estágio; Absolute/UpdateBlock no tick batelam por peer. Um futuro VisibilitySystem pode restringir peers relevantes — não implementado agora.
 
@@ -233,21 +233,23 @@ Gates: se item **11** falhar, não começar containers. Se **S39** ou **S41** fa
 
 ### ECS decision boundary
 
-**Updated by Phase XXI (ADR §106), expanded by Phase XXII (ADR §107).** A real ECS now exists
-(`src/zenith/Ecs/`), authoritative for six world-actor species — Zombie, Minecart, Projectile
-(Phase XXI), Cow, Skeleton, Spider (Phase XXII). See [`docs/ecs.md`](docs/ecs.md) and
+**Updated by Phase XXI (ADR §106), expanded by Phase XXII (ADR §107), expanded again by the
+Creeper/Enderman/Golem/Fish migration (ADR §132).** A real ECS now exists (`src/zenith/Ecs/`),
+authoritative for ten world-actor species — Zombie, Minecart, Projectile (Phase XXI), Cow,
+Skeleton, Spider (Phase XXII), Fish, Creeper, Enderman, Golem (§132). See
+[`docs/ecs.md`](docs/ecs.md) and
 [`docs/phase-xxi-ecs-foundation-findings.md`](docs/history/phases/phase-xxi-ecs-foundation-findings.md)/
 [`docs/phase-xxii-ecs-roster-consolidation-findings.md`](docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md).
-Both were explicit scope decisions, not new measured-pressure triggers — the standing rule below,
-written before Phase XXI, remains accurate for everything the roster does not cover.
+All three were explicit scope decisions, not new measured-pressure triggers — the standing rule
+below, written before Phase XXI, remains accurate for everything the roster does not cover.
 
-ECS remains frozen for every other world-actor category (the 6 unmigrated `IDamageableActor`
-species: Creeper, Enderman, Bat, Villager, Golem, Fish) and every non-world-actor domain until real
-pressure is measured or a deliberate scope decision like §106/§107 is made and recorded as an ADR.
-It starts single-writer on the GameLoop (confirmed — `GameLoop` remains single-threaded,
-deterministic registration order). It does **not** imply a VisibilitySystem or parallel scheduler,
-and does not pull players, inventory, sessions, transport, packets or persistence into ECS by
-default — none of that changed across either phase.
+ECS remains frozen for every other world-actor category (the 2 unmigrated `IDamageableActor`
+species: Bat, Villager — each blocked by a genuine schema gap, see `docs/ecs.md`'s retirement gate)
+and every non-world-actor domain until real pressure is measured or a deliberate scope decision like
+§106/§107/§132 is made and recorded as an ADR. It starts single-writer on the GameLoop (confirmed —
+`GameLoop` remains single-threaded, deterministic registration order). It does **not** imply a
+VisibilitySystem or parallel scheduler, and does not pull players, inventory, sessions, transport,
+packets or persistence into ECS by default — none of that changed across any phase.
 
 Espinha: **Chat → World in-memory → Inventory/blocks → LevelDB**, skins cosméticas em paralelo. Não espelhar Actor→Events; Zenith já usa `GameLoop` + pending input.
 
@@ -319,7 +321,7 @@ Quando extensibilidade externa existir: `EventBus.Subscribe<T>` primeiro — nã
 ### Explicitamente fora da sequência curta
 
 - Actor / job channel, framework EventHandlers, VisibilitySystem
-- ECS fora do slice Zombie/Minecart/Projectile/Cow/Skeleton/Spider (ADR §106/§107) — as 6 espécies `IDamageableActor` restantes (Creeper, Enderman, Bat, Villager, Golem, Fish), e todo o resto (players, sessões, inventário, storage, packets, transporte), continuam fora por padrão
+- ECS fora do slice Zombie/Minecart/Projectile/Cow/Skeleton/Spider/Fish/Creeper/Enderman/Golem (ADR §106/§107/§132) — as 2 espécies `IDamageableActor` restantes (Bat, Villager), e todo o resto (players, sessões, inventário, storage, packets, transporte), continuam fora por padrão
 - Anti-cheat, Snappy zero-copy
 - DI container, Plugin API
 - Commands / Permission (`/` adiado de propósito)
