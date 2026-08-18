@@ -358,6 +358,16 @@ Zombie, Minecart, Cow, Skeleton, Spider, Projectile (Projectile deals damage, ne
 it never calls either helper as a target — it calls `DamageableActorCombat.TryApplyDamage` on
 whatever it hits, via `DamageDispatch`). Roster parity (6/6) was reached this phase.
 
+**Update (ADR §131, `docs/decisions.md`):** the storage split documented in this section is correct
+and stays — but the *combat sequence itself* (damage/loot/XP/replication/destruction) had been
+duplicated byte-for-byte between the two helpers since Phase XXI, differing only in how a mob's
+state was read (object properties vs. ECS component lookups). That duplication is now closed:
+`GroundMobCombat` and `DamageableActorCombat` are both thin adapters over one shared
+`DamageableActorCombatCore`, built from a small `DamageableActorView` snapshot either backend can
+produce cheaply. No storage migrated, no public signature changed, no call site touched — see ADR
+§131 for what shipped. This preempts the "no maintenance-cost signal has appeared yet" paragraph
+below: the duplication that signal would have been watching for can no longer occur structurally.
+
 **Phase XXII revisited this gate and chose Outcome A: keep both helpers.** The trigger stated in
 Phase XXI — "the migrated roster covers enough of the remaining species that maintaining two
 helpers costs more than migrating the stragglers" — has *not* fired, evaluated honestly against the
