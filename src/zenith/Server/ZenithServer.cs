@@ -238,11 +238,50 @@ class ZenithServer
         int chunkResidencySweepIntervalTicks)
     {
         var gravity = new GravitySystem(world, players);
-        // Phase XXI/XXII — ECS-authoritative roster. DamageDispatch (Phase XXII) is built once and
-        // registered by every ECS-damageable system before Projectile is constructed — this is the
-        // seam that replaced the old hardcoded Zombie/Minecart-only dispatch chain in
-        // ProjectileSystem once a third (then fourth, fifth) ECS-damageable species arrived. Skeleton
-        // is constructed after Projectile (it fires through it) and registers into the same dispatch.
+        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial);
+
+        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
+        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
+        gameLoop.Register(gravity, diagnostics.System("gravity"));
+        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
+        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
+        // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
+        gameLoop.Register(new HungerSystem(itemPalette, players), diagnostics.System("hunger"));
+        gameLoop.Register(new EffectSystem(players), diagnostics.System("effect"));
+        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
+        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
+        gameLoop.Register(new ChunkStreamSystem(world, diagnostics.Worldgen), diagnostics.System("chunk-stream"));
+        gameLoop.Register(
+            new ChunkResidencySystem(world, chunkResidencySweepIntervalTicks),
+            diagnostics.System("chunk-residency"));
+
+        return gravity;
+    }
+
+    /// <summary>
+    /// The entity-gameplay slice of <see cref="RegisterWorldSystems"/>, split out purely for
+    /// readability as the entity roster grew (12 species today) — no new type, no behavior change,
+    /// no registry. Every construction/registration call here is byte-identical to what used to be
+    /// inline in <see cref="RegisterWorldSystems"/>; only its location moved.
+    ///
+    /// DamageDispatch (Phase XXII) is one shared mutable instance, threaded through every species and
+    /// consulted at Tick time — not snapshotted at construction — so <c>.Register</c> calls only need
+    /// to land before GameLoop starts ticking, not before any particular species' construction.
+    /// SkeletonSystem is the one real ordering dependency: its constructor takes the already-built
+    /// ProjectileSystem (it fires arrows through it), which is why it's constructed after Projectile
+    /// specifically, not because every species must register into DamageDispatch first.
+    /// </summary>
+    private static void RegisterEntityGameplay(
+        GameLoop gameLoop,
+        ServerRuntimeDiagnostics diagnostics,
+        World.World world,
+        PlayerManager players,
+        EntityRuntime entities,
+        BatStore batStore,
+        VillagerStore villagerStore,
+        ItemPalette itemPalette,
+        PlayerSpatialIndex playerSpatial)
+    {
         var damage = new DamageDispatch();
         var zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
         damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
@@ -276,22 +315,6 @@ class ZenithServer
         gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette), diagnostics.System("villager"));
         gameLoop.Register(golemSystem, diagnostics.System("golem"));
         gameLoop.Register(fishSystem, diagnostics.System("fish"));
-        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
-        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
-        gameLoop.Register(gravity, diagnostics.System("gravity"));
-        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
-        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
-        // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
-        gameLoop.Register(new HungerSystem(itemPalette, players), diagnostics.System("hunger"));
-        gameLoop.Register(new EffectSystem(players), diagnostics.System("effect"));
-        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
-        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
-        gameLoop.Register(new ChunkStreamSystem(world, diagnostics.Worldgen), diagnostics.System("chunk-stream"));
-        gameLoop.Register(
-            new ChunkResidencySystem(world, chunkResidencySweepIntervalTicks),
-            diagnostics.System("chunk-residency"));
-
-        return gravity;
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>
