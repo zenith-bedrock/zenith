@@ -1,8 +1,9 @@
 # Zenith ECS — living architecture doc
 
-**Status:** real, in production use since Phase XXI, expanded in Phase XXII. Authoritative for
-Zombie, Minecart, Projectile, Cow, Skeleton, Spider. Not authoritative for anything else — see
-[Scope](#scope) below.
+**Status:** real, in production use since Phase XXI, expanded in Phase XXII, and again in the
+Creeper/Enderman/Golem/Fish migration (docs/decisions.md, the ADR after §131). Authoritative for
+Zombie, Minecart, Projectile, Cow, Skeleton, Spider, Fish, Creeper, Enderman, Golem. Not
+authoritative for anything else — see [Scope](#scope) below.
 
 This document describes what exists in `src/zenith/Ecs/` today. It is not a design proposal and
 not a plugin API. Update it when the ECS surface changes; do not let it drift into aspiration.
@@ -21,13 +22,14 @@ narrative.
 ## Scope
 
 **Migrated (ECS is the sole authoritative store):** Zombie, Minecart, Projectile (Phase XXI); Cow,
-Skeleton, Spider (Phase XXII). Six species total.
+Skeleton, Spider (Phase XXII); Fish, Creeper, Enderman, Golem (Creeper/Enderman/Golem/Fish
+migration, docs/decisions.md ADR after §131). Ten species total.
 
 **Not migrated (still the pre-existing OOP `IDamageableActor` + per-species `*Store` pattern):**
-Creeper, Enderman, Bat, Villager, Golem, Fish — six species, still correctly served by
-`GroundMobCombat`/`GroundMobMovement`/`DespawnLifecycle` and `IDamageableActor`. See
-[Retirement gate](#retirement-gate-groundmobcombat-vs-damageableactorcombat) for why these six
-specifically weren't pulled in this phase, and what would trigger migrating one.
+Bat, Villager — two species, still correctly served by
+`GroundMobCombat`/`GroundMobMovement`/`DespawnLifecycle` and `IDamageableActor`. Each has a genuine
+structural blocker, not just distinct behavior — see
+[Retirement gate](#retirement-gate-groundmobcombat-vs-damageableactorcombat).
 
 **Never in scope:** Player, sessions, inventory, world storage, packets, transport. This is a
 world-actor runtime, not a general application data model. See `ARCHITECTURE.md`'s "ECS decision
@@ -226,9 +228,10 @@ against, not avoiding it. See `docs/history/phases/phase-xxix-ground-actor-physi
 ### Ground locomotion (`GroundMobMovement`, Phase XXIX)
 
 Ground mob movement is resolved through `Gameplay/Entities/GroundMobMovement.cs`, a stateless
-resolver over primitives (world + position + desired delta), not an ECS system — both the ECS roster
-above and the legacy roster (`Villager`/`Golem`/`Creeper`, plain classes with a `VerticalFallSpeed`
-field standing in for `Velocity.Y`) call the same two static methods, `TryMoveHorizontal` (occupancy +
+resolver over primitives (world + position + desired delta), not an ECS system — both the ECS
+roster (now including Golem/Creeper, which reuse `Velocity.Y` as fall-speed the same way every
+other migrated ground mob does) and the legacy roster (`Villager`, the sole remaining plain class
+with a `VerticalFallSpeed` field) call the same two static methods, `TryMoveHorizontal` (occupancy +
 one-block step-up, no support requirement) and `ResolveVertical` (gravity/falling/landing). Real
 physical support/occupancy/fluid classification lives on `Blocks` (`IsAir`/`IsFluid`/`CanOccupy`/
 `CanSupportGroundActor`/`BlocksMovement`), replacing the old "any non-air block is solid ground"
@@ -351,12 +354,12 @@ has needed them yet:
 
 ## Retirement gate: `GroundMobCombat` vs. `DamageableActorCombat`
 
-Both combat helpers are real and both stay. `GroundMobCombat<TMob>` (generic over
-`IDamageableActor`) now serves the 6 unmigrated species: Creeper, Enderman, Bat, Villager, Golem,
-Fish. `DamageableActorCombat` (entity-id + `EntityRuntime`) serves the 6 ECS-authoritative species:
-Zombie, Minecart, Cow, Skeleton, Spider, Projectile (Projectile deals damage, never receives it, so
-it never calls either helper as a target — it calls `DamageableActorCombat.TryApplyDamage` on
-whatever it hits, via `DamageDispatch`). Roster parity (6/6) was reached this phase.
+Both combat helpers are real and both stay, but the gate is now substantially closed.
+`GroundMobCombat<TMob>` (generic over `IDamageableActor`) serves only the 2 remaining unmigrated
+species: Bat, Villager. `DamageableActorCombat` (entity-id + `EntityRuntime`) serves the 10
+ECS-authoritative species: Zombie, Minecart, Cow, Skeleton, Spider, Fish, Creeper, Enderman, Golem,
+Projectile (Projectile deals damage, never receives it, so it never calls either helper as a
+target — it calls `DamageableActorCombat.TryApplyDamage` on whatever it hits, via `DamageDispatch`).
 
 **Update (ADR §131, `docs/decisions.md`):** the storage split documented in this section is correct
 and stays — but the *combat sequence itself* (damage/loot/XP/replication/destruction) had been
@@ -365,63 +368,58 @@ state was read (object properties vs. ECS component lookups). That duplication i
 `GroundMobCombat` and `DamageableActorCombat` are both thin adapters over one shared
 `DamageableActorCombatCore`, built from a small `DamageableActorView` snapshot either backend can
 produce cheaply. No storage migrated, no public signature changed, no call site touched — see ADR
-§131 for what shipped. This preempts the "no maintenance-cost signal has appeared yet" paragraph
-below: the duplication that signal would have been watching for can no longer occur structurally.
+§131 for what shipped.
 
-**Phase XXII revisited this gate and chose Outcome A: keep both helpers.** The trigger stated in
-Phase XXI — "the migrated roster covers enough of the remaining species that maintaining two
-helpers costs more than migrating the stragglers" — has *not* fired, evaluated honestly against the
-6 remaining species' real behavior, not just their count:
+**Update (Creeper/Enderman/Golem/Fish migration, ADR after §131):** Phase XXII's table below listed
+6 species as non-mechanical to migrate, on the grounds that each had a lifecycle/damage/targeting/
+movement shape neither combat helper modeled. Re-reading the actual per-species logic (not just the
+one-line summary) showed that framing conflated "has distinct per-tick behavior" with "requires new
+ECS infrastructure" for 4 of the 6:
+
+- **Creeper's area explosion** and **Golem's area slam** already looped `PlayerDamage.ApplyCore`
+  over `online` players using world-space coordinates — neither ever touched the mob's own storage
+  except its own position. Area damage was never a missing ECS primitive; it was a plain loop that
+  worked identically regardless of what backed the mob's state.
+- **Enderman's aggro/teleport** and **Golem's enrage/target-retention** were exactly the shape
+  `SpiderState`/`ZombieState` already solved: a handful of extra fields with no cross-species query
+  need — the designed-for case for a feature-specific `ComponentStore<T>`, not an edge case.
+- **Fish's `TrySwim`** was a movement-validity predicate, structurally identical in role to
+  `GroundMobMovement.TryMoveHorizontal` — it never cared whether the position it read/wrote lived
+  on a C# object or in a `ComponentStore<Position>`.
+
+All 4 migrated onto `CreeperState`/`EndermanState`/`GolemState`/`FishState` (mirroring
+`SpiderState`'s shape) with no new ECS primitive and no behavioral change — see the "Adding a new
+ECS actor" template below, which each followed directly. A confirmed side benefit: `DamageDispatch`
+registration means arrows can now hit all 4, which the old `IDamageableActor`/`*Store` pattern never
+allowed (`ProjectileSystem.FindHitDamageableActor` only ever queried ECS component stores).
+
+**Bat and Villager remain genuinely non-mechanical** — the trigger below has not fired for either:
 
 | Species | What makes it non-mechanical to migrate |
 |---|---|
-| Creeper | Fuse timer + area explosion — a lifecycle/damage shape neither `GroundMobCombat` nor `DamageableActorCombat` currently models (an actor that damages an *area* on its own death, not on request) |
-| Enderman | Damage-triggered aggro (not proximity-scan like Zombie/Spider) + teleport — a fourth distinct targeting shape already noted in `entities.md` |
 | Bat | 3D wander (the only flight movement model — `Position.Yaw` alone doesn't carry pitch) |
 | Villager | Real trade interaction (`Wares`, a `List<StackId>` with no ECS analog yet — the first and only non-player inventory-shaped data) |
-| Golem | Boss phases (`IsEnraged`, a second ability) — the one species with per-tick behavior branching beyond attack/chase |
-| Fish | Swim movement validity (`TrySwim`, a third distinct movement-validity predicate) |
 
-None of these are "just port the same shape" work — each still has genuinely distinct data or
-behavior the way Phase XIV–XX's evidence trail already established. Forcing them through this
-phase's window to hit a roster-parity number would have been "migrate to fill a table," explicitly
-rejected as a goal by this phase's own brief.
+Both blockers require a schema change (a pitch field on `Position`, or a new inventory-shaped
+component) that the migrated species never needed — this is the real dividing line the corrected
+assessment above draws, not species count or behavioral complexity.
 
 ### Per-species re-evaluation tracker
 
-The "migrate when gameplay work already needs to touch it" trigger above requires knowing, per
-species, what kind of touch counts. Phase XXIX's ground-actor gravity/support rewrite already
-touched 5 of these 6 files (Creeper, Enderman — teleport-landing check only, Fish, Golem,
-Villager; Bat was deliberately excluded, it never had a vertical model). That was shared physics
-infrastructure, not species-specific pressure — no bug was fixed in one species and missed in
-another, no feature needed identical behavior across species and got written twice — so the gate
-did **not** fire for any of them from that alone. This table exists so the next PR that touches one
-of these species doesn't have to re-derive that judgment from scratch:
-
-| Species | Touched in | Re-evaluate when |
-|---|---|---|
-| Creeper | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | another entity needs area-damage-on-death |
-| Enderman | Phase XXIX (partial — teleport-landing check only, not the full gravity resolver) | another entity needs damage-triggered aggro or teleport |
-| Bat | Aug 2026 domain reorg only; excluded from Phase XXIX by design | any species needs a flight/3D-wander movement model |
-| Villager | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | a trade UI / NPC shop needs non-player inventory-shaped data |
-| Golem | Phase XXIX (gravity/ground-support rewrite; shared infra, not species-specific) | another entity needs per-tick phase/state branching |
-| Fish | Phase XXIX (partial — swim-validity path is distinct from the gravity resolver) | another aquatic entity (e.g. squid) needs swim physics |
+| Species | Re-evaluate when |
+|---|---|
+| Bat | any species needs a flight/3D-wander movement model |
+| Villager | a trade UI / NPC shop needs non-player inventory-shaped data |
 
 No migration is proposed or scheduled by this table — it is evidence bookkeeping only, so the
 retirement trigger stays evaluable without re-reading git history each time.
 
-**No maintenance-cost signal has appeared either**: no bug has been fixed in one combat helper and
-missed in the other; no feature has needed to work identically across both and been written twice.
-`DamageDispatch` (below) absorbed the one real cross-cutting pressure point (Projectile's target
-dispatch) without touching either combat helper.
-
 **Updated retirement trigger, going forward:** migrate a remaining species *when gameplay work
 already needs to touch it* (a bug fix, a feature request, a new pressure test) — not on a schedule,
-and not to close this gate for its own sake. Re-evaluate this gate the next time either combat
-helper changes for a reason that would have applied to both, or when the legacy roster drops to 3
-or fewer (parity-minus-one, the point where maintaining a second helper for a shrinking minority
-starts to look wasteful on its own). Until then, treat the dual-helper period as a stable, expected
-state — not a to-do.
+and not to close this gate for its own sake. With the legacy roster now at 2 (Bat, Villager), both
+with a real schema blocker rather than "just distinct behavior," the dual-helper period is expected
+to persist until one of those specific blockers is addressed by unrelated gameplay work — not a
+to-do in its own right.
 
 ---
 

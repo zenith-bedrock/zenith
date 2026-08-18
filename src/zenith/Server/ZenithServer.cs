@@ -95,13 +95,9 @@ class ZenithServer
         }
         var players = new PlayerManager();
         var clock = new GameClock();
-        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for Zombie/Minecart/Projectile/Cow/Skeleton/Spider.
-        var creepers = new CreeperStore();
-        var endermen = new EndermanStore();
+        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for Zombie/Minecart/Projectile/Cow/Skeleton/Spider/Fish/Creeper/Enderman/Golem.
         var bats = new BatStore();
         var villagers = new VillagerStore();
-        var golems = new GolemStore();
-        var fish = new FishStore();
         var diagnostics = new ServerRuntimeDiagnostics();
         var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
         var playerSpatial = RegisterEarlySystems(gameLoop, players, diagnostics);
@@ -144,8 +140,8 @@ class ZenithServer
         var recipes = RecipeRegistry.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         var gravity = RegisterWorldSystems(
-            gameLoop, diagnostics, world, players, entities, creepers, endermen,
-            bats, villagers, golems, fish, itemPalette, recipes, creative, playerSpatial,
+            gameLoop, diagnostics, world, players, entities,
+            bats, villagers, itemPalette, recipes, creative, playerSpatial,
             config.World.ChunkResidencySweepIntervalTicks);
 
         var eventBus = new EventBus(serverLogger);
@@ -190,9 +186,8 @@ class ZenithServer
         gameLoop.SetTickObserver(elapsed =>
         {
             var actors = entities.Entities.AliveCount +
-                         creepers.Active.Count + endermen.Active.Count +
-                         bats.Active.Count + villagers.Active.Count + golems.Active.Count +
-                         fish.Active.Count + world.FallingBlocks.Active.Count + world.FloorDrops.Count;
+                         bats.Active.Count + villagers.Active.Count +
+                         world.FallingBlocks.Active.Count + world.FloorDrops.Count;
             diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
                 diagnostics.Systems.Count, RakNetServer);
             _telemetry.RecordTick(elapsed, players.Count, actors, RakNetServer);
@@ -234,12 +229,8 @@ class ZenithServer
         World.World world,
         PlayerManager players,
         EntityRuntime entities,
-        CreeperStore creeperStore,
-        EndermanStore endermanStore,
         BatStore batStore,
         VillagerStore villagerStore,
-        GolemStore golemStore,
-        FishStore fishStore,
         ItemPalette itemPalette,
         RecipeRegistry recipes,
         CreativeCatalog creative,
@@ -261,6 +252,14 @@ class ZenithServer
         damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
         var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
         damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
+        var fishSystem = new FishSystem(world, players, entities, itemPalette);
+        damage.Register(fishSystem.Owns, fishSystem.TryApplyDamage);
+        var creeperSystem = new CreeperSystem(world, players, entities, itemPalette);
+        damage.Register(creeperSystem.Owns, creeperSystem.TryApplyDamage);
+        var endermanSystem = new EndermanSystem(world, players, entities, itemPalette);
+        damage.Register(endermanSystem.Owns, endermanSystem.TryApplyDamage);
+        var golemSystem = new GolemSystem(world, players, entities, itemPalette);
+        damage.Register(golemSystem.Owns, golemSystem.TryApplyDamage);
         var projectileSystem = new ProjectileSystem(world, players, entities, damage, playerSpatial);
         var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette);
         damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
@@ -270,13 +269,13 @@ class ZenithServer
         gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
         gameLoop.Register(skeletonSystem, diagnostics.System("skeleton"));
         gameLoop.Register(cowSystem, diagnostics.System("cow"));
-        gameLoop.Register(new CreeperSystem(world, players, creeperStore, itemPalette), diagnostics.System("creeper"));
-        gameLoop.Register(new EndermanSystem(world, players, endermanStore, itemPalette), diagnostics.System("enderman"));
+        gameLoop.Register(creeperSystem, diagnostics.System("creeper"));
+        gameLoop.Register(endermanSystem, diagnostics.System("enderman"));
         gameLoop.Register(new BatSystem(world, players, batStore, itemPalette), diagnostics.System("bat"));
         gameLoop.Register(spiderSystem, diagnostics.System("spider"));
         gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette), diagnostics.System("villager"));
-        gameLoop.Register(new GolemSystem(world, players, golemStore, itemPalette), diagnostics.System("golem"));
-        gameLoop.Register(new FishSystem(world, players, fishStore, itemPalette), diagnostics.System("fish"));
+        gameLoop.Register(golemSystem, diagnostics.System("golem"));
+        gameLoop.Register(fishSystem, diagnostics.System("fish"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
         gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
         gameLoop.Register(gravity, diagnostics.System("gravity"));

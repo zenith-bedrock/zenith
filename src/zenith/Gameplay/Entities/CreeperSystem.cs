@@ -1,3 +1,4 @@
+using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Packets;
 using Zenith.Player;
@@ -9,12 +10,20 @@ namespace Zenith.Gameplay.Entities;
 
 /// <summary>
 /// First "different death behavior" ground mob (Phase XV). Combat/loot/XP bookkeeping for a
-/// player-caused kill is shared via <see cref="GroundMobCombat"/>, same as every other ground mob.
-/// The fuse → explosion → area damage chain is entirely local to this system: it is not a form of
-/// "taking damage," it is a self-triggered removal that happens to reuse
-/// <see cref="GroundMobCombat.TryApplyDamage"/> for its own death/loot/XP/removal bookkeeping (a
-/// lethal self-inflicted hit is still exactly that bookkeeping) while area damage to nearby players
-/// is applied separately through the ordinary <see cref="PlayerDamage"/> path.
+/// player-caused kill is shared via <see cref="DamageableActorCombat"/>, same as every other
+/// migrated mob. The fuse → explosion → area damage chain is entirely local to this system: it is
+/// not a form of "taking damage," it is a self-triggered removal that happens to reuse
+/// <see cref="DamageableActorCombat.TryApplyDamage"/> for its own death/loot/XP/removal bookkeeping
+/// (a lethal self-inflicted hit is still exactly that bookkeeping) while area damage to nearby
+/// players is applied separately through the ordinary <see cref="PlayerDamage"/> path.
+///
+/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores,
+/// Velocity.Y is reused as gravity fall-speed (Phase XXIX convention), and only
+/// <see cref="CreeperState"/> (target, fuse state) is feature-specific. The fuse/explosion/
+/// area-damage logic itself did not need any new ECS primitive: the explosion loop already reads
+/// world-space coordinates and calls <see cref="PlayerDamage.ApplyCore"/> per player, independent
+/// of what backs the Creeper's own storage.
 /// </summary>
 sealed class CreeperSystem : IGameSystem
 {
@@ -42,22 +51,30 @@ sealed class CreeperSystem : IGameSystem
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
-    private readonly CreeperStore _creepers;
+    private readonly EntityRuntime _stores;
+    private readonly ComponentStore<CreeperState> _creepers;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long CreeperId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long CreeperId, long PlayerId), ProjectedPose> _lastProjected = new();
+    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
+    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
+    private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
 
-    public CreeperSystem(World.World world, PlayerManager players, CreeperStore creepers, ItemPalette itemPalette)
+    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
-        _creepers = creepers;
+        _stores = stores;
+        _creepers = new ComponentStore<CreeperState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
-    public CreeperStore Creepers => _creepers;
+    internal IReadOnlyList<EntityId> Creepers => _creepers.Entities;
+    internal EntityRuntime Stores => _stores;
+    internal ComponentStore<CreeperState> CreeperStates => _creepers;
+
+    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a creeper," nothing more.</summary>
+    internal bool Owns(EntityId id) => _creepers.Has(id);
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
     internal long ExplosionCount { get; private set; }
@@ -66,59 +83,82 @@ sealed class CreeperSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_creepers.Active.Count != 0)
+        if (_creepers.Count != 0)
             _bootstrapSpawned = true;
         EnsureBootstrapCreeper(online);
 
-        foreach (var creeper in _creepers.Active.ToArray())
-        {
-            if (!creeper.IsActive) continue;
-            if (TryDespawn(creeper, clock, online)) continue;
-            ReconcileViewers(creeper, online);
-            ApplyPlayerAttacks(creeper, online, clock.CurrentTick);
-            if (!creeper.IsActive) continue;
+        _tickScratch.Clear();
+        _tickScratch.AddRange(_creepers.Entities);
 
-            var target = FindOrAcquireTarget(creeper, online);
-            var exitThreshold = creeper.IsFusing ? DefuseDistance : IgniteDistance;
+        foreach (var id in _tickScratch)
+        {
+            if (!_stores.Entities.IsAlive(id)) continue;
+            if (TryDespawn(id, clock, online)) continue;
+            ReconcileViewers(id, online);
+            ApplyPlayerAttacks(id, online, clock.CurrentTick);
+            if (!_stores.Entities.IsAlive(id)) continue;
+
+            var target = FindOrAcquireTarget(id, online);
+            ref var state = ref _creepers.GetRef(id);
+            var exitThreshold = state.IsFusing ? DefuseDistance : IgniteDistance;
             if (target is null)
             {
-                Defuse(creeper, online);
+                Defuse(id, online);
             }
-            else if (DistanceSquared(creeper, target) > exitThreshold * exitThreshold)
+            else if (DistanceSquared(id, target) > exitThreshold * exitThreshold)
             {
-                Defuse(creeper, online);
-                AdvanceTowardTarget(creeper, target);
+                Defuse(id, online);
+                AdvanceTowardTarget(id, target);
             }
             else
             {
-                TickFuse(creeper, clock, online);
+                TickFuse(id, clock, online);
             }
 
-            if (creeper.IsActive)
+            if (_stores.Entities.IsAlive(id))
             {
-                ApplyGravity(creeper);
-                ReconcileViewers(creeper, online);
+                ApplyGravity(id);
+                ReconcileViewers(id, online);
             }
         }
 
-        _replicated.RemoveWhere(pair => !_creepers.Active.Any(c => c.EntityId == pair.CreeperId) ||
-                                        !online.Any(p => p.RuntimeId == pair.PlayerId));
+        _replicated.RemoveWhere(pair => !IsKnownAliveCreeperId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
         foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
             _lastProjected.Remove(key);
         ReplicateMoves(online);
     }
 
+    private bool IsKnownAliveCreeperId(long actorUniqueId)
+    {
+        foreach (var id in _creepers.Entities)
+            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
+                return true;
+        return false;
+    }
+
     private void EnsureBootstrapCreeper(IReadOnlyList<Player.Player> online)
     {
-        if (_bootstrapSpawned || _creepers.Active.Count != 0) return;
+        if (_bootstrapSpawned || _creepers.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;
         var x = player.PositionX + SpawnDistance;
         var z = player.PositionZ;
         var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
-        var entityId = _players.AllocateRuntimeId();
-        if (_creepers.TryAdd(new Creeper(entityId, (ulong)entityId, x, y, z)))
-            _bootstrapSpawned = true;
+        SpawnCreeper(x, y, z);
+        _bootstrapSpawned = true;
+    }
+
+    /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
+    internal EntityId SpawnCreeper(float x, float y, float z)
+    {
+        var actorUniqueId = _players.AllocateRuntimeId();
+        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
+                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Creeper.");
+        _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) }); // Vanilla-parity creeper health.
+        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
+        _stores.Despawn.Set(id, new DespawnTracking());
+        _creepers.Set(id, new CreeperState());
+        return id;
     }
 
     /// <summary>
@@ -127,56 +167,69 @@ sealed class CreeperSystem : IGameSystem
     /// which is always inside despawn range (64), so <see cref="DespawnLifecycle.EvaluateDespawn"/>
     /// naturally returns false for it without any special-casing here.
     /// </summary>
-    private bool TryDespawn(Creeper creeper, GameClock clock, IReadOnlyList<Player.Player> online)
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        if (!_stores.Positions.TryGet(id, out var pos)) return false;
+        ref var tracking = ref _stores.Despawn.GetRef(id);
         var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            creeper.PositionX, creeper.PositionZ, online, DespawnRadius, clock.CurrentTick, creeper.LastSeenNearPlayerTick);
-        creeper.LastSeenNearPlayerTick = lastSeen;
+            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
+        tracking.LastSeenNearPlayerTick = lastSeen;
         if (!shouldDespawn) return false;
 
+        if (!_stores.Identities.TryGet(id, out var identity)) return false;
         foreach (var peer in online)
-            if (_replicated.Remove((creeper.EntityId, peer.RuntimeId)))
+            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
             {
-                _lastProjected.Remove((creeper.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(creeper.EntityId);
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             }
-        creeper.Remove();
-        _creepers.Remove(creeper);
+        _stores.DestroyActor(identity.ActorRuntimeId, id);
         DespawnCount++;
         return true;
     }
 
-    private void ReconcileViewers(Creeper creeper, IReadOnlyList<Player.Player> online) =>
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        var health = healthComponent.State;
+
         ViewerReconciliation.Sync(
-            creeper.EntityId, online, _replicated,
-            peer => ActorInterest.Includes(peer, creeper.PositionX, creeper.PositionZ),
+            identity.ActorUniqueId, online, _replicated,
+            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddCreeper(
-                    creeper.EntityId, creeper.RuntimeId, creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(creeper.RuntimeId, creeper.Health.Current, creeper.Health.Maximum);
-                _lastProjected[(creeper.EntityId, peer.RuntimeId)] = new ProjectedPose(creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
+                peer.Session.Protocol.Entity.SendAddCreeper(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
             {
-                _lastProjected.Remove((creeper.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(creeper.EntityId);
+                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             });
+    }
 
-    private void ApplyPlayerAttacks(Creeper creeper, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        GroundMobCombat.ApplyPlayerMeleeAttacks(creeper, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
+    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
 
     /// <summary>Player kills it with a weapon before the fuse completes — ordinary shared bookkeeping.</summary>
-    public bool TryApplyDamage(Creeper creeper, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        GroundMobCombat.TryApplyDamage(
-            creeper, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Creeper", currentTick,
-            removeFromStore: _creepers.Remove,
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        DamageableActorCombat.TryApplyDamage(
+            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Creeper", currentTick,
+            destroyActor: cid =>
+            {
+                if (_stores.Identities.TryGet(cid, out var identity))
+                    _stores.DestroyActor(identity.ActorRuntimeId, cid);
+            },
             onDeathReplicatedToPeer: peer =>
             {
-                _lastProjected.Remove((creeper.EntityId, peer.RuntimeId));
+                if (_stores.Identities.TryGet(id, out var identity))
+                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
                 ReplicatedRemovalCount++;
             });
 
@@ -187,49 +240,62 @@ sealed class CreeperSystem : IGameSystem
     /// Zenith's existing Sneaking/Sprinting/ShowName bit numbers exactly, high confidence). Sent only
     /// on the false→true/true→false transition, not every tick.
     /// </summary>
-    private void SetIgnited(Creeper creeper, bool ignited, IReadOnlyList<Player.Player> online)
+    private void SetIgnited(EntityId id, bool ignited, IReadOnlyList<Player.Player> online)
     {
-        if (creeper.IsFusing == ignited) return;
-        creeper.IsFusing = ignited;
+        ref var state = ref _creepers.GetRef(id);
+        if (state.IsFusing == ignited) return;
+        state.IsFusing = ignited;
 
+        if (!_stores.Identities.TryGet(id, out var identity)) return;
         foreach (var peer in online)
-            if (_replicated.Contains((creeper.EntityId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendActorIgnited(creeper.RuntimeId, ignited);
+            if (_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+                peer.Session.Protocol.Entity.SendActorIgnited(identity.ActorRuntimeId, ignited);
     }
 
-    private void Defuse(Creeper creeper, IReadOnlyList<Player.Player> online) => SetIgnited(creeper, false, online);
+    private void Defuse(EntityId id, IReadOnlyList<Player.Player> online) => SetIgnited(id, false, online);
 
-    private void TickFuse(Creeper creeper, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void TickFuse(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (!creeper.IsFusing)
+        ref var state = ref _creepers.GetRef(id);
+        if (!state.IsFusing)
         {
-            SetIgnited(creeper, true, online);
-            creeper.FuseStartedTick = clock.CurrentTick;
+            SetIgnited(id, true, online);
+            ref var restarted = ref _creepers.GetRef(id);
+            restarted.FuseStartedTick = clock.CurrentTick;
             return;
         }
 
-        if (clock.CurrentTick - creeper.FuseStartedTick >= FuseDurationTicks)
-            Explode(creeper, online, clock.CurrentTick);
+        if (clock.CurrentTick - state.FuseStartedTick >= FuseDurationTicks)
+            Explode(id, online, clock.CurrentTick);
     }
 
     /// <summary>
-    /// Self-kill reuses GroundMobCombat's death/loot/XP/removal bookkeeping (an explosion is still
-    /// exactly that transition, just self-inflicted with no attacker to attribute XP to). Area
-    /// damage to nearby players is a distinct, Creeper-only concept — GroundMobCombat never touches
-    /// player health.
+    /// Self-kill reuses DamageableActorCombat's death/loot/XP/removal bookkeeping (an explosion is
+    /// still exactly that transition, just self-inflicted with no attacker to attribute XP to).
+    /// Area damage to nearby players is a distinct, Creeper-only concept — the combat helper never
+    /// touches player health.
     /// </summary>
-    private void Explode(Creeper creeper, IReadOnlyList<Player.Player> online, ulong currentTick)
+    private void Explode(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        var explosionX = creeper.PositionX;
-        var explosionY = creeper.PositionY;
-        var explosionZ = creeper.PositionZ;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var explosionX = pos.X;
+        var explosionY = pos.Y;
+        var explosionZ = pos.Z;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        var maxHealth = healthComponent.State.Maximum;
 
-        if (!GroundMobCombat.TryApplyDamage(
-                creeper, DamageSource.Generic, creeper.Health.Maximum, online, _world, _players, _replicated,
-                _lootItem, KillExperience, "Creeper", currentTick, removeFromStore: _creepers.Remove,
+        if (!DamageableActorCombat.TryApplyDamage(
+                id, _stores, DamageSource.Generic, maxHealth, online, _world, _players, _replicated,
+                _lootItem, KillExperience, "Creeper", currentTick,
+                destroyActor: cid =>
+                {
+                    if (_stores.Identities.TryGet(cid, out var identity))
+                        _stores.DestroyActor(identity.ActorRuntimeId, cid);
+                },
                 onDeathReplicatedToPeer: peer =>
                 {
-                    _lastProjected.Remove((creeper.EntityId, peer.RuntimeId));
+                    if (_stores.Identities.TryGet(id, out var identity))
+                        _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
                     ReplicatedRemovalCount++;
                 }))
         {
@@ -297,68 +363,81 @@ sealed class CreeperSystem : IGameSystem
         return updates;
     }
 
-    private Player.Player? FindOrAcquireTarget(Creeper creeper, IReadOnlyList<Player.Player> online)
+    private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
-        if (creeper.TargetPlayerRuntimeId is { } retainedId)
+        ref var state = ref _creepers.GetRef(id);
+        if (state.TargetPlayerRuntimeId is { } retainedId)
         {
             var retained = _players.GetByRuntimeId(retainedId);
-            if (retained is not null && IsTargetValid(creeper, retained))
+            if (retained is not null && IsTargetValid(id, retained))
                 return retained;
-            creeper.TargetPlayerRuntimeId = null;
+            state.TargetPlayerRuntimeId = null;
         }
+
+        if (!_stores.Positions.TryGet(id, out var pos)) return null;
 
         Player.Player? target = null;
         var best = DetectionDistance * DetectionDistance;
         foreach (var player in online)
         {
             if (!player.IsInGame || player.IsDead) continue;
-            var distance = DistanceSquared(creeper, player);
+            var dx = player.PositionX - pos.X;
+            var dz = player.PositionZ - pos.Z;
+            var distance = dx * dx + dz * dz;
             if (distance >= best) continue;
             best = distance;
             target = player;
         }
 
-        creeper.TargetPlayerRuntimeId = target?.RuntimeId;
+        ref var updated = ref _creepers.GetRef(id);
+        updated.TargetPlayerRuntimeId = target?.RuntimeId;
         return target;
     }
 
-    private static bool IsTargetValid(Creeper creeper, Player.Player target) =>
-        target.IsInGame && !target.IsDead && DistanceSquared(creeper, target) <= DetectionDistance * DetectionDistance;
-
-    private static float DistanceSquared(Creeper creeper, Player.Player target)
+    private bool IsTargetValid(EntityId id, Player.Player target)
     {
-        var dx = target.PositionX - creeper.PositionX;
-        var dz = target.PositionZ - creeper.PositionZ;
+        if (!target.IsInGame || target.IsDead) return false;
+        return DistanceSquared(id, target) <= DetectionDistance * DetectionDistance;
+    }
+
+    private float DistanceSquared(EntityId id, Player.Player target)
+    {
+        if (!_stores.Positions.TryGet(id, out var pos)) return float.MaxValue;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         return dx * dx + dz * dz;
     }
 
     /// <summary>Direct approach only (no side-step fallback) — a creeper stalling at an obstacle just re-tries next tick.</summary>
-    private void AdvanceTowardTarget(Creeper creeper, Player.Player target)
+    private void AdvanceTowardTarget(EntityId id, Player.Player target)
     {
-        var dx = target.PositionX - creeper.PositionX;
-        var dz = target.PositionZ - creeper.PositionZ;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        var dx = target.PositionX - pos.X;
+        var dz = target.PositionZ - pos.Z;
         var lengthSquared = dx * dx + dz * dz;
         if (lengthSquared <= 0.0001f) return;
 
         var length = MathF.Sqrt(lengthSquared);
-        var stepX = creeper.PositionX + dx / length * MovePerTick;
-        var stepZ = creeper.PositionZ + dz / length * MovePerTick;
-        if (!GroundMobMovement.TryMoveHorizontal(_world, creeper.PositionX, creeper.PositionY, creeper.PositionZ, stepX, stepZ, out var resolvedY)) return;
+        var stepX = pos.X + dx / length * MovePerTick;
+        var stepZ = pos.Z + dz / length * MovePerTick;
+        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, stepX, stepZ, out var resolvedY)) return;
 
-        creeper.PositionX = stepX;
-        creeper.PositionY = resolvedY;
-        creeper.PositionZ = stepZ;
-        creeper.Yaw = LookMath.MoveYawTowards(creeper.Yaw, LookMath.YawTowards(dx, dz), LookMath.DefaultMaxTurnDegreesPerTick);
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.X = stepX;
+        p.Y = resolvedY;
+        p.Z = stepZ;
+        p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dx, dz), LookMath.DefaultMaxTurnDegreesPerTick);
     }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing — see VillagerSystem's identical helper for why fields always round-trip.</summary>
-    private void ApplyGravity(Creeper creeper)
+    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
+    private void ApplyGravity(EntityId id)
     {
-        var y = creeper.PositionY;
-        var fallSpeed = creeper.VerticalFallSpeed;
-        GroundMobMovement.ResolveVertical(_world, creeper.PositionX, creeper.PositionZ, ref y, ref fallSpeed, out _);
-        creeper.PositionY = y;
-        creeper.VerticalFallSpeed = fallSpeed;
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        ref var vel = ref _stores.Velocities.GetRef(id);
+        var y = pos.Y;
+        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.Y = y;
     }
 
     private void ReplicateMoves(IReadOnlyList<Player.Player> online)
@@ -366,21 +445,23 @@ sealed class CreeperSystem : IGameSystem
         foreach (var peer in online)
         {
             _moveBatch.Clear();
-            foreach (var creeper in _creepers.Active)
+            foreach (var id in _creepers.Entities)
             {
-                var key = (creeper.EntityId, peer.RuntimeId);
+                if (!_stores.Identities.TryGet(id, out var identity)) continue;
+                var key = (identity.ActorUniqueId, peer.RuntimeId);
                 if (!_replicated.Contains(key)) continue;
-                var current = new ProjectedPose(creeper.PositionX, creeper.PositionY, creeper.PositionZ, creeper.Yaw);
+                if (!_stores.Positions.TryGet(id, out var pos)) continue;
+                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
                     continue;
                 _moveBatch.Add(new RawActorPose
                 {
-                    ActorRuntimeId = creeper.RuntimeId,
-                    X = creeper.PositionX,
-                    Y = creeper.PositionY,
-                    Z = creeper.PositionZ,
-                    Yaw = creeper.Yaw,
-                    HeadYaw = creeper.Yaw
+                    ActorRuntimeId = identity.ActorRuntimeId,
+                    X = pos.X,
+                    Y = pos.Y,
+                    Z = pos.Z,
+                    Yaw = pos.Yaw,
+                    HeadYaw = pos.Yaw
                 });
                 _lastProjected[key] = current;
             }

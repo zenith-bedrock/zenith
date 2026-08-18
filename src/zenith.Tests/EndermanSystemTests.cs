@@ -1,24 +1,41 @@
+using Zenith.Ecs;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 
-/// <summary>Phase XV — Enderman: teleport movement and damage-triggered aggro, sharing only kill bookkeeping.</summary>
+/// <summary>
+/// Phase XV — Enderman: teleport movement and damage-triggered aggro, sharing only kill bookkeeping.
+/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (docs/decisions.md).
+/// </summary>
 public sealed class EndermanSystemTests
 {
+    private static Position Pos(EndermanSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Positions.TryGet(id, out var pos));
+        return pos;
+    }
+
+    private static HealthState Health(EndermanSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Health.TryGet(id, out var health));
+        return health.State;
+    }
+
     [Fact]
     public void Bootstrap_spawns_one_enderman_near_the_first_online_player()
     {
         var fx = new IntentTestFixture();
         _ = fx.AddInGamePlayer("bootstrapper");
-        var system = new EndermanSystem(fx.World, fx.Players, new EndermanStore(), fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
 
         system.Tick(fx.Clock, fx.Players.Online);
 
-        var enderman = Assert.Single(system.Endermen.Active);
-        Assert.True(enderman.IsActive);
+        var id = Assert.Single(system.Endermen);
+        Assert.True(system.Stores.Entities.IsAlive(id));
     }
 
     [Fact]
@@ -27,22 +44,21 @@ public sealed class EndermanSystemTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("distant-observer");
         player.PositionX = 500; // far outside any melee/aggro range
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY, 0);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(7));
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(7));
+        var id = system.SpawnEnderman(0, Blocks.FlatSpawnY, 0);
 
-        var startX = enderman.PositionX;
-        var startZ = enderman.PositionZ;
+        var start = Pos(system, id);
         for (var i = 0; i < 150; i++)
         {
             fx.Clock.AdvanceBy(1);
             system.Tick(fx.Clock, fx.Players.Online);
         }
+        var end = Pos(system, id);
 
         Assert.True(system.TeleportCount > 0);
-        Assert.True(enderman.PositionX != startX || enderman.PositionZ != startZ);
-        Assert.Null(enderman.AggroTargetRuntimeId);
+        Assert.True(end.X != start.X || end.Z != start.Z);
+        Assert.True(system.EndermanStates.TryGet(id, out var state));
+        Assert.Null(state.AggroTargetRuntimeId);
     }
 
     [Fact]
@@ -50,17 +66,17 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("provoker");
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
+        var maxHealth = Health(system, id).Maximum;
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(player.RuntimeId, enderman.AggroTargetRuntimeId);
-        Assert.True(enderman.AggroTicksRemaining > 0);
-        Assert.True(enderman.Health.Current < enderman.Health.Maximum);
+        Assert.True(system.EndermanStates.TryGet(id, out var state));
+        Assert.Equal(player.RuntimeId, state.AggroTargetRuntimeId);
+        Assert.True(state.AggroTicksRemaining > 0);
+        Assert.True(Health(system, id).Current < maxHealth);
     }
 
     /// <summary>Phase XXVI — closes the entity-fidelity finding that Enderman never set Yaw at all.</summary>
@@ -71,20 +87,15 @@ public sealed class EndermanSystemTests
         var player = fx.AddInGamePlayer("provoker");
         player.PositionX = 10;
         player.PositionZ = 0;
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ)
-        {
-            Yaw = 0f
-        };
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
-        var expectedYaw = LookMath.YawTowards(
-            player.PositionX - enderman.PositionX, player.PositionZ - enderman.PositionZ);
-        Assert.Equal(expectedYaw, enderman.Yaw, precision: 3);
+        var pos = Pos(system, id);
+        var expectedYaw = LookMath.YawTowards(player.PositionX - pos.X, player.PositionZ - pos.Z);
+        Assert.Equal(expectedYaw, pos.Yaw, precision: 3);
     }
 
     [Fact]
@@ -92,16 +103,15 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("retaliation-target");
-        var store = new EndermanStore();
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(3));
         // Spawned out of melee range so it must close the distance via teleport before it can hit back.
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 20, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(3));
+        var id = system.SpawnEnderman(player.PositionX + 20, player.PositionY, player.PositionZ);
 
         // Provoke directly (same effect as a landed hit) so this test isolates aggro *movement/retaliation*
         // rather than re-testing the "a hit provokes it" path already covered above.
-        enderman.AggroTargetRuntimeId = player.RuntimeId;
-        enderman.AggroTicksRemaining = 100;
+        ref var state = ref system.EndermanStates.GetRef(id);
+        state.AggroTargetRuntimeId = player.RuntimeId;
+        state.AggroTicksRemaining = 100;
 
         var healthBefore = player.Health;
         for (var i = 0; i < 100 && player.Health == healthBefore; i++)
@@ -118,17 +128,17 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("forgiven");
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 30, player.PositionY, player.PositionZ);
-        enderman.AggroTargetRuntimeId = player.RuntimeId;
-        enderman.AggroTicksRemaining = 1;
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnEnderman(player.PositionX + 30, player.PositionY, player.PositionZ);
+        ref var state = ref system.EndermanStates.GetRef(id);
+        state.AggroTargetRuntimeId = player.RuntimeId;
+        state.AggroTicksRemaining = 1;
 
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(0, enderman.AggroTicksRemaining);
-        Assert.Null(enderman.AggroTargetRuntimeId);
+        Assert.True(system.EndermanStates.TryGet(id, out var after));
+        Assert.Equal(0, after.AggroTicksRemaining);
+        Assert.Null(after.AggroTargetRuntimeId);
     }
 
     [Fact]
@@ -136,10 +146,8 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("slayer");
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         for (var i = 0; i < 3; i++)
         {
@@ -148,8 +156,8 @@ public sealed class EndermanSystemTests
             fx.Clock.AdvanceBy(11);
         }
 
-        Assert.False(enderman.IsActive);
-        Assert.Empty(store.Active);
+        Assert.False(system.Stores.Entities.IsAlive(id));
+        Assert.Empty(system.Endermen);
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:ender_pearl"), loot.Id.Value);
         Assert.Equal(5, player.ExperiencePoints);
@@ -160,16 +168,15 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 10, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnEnderman(player.PositionX + 10, player.PositionY, player.PositionZ);
+        var maxHealth = Health(system, id).Maximum;
 
         player.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(enderman.Health.Maximum, enderman.Health.Current);
-        Assert.Single(store.Active);
+        Assert.Equal(maxHealth, Health(system, id).Current);
+        Assert.Single(system.Endermen);
     }
 
     [Fact]
@@ -178,10 +185,8 @@ public sealed class EndermanSystemTests
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = -1;
-        var store = new EndermanStore();
-        var enderman = new Enderman(fx.Players.AllocateRuntimeId(), 99, first.PositionX + 5, first.PositionY, first.PositionZ);
-        Assert.True(store.TryAdd(enderman));
-        var system = new EndermanSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnEnderman(first.PositionX + 5, first.PositionY, first.PositionZ);
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(1, system.ReplicatedSpawnCount);
 
@@ -192,5 +197,25 @@ public sealed class EndermanSystemTests
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(2, system.ReplicatedSpawnCount);
+    }
+
+    [Fact]
+    public void Arrow_can_damage_an_enderman_through_the_shared_dispatch()
+    {
+        var fx = new IntentTestFixture();
+        var owner = fx.AddInGamePlayer("hunter");
+        var stores = new EntityRuntime();
+        var endermen = new EndermanSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
+        var damage = new DamageDispatch();
+        damage.Register(endermen.Owns, endermen.TryApplyDamage);
+        var projectiles = new ProjectileSystem(fx.World, fx.Players, stores, damage, new PlayerSpatialIndex());
+        var id = endermen.SpawnEnderman(10f, 100f, 0f); // 20 HP; a 4-damage hit must leave it alive but wounded, not untouched.
+        var maxHealth = Health(endermen, id).Maximum;
+
+        projectiles.TrySpawnFromActor(owner.RuntimeId, 9.7f, 100f, 0f, 0.05f, 0f, 0f, fx.Players.Online);
+        projectiles.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(Health(endermen, id).Current < maxHealth); // dispatch actually applied damage, not a silent no-op
+        Assert.Empty(projectiles.Projectiles);
     }
 }
