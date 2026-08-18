@@ -52,7 +52,7 @@ public class FragmentEvictionTests
             startedAtMs: now - 60_000,
             parts: new Dictionary<int, Frame>
             {
-                [0] = new Frame { Reliability = Reliability.ReliableOrdered, MessageIndex = 0, Buffer = [1] }
+                [0] = new Frame { Reliability = Reliability.ReliableOrdered, MessageIndex = 0, Buffer = new byte[] { 1 } }
             });
         Assert.Equal(1, session.FragmentQueueCount);
 
@@ -64,7 +64,7 @@ public class FragmentEvictionTests
             OrderIndex = 0,
             OrderChannel = 0,
             SplitInfo = new Frame.SplitPacketInfo(Count: 2, Id: 2, Index: 0),
-            Buffer = [0xFE, 0xAA]
+            Buffer = new byte[] { 0xFE, 0xAA }
         });
 
         Assert.False(ok); // the new split isn't complete yet either

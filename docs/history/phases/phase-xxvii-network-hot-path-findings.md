@@ -1,5 +1,12 @@
 # Phase XXVII — Network Hot-Path Copy & Allocation Audit: findings
 
+**Update (ADR §126, `docs/decisions.md`):** the "Rejected/deferred changes" item #1 below
+(`Frame.Buffer` as `ReadOnlyMemory<byte>`) has since been implemented — the re-derived blast radius
+was smaller than estimated here (no `ArrayPool`, no ordering/fragment-queue/retransmission-buffer
+changes needed; inbound paths were untouched by design). See ADR §126 for what shipped and the
+measured before/after numbers. This document is kept as-is below for the historical record of the
+original, more conservative estimate.
+
 Full living reference for BinaryStream/RakNet architecture is implicit in the source itself; this
 document is the phase record — baseline copy map, what was measured, what changed, what was
 evaluated and deliberately deferred, and what remains.

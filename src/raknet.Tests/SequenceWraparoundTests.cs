@@ -43,7 +43,7 @@ public class SequenceWraparoundTests
                 new Frame
                 {
                     Reliability = Reliability.Unreliable,
-                    Buffer = [(byte)MessageIdentifier.Game, 0x01]
+                    Buffer = new byte[] { (byte)MessageIdentifier.Game, 0x01 }
                 }
             ]
         };

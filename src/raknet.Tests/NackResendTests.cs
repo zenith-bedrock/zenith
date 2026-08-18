@@ -72,7 +72,7 @@ public class NackResendTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [1]
+            Buffer = new byte[] { 1 }
         }, RakNetSession.Priority.Immediate);
 
         var firstSend = SessionFactory.DecodeFrames(server);
@@ -111,7 +111,7 @@ public class NackResendTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [1]
+            Buffer = new byte[] { 1 }
         }, RakNetSession.Priority.Immediate);
         SessionFactory.DecodeFrames(server); // drain
 
@@ -126,7 +126,7 @@ public class NackResendTests
         {
             Reliability = Reliability.ReliableOrdered,
             OrderChannel = 0,
-            Buffer = [2]
+            Buffer = new byte[] { 2 }
         }, RakNetSession.Priority.Immediate);
 
         var second = SessionFactory.DecodeFrames(server);

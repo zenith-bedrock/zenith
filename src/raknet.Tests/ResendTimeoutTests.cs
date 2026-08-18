@@ -64,7 +64,7 @@ public class ResendTimeoutTests
             MessageIndex = 5,
             OrderIndex = 0,
             OrderChannel = 0,
-            Buffer = [1, 2, 3]
+            Buffer = new byte[] { 1, 2, 3 }
         };
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         session.SeedBackup(0, now - 2000, [frame]); // older than the 1500ms resend timeout
@@ -72,7 +72,7 @@ public class ResendTimeoutTests
         session.Tick();
 
         var resent = DecodeFrames(server);
-        Assert.Contains(resent, f => f.MessageIndex == 5 && f.Buffer.SequenceEqual(frame.Buffer));
+        Assert.Contains(resent, f => f.MessageIndex == 5 && f.Buffer.Span.SequenceEqual(frame.Buffer.Span));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class ResendTimeoutTests
             MessageIndex = 9,
             OrderIndex = 0,
             OrderChannel = 0,
-            Buffer = [9]
+            Buffer = new byte[] { 9 }
         };
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         session.SeedBackup(0, now, [frame]); // just sent, well inside the timeout
