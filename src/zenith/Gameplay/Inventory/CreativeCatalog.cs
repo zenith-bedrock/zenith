@@ -32,6 +32,7 @@ sealed class CreativeCatalog
     public const uint DiamondShovel = 19;
 
     private readonly Dictionary<uint, Entry> _byNetId = new();
+    private bool _frozen;
 
     readonly record struct Entry(uint NetId, int StackTypeId, int BaseCount, bool IsBlock);
 
@@ -69,11 +70,27 @@ sealed class CreativeCatalog
         return catalog;
     }
 
-    private void RegisterBlock(uint netId, int blockRuntimeId) =>
-        _byNetId[netId] = new Entry(netId, blockRuntimeId, 1, IsBlock: true);
+    /// <summary>Boot-time-only; <see cref="CreateDefault(ItemPalette)"/> is still the only caller.</summary>
+    private void RegisterBlock(uint netId, int blockRuntimeId) => Register(netId, blockRuntimeId, isBlock: true);
 
-    private void RegisterTool(uint netId, int itemNetworkId) =>
-        _byNetId[netId] = new Entry(netId, itemNetworkId, 1, IsBlock: false);
+    /// <summary>Boot-time-only; <see cref="CreateDefault(ItemPalette)"/> is still the only caller.</summary>
+    private void RegisterTool(uint netId, int itemNetworkId) => Register(netId, itemNetworkId, isBlock: false);
+
+    private void Register(uint netId, int stackTypeId, bool isBlock)
+    {
+        if (_frozen)
+            throw new InvalidOperationException("CreativeCatalog is frozen; register before Freeze().");
+        if (_byNetId.ContainsKey(netId))
+            throw new InvalidOperationException($"Duplicate creative net id {netId}.");
+        _byNetId[netId] = new Entry(netId, stackTypeId, 1, isBlock);
+    }
+
+    /// <summary>
+    /// Marks composition complete — no further registration is accepted afterward. Called once by
+    /// the composition root right after <see cref="CreateDefault(ItemPalette)"/>, before GameLoop
+    /// starts ticking. Compose → freeze → gameplay reads only.
+    /// </summary>
+    internal void Freeze() => _frozen = true;
 
     public IReadOnlyList<CatalogSnapshot> SnapshotEntries()
     {

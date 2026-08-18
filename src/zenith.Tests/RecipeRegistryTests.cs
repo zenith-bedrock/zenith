@@ -1,3 +1,4 @@
+using System.Linq;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
@@ -71,5 +72,39 @@ public class RecipeRegistryTests
         // Same numeric value as OakLog block rid must not craft when Kind=Item.
         var bogus = StackId.FromItem(Blocks.OakLog);
         Assert.False(reg.TryMatch([(bogus, 1)], out _));
+    }
+
+    /// <summary>
+    /// A caller mutating the array TryGet handed back must not corrupt the registry's own stored
+    /// recipe — TryGet returns a defensive copy, not the backing array, so "frozen" actually means
+    /// existing entries can't change, not just that no new ones can be added.
+    /// </summary>
+    [Fact]
+    public void TryGet_returned_inputs_array_is_a_copy_not_the_backing_storage()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+
+        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var firstRead));
+        firstRead[0] = (StackId.FromBlock(Blocks.Stone), 99);
+
+        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var secondRead));
+        Assert.Equal(StackId.FromBlock(Blocks.OakLog), secondRead[0].Id);
+        Assert.Equal(1, secondRead[0].Count);
+    }
+
+    /// <summary>Same guarantee as <see cref="TryGet_returned_inputs_array_is_a_copy_not_the_backing_storage"/>, via SnapshotRecipes' wire-facing path.</summary>
+    [Fact]
+    public void SnapshotRecipes_returned_inputs_array_is_a_copy_not_the_backing_storage()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+
+        var firstSnapshot = reg.SnapshotRecipes();
+        var target = firstSnapshot.Single(r => r.NetId == RecipeRegistry.OakLogToPlanks);
+        target.Inputs[0] = (StackId.FromBlock(Blocks.Stone), 99);
+
+        var secondSnapshot = reg.SnapshotRecipes();
+        var reread = secondSnapshot.Single(r => r.NetId == RecipeRegistry.OakLogToPlanks);
+        Assert.Equal(StackId.FromBlock(Blocks.OakLog), reread.Inputs[0].Id);
+        Assert.Equal(1, reread.Inputs[0].Count);
     }
 }
