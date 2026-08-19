@@ -14,6 +14,33 @@ public sealed class ChunkResidencyEvictionTests
 {
     public ChunkResidencyEvictionTests() => Blocks.EnsureLoaded();
 
+    /// <summary>
+    /// A GameLoop-tick edit (e.g. an explosion's block break) has no chunk-hydration gate — it can
+    /// target a cell in a chunk no player has ever streamed. If that chunk's first hydrate is
+    /// concurrently racing to read a stale, previously-persisted overlay for that same cell,
+    /// SeedOverlayIfAbsent's TryAdd must make the live edit win — an overwrite here would silently
+    /// revert a just-made edit back to old disk data the instant hydrate finished.
+    /// </summary>
+    [Fact]
+    public async Task A_live_edit_racing_ahead_of_first_hydrate_is_not_overwritten_by_stale_persisted_data()
+    {
+        var storage = new InMemoryChunkStorage();
+        // Simulates a value persisted in an earlier server run, before this chunk has ever been
+        // touched (hydrated) in this one.
+        await storage.PutOverlayAsync(1, 64, 2, Blocks.Dirt);
+
+        var world = new World.World(storage);
+        // Live edit lands first — chunk (0,0) has not been requested/hydrated yet at this point.
+        Assert.True(world.TrySetBlock(1, 64, 2, Blocks.Stone));
+        Assert.Equal(Blocks.Stone, world.GetBlock(1, 64, 2));
+
+        // First hydrate for this chunk now runs and loads the stale persisted overlay.
+        await world.GetOrCreateColumnAsync(0, 0);
+
+        // The live edit must still win — hydrate seeds gaps, it never overwrites live RAM state.
+        Assert.Equal(Blocks.Stone, world.GetBlock(1, 64, 2));
+    }
+
     [Fact]
     public async Task TryEvictChunk_returns_false_and_changes_nothing_while_a_viewer_is_present()
     {

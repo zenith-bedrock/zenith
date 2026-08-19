@@ -112,10 +112,18 @@ static class Tools
         }
     }
 
+    /// <summary>
+    /// <paramref name="id"/> is checked against the table <see cref="LoadUnlocked"/> just cleared,
+    /// not across reloads — <see cref="Load"/> re-running with a different <see cref="ItemPalette"/>
+    /// is deliberate (matches <see cref="CreativeCatalog.CreateDefault(ItemPalette)"/>'s real call
+    /// site), but two curated names resolving to the same network id within one pass is always a
+    /// contributor mistake, never a valid state.
+    /// </summary>
     private static void Register(ItemPalette palette, string name, ToolKind kind, ToolTier tier)
     {
         var id = palette.Require(name);
-        ByNetworkId[id] = new ToolInfo(kind, tier);
+        if (!ByNetworkId.TryAdd(id, new ToolInfo(kind, tier)))
+            throw new InvalidOperationException($"Duplicate tool network id {id} ('{name}' collides with '{NameByNetworkId[id]}').");
         NameByNetworkId[id] = name;
         NetworkIdByName[name] = id;
     }
