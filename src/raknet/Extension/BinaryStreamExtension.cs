@@ -23,7 +23,9 @@ public static class BinaryStreamExtension
                 stream.ReadShort(Endianess.Little); // Family, AF_INET6
                 var port = stream.ReadUShort();
                 stream.ReadInt(); // flow info
-                var addr = IPAddress.Parse(stream.ReadSpan(16).ToString());
+                // Not IPAddress.Parse(span.ToString()) — Span<byte>.ToString() yields the type name,
+                // never a parseable address string, so that always threw for a real IPv6 client.
+                var addr = new IPAddress(stream.ReadSpan(16));
                 stream.ReadInt(); // scope ID
                 return new IPEndPoint(addr, port);
             }

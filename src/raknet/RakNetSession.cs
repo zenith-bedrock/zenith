@@ -251,7 +251,8 @@ public class RakNetSession
         }
 
         // Encode sob o lock; UDP I/O curto mantido aqui para evitar reentrância
-        // frágil com QueueFrame → SendQueue aninhados.
+        // frágil com QueueFrame → SendQueue aninhados. Deliberate exception to
+        // AGENTS.md's "never hold a lock across I/O" rule — see ADR §134 for why.
         Server.Send(EndPoint, frameSet.Encode());
     }
 
