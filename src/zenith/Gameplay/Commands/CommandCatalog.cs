@@ -5,11 +5,14 @@ sealed class CommandCatalog
 {
     private readonly Dictionary<string, CommandDefinition> _names = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<CommandDefinition> _definitions = [];
+    private bool _frozen;
 
     public IReadOnlyList<CommandDefinition> Definitions => _definitions;
 
     public void Register(CommandDefinition definition)
     {
+        if (_frozen)
+            throw new InvalidOperationException("CommandCatalog is frozen; register before Freeze().");
         ArgumentException.ThrowIfNullOrWhiteSpace(definition.Name);
         if (_names.ContainsKey(definition.Name) || definition.Aliases.Any(_names.ContainsKey))
             throw new InvalidOperationException($"Duplicate command name or alias for '{definition.Name}'.");
@@ -17,6 +20,13 @@ sealed class CommandCatalog
         _names.Add(definition.Name, definition);
         foreach (var alias in definition.Aliases) _names.Add(alias, definition);
     }
+
+    /// <summary>
+    /// Marks composition complete — same compose → freeze → gameplay-reads-only contract as
+    /// <c>RecipeRegistry</c>/<c>CreativeCatalog</c> (ADR §133). Called once by
+    /// <see cref="CommandRuntime"/>'s constructor right after registering its built-in commands.
+    /// </summary>
+    internal void Freeze() => _frozen = true;
 
     public CommandParseResult Parse(string line, CommandPermission permission)
     {
@@ -60,7 +70,12 @@ sealed record CommandOverload(IReadOnlyList<CommandArgument> Arguments)
         for (var i = 0; i < Arguments.Count; i++)
         {
             var argument = Arguments[i];
-            if (i == tokens.Count) { if (!argument.Optional) return false; continue; }
+            // Once tokens run out, EVERY remaining argument must be optional-or-fail — not just the
+            // first one at exactly i == tokens.Count. The old `==` check only handled the boundary
+            // token correctly and then indexed tokens[i] out of range for any argument past it,
+            // throwing ArgumentOutOfRangeException instead of returning false for e.g. "/effect give
+            // poison" (2 tokens, 5 arguments, 3 trailing optional).
+            if (i >= tokens.Count) { if (!argument.Optional) return false; continue; }
             if (!argument.TryParse(tokens[i], out var value)) return false;
             parsed.Add(argument.Name, value);
         }

@@ -55,6 +55,8 @@ sealed class CommandRuntime
                     new EnumCommandArgument("action", effectClear),
                     new PlayerCommandArgument("target", name => _players.Get(name), Optional: true))
             ]));
+
+        _catalog.Freeze();
     }
 
     public IReadOnlyList<string> Suggest(string prefix) => _catalog.Suggest(prefix);
