@@ -135,26 +135,11 @@ class LoginSessionHandler : ISessionHandler
             SkinHeight = identity.SkinHeight
         };
 
-        if (!session.Context.PlayerManager.TryAdd(player))
-        {
-            var existing = session.Context.PlayerManager.Get(identity.DisplayName);
-            if (existing is not null)
-            {
-                session.Context.Logger.Warning(
-                    $"Displacing already-online player '{identity.DisplayName}' for reconnect.");
-                existing.Session.Disconnect();
-            }
-
-            if (!session.Context.PlayerManager.TryAdd(player))
-            {
-                session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
-                session.Disconnect();
-                return;
-            }
-        }
-
-        session.Player = player;
-        session.RakSession.HasGameIdentity = true;
+        // Deliberately NOT PlayerManager.TryAdd yet — that's what makes this player visible to
+        // GameLoop's Online snapshot (PlayerManager.Online/FillOnline). Populate everything below
+        // (inventory, armor, position, gamemode, vitals) on this still-private object first, so a
+        // concurrent GameLoop tick can never observe a half-initialized player. TryAdd moves to
+        // just before PlayerLoginEvent publishes, once the object is actually tick-ready.
         var loaded = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
         session.Context.Logger.Info(
             loaded
@@ -198,6 +183,28 @@ class LoginSessionHandler : ISessionHandler
                 $"Playerdata load miss for '{player.Username}' uuid={player.Uuid:D} " +
                 $"(terrain spawn Y={player.PositionY:F0} / config mode)");
         }
+
+        // Player is fully populated now — safe to make it visible to the GameLoop for the first time.
+        if (!session.Context.PlayerManager.TryAdd(player))
+        {
+            var existing = session.Context.PlayerManager.Get(identity.DisplayName);
+            if (existing is not null)
+            {
+                session.Context.Logger.Warning(
+                    $"Displacing already-online player '{identity.DisplayName}' for reconnect.");
+                existing.Session.Disconnect();
+            }
+
+            if (!session.Context.PlayerManager.TryAdd(player))
+            {
+                session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
+                session.Disconnect();
+                return;
+            }
+        }
+
+        session.Player = player;
+        session.RakSession.HasGameIdentity = true;
 
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 
