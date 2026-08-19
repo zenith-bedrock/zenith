@@ -251,7 +251,7 @@ sealed class World
 
         var overlays = await _storage.LoadOverlaysForChunkAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
         foreach (var o in overlays)
-            StoreOverlay(o.X, o.Y, o.Z, o.BlockRuntimeId);
+            SeedOverlayIfAbsent(o.X, o.Y, o.Z, o.BlockRuntimeId);
 
         var chests = await _storage.LoadChestsForChunkAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
         foreach (var (x, y, z, blob) in chests)
@@ -443,8 +443,9 @@ sealed class World
         _ = TrySetBlock(x, y, z, blockRuntimeId);
 
     /// <summary>
-    /// Single write path for flat map + chunk index (SetBlock + LevelDB hydrate).
-    /// Hydrate bypasses SoftCap (world already on disk).
+    /// Live-edit write path (<see cref="TrySetBlock"/>) — unconditional overwrite, SoftCap-gated by
+    /// the caller. A live GameLoop-tick edit always wins over whatever was there. Hydrate does NOT
+    /// use this — see <see cref="SeedOverlayIfAbsent"/> for why.
     /// </summary>
     private void StoreOverlay(int x, int y, int z, int blockRuntimeId)
     {
@@ -453,6 +454,27 @@ sealed class World
         var chunk = (ToChunk(x), ToChunk(z));
         var bucket = _overlaysByChunk.GetOrAdd(chunk, static _ => new ConcurrentDictionary<(int X, int Y, int Z), int>());
         bucket[cell] = blockRuntimeId;
+    }
+
+    /// <summary>
+    /// First-touch hydrate write path (<see cref="EnsureHydratedAsync"/>) — TryAdd, never overwrite.
+    /// <see cref="TrySetBlock"/> has no chunk-hydration gate (an entity effect — e.g. a Creeper
+    /// explosion's block break — can target a chunk cell before any player has streamed that chunk
+    /// and triggered its first hydrate). If a background hydrate for that chunk is concurrently
+    /// mid-flight and its disk read raced ahead of that fresh edit, an unconditional overwrite here
+    /// would silently revert the live edit back to the stale persisted value the instant hydrate
+    /// finishes. TryAdd makes first-writer-wins the actual contract: whichever of "live edit" or
+    /// "hydrate seed" reaches this cell first is authoritative, and the other is a no-op — matching
+    /// what "seed from persistent storage on first touch" should mean once RAM already holds fresher
+    /// state for that cell, from any source.
+    /// </summary>
+    private void SeedOverlayIfAbsent(int x, int y, int z, int blockRuntimeId)
+    {
+        var cell = (x, y, z);
+        if (!_blockOverrides.TryAdd(cell, blockRuntimeId)) return;
+        var chunk = (ToChunk(x), ToChunk(z));
+        var bucket = _overlaysByChunk.GetOrAdd(chunk, static _ => new ConcurrentDictionary<(int X, int Y, int Z), int>());
+        bucket.TryAdd(cell, blockRuntimeId);
     }
 
     private void RemoveOverlay(int x, int y, int z)
