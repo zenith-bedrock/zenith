@@ -88,8 +88,14 @@ public class HealthStateTests
         Assert.Equal(15f, health.Current);
     }
 
+    /// <summary>
+    /// Regression for ADR §98's second Adendo: an overriding hit must only apply its delta over the
+    /// hit that opened the window (8 - 5 = 3), not the full 8 again on top of the already-applied 5 —
+    /// otherwise the shared portion double-counts. 20 max - 5 - 3 = 12, matching
+    /// Dragonfly/PocketMine/vanilla's "subtract only the delta" rule for this exact case.
+    /// </summary>
     [Fact]
-    public void A_strictly_harder_hit_inside_the_window_still_lands()
+    public void A_strictly_harder_hit_inside_the_window_only_applies_the_delta()
     {
         var health = new HealthState(maximum: 20f);
 
@@ -97,7 +103,7 @@ public class HealthStateTests
         var harder = health.Apply(DamageSource.Melee, amount: 8f, currentTick: 5);
 
         Assert.Equal(DamageResultKind.Applied, harder.Kind);
-        Assert.Equal(7f, health.Current);
+        Assert.Equal(12f, health.Current);
     }
 
     [Fact]

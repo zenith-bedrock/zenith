@@ -93,7 +93,9 @@ sealed class HealthState
     /// Applies one finite, positive damage amount. A lethal transition is emitted exactly once;
     /// later damage cannot re-run death effects or change the recorded fatal source.
     /// <paramref name="currentTick"/> drives the hit-invulnerability window — Void bypasses it
-    /// (matches vanilla: falling out of the world damages every tick, not just once).
+    /// (matches vanilla: falling out of the world damages every tick, not just once). A strictly
+    /// harder hit that overrides an active window applies only its delta over the hit that opened
+    /// the window, not the full amount again (ADR §98 Adendo).
     /// </summary>
     public DamageResult Apply(DamageSource source, float amount, ulong currentTick)
     {
@@ -104,13 +106,21 @@ sealed class HealthState
         if (IsDead)
             return new DamageResult(DamageResultKind.AlreadyDead, source, previous, previous);
 
-        if (source.Cause != DamageCause.Void && currentTick < _invulnerableUntilTick && amount <= _lastDamageTaken)
+        var withinActiveWindow = source.Cause != DamageCause.Void && currentTick < _invulnerableUntilTick;
+        if (withinActiveWindow && amount <= _lastDamageTaken)
             return new DamageResult(DamageResultKind.Rejected, source, previous, previous);
+
+        // A strictly-harder hit that overrides an active window only applies the delta beyond what
+        // the hit that opened the window already accounted for (Dragonfly: damageLeft -= p.lastDamage;
+        // PocketMine: MODIFIER_PREVIOUS_DAMAGE_COOLDOWN; vanilla: actuallyHurt(source, amount - lastHurt)).
+        // Applying the full new amount on top of an already-suffered overlapping hit would double-count
+        // the shared portion. Void bypasses the window entirely and always applies its full amount.
+        var appliedAmount = withinActiveWindow ? amount - _lastDamageTaken : amount;
 
         _lastDamageTaken = amount;
         _invulnerableUntilTick = currentTick + InvulnerabilityTicks;
 
-        Current = MathF.Max(0f, Current - amount);
+        Current = MathF.Max(0f, Current - appliedAmount);
         if (Current > 0f)
             return new DamageResult(DamageResultKind.Applied, source, previous, Current);
 

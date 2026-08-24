@@ -1427,6 +1427,15 @@ the world damages every tick, matching vanilla). This doesn't change any of the 
 inside `Apply` itself, not a new write path. Recorded here (found via a later architecture audit that
 this addition had never been folded back into this ADR's text) purely to close a doc/code drift gap.
 
+**Adendo (ago 2026 — override applies the delta, not the full amount):** a harder hit that overrides
+an active window was subtracting its *full* `amount` from `Current`, on top of whatever the hit that
+opened the window had already subtracted — double-counting the overlapping portion (found via a
+reference-parity audit against Dragonfly/PocketMine/vanilla, all three of which subtract only the
+delta over the previous hit in this exact case: `damageLeft -= p.lastDamage`,
+`MODIFIER_PREVIOUS_DAMAGE_COOLDOWN`, `actuallyHurt(source, amount - lastHurt)`). `Apply` now applies
+`amount - _lastDamageTaken` when overriding an active window, and the full `amount` otherwise (window
+expired, or Void's bypass). No change to the rejection rule, the window duration, or Void's bypass.
+
 ## First actor vertical slice (Zombie)
 
 ### FIRST_ACTOR_FINDINGS
