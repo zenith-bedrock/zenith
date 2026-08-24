@@ -65,4 +65,49 @@ public class ColumnSendTests
 
         Assert.NotEmpty(fx.Transport.Captured);
     }
+
+    /// <summary>
+    /// Regression for a real desync found via a reference-parity audit: a background-streamed
+    /// column's overlay list used to be captured once, at read time, and could sit in a bounded
+    /// channel/worker queue for a while before actually being sent — a block edited by another
+    /// player in that window would never reach this joining client for that cell. EmitToSession
+    /// must re-read overlays live at send time, not trust whatever ColumnReadResult.Overlays held
+    /// when the column was originally read.
+    /// </summary>
+    [Fact]
+    public async Task EmitToSession_reflects_a_live_edit_that_landed_after_the_column_was_read()
+    {
+        var fx = new IntentTestFixture();
+        var baselinePlayer = fx.AddInGamePlayer("baseline");
+        var lateEditPlayer = fx.AddInGamePlayer("late-edit");
+
+        // Baseline: no live edit between read and send — establishes what "just LevelChunk" looks
+        // like. Compares total bytes sent, not datagram count: RakNet can batch multiple queued
+        // frames into one UDP datagram under the MTU, so an extra UpdateBlock might not add a whole
+        // extra datagram, but it always adds bytes.
+        var baselineColumn = await fx.World.GetOrCreateColumnAsync(0, 0);
+        ColumnSend.EmitToSession(baselinePlayer.Session, baselineColumn, orderChannel: 0);
+        baselinePlayer.Session.RakSession.Tick();
+        var baselineBytes = BytesSentTo(fx, baselinePlayer);
+
+        // Same read, but this time a live edit lands in the window between the read and the send —
+        // exactly the race window a background-streamed join sits in for its outer view radius.
+        var column = await fx.World.GetOrCreateColumnAsync(0, 0);
+        fx.World.SetBlock(5, 64, 5, Blocks.Stone);
+
+        ColumnSend.EmitToSession(lateEditPlayer.Session, column, orderChannel: 0);
+        lateEditPlayer.Session.RakSession.Tick();
+        var lateEditBytes = BytesSentTo(fx, lateEditPlayer);
+
+        Assert.True(lateEditBytes > baselineBytes);
+    }
+
+    private static int BytesSentTo(IntentTestFixture fx, Zenith.Player.Player player)
+    {
+        var total = 0;
+        foreach (var (endPoint, datagram) in fx.Transport.CapturedByEndpoint)
+            if (endPoint.Equals(player.Session.RakSession.EndPoint))
+                total += datagram.Length;
+        return total;
+    }
 }

@@ -210,11 +210,11 @@ public class ColumnTerrainEmitterTests
             new BlockOverride(32, 64, 48, Blocks.Stone),
             new BlockOverride(33, 64, 48, Blocks.GrassBlock)
         };
-        var result = new ColumnReadResult(bas, overlays);
 
         var sequence = new List<string>();
         ColumnTerrainEmitter.Emit(
-            result,
+            bas,
+            overlays,
             sendLevelChunk: c =>
             {
                 sequence.Add($"chunk:{c.Coord.X},{c.Coord.Z}");
