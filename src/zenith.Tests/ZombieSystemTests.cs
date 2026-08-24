@@ -193,24 +193,28 @@ public sealed class ZombieSystemTests
         Assert.Equal(16f, Health(system, second).Current);
     }
 
+    /// <summary>
+    /// Regression for ADR §135: loot capacity must never veto a kill. A saturated floor-drop store
+    /// used to refuse the entire fatal transition, leaving the zombie stuck alive at full health —
+    /// a real, server-wide "this mob is now unkillable" bug, not just a lost drop. The kill must
+    /// land regardless; only the loot silently fails to appear.
+    /// </summary>
     [Fact]
-    public void LethalDamage_refusesTransitionWhenLootCannotBeStored()
+    public void LethalDamage_landsWithoutLootWhenLootCannotBeStored()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        // A full store cannot accept a new rotten-flesh cell. The source must therefore remain
-        // authoritative rather than becoming a death with silently lost loot.
+        // A full store cannot accept a new rotten-flesh cell anywhere, including near the zombie.
         for (var i = 0; i < FloorDropStore.SoftCap; i++)
             Assert.True(fx.World.FloorDrops.TryAddOrMerge(i + 100, (int)player.PositionY, 0,
                 StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
 
         var maxHealth = Health(system, id).Maximum;
-        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.Equal(maxHealth, Health(system, id).Current);
+        Assert.True(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
+        Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 
