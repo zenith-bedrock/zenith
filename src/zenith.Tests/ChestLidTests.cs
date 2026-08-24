@@ -215,6 +215,34 @@ public class ChestLidTests
         Assert.Equal(0, fx.World.Chests.OpenerCount(6, 64, 6));
     }
 
+    /// <summary>
+    /// Regression for ADR §104b's Adendo: inventory/player-data persistence on disconnect used to
+    /// run directly from the network thread inside HandleClose, racing InventorySystem's
+    /// unsynchronized reads of PlayerInventory on the GameLoop thread. It must instead be queued
+    /// and drained on the tick, exactly like the chest-opener release above.
+    /// </summary>
+    [Fact]
+    public void InventorySystem_persists_disconnected_player_inventory_on_the_gameplay_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("disconnect-persist");
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
+        var inventory = fx.CreateInventorySystem();
+
+        // The network lifecycle removes the player first, then hands the persist write to the tick.
+        fx.Players.Remove(player);
+        fx.Players.SubmitDisconnectedInventoryPersist(player);
+
+        var loaded = new PlayerInventory(seedStarterHotbar: false);
+        Assert.False(fx.World.TryLoadInventory(player.Uuid, loaded));
+
+        inventory.Tick(fx.Clock, Array.Empty<Player.Player>());
+
+        Assert.True(fx.World.TryLoadInventory(player.Uuid, loaded));
+        Assert.Equal(Blocks.Stone, loaded.Get(0).Id.Value);
+        Assert.Equal(5, loaded.Get(0).Count);
+    }
+
     [Fact]
     public void ChestLidFanout_Open_fans_to_subject_and_peer_who_Knows()
     {

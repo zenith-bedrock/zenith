@@ -19,6 +19,10 @@ class PlayerManager
     // Connection teardown is a network-thread concern, but releasing a chest opener mutates
     // authoritative world container state. Each live Player can be queued once on disconnect.
     private readonly ConcurrentQueue<Player> _disconnectedContainerCleanup = new();
+    // Same reasoning, same shape, for inventory/player-data persistence: PlayerInventory's backing
+    // array has no lock, so reading it to build a save blob must happen on the GameLoop thread that
+    // owns its mutation — never directly from the network-close callback (ADR §104b Adendo).
+    private readonly ConcurrentQueue<Player> _disconnectedInventoryPersist = new();
     private long _nextRuntimeId = 1;
 
     public int Count => _players.Count;
@@ -82,6 +86,14 @@ class PlayerManager
     /// <summary>GameLoop only — drains a disconnected player's pending chest opener release.</summary>
     public bool TryConsumeDisconnectedContainerCleanup(out Player player) =>
         _disconnectedContainerCleanup.TryDequeue(out player!);
+
+    /// <summary>Network lifecycle handoff; consumed by <c>InventorySystem</c> on the GameLoop.</summary>
+    public void SubmitDisconnectedInventoryPersist(Player player) =>
+        _disconnectedInventoryPersist.Enqueue(player);
+
+    /// <summary>GameLoop only — drains a disconnected player's pending inventory/player-data save.</summary>
+    public bool TryConsumeDisconnectedInventoryPersist(out Player player) =>
+        _disconnectedInventoryPersist.TryDequeue(out player!);
 
     public Player? Get(string username) => _players.GetValueOrDefault(username);
 }

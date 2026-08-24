@@ -517,7 +517,8 @@ class ZenithServer
             _lifetime.Cancel();
             _sessionListener.StopAccepting();
 
-            // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose enqueues inv Puts.
+            // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose queues each
+            // session's inventory/player-data persist for the GameLoop to drain.
             _logger.Info("Disconnecting sessions...");
             _sessionListener.DisconnectAll("Server closed");
 
@@ -535,6 +536,18 @@ class ZenithServer
                     // RunAsync preserves the original failure for its caller; shutdown must still settle/flush.
                     _logger.Error($"GameLoop stopped with an error during shutdown: {ex}");
                 }
+            }
+
+            // GameLoop has now fully stopped (awaited above), so nothing else can be concurrently
+            // mutating PlayerInventory on this tick's data anymore — safe to drain directly here
+            // rather than rely on one more GameLoop tick, which DisconnectAll's cancellation-race
+            // does not actually guarantee (ADR §104b Adendo). Without this, a shutdown that races the
+            // GameLoop's own cancellation check could drop every in-flight disconnect's inventory
+            // and player-data save.
+            while (Context.PlayerManager.TryConsumeDisconnectedInventoryPersist(out var departed))
+            {
+                Context.World.PersistInventory(departed);
+                Context.World.PersistPlayerData(departed);
             }
 
             // Settle in-flight sand/gravel into overlays before LevelDB flush (ADR §57).

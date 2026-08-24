@@ -1641,6 +1641,24 @@ identity exists.
 chest release or persistence into EventBus listeners, changing PlayerManager ownership, or making
 network loss a Gameplay decision.
 
+**Adendo (ago 2026 — inventory/player-data persist race):** the "persist stable inventory/player
+data" step above was, until now, a direct synchronous call from `NetworkSession.HandleClose` —
+running on the network thread, not the GameLoop. `PlayerInventory`'s backing array has no lock, so
+this could read a torn snapshot while `InventorySystem`/other GameLoop systems concurrently mutated
+that same player's inventory on the GameLoop thread (found via a reference-parity audit; a real
+duplication/loss risk on disk, not hypothetical). Fixed to match the chest-opener release already
+described above: `HandleClose` now only queues (`PlayerManager.SubmitDisconnectedInventoryPersist`),
+and `InventorySystem.Tick` drains it (`TryConsumeDisconnectedInventoryPersist`) on the GameLoop
+thread that actually owns the mutation. This does not change the "direct... not EventBus listeners"
+non-goal above — the queue is the same plain hand-off mechanism the chest release already used, not
+an `EventBus` subscription. One additional wrinkle specific to persistence (chest-opener release has
+no such requirement, since in-memory opener state does not need to survive process exit): a graceful
+shutdown's `_lifetime.Cancel()` can race the GameLoop's own cancellation check such that no further
+tick ever drains a queue entry enqueued by `DisconnectAll`'s in-line `HandleClose` calls. `ZenithServer.
+ShutdownCoreAsync` now drains this queue explicitly, directly, right after `await gameLoop` completes
+— at that point the GameLoop is provably no longer running, so a direct call there is race-free by
+construction, without needing one more scheduled tick.
+
 ### 105. Keep two concrete mob behaviors; extract only the Player death transition
 
 **Choice:** retain `ZombieSystem` and `SkeletonSystem` as separate, tick-owned gameplay systems.
