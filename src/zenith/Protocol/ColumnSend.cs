@@ -15,10 +15,28 @@ static class ColumnSend
     [ThreadStatic]
     private static List<(int X, int Y, int Z, int BlockRuntimeId)>? t_updatesScratch;
 
+    /// <summary>
+    /// <paramref name="column"/>'s <c>Overlays</c> field is deliberately ignored here — it was
+    /// captured back when the column was first read, which for a background-streamed join (large
+    /// view radius, small spawn-ready radius) can be seconds before this actually sends, sitting in
+    /// a bounded channel / worker queue the whole time. A block edited by another player in that
+    /// window would silently never reach this joining client for this cell — a real, reproducible
+    /// ghost-block desync on any populated server, not a hypothetical (found via a reference-parity
+    /// audit; <see cref="EmitFloorDropsInColumn"/> right below already reads floor drops live at
+    /// send time for exactly the same reason, which is why only this overlay path had the bug).
+    /// Overlays are re-read live, right before sending, so this always reflects the true current
+    /// RAM state — the same freshness guarantee <see cref="EmitOverlaysToSession"/>'s join-catchup
+    /// path already had.
+    /// </summary>
     public static void EmitToSession(NetworkSession session, in ColumnReadResult column, byte orderChannel)
     {
+        var world = session.Context.World;
+        var overlayScratch = t_overlayScratch ??= new List<BlockOverride>(64);
+        world.FillOverlaysInColumn(column.Base.Coord.X, column.Base.Coord.Z, overlayScratch);
+
         ColumnTerrainEmitter.Emit(
-            column,
+            column.Base,
+            overlayScratch,
             sendLevelChunk: bas => session.Protocol.World.SendLevelChunk(new ChunkColumn(
                 bas.Coord.X,
                 bas.Coord.Z,
@@ -28,7 +46,7 @@ static class ColumnSend
             sendUpdateBlock: (x, y, z, runtimeId) =>
                 session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId, orderChannel: orderChannel));
 
-        EmitFloorDropsInColumn(session, session.Context.World, column.Base.Coord.X, column.Base.Coord.Z);
+        EmitFloorDropsInColumn(session, world, column.Base.Coord.X, column.Base.Coord.Z);
     }
 
     /// <summary>Re-send current overlays for known columns (join catch-up, §14).</summary>
