@@ -115,8 +115,9 @@ public sealed class CowSystemTests
         Assert.Single(system.Cows);
     }
 
+    /// <summary>Regression for ADR §135 — see ZombieSystemTests' equivalent case for the full rationale.</summary>
     [Fact]
-    public void LethalDamage_refuses_transition_when_loot_cannot_be_stored()
+    public void LethalDamage_lands_without_loot_when_loot_cannot_be_stored()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
@@ -128,9 +129,8 @@ public sealed class CowSystemTests
                 StackId.FromBlock(Blocks.Dirt), 1, fx.Players.AllocateRuntimeId(), out _));
 
         var maxHealth = Health(system, id).Maximum;
-        Assert.False(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.Equal(maxHealth, Health(system, id).Current);
+        Assert.True(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
+        Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
     }
 

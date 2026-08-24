@@ -77,10 +77,6 @@ internal static class DamageableActorCombatCore
         Action<Player.Player>? onDeathReplicatedToPeer = null)
     {
         var health = view.Health;
-        var canDropLoot = FloorDropFanout.CanDeposit(
-            world, (int)MathF.Floor(view.X), (int)MathF.Floor(view.Y), (int)MathF.Floor(view.Z), lootItem, 1);
-        if (health.Current <= amount && !canDropLoot) return false;
-
         var result = health.Apply(source, amount, currentTick);
         if (!result.WasApplied) return false;
 
@@ -94,9 +90,13 @@ internal static class DamageableActorCombatCore
 
         if (!result.CausedDeath) return true;
 
-        if (!FloorDropFanout.TryDeposit(
-                world, players, online, (int)MathF.Floor(view.X), (int)MathF.Floor(view.Y), (int)MathF.Floor(view.Z), lootItem, 1))
-            throw new InvalidOperationException($"A prevalidated {actorName} loot drop could not commit.");
+        // Loot capacity must never veto a kill (ADR §135): a fatal blow always lands, even if the
+        // floor-drop area is saturated (global SoftCap, or every nearby cell already holding a
+        // mismatched/full stack) — the loot silently does not drop rather than leaving the mob
+        // perpetually just-above-zero HP server-wide until unrelated drops elsewhere despawn.
+        // FloorDropStore already logs once when SoftCap refuses a cell (TryAddOrMerge).
+        _ = FloorDropFanout.TryDeposit(
+            world, players, online, (int)MathF.Floor(view.X), (int)MathF.Floor(view.Y), (int)MathF.Floor(view.Z), lootItem, 1);
 
         MobKillReward.AwardExperience(source, killExperience, online);
 
