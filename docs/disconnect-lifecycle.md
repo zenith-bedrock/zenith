@@ -15,11 +15,18 @@ disconnect/kick, pre-spawn failure or shutdown all converge on one teardown invo
 1. Capture `Player.IsInGame` as `wasInGame`.
 2. If true, transmit peer visibility removal to the current in-game peer snapshot.
 3. Queue an open-chest release to `InventorySystem`; only the GameLoop mutates `ChestStore`.
-4. Fire-and-forget stable-identity inventory and player-data writes.
+4. Queue stable-identity inventory and player-data persistence to `InventorySystem`; only the
+   GameLoop reads `PlayerInventory`, which has no lock of its own (ADR §104b Adendo).
 5. Set `IsInGame` false, remove the Player from `PlayerManager`, then publish `PlayerQuitEvent`.
 6. Disable the active session handler and clear the RakNet game-identity marker.
 
-The persistence writes are awaited only by the coordinated shutdown flush. A disconnect never
+Both queued hand-offs (steps 3 and 4) are drained by `InventorySystem.Tick` on its next GameLoop
+tick, never on the network thread. A coordinated shutdown cannot rely on "one more tick" to drain
+step 4's queue — `ShutdownCoreAsync` cancels the GameLoop before `DisconnectAll` runs `HandleClose`
+for every session, so no further tick is guaranteed — so shutdown drains it explicitly, directly,
+once the GameLoop task has been awaited to completion (safe at that point because nothing can be
+concurrently mutating inventory anymore). The underlying disk writes themselves stay async either
+way; they are awaited only by the coordinated shutdown's persistence flush. A disconnect never
 holds a lock across disk I/O or protocol send.
 
 ## Phase matrix

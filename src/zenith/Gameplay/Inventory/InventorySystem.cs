@@ -44,6 +44,17 @@ sealed class InventorySystem : IGameSystem
         while (_players.TryConsumeDisconnectedContainerCleanup(out var disconnected))
             ChestLidFanout.ReleaseOpener(online, _world, disconnected);
 
+        // Same reasoning (ADR §104b Adendo): PlayerInventory has no lock, so building its save blob must
+        // happen here, on the GameLoop thread that owns its mutation — not directly from the
+        // network-close callback, which could otherwise race a concurrent Apply for this same
+        // player. Persists whatever was last successfully applied; any intent still queued for a
+        // now-departed player is simply never processed, not force-applied post-disconnect.
+        while (_players.TryConsumeDisconnectedInventoryPersist(out var departed))
+        {
+            _world.PersistInventory(departed);
+            _world.PersistPlayerData(departed);
+        }
+
         if (online.Count == 0) return;
 
         foreach (var player in online)

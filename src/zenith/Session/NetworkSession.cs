@@ -297,11 +297,13 @@ class NetworkSession
                 Context.PlayerManager.SubmitDisconnectedContainerCleanup(Player);
 
             // Ephemeral login uuid — skip disk so we do not litter inv:/pd: (ADR §60).
+            // Deferred to the GameLoop tick (ADR §104b Adendo), not called directly here:
+            // PlayerInventory's backing array has no lock, and InventorySystem/other GameLoop
+            // systems can be concurrently mutating this exact player's inventory on the GameLoop
+            // thread while this callback runs on the network thread. Same reasoning as the
+            // ChestStore deferral above.
             if (Player.IdentityStable)
-            {
-                Context.World.PersistInventory(Player);
-                Context.World.PersistPlayerData(Player);
-            }
+                Context.PlayerManager.SubmitDisconnectedInventoryPersist(Player);
 
             // Connection-lifecycle exception: this scalar prevents further peer fan-out while the
             // session is removed. It grants no authority to mutate gameplay/world state.
