@@ -65,6 +65,23 @@ public sealed class GroundMobMovementTests
         Assert.True(Blocks.CanSupportGroundActor(Blocks.GrassBlock));
     }
 
+    /// <summary>
+    /// Regression for ADR §138: torch is the second passable-decoration block (after ground cover),
+    /// but fence/stone bricks/cobblestone wall are ordinary full-solid building blocks — Zenith
+    /// doesn't model partial collision boxes (Phase XXIX), so a fence blocks movement fully rather
+    /// than at vanilla's partial height, an accepted simplification.
+    /// </summary>
+    [Fact]
+    public void Torch_is_passable_but_fence_stone_bricks_and_wall_are_solid()
+    {
+        Blocks.EnsureLoaded();
+        Assert.False(Blocks.BlocksMovement(Blocks.Torch));
+        Assert.False(Blocks.CanSupportGroundActor(Blocks.Torch));
+        Assert.True(Blocks.BlocksMovement(Blocks.OakFence));
+        Assert.True(Blocks.BlocksMovement(Blocks.StoneBricks));
+        Assert.True(Blocks.BlocksMovement(Blocks.CobblestoneWall));
+    }
+
     [Fact]
     public void Ground_actor_does_not_hover_over_water()
     {

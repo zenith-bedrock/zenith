@@ -55,6 +55,10 @@ static class Blocks
     private static int _shortGrass;
     private static int _dandelion;
     private static int _poppy;
+    private static int _torch;
+    private static int _oakFence;
+    private static int _stoneBricks;
+    private static int _cobblestoneWall;
     private static HashSet<int>? _chestIds;
     private static HashSet<int>? _placeableIds;
     private static HashSet<int>? _gravityIds;
@@ -99,6 +103,12 @@ static class Blocks
     public static int ShortGrass { get { EnsureLoaded(); return _shortGrass; } }
     public static int Dandelion { get { EnsureLoaded(); return _dandelion; } }
     public static int Poppy { get { EnsureLoaded(); return _poppy; } }
+
+    /// <summary>Craftable decoration/building blocks (ADR §138). Torch is passable; the rest are full solid.</summary>
+    public static int Torch { get { EnsureLoaded(); return _torch; } }
+    public static int OakFence { get { EnsureLoaded(); return _oakFence; } }
+    public static int StoneBricks { get { EnsureLoaded(); return _stoneBricks; } }
+    public static int CobblestoneWall { get { EnsureLoaded(); return _cobblestoneWall; } }
 
     /// <summary>Overworld min Y (Bedrock). Flat + noise share this floor.</summary>
     public const int FlatMinY = -64;
@@ -149,6 +159,10 @@ static class Blocks
         _shortGrass = palette.Require("minecraft:short_grass");
         _dandelion = palette.Require("minecraft:dandelion");
         _poppy = palette.Require("minecraft:poppy");
+        _torch = palette.Require("minecraft:torch");
+        _oakFence = palette.Require("minecraft:oak_fence");
+        _stoneBricks = palette.Require("minecraft:stone_bricks");
+        _cobblestoneWall = palette.Require("minecraft:cobblestone_wall");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -173,18 +187,26 @@ static class Blocks
             _chestSouth,
             _chestWest,
             _chestNorth,
-            _chestEast
+            _chestEast,
+            _torch,
+            _oakFence,
+            _stoneBricks,
+            _cobblestoneWall
         ];
         _gravityIds = [_sand, _gravel];
         // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
         // Extend this set, not a scattered `== Blocks.Water` check, the day a second fluid lands.
         _fluidIds = [_water];
-        _passableIds = [_shortGrass, _dandelion, _poppy];
+        _passableIds = [_shortGrass, _dandelion, _poppy, _torch];
         _nameByRuntime = new Dictionary<int, string>
         {
             [_shortGrass] = "minecraft:short_grass",
             [_dandelion] = "minecraft:dandelion",
             [_poppy] = "minecraft:poppy",
+            [_torch] = "minecraft:torch",
+            [_oakFence] = "minecraft:oak_fence",
+            [_stoneBricks] = "minecraft:stone_bricks",
+            [_cobblestoneWall] = "minecraft:cobblestone_wall",
             [_air] = "minecraft:air",
             [_stone] = "minecraft:stone",
             [_grassBlock] = "minecraft:grass_block",
@@ -404,6 +426,7 @@ static class Blocks
             _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
             _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
             _shortGrass = _dandelion = _poppy = 0;
+            _torch = _oakFence = _stoneBricks = _cobblestoneWall = 0;
             _chestIds = null;
             _placeableIds = null;
             _gravityIds = null;

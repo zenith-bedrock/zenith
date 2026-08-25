@@ -32,6 +32,13 @@ sealed class RecipeRegistry
     public const uint DiamondAxe = 11;
     public const uint DiamondShovel = 12;
 
+    // ADR §138 — building/decoration blocks, same "materials obtainable today" bar as the tool
+    // chain above: coal is mined directly (BlockLoot), no furnace/smelting needed for any of these.
+    public const uint CoalAndStickToTorch = 13;
+    public const uint PlanksAndStickToFence = 14;
+    public const uint StoneToStoneBricks = 15;
+    public const uint CobblestoneToWall = 16;
+
     private readonly Dictionary<uint, Recipe> _byNetId = new();
     private bool _frozen;
 
@@ -52,8 +59,10 @@ sealed class RecipeRegistry
         Blocks.EnsureLoaded();
         var stick = StackId.FromItem(itemPalette.Require("minecraft:stick"));
         var diamond = StackId.FromItem(itemPalette.Require("minecraft:diamond"));
+        var coal = StackId.FromItem(itemPalette.Require("minecraft:coal"));
         var planks = StackId.FromBlock(Blocks.OakPlanks);
         var stone = StackId.FromBlock(Blocks.Stone);
+        var cobblestone = StackId.FromBlock(Blocks.Cobblestone);
 
         var reg = new RecipeRegistry();
         reg.Register(OakLogToPlanks, [(StackId.FromBlock(Blocks.OakLog), 1)], planks, 4);
@@ -72,6 +81,11 @@ sealed class RecipeRegistry
         reg.Register(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1);
         reg.Register(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1);
         reg.Register(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1);
+
+        reg.Register(CoalAndStickToTorch, [(coal, 1), (stick, 1)], StackId.FromBlock(Blocks.Torch), 4);
+        reg.Register(PlanksAndStickToFence, [(planks, 4), (stick, 2)], StackId.FromBlock(Blocks.OakFence), 3);
+        reg.Register(StoneToStoneBricks, [(stone, 4)], StackId.FromBlock(Blocks.StoneBricks), 4);
+        reg.Register(CobblestoneToWall, [(cobblestone, 6)], StackId.FromBlock(Blocks.CobblestoneWall), 6);
 
         return reg;
     }

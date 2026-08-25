@@ -17,6 +17,10 @@ sealed class CreativeCatalog
     public const uint Sand = 6;
     public const uint Chest = 7;
     public const uint Gravel = 20;
+    public const uint Torch = 21;
+    public const uint OakFence = 22;
+    public const uint StoneBricks = 23;
+    public const uint CobblestoneWall = 24;
 
     public const uint WoodenPickaxe = 8;
     public const uint WoodenAxe = 9;
@@ -54,6 +58,10 @@ sealed class CreativeCatalog
         catalog.RegisterBlock(Sand, Blocks.Sand);
         catalog.RegisterBlock(Chest, Blocks.Chest);
         catalog.RegisterBlock(Gravel, Blocks.Gravel);
+        catalog.RegisterBlock(Torch, Blocks.Torch);
+        catalog.RegisterBlock(OakFence, Blocks.OakFence);
+        catalog.RegisterBlock(StoneBricks, Blocks.StoneBricks);
+        catalog.RegisterBlock(CobblestoneWall, Blocks.CobblestoneWall);
 
         catalog.RegisterTool(WoodenPickaxe, Tools.Require("minecraft:wooden_pickaxe"));
         catalog.RegisterTool(WoodenAxe, Tools.Require("minecraft:wooden_axe"));

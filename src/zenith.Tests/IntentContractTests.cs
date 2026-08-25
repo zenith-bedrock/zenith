@@ -3365,7 +3365,7 @@ public class IntentContractTests
         Blocks.EnsureLoaded();
         var palette = ItemPaletteLoader.FromEmbeddedResource();
         var packet = InventoryProtocol.BuildCreativeContent(CreativeCatalog.CreateDefault(), palette);
-        Assert.Equal(20, packet.Items.Length);
+        Assert.Equal(24, packet.Items.Length); // ADR §138 added 4 building/decoration blocks.
         Assert.Equal(CreativeCatalog.Stone, packet.Items[0].CreativeItemNetworkId);
         Assert.Single(packet.Groups);
         Assert.True(packet.Encode().Length > 16);
