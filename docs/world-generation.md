@@ -174,6 +174,21 @@ check runs first and short-circuits. Ore is only tried once the feature check re
 resolved even earlier (before surface/subsurface/feature are checked at all), so a carved cell is
 always air regardless of what a tree/ruin/ore rule would have put there.
 
+## Ground cover (ADR §137)
+
+Short grass, dandelion, poppy — one independent probability roll per column (`SampleGroundCover`),
+checked only at `y == surface + 1`, after the tree/ruin feature check returns air at that exact cell
+(so a tree trunk column, or a ruin's cobblestone/plank corner, always wins over grass). Unlike trees,
+ground cover has no spacing requirement between neighbors, so there's no cell grid — every column
+independently rolls `Hash(x, z, seed ^ salt) % density`. `OverworldBiomeSampler.GroundCoverDensity`
+gives the 1-in-N odds per biome (Plains 1/16, Forest 1/48, Hills 1/96 — Desert/Ocean get none, same
+eligible-biome set as trees). A hit picks short grass (4/6), dandelion (1/6), or poppy (1/6).
+
+These are the first blocks that are not air, not fluid, and not "real solid collision" either —
+`Blocks.IsPassableDecoration` is a new third exclusion category alongside `IsAir`/`IsFluid` that
+`Blocks.IsSolid` now checks, and `DigProfiles` has entries for all three so Survival can actually
+break them (a missing `DigProfiles` entry means "cannot dig at all," not "instant break").
+
 ## Spawn safety
 
 `SampleSpawnFeetY` scans upward from `max(surfaceY, SeaLevel) + 1` for the first candidate where feet
@@ -217,7 +232,8 @@ mode that's explicitly ephemeral/non-production.
 - Only two surface-material pairs exist across five biomes (Sand/Sand for Desert+Ocean,
   Grass/Dirt for everything else) — no biome-specific `seaFloorBlock` beyond the Ocean case, no
   gravel, no biome-specific subsurface variation.
-- No vegetation beyond trees (no flowers/grass/mushrooms).
+- Ground cover is short grass + two flowers (dandelion, poppy) only — no mushrooms, no 2-tall
+  `tall_grass`, no aquatic (kelp/seagrass) or dry-biome (cactus/dead bush) vegetation.
 - Ruins are a single fixed small shape, not a structure catalog.
 - No aquifers; a cave carved under an Ocean biome is a dry air pocket, not flooded or specially
   sealed — no pathological outcome was found in this pass, but it also wasn't stress-tested visually.

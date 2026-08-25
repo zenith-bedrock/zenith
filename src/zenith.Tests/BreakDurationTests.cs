@@ -29,6 +29,20 @@ public class BreakDurationTests
         Assert.Equal(150, BreakDuration.BreakTicks(Blocks.Stone));
     }
 
+    /// <summary>
+    /// Regression for ADR §137: ground-cover vegetation must have a registered DigProfile — a
+    /// missing entry means Survival cannot dig it at all (this table's own documented contract),
+    /// which would have made every grass tuft/flower an unbreakable obstacle the moment world-gen
+    /// started placing them.
+    /// </summary>
+    [Fact]
+    public void Ground_cover_decoration_is_diggable_by_hand()
+    {
+        Assert.Equal(3, BreakDuration.BreakTicks(Blocks.ShortGrass));
+        Assert.Equal(3, BreakDuration.BreakTicks(Blocks.Dandelion));
+        Assert.Equal(3, BreakDuration.BreakTicks(Blocks.Poppy));
+    }
+
     [Fact]
     public void Wooden_shovel_on_dirt_is_faster_than_hand()
     {

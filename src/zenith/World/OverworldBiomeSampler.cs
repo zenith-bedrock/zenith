@@ -119,6 +119,30 @@ static class OverworldBiomeSampler
     public static bool AllowsTrees(OverworldBiomeKind kind)
         => kind is OverworldBiomeKind.Plains or OverworldBiomeKind.Forest or OverworldBiomeKind.Hills;
 
+    /// <summary>
+    /// Ground-cover eligibility (short grass / flowers, ADR §137) — same biome set as
+    /// <see cref="AllowsTrees"/> today (Desert/Ocean get neither), kept as its own named predicate
+    /// since the two concepts could legitimately diverge later (e.g. a grassy-but-treeless biome).
+    /// </summary>
+    public static bool AllowsGroundCover(OverworldBiomeKind kind)
+        => kind is OverworldBiomeKind.Plains or OverworldBiomeKind.Forest or OverworldBiomeKind.Hills;
+
+    /// <summary>
+    /// 1-in-N chance per surface column that a ground-cover attempt lands at all (see
+    /// <see cref="OverworldTerrainSampler"/>'s ground-cover sampler). Calibrated against
+    /// PocketMine's <c>TallGrass</c> populator's per-chunk attempt counts (Plains 12/256 cells,
+    /// Forest 3/256, Mountains 1/256) — not identical (Zenith uses one per-column independent roll,
+    /// not N attempts-with-collisions per chunk), close enough in the same order of magnitude.
+    /// </summary>
+    public static int GroundCoverDensity(OverworldBiomeKind kind)
+        => kind switch
+        {
+            OverworldBiomeKind.Plains => 16,
+            OverworldBiomeKind.Forest => 48,
+            OverworldBiomeKind.Hills => 96,
+            _ => 0,
+        };
+
     public static bool TryTreeRoll(uint cellHash, OverworldBiomeKind kind)
     {
         var mod = (int)(cellHash % 9);

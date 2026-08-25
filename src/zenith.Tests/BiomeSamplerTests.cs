@@ -53,6 +53,34 @@ public class BiomeSamplerTests
         Assert.True(CountTreesInBiome(noise, seed, OverworldBiomeKind.Forest, x, z) > 0);
     }
 
+    /// <summary>Regression for ADR §137 — ground-cover vegetation (short grass/flowers).</summary>
+    [Fact]
+    public void Desert_has_no_ground_cover_in_biome_cell()
+    {
+        const int seed = 21;
+        var (x, z) = FindBiomeCoords(seed, OverworldBiomeKind.Desert);
+        var noise = new NoiseTerrainProvider(seed);
+        Assert.Equal(0, CountGroundCoverInBiome(noise, seed, OverworldBiomeKind.Desert, x, z));
+    }
+
+    [Fact]
+    public void Ocean_has_no_ground_cover_in_biome_cell()
+    {
+        const int seed = 12;
+        var (x, z) = FindBiomeCoords(seed, OverworldBiomeKind.Ocean);
+        var noise = new NoiseTerrainProvider(seed);
+        Assert.Equal(0, CountGroundCoverInBiome(noise, seed, OverworldBiomeKind.Ocean, x, z));
+    }
+
+    [Fact]
+    public void Plains_has_ground_cover_in_biome_cell()
+    {
+        const int seed = 21;
+        var (x, z) = FindBiomeCoords(seed, OverworldBiomeKind.Plains);
+        var noise = new NoiseTerrainProvider(seed);
+        Assert.True(CountGroundCoverInBiome(noise, seed, OverworldBiomeKind.Plains, x, z) > 0);
+    }
+
     [Fact]
     public void Noise_columns_encode_different_biome_regions()
     {
@@ -157,6 +185,30 @@ public class BiomeSamplerTests
                     if (noise.SampleBaseBlock(x, y, z) == Blocks.OakLog)
                         count++;
                 }
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountGroundCoverInBiome(
+        NoiseTerrainProvider noise,
+        int seed,
+        OverworldBiomeKind kind,
+        int anchorX,
+        int anchorZ)
+    {
+        var half = OverworldBiomeSampler.BiomeCellSize / 2;
+        var count = 0;
+        for (var x = anchorX - half; x < anchorX + half; x++)
+        {
+            for (var z = anchorZ - half; z < anchorZ + half; z++)
+            {
+                if (OverworldBiomeSampler.SampleKind(x, z, seed) != kind) continue;
+                var surface = OverworldTerrainSampler.SurfaceY(x, z, seed);
+                var block = noise.SampleBaseBlock(x, surface + 1, z);
+                if (block == Blocks.ShortGrass || block == Blocks.Dandelion || block == Blocks.Poppy)
+                    count++;
             }
         }
 
