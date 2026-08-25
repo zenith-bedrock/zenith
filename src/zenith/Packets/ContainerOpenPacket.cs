@@ -7,6 +7,8 @@ namespace Zenith.Packets;
 sealed partial class ContainerOpenPacket : DataPacket
 {
     public const byte WindowTypeChest = 0;
+    /// <summary>gophertunnel <c>ContainerTypeWorkbench</c> = 1 (ADR §139).</summary>
+    public const byte WindowTypeWorkbench = 1;
     public const byte WindowTypeInventory = 0xff;
 
     [Wire]

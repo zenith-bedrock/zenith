@@ -39,17 +39,21 @@ sealed class RecipeRegistry
     public const uint StoneToStoneBricks = 15;
     public const uint CobblestoneToWall = 16;
 
+    /// <summary>ADR §139 — the crafting table itself; obviously does not require one to make.</summary>
+    public const uint PlanksToCraftingTable = 17;
+
     private readonly Dictionary<uint, Recipe> _byNetId = new();
     private bool _frozen;
 
-    readonly record struct Recipe(uint NetId, (StackId Id, int Count)[] Inputs, StackId Output, int OutCount);
+    readonly record struct Recipe(uint NetId, (StackId Id, int Count)[] Inputs, StackId Output, int OutCount, bool RequiresTable);
 
     /// <summary>Wire/DTO-facing recipe rows — no packets dependency.</summary>
     public readonly record struct RecipeSnapshot(
         uint NetId,
         (StackId Id, int Count)[] Inputs,
         StackId Output,
-        int OutCount);
+        int OutCount,
+        bool RequiresTable);
 
     public static RecipeRegistry CreateDefault() =>
         CreateDefault(ItemPaletteLoader.FromEmbeddedResource());
@@ -64,28 +68,47 @@ sealed class RecipeRegistry
         var stone = StackId.FromBlock(Blocks.Stone);
         var cobblestone = StackId.FromBlock(Blocks.Cobblestone);
 
+        // ADR §139 — RequiresTable reflects each recipe's REAL vanilla shape bounding box, not a
+        // guess: anything whose minimal shape needs more than 2 rows or 2 columns cannot physically
+        // fit the personal 2×2 grid, regardless of Zenith's own matcher being shapeless (aggregate
+        // count, not arrangement). Verified per recipe below.
         var reg = new RecipeRegistry();
-        reg.Register(OakLogToPlanks, [(StackId.FromBlock(Blocks.OakLog), 1)], planks, 4);
-        reg.Register(OakPlanksToChest, [(planks, 8)], StackId.FromBlock(Blocks.Chest), 1);
+        // 1 log -> 4 planks: vanilla's "any of the 4 cells" special case. No table.
+        reg.Register(OakLogToPlanks, [(StackId.FromBlock(Blocks.OakLog), 1)], planks, 4, requiresTable: false);
+        // Chest: 8 planks in a ring around an empty center — 3x3 bounding box. Table required (the
+        // gap this whole ADR closes).
+        reg.Register(OakPlanksToChest, [(planks, 8)], StackId.FromBlock(Blocks.Chest), 1, requiresTable: true);
 
-        reg.Register(PlanksToStick, [(planks, 2)], stick, 4);
+        // Stick: 2 planks stacked 1 wide x 2 tall — fits 2x2. No table.
+        reg.Register(PlanksToStick, [(planks, 2)], stick, 4, requiresTable: false);
 
-        reg.Register(WoodenPickaxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_pickaxe"), 1);
-        reg.Register(WoodenAxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_axe"), 1);
-        reg.Register(WoodenShovel, [(planks, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_shovel"), 1);
+        // Pickaxe: 3 materials across the top row + 2 sticks down the middle column below them —
+        // 3 wide x 3 tall. Axe: 2 wide x 3 tall. Shovel: 1 wide x 3 tall. All three exceed 2 rows —
+        // all require a table, same as real vanilla.
+        reg.Register(WoodenPickaxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_pickaxe"), 1, requiresTable: true);
+        reg.Register(WoodenAxe, [(planks, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_axe"), 1, requiresTable: true);
+        reg.Register(WoodenShovel, [(planks, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:wooden_shovel"), 1, requiresTable: true);
 
-        reg.Register(StonePickaxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_pickaxe"), 1);
-        reg.Register(StoneAxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_axe"), 1);
-        reg.Register(StoneShovel, [(stone, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_shovel"), 1);
+        reg.Register(StonePickaxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_pickaxe"), 1, requiresTable: true);
+        reg.Register(StoneAxe, [(stone, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_axe"), 1, requiresTable: true);
+        reg.Register(StoneShovel, [(stone, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:stone_shovel"), 1, requiresTable: true);
 
-        reg.Register(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1);
-        reg.Register(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1);
-        reg.Register(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1);
+        reg.Register(DiamondPickaxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_pickaxe"), 1, requiresTable: true);
+        reg.Register(DiamondAxe, [(diamond, 3), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_axe"), 1, requiresTable: true);
+        reg.Register(DiamondShovel, [(diamond, 1), (stick, 2)], ToolStack(itemPalette, "minecraft:diamond_shovel"), 1, requiresTable: true);
 
-        reg.Register(CoalAndStickToTorch, [(coal, 1), (stick, 1)], StackId.FromBlock(Blocks.Torch), 4);
-        reg.Register(PlanksAndStickToFence, [(planks, 4), (stick, 2)], StackId.FromBlock(Blocks.OakFence), 3);
-        reg.Register(StoneToStoneBricks, [(stone, 4)], StackId.FromBlock(Blocks.StoneBricks), 4);
-        reg.Register(CobblestoneToWall, [(cobblestone, 6)], StackId.FromBlock(Blocks.CobblestoneWall), 6);
+        // Torch: 1 coal on top of 1 stick — 1 wide x 2 tall. Fits 2x2. No table.
+        reg.Register(CoalAndStickToTorch, [(coal, 1), (stick, 1)], StackId.FromBlock(Blocks.Torch), 4, requiresTable: false);
+        // Fence: two columns of [plank, stick] side by side — 3 wide x 2 tall. Table required.
+        reg.Register(PlanksAndStickToFence, [(planks, 4), (stick, 2)], StackId.FromBlock(Blocks.OakFence), 3, requiresTable: true);
+        // Stone bricks: a plain 2x2 block of stone. Exactly fits. No table.
+        reg.Register(StoneToStoneBricks, [(stone, 4)], StackId.FromBlock(Blocks.StoneBricks), 4, requiresTable: false);
+        // Wall: 3 wide x 2 tall row of cobblestone. Table required.
+        reg.Register(CobblestoneToWall, [(cobblestone, 6)], StackId.FromBlock(Blocks.CobblestoneWall), 6, requiresTable: true);
+
+        // The table itself: a plain 2x2 block of planks. Fits the very grid it makes obsolete —
+        // matches real vanilla, which lets you make your first table without one.
+        reg.Register(PlanksToCraftingTable, [(planks, 4)], StackId.FromBlock(Blocks.CraftingTable), 1, requiresTable: false);
 
         return reg;
     }
@@ -100,13 +123,13 @@ sealed class RecipeRegistry
     /// ever promoted beyond <c>private</c> for a real second caller (none exists yet). Kept
     /// <c>private</c>: <see cref="CreateDefault(ItemPalette)"/> is still the only caller.
     /// </summary>
-    private void Register(uint netId, (StackId Id, int Count)[] inputs, StackId output, int outCount)
+    private void Register(uint netId, (StackId Id, int Count)[] inputs, StackId output, int outCount, bool requiresTable = false)
     {
         if (_frozen)
             throw new InvalidOperationException("RecipeRegistry is frozen; register before Freeze().");
         if (_byNetId.ContainsKey(netId))
             throw new InvalidOperationException($"Duplicate recipe net id {netId}.");
-        _byNetId[netId] = new Recipe(netId, inputs.ToArray(), output, outCount);
+        _byNetId[netId] = new Recipe(netId, inputs.ToArray(), output, outCount, requiresTable);
     }
 
     /// <summary>
@@ -126,7 +149,8 @@ sealed class RecipeRegistry
                 recipe.NetId,
                 recipe.Inputs.ToArray(), // defensive copy — Freeze() must mean existing entries can't be mutated via an escaped array either
                 recipe.Output,
-                recipe.OutCount));
+                recipe.OutCount,
+                recipe.RequiresTable));
         }
 
         list.Sort((a, b) => a.NetId.CompareTo(b.NetId));
@@ -137,19 +161,22 @@ sealed class RecipeRegistry
         uint recipeNetId,
         out StackId output,
         out int outCount,
-        out (StackId Id, int Count)[] inputs)
+        out (StackId Id, int Count)[] inputs,
+        out bool requiresTable)
     {
         if (!_byNetId.TryGetValue(recipeNetId, out var recipe))
         {
             output = default;
             outCount = 0;
             inputs = [];
+            requiresTable = false;
             return false;
         }
 
         output = recipe.Output;
         outCount = recipe.OutCount;
         inputs = recipe.Inputs.ToArray(); // defensive copy — same reason as SnapshotRecipes()
+        requiresTable = recipe.RequiresTable;
         return true;
     }
 
@@ -171,7 +198,7 @@ sealed class RecipeRegistry
     /// <summary>Consome inputs do inventário e adiciona output (all-or-nothing via snapshot).</summary>
     public bool TryCraft(PlayerInventory inventory, uint recipeNetId)
     {
-        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed))
+        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed, out _))
             return false;
 
         var snapshot = inventory.CaptureSnapshot();
@@ -194,14 +221,24 @@ sealed class RecipeRegistry
     }
 
     /// <summary>
-    /// Match + consume 2×2 grid slots × <paramref name="times"/>; output for CreatedOutput.
+    /// Match + consume craft-grid slots × <paramref name="times"/>; output for CreatedOutput.
     /// Times clamped by grid affordability and single-slot MaxStack (H0).
-    /// Item stacks in the grid do not match block recipes (exact StackId).
+    /// Item stacks in the grid do not match block recipes (exact StackId). <paramref name="craftUi"/>
+    /// is either the player's personal <see cref="PlayerCraftUi"/> (2×2) or the crafting table's
+    /// <see cref="PlayerTableCraftUi"/> (3×3) — the caller picks which, based on which is actually
+    /// open; this method only cares about <see cref="ICraftGrid"/>'s shape (ADR §139).
+    /// <paramref name="isAtCraftingTable"/> gates recipes whose real vanilla shape does not fit a
+    /// 2×2 grid — refused here even if the aggregate-count match would otherwise succeed, since
+    /// Zenith's shapeless matcher has no other way to know the ingredients don't actually arrange
+    /// into a valid shape that small.
     /// </summary>
-    public bool TryCraftFromGrid(PlayerCraftUi craftUi, uint recipeNetId, out InventorySlot output, int times = 1)
+    public bool TryCraftFromGrid(ICraftGrid craftUi, uint recipeNetId, out InventorySlot output, int times, bool isAtCraftingTable)
     {
         output = InventorySlot.Empty;
-        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed))
+        if (!TryGet(recipeNetId, out var outId, out var outCount, out var needed, out var requiresTable))
+            return false;
+
+        if (requiresTable && !isAtCraftingTable)
             return false;
 
         if (outCount <= 0 || times < 0)
@@ -210,8 +247,9 @@ sealed class RecipeRegistry
         if (times == 0)
             times = 1;
 
-        var inputs = new List<(StackId Id, int Count)>(PlayerCraftUi.GridSize);
-        for (var i = 0; i < PlayerCraftUi.GridSize; i++)
+        var gridSize = craftUi.GridSize;
+        var inputs = new List<(StackId Id, int Count)>(gridSize);
+        for (var i = 0; i < gridSize; i++)
         {
             var slot = craftUi.GetGrid(i);
             if (!slot.IsEmpty)
@@ -240,7 +278,7 @@ sealed class RecipeRegistry
         foreach (var (id, count) in needed)
         {
             var remaining = count * times;
-            for (var i = 0; i < PlayerCraftUi.GridSize && remaining > 0; i++)
+            for (var i = 0; i < gridSize && remaining > 0; i++)
             {
                 var slot = craftUi.GetGrid(i);
                 if (slot.IsEmpty || slot.Id != id) continue;

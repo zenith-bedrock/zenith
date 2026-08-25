@@ -17,7 +17,8 @@ readonly record struct OpenContainerSession(
     public enum TargetKind : byte
     {
         PlayerInventory = 1,
-        Chest = 2
+        Chest = 2,
+        CraftingTable = 3
     }
 
     public static OpenContainerSession PlayerInventory(byte windowId, byte windowType, uint generation) =>
@@ -26,4 +27,12 @@ readonly record struct OpenContainerSession(
     public static OpenContainerSession ChestView(
         byte windowId, byte windowType, uint generation, in OpenChestView chest) =>
         new(windowId, windowType, generation, TargetKind.Chest, chest);
+
+    /// <summary>
+    /// ADR §139 — a crafting table has no shared/persistent storage (unlike Chest): the 3×3 grid
+    /// lives entirely on the opening player's own <see cref="PlayerTableCraftUi"/>, so this session
+    /// carries no view payload, just the target kind.
+    /// </summary>
+    public static OpenContainerSession CraftingTable(byte windowId, byte windowType, uint generation) =>
+        new(windowId, windowType, generation, TargetKind.CraftingTable, null);
 }

@@ -23,7 +23,7 @@ If you hit something that isn't listed as a known gap below, it's likely a real 
 | Survival dig timing | `BreakDuration` math (Dragonfly-derived) + curated tool speed table; crack progress visible to peers (ADR §27). |
 | Inventory (36 slots) | Rearrange (ISR), held-item sync to peers, Creative palette → cursor / SHIFT → bag. |
 | Chests | Single + double chest (sneak-place to pair), 54-slot UI, persist to `ct:`. |
-| 2×2 crafting | Survival craft chain (e.g. planks → chest). |
+| Crafting (2×2 personal + 3×3 table) | Survival craft chain (log → planks → stick/tools/chest/fence/…). Recipes whose real vanilla shape needs more than 2×2 (chest, every tool, fence, wall) require an actual crafting table, matching vanilla — placing/interacting with a `crafting_table` block opens a real 9-slot grid (ADR §139). |
 | Creative / Survival gamemode | `/gamemode` minimal — fly in Creative, no fly in Survival. |
 | Void death / respawn | Fall below world → DeathInfo + Respawn handshake; Survival death drops loot to floor. |
 | Block gravity | Sand/gravel fall when unsupported (`GravitySystem`). |

@@ -22,6 +22,10 @@ public class InventoryContainerMapTests
     [InlineData(InventoryContainerMap.Chest, 26, InventorySlotArea.OpenContainer, 26)]
     [InlineData(InventoryContainerMap.CraftingInput, 28, InventorySlotArea.CraftGrid, 0)]
     [InlineData(InventoryContainerMap.CraftingInput, 31, InventorySlotArea.CraftGrid, 3)]
+    // ADR §139 — crafting table's 3x3 grid: a separate wire range (32-40), not a continuation of
+    // the personal grid's 28-31.
+    [InlineData(InventoryContainerMap.CraftingInput, 32, InventorySlotArea.TableCraftGrid, 0)]
+    [InlineData(InventoryContainerMap.CraftingInput, 40, InventorySlotArea.TableCraftGrid, 8)]
     [InlineData(InventoryContainerMap.CreatedOutput, 50, InventorySlotArea.CraftResult, 0)]
     public void Maps_wire_containers_to_domain_slot_reference(
         byte container, byte slot, InventorySlotArea expectedArea, int expectedIndex)
@@ -43,6 +47,8 @@ public class InventoryContainerMapTests
         Assert.False(InventoryContainerMap.TryMap(99, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 0, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 27, out _));
+        // The gap between the two grids (personal ends at 31, table starts at 32) has nothing in it.
+        Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CraftingInput, 41, out _));
         Assert.False(InventoryContainerMap.TryMap(InventoryContainerMap.CreatedOutput, 0, out _));
     }
 
@@ -68,6 +74,11 @@ public class InventoryContainerMapTests
         Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.CraftGrid(1), out var c13, out var s13));
         Assert.Equal(InventoryContainerMap.CraftingInput, c13);
         Assert.Equal(29, s13);
+
+        // Same container id (13) as the personal grid — the wire slot is what distinguishes them.
+        Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.TableCraftGrid(1), out var ct, out var st));
+        Assert.Equal(InventoryContainerMap.CraftingInput, ct);
+        Assert.Equal(33, st);
 
         Assert.True(InventoryContainerMap.TryToWire(InventorySlotReference.CraftResult, out var c60, out var s60));
         Assert.Equal(InventoryContainerMap.CreatedOutput, c60);

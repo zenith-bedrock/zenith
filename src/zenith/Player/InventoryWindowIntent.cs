@@ -10,7 +10,8 @@ readonly struct InventoryWindowIntent
     {
         OpenInventory = 1,
         OpenChest = 2,
-        Close = 3
+        Close = 3,
+        OpenCraftingTable = 4
     }
 
     /// <summary>
@@ -39,6 +40,15 @@ readonly struct InventoryWindowIntent
     {
         HasValue = true,
         Action = Kind.OpenChest,
+        X = x,
+        Y = y,
+        Z = z
+    };
+
+    public static InventoryWindowIntent OpenCraftingTable(int x, int y, int z) => new()
+    {
+        HasValue = true,
+        Action = Kind.OpenCraftingTable,
         X = x,
         Y = y,
         Z = z

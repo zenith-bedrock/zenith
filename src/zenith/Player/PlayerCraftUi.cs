@@ -1,9 +1,10 @@
 namespace Zenith.Player;
 
 /// <summary>Ephemeral 2×2 craft grid + created output — not persisted (ADR §39).</summary>
-sealed class PlayerCraftUi
+sealed class PlayerCraftUi : ICraftGrid
 {
     public const int GridSize = 4;
+    int ICraftGrid.GridSize => GridSize;
 
     private readonly InventorySlot[] _grid = new InventorySlot[GridSize];
     private InventorySlot _result = InventorySlot.Empty;

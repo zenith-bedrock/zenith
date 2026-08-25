@@ -14,6 +14,7 @@ readonly record struct InventorySlotReference(InventorySlotArea Area, int Index)
     public static InventorySlotReference CraftGrid(int index) => new(InventorySlotArea.CraftGrid, index);
     public static InventorySlotReference CraftResult => new(InventorySlotArea.CraftResult, 0);
     public static InventorySlotReference Armor(int index) => new(InventorySlotArea.Armor, index);
+    public static InventorySlotReference TableCraftGrid(int index) => new(InventorySlotArea.TableCraftGrid, index);
 
     /// <summary>
     /// Compatibility only for existing in-process characterization tests. Production packet
@@ -65,5 +66,7 @@ public enum InventorySlotArea : byte
     OpenContainer = 3,
     CraftGrid = 4,
     CraftResult = 5,
-    Armor = 6
+    Armor = 6,
+    /// <summary>Crafting table's 3×3 grid (ADR §139) — separate wire slot range from <see cref="CraftGrid"/>, not an extension of it.</summary>
+    TableCraftGrid = 7
 }

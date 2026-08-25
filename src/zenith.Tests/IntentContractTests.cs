@@ -2813,6 +2813,31 @@ public class IntentContractTests
         Assert.Equal(1, fx.World.Chests.Get(2, 64, 2, 0).Count);
     }
 
+    /// <summary>Regression for ADR §139 — interacting with a crafting table opens a real workbench window, distinct from both chest and the personal inventory.</summary>
+    [Fact]
+    public void Interacting_with_a_crafting_table_opens_and_closes_a_workbench_window()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("workbench-user");
+        fx.World.SetBlock(2, 64, 2, Blocks.CraftingTable);
+        StandNear(player, 2, 64, 2);
+        var sys = fx.CreateInventorySystem();
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenCraftingTable(2, 64, 2)));
+        sys.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.IsAtCraftingTable);
+        Assert.True(player.OpenContainer is not null);
+        var session = player.OpenContainer!.Value;
+        Assert.Equal(InventoryContainerMap.WindowTypeWorkbench, session.WindowType);
+
+        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.Close(session.WindowId, session.WindowType)));
+        sys.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.False(player.IsAtCraftingTable);
+        Assert.Null(player.OpenContainer);
+    }
+
     [Fact]
     public void ItemStackRequest_rejects_a_dynamic_container_id_for_a_static_hotbar_slot()
     {
@@ -3174,7 +3199,31 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(1, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(2, Blocks.Air, 0));
 
+        // ADR §139 regression: a chest's real vanilla shape (8 planks in a ring) needs a 3x3 grid —
+        // the personal 2x2 grid must refuse it even though Zenith's shapeless matcher could
+        // otherwise satisfy the aggregate count.
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(22, [
+            InventoryStackAction.Craft(RecipeRegistry.OakPlanksToChest),
+            InventoryStackAction.CreateOutput(),
+            InventoryStackAction.Transfer(
+                InventoryContainerMap.CraftResultFlat, 3, 1,
+                new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
+                new WireSlot(InventoryContainerMap.Inventory, 3))
+        ])));
+        sys.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.NotEqual(Blocks.Chest, player.Inventory.Get(3).Id.Value);
+        Assert.Equal(Blocks.OakPlanks, player.CraftUi.GetGrid(0).Id.Value); // rolled back, not consumed
+
+        // Open a crafting table and place the same 8 planks in its 3x3 grid — now it succeeds.
+        player.OpenCraftingTableContainer(1, InventoryContainerMap.WindowTypeWorkbench);
+        Assert.True(player.TableCraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+        Assert.True(player.TableCraftUi.TrySetGrid(1, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+        Assert.True(player.TableCraftUi.TrySetGrid(2, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+        Assert.True(player.TableCraftUi.TrySetGrid(3, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+
+        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(23, [
             InventoryStackAction.Craft(RecipeRegistry.OakPlanksToChest),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
@@ -3187,6 +3236,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.Result.IsEmpty);
         Assert.Equal(Blocks.Chest, player.Inventory.Get(3).Id.Value);
         Assert.Equal(1, player.Inventory.Get(3).Count);
+        Assert.True(player.TableCraftUi.GetGrid(0).IsEmpty); // consumed from the table grid, not the personal one
     }
 
     [Fact]
@@ -3365,7 +3415,7 @@ public class IntentContractTests
         Blocks.EnsureLoaded();
         var palette = ItemPaletteLoader.FromEmbeddedResource();
         var packet = InventoryProtocol.BuildCreativeContent(CreativeCatalog.CreateDefault(), palette);
-        Assert.Equal(24, packet.Items.Length); // ADR §138 added 4 building/decoration blocks.
+        Assert.Equal(25, packet.Items.Length); // ADR §138 + §139 added 5 building/decoration blocks.
         Assert.Equal(CreativeCatalog.Stone, packet.Items[0].CreativeItemNetworkId);
         Assert.Single(packet.Groups);
         Assert.True(packet.Encode().Length > 16);

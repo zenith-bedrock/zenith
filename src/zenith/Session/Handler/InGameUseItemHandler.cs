@@ -109,9 +109,10 @@ partial class InGameSessionHandler
             return;
         }
 
-        // Chest interact (§56): empty-hand or non-sneak → open; sneak + held placeable → place on face.
-        // Prefer pending AuthInput sneak (same packet as UseItem) over last-tick IsSneaking.
-        if (Blocks.IsChest(clicked))
+        // Chest / crafting table interact (§56 / ADR §139): empty-hand or non-sneak → open;
+        // sneak + held placeable → place on face. Prefer pending AuthInput sneak (same packet as
+        // UseItem) over last-tick IsSneaking.
+        if (Blocks.IsChest(clicked) || Blocks.IsCraftingTable(clicked))
         {
             var sneaking = player.IsSneaking;
             if (player.TryPeekMovementInput(out var pendingMove))
@@ -120,8 +121,11 @@ partial class InGameSessionHandler
             var emptyHand = stack.IsEmpty || stack.Count <= 0;
             if (emptyHand || !sneaking)
             {
-                if (!player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ)))
-                    session.Context.Logger.Debug($"Dropped chest open from {player.Username}: window queue full.");
+                var opened = Blocks.IsChest(clicked)
+                    ? player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ))
+                    : player.SubmitWindowIntent(InventoryWindowIntent.OpenCraftingTable(blockX, blockY, blockZ));
+                if (!opened)
+                    session.Context.Logger.Debug($"Dropped container open from {player.Username}: window queue full.");
                 return;
             }
         }
