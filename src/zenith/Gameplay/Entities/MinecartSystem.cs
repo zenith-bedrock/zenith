@@ -243,6 +243,7 @@ sealed class MinecartSystem : IGameSystem
             if (occupant.RidingEntityId == actorUniqueId)
                 occupant.RidingEntityId = null;
             DismountCount++;
+            SendDismountTeleport(occupant);
         }
         return applied;
     }
@@ -302,6 +303,33 @@ sealed class MinecartSystem : IGameSystem
             occupant.RidingEntityId = null;
         DismountCount++;
         BroadcastLink(id, online, riderId, SetActorLinkPacket.TypeRemove);
+        SendDismountTeleport(occupant);
+    }
+
+    /// <summary>
+    /// ADR §136 — resolves Phase XX's flagged-but-untested assumption. <see cref="FollowOccupant"/>
+    /// repositions the rider's authoritative pose every tick while mounted, but never sent the
+    /// rider's own client a packet that says so — <see cref="SetActorLinkPacket"/> only tells peers
+    /// to visually attach/detach the rider, it does not resync the rider's own local
+    /// position/camera prediction. Without this, the client's own understanding of where it is
+    /// silently drifted from the server the entire ride, and nothing ever corrected it — every
+    /// server-side reach/interact check afterward measured against wherever the client's stale
+    /// prediction landed, not where it visually was, so the player could end up unable to hit or
+    /// interact with anything after dismounting (a live-client bug report, not a hypothetical).
+    /// Matches the same pattern <see cref="MovementSystem"/>'s respawn path already uses for the
+    /// same class of problem (an authoritative reposition outside normal AuthInput flow).
+    /// </summary>
+    private static void SendDismountTeleport(Player.Player? occupant)
+    {
+        if (occupant is null || !occupant.IsInGame || occupant.IsDead) return;
+        occupant.Session.Protocol.Entity.SendMovePlayerTeleport(
+            entityRuntimeId: (ulong)occupant.RuntimeId,
+            x: occupant.PositionX,
+            y: occupant.PositionY,
+            z: occupant.PositionZ,
+            pitch: occupant.Pitch,
+            yaw: occupant.Yaw,
+            headYaw: occupant.HeadYaw);
     }
 
     private long GetActorUniqueId(EntityId id) => _stores.Identities.TryGet(id, out var identity) ? identity.ActorUniqueId : 0;
@@ -355,10 +383,13 @@ sealed class MinecartSystem : IGameSystem
 
     /// <summary>
     /// The rider's authoritative position mirrors the vehicle every tick. No explicit teleport is
-    /// sent to the rider's own client: <see cref="SetActorLinkPacket"/> is Bedrock's documented
-    /// mechanism for the client to visually attach a rider to a vehicle and follow it locally —
-    /// fighting that with server-pushed teleports was deliberately not attempted. Untested against
-    /// a live client; see phase findings for that caveat.
+    /// sent to the rider's own client while still mounted: <see cref="SetActorLinkPacket"/> is
+    /// Bedrock's documented mechanism for the client to visually attach a rider to a vehicle and
+    /// follow it locally — fighting that with server-pushed teleports every tick was deliberately
+    /// not attempted. That part held up. What did not: <see cref="SendDismountTeleport"/> (ADR
+    /// §136) — the moment authoritative control hands back to the client, it does need an explicit
+    /// correction, since <c>SetActorLinkPacket</c> only turns the visual attachment on/off, it does
+    /// not resync the rider's own local position/camera prediction.
     /// </summary>
     private void FollowOccupant(EntityId id, Player.Player rider)
     {

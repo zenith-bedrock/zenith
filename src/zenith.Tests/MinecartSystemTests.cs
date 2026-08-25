@@ -3,6 +3,7 @@ using Zenith.Player;
 using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 
@@ -92,6 +93,35 @@ public sealed class MinecartSystemTests
         Assert.Equal(moved.Z, player.PositionZ);
     }
 
+    /// <summary>
+    /// Regression: while mounted, MovementSystem used to discard the client's Pitch/Yaw along with
+    /// position, freezing ApplyRiderSteering's read of Yaw at whatever it was at the moment of
+    /// mounting. Bedrock does not lock the rider's camera, so the client keeps reporting fresh
+    /// look direction the whole ride — that must keep landing on Player.Yaw/Pitch even though
+    /// position stays vehicle-driven.
+    /// </summary>
+    [Fact]
+    public void Rider_pitch_and_yaw_keep_tracking_client_input_while_mounted()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("look-around-rider");
+        var minecarts = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var movement = new MovementSystem(fx.Players);
+        var id = minecarts.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
+
+        player.SubmitInteractIntent(ActorUniqueId(minecarts, id));
+        minecarts.Tick(fx.Clock, fx.Players.Online);
+        Assert.NotNull(player.RidingEntityId);
+
+        player.SubmitMovementInput(MovementInputState.From(
+            player.PositionX, player.PositionY, player.PositionZ, pitch: 12f, yaw: 90f));
+        movement.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(90f, player.Yaw);
+        Assert.Equal(12f, player.Pitch);
+        Assert.Equal(90f, player.HeadYaw);
+    }
+
     [Fact]
     public void Interacting_again_while_riding_dismounts()
     {
@@ -110,6 +140,49 @@ public sealed class MinecartSystemTests
         Assert.Equal(1, system.DismountCount);
         Assert.Null(player.RidingEntityId);
         Assert.Null(Occupant(system, id));
+    }
+
+    /// <summary>
+    /// Regression for a live-client bug report: FollowOccupant repositions the rider's authoritative
+    /// pose every tick while mounted, but nothing ever told the rider's own client where it actually
+    /// ended up — SetActorLink only attaches/detaches the rider visually for peers, it does not
+    /// resync the rider's own local position/camera prediction. Left uncorrected, the departing
+    /// rider's client silently disagreed with the server about its own position, and every
+    /// subsequent reach/interact check (attack, block interaction) measured against the wrong spot —
+    /// "stuck, can't hit anything" after exiting a vehicle. Dismount must now send that rider an
+    /// authoritative MovePlayer teleport.
+    /// </summary>
+    [Fact]
+    public void Dismounting_sends_the_rider_an_authoritative_position_teleport()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("rider");
+        var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
+
+        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        system.Tick(fx.Clock, fx.Players.Online);
+        player.Session.RakSession.Tick();
+        var afterMountBytes = BytesSentTo(fx, player); // baseline: just SetActorLink(Rider)
+
+        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        system.Tick(fx.Clock, fx.Players.Online);
+        player.Session.RakSession.Tick();
+        var dismountTickBytes = BytesSentTo(fx, player) - afterMountBytes;
+
+        Assert.Null(player.RidingEntityId);
+        // SetActorLink(Remove) alone is the same size as the mount's SetActorLink(Rider) — the extra
+        // bytes prove a MovePlayer teleport also went out this tick.
+        Assert.True(dismountTickBytes > afterMountBytes);
+    }
+
+    private static int BytesSentTo(IntentTestFixture fx, global::Zenith.Player.Player player)
+    {
+        var total = 0;
+        foreach (var (endPoint, datagram) in fx.Transport.CapturedByEndpoint)
+            if (endPoint.Equals(player.Session.RakSession.EndPoint))
+                total += datagram.Length;
+        return total;
     }
 
     [Fact]
