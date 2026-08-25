@@ -26,6 +26,9 @@
     <EmbeddedResource Include="data\biome_definitions.bin">
       <LogicalName>biome_definitions.bin</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\recipes.nbt">
+      <LogicalName>recipes.nbt</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>

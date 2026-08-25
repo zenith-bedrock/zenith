@@ -10,6 +10,7 @@ using Zenith.Session.Handler;
 using Zenith.Player;
 using Zenith.Raknet;
 using Zenith.Raknet.Log;
+using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 using Zenith.Server;
 using Zenith.World;
@@ -2436,7 +2437,7 @@ public class IntentContractTests
         new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
         Assert.Equal(GameMode.Creative, player.GameMode);
-        Assert.Contains(creativePayload, ConcatCaptured(fx));
+        Assert.Contains(ReassembleApplicationPackets(fx), msg => msg.AsSpan().IndexOf(creativePayload) >= 0);
 
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
@@ -2444,7 +2445,7 @@ public class IntentContractTests
         new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
         Assert.Equal(GameMode.Survival, player.GameMode);
-        Assert.Contains(creativePayload, ConcatCaptured(fx));
+        Assert.Contains(ReassembleApplicationPackets(fx), msg => msg.AsSpan().IndexOf(creativePayload) >= 0);
     }
 
     [Fact]
@@ -2614,6 +2615,57 @@ public class IntentContractTests
         }
 
         return buf;
+    }
+
+    /// <summary>
+    /// Decodes every captured RakNet datagram into its FrameSet's <see cref="Frame"/>s and
+    /// reassembles split (fragmented) ones — mirroring <c>RakNetSession.HandleFragment</c>'s exact
+    /// index-ordered concat. A payload larger than one datagram's MTU (ADR §140's real creative
+    /// catalog is: 45 items / 19 named groups, 1.6 KB encoded, well past the 1400-byte test MTU) is
+    /// no longer a contiguous span across <see cref="ConcatCaptured"/>'s raw bytes — reassembling
+    /// frame payloads is the only correct way to recover one logical reliable message. Each message
+    /// may itself batch more than one game packet (wrapper-framed), so callers still search for a
+    /// known packet's bytes as a sub-span rather than an exact match.
+    /// </summary>
+    private static List<byte[]> ReassembleApplicationPackets(IntentTestFixture fx)
+    {
+        var messages = new List<byte[]>();
+        var fragments = new Dictionary<short, SortedDictionary<int, Frame>>();
+
+        foreach (var datagram in fx.Transport.Captured)
+        {
+            if (datagram.Length == 0 || (datagram[0] & 0xf0) != (byte)Zenith.Raknet.Enumerator.BitFlags.Valid)
+                continue;
+
+            var reader = new BinaryStream(datagram, 1, datagram.Length - 1);
+            var frameSet = new FrameSet();
+            frameSet.Decode(ref reader);
+            reader.Dispose();
+
+            foreach (var frame in frameSet.Packets)
+            {
+                if (!frame.IsSplit())
+                {
+                    messages.Add(frame.Buffer.ToArray());
+                    continue;
+                }
+
+                var split = frame.SplitInfo!;
+                if (!fragments.TryGetValue(split.Id, out var parts))
+                    fragments[split.Id] = parts = new SortedDictionary<int, Frame>();
+                parts[split.Index] = frame;
+
+                if (parts.Count != split.Count) continue;
+
+                var stream = new BinaryStream();
+                foreach (var part in parts.Values)
+                    stream.Write(part.Buffer.Span);
+                messages.Add(stream.GetBufferDisposing().ToArray());
+                fragments.Remove(split.Id);
+            }
+        }
+
+        return messages;
     }
 
     [Fact]
@@ -3415,9 +3467,12 @@ public class IntentContractTests
         Blocks.EnsureLoaded();
         var palette = ItemPaletteLoader.FromEmbeddedResource();
         var packet = InventoryProtocol.BuildCreativeContent(CreativeCatalog.CreateDefault(), palette);
-        Assert.Equal(25, packet.Items.Length); // ADR §138 + §139 added 5 building/decoration blocks.
+        // ADR §140: real vanilla catalog, filtered by the Blocks+DigProfiles/Tools safety gate —
+        // 33 blocks (13 pinned starter blocks + ores/cobblestone/deepslate/leaves/ground-cover, every
+        // other block with a real name and a curated DigProfiles row) + 12 curated tools.
+        Assert.Equal(33 + 12, packet.Items.Length);
         Assert.Equal(CreativeCatalog.Stone, packet.Items[0].CreativeItemNetworkId);
-        Assert.Single(packet.Groups);
+        Assert.Equal(19, packet.Groups.Length); // real vanilla groups the 45 eligible items span.
         Assert.True(packet.Encode().Length > 16);
     }
 

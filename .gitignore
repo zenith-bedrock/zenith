@@ -89,3 +89,4 @@ docs/audit/
 docs/plans/
 tmp-nbt-dump.csx
 tools/protocol-import/.cache/
+tools/gamedata-import/out/
