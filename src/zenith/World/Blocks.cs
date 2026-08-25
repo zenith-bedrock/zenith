@@ -52,10 +52,14 @@ static class Blocks
     private static int _chestSouth;
     private static int _chestEast;
     private static int _chestWest;
+    private static int _shortGrass;
+    private static int _dandelion;
+    private static int _poppy;
     private static HashSet<int>? _chestIds;
     private static HashSet<int>? _placeableIds;
     private static HashSet<int>? _gravityIds;
     private static HashSet<int>? _fluidIds;
+    private static HashSet<int>? _passableIds;
     private static Dictionary<int, string>? _nameByRuntime;
     private static BlockPalette? _palette;
     private static bool _loaded;
@@ -90,6 +94,11 @@ static class Blocks
 
     /// <summary>Item / recipe / default place form — south palette entry.</summary>
     public static int Chest { get { EnsureLoaded(); return _chest; } }
+
+    /// <summary>Ground-cover decoration (world-gen vegetation, ADR §137) — see <see cref="IsPassableDecoration"/>.</summary>
+    public static int ShortGrass { get { EnsureLoaded(); return _shortGrass; } }
+    public static int Dandelion { get { EnsureLoaded(); return _dandelion; } }
+    public static int Poppy { get { EnsureLoaded(); return _poppy; } }
 
     /// <summary>Overworld min Y (Bedrock). Flat + noise share this floor.</summary>
     public const int FlatMinY = -64;
@@ -137,6 +146,9 @@ static class Blocks
         _deepslateDiamondOre = palette.Require("minecraft:deepslate_diamond_ore");
         _deepslateLapisOre = palette.Require("minecraft:deepslate_lapis_ore");
         _deepslateRedstoneOre = palette.Require("minecraft:deepslate_redstone_ore");
+        _shortGrass = palette.Require("minecraft:short_grass");
+        _dandelion = palette.Require("minecraft:dandelion");
+        _poppy = palette.Require("minecraft:poppy");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -167,8 +179,12 @@ static class Blocks
         // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
         // Extend this set, not a scattered `== Blocks.Water` check, the day a second fluid lands.
         _fluidIds = [_water];
+        _passableIds = [_shortGrass, _dandelion, _poppy];
         _nameByRuntime = new Dictionary<int, string>
         {
+            [_shortGrass] = "minecraft:short_grass",
+            [_dandelion] = "minecraft:dandelion",
+            [_poppy] = "minecraft:poppy",
             [_air] = "minecraft:air",
             [_stone] = "minecraft:stone",
             [_grassBlock] = "minecraft:grass_block",
@@ -264,12 +280,26 @@ static class Blocks
     }
 
     /// <summary>
-    /// Real solid collision — not air, not a fluid. The one physical fact <see cref="BlocksMovement"/>
-    /// and <see cref="CanSupportGroundActor"/> both reduce to today; kept as two named call shapes
-    /// since a future consumer (e.g. a partial-height block) may legitimately need to diverge, but
-    /// there is exactly one classification underneath until that happens.
+    /// Ground-cover decoration placed by world-gen (short grass, flowers — ADR §137): not air, not
+    /// a fluid, but thin/passable, not the "real solid collision" <see cref="IsSolid"/> means. Kept
+    /// as its own set rather than folding into <see cref="IsFluid"/>'s naming — a liquid body and a
+    /// thin decoration are physically unrelated, they just share the same "not real collision"
+    /// conclusion here.
     /// </summary>
-    private static bool IsSolid(int runtimeId) => !IsAir(runtimeId) && !IsFluid(runtimeId);
+    public static bool IsPassableDecoration(int runtimeId)
+    {
+        EnsureLoaded();
+        return _passableIds is not null && _passableIds.Contains(runtimeId);
+    }
+
+    /// <summary>
+    /// Real solid collision — not air, not a fluid, not passable decoration. The one physical fact
+    /// <see cref="BlocksMovement"/> and <see cref="CanSupportGroundActor"/> both reduce to today;
+    /// kept as two named call shapes since a future consumer (e.g. a partial-height block) may
+    /// legitimately need to diverge, but there is exactly one classification underneath until that
+    /// happens.
+    /// </summary>
+    private static bool IsSolid(int runtimeId) => !IsAir(runtimeId) && !IsFluid(runtimeId) && !IsPassableDecoration(runtimeId);
 
     /// <summary>Blocks body occupancy for any actor's feet/head cell. Air and fluid are both occupiable.</summary>
     public static bool BlocksMovement(int runtimeId) => IsSolid(runtimeId);
@@ -373,10 +403,12 @@ static class Blocks
             _deepslateCoalOre = _deepslateIronOre = _deepslateCopperOre = _deepslateGoldOre = 0;
             _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
             _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
+            _shortGrass = _dandelion = _poppy = 0;
             _chestIds = null;
             _placeableIds = null;
             _gravityIds = null;
             _fluidIds = null;
+            _passableIds = null;
             _nameByRuntime = null;
             _palette = null;
         }

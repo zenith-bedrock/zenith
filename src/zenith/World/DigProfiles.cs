@@ -94,6 +94,13 @@ static class DigProfiles
         RegisterUnlocked(Blocks.Gravel, 0.6, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.GrassBlock, 0.6, ToolKind.None, ToolKind.Shovel, requiresCorrectTool: false);
 
+        // Ground-cover decoration (ADR §137) — vanilla hardness is 0.0 (instant, any tool
+        // including bare hand); 0.1 is the fastest nonzero value this table uses (BreakDuration
+        // divides by DestroySpeed) and is indistinguishable from instant at 20 TPS.
+        RegisterUnlocked(Blocks.ShortGrass, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
+        RegisterUnlocked(Blocks.Dandelion, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
+        RegisterUnlocked(Blocks.Poppy, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
+
         // Wood / chest — axe effective; always harvestable for timing.
         RegisterUnlocked(Blocks.OakPlanks, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.OakLog, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);

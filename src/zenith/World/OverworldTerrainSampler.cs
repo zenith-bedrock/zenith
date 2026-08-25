@@ -39,6 +39,7 @@ static class OverworldTerrainSampler
 
     private const int TreeSalt = unchecked((int)0x7EE7E77Eu);
     private const int RuinSalt = unchecked((int)0x5015015u);
+    private const int GroundCoverSalt = unchecked((int)0x67A55u);
 
     public static int SurfaceY(int worldX, int worldZ, int seed)
     {
@@ -258,11 +259,19 @@ static class OverworldTerrainSampler
         if (worldY > surface)
         {
             if (worldY <= SeaLevel) return Blocks.Water;
-            if (features is not null)
-                return features.TryGet(worldX, worldY, worldZ, out var aboveBlock) ? aboveBlock : Blocks.Air;
 
-            var above = SampleFeature(worldX, worldY, worldZ, seed);
-            return above != Blocks.Air ? above : Blocks.Air;
+            var above = features is not null
+                ? (features.TryGet(worldX, worldY, worldZ, out var aboveBlock) ? aboveBlock : Blocks.Air)
+                : SampleFeature(worldX, worldY, worldZ, seed);
+            if (above != Blocks.Air) return above;
+
+            // Ground cover (ADR §137) only ever sits directly on the surface — checked once here,
+            // by exact Y, rather than folded into SampleFeature's per-block scan (which runs at
+            // every Y above surface up to the world ceiling; this subsystem's per-column cost is
+            // already the documented bottleneck, see docs/world-generation.md's Performance model).
+            if (worldY != surface + 1) return Blocks.Air;
+            var groundCoverKind = biome ?? OverworldBiomeSampler.SampleKind(worldX, worldZ, seed);
+            return SampleGroundCover(worldX, worldZ, seed, groundCoverKind);
         }
         if (worldY == Blocks.FlatMinY) return Blocks.Bedrock;
 
@@ -328,6 +337,27 @@ static class OverworldTerrainSampler
         var tree = SampleTree(x, y, z, seed);
         if (tree != Blocks.Air) return tree;
         return SampleRuin(x, y, z, seed);
+    }
+
+    /// <summary>
+    /// Short grass / flowers (ADR §137), one independent probability roll per column — no cell grid
+    /// needed (unlike trees, ground cover has no spacing requirement between neighbors). Called only
+    /// at <c>y == surface + 1</c> by both callers, so it agrees with itself by construction (dual-
+    /// sample contract, ADR §69) without needing a <see cref="FeaturePlacementPlan"/> entry.
+    /// </summary>
+    private static int SampleGroundCover(int x, int z, int seed, OverworldBiomeKind biome)
+    {
+        var density = OverworldBiomeSampler.GroundCoverDensity(biome);
+        if (density <= 0) return Blocks.Air;
+
+        var h = Hash(x, z, seed ^ GroundCoverSalt);
+        if (h % (uint)density != 0) return Blocks.Air;
+
+        // Grass is far more common than either flower — matches PocketMine's growGrass weighting
+        // (4 grass : 1 dandelion : 1 poppy out of 6).
+        var pick = (h >> 8) % 6;
+        if (pick < 4) return Blocks.ShortGrass;
+        return pick == 4 ? Blocks.Dandelion : Blocks.Poppy;
     }
 
     private static int SampleTree(int x, int y, int z, int seed)

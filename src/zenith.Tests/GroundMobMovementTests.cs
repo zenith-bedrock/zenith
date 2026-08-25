@@ -40,6 +40,31 @@ public sealed class GroundMobMovementTests
         Assert.True(GroundMobMovement.IsSupportedGroundCell(fx.World, 0.5f, Blocks.FlatSpawnY, 0.5f));
     }
 
+    /// <summary>
+    /// Regression for ADR §137: ground-cover vegetation (short grass/flowers) added by world-gen
+    /// must be passable, unlike every previously-registered block — before this, Blocks.IsSolid
+    /// treated anything that wasn't air or fluid as solid, which would have made grass tufts
+    /// impassable walls the moment any decoration got placed on the surface.
+    /// </summary>
+    [Fact]
+    public void Ground_cover_decoration_does_not_block_movement_or_support()
+    {
+        Blocks.EnsureLoaded();
+        Assert.False(Blocks.BlocksMovement(Blocks.ShortGrass));
+        Assert.False(Blocks.BlocksMovement(Blocks.Dandelion));
+        Assert.False(Blocks.BlocksMovement(Blocks.Poppy));
+        Assert.False(Blocks.CanSupportGroundActor(Blocks.ShortGrass));
+        Assert.True(Blocks.CanOccupy(Blocks.ShortGrass));
+    }
+
+    [Fact]
+    public void Grass_block_itself_still_blocks_movement_and_supports_ground_actors()
+    {
+        Blocks.EnsureLoaded();
+        Assert.True(Blocks.BlocksMovement(Blocks.GrassBlock));
+        Assert.True(Blocks.CanSupportGroundActor(Blocks.GrassBlock));
+    }
+
     [Fact]
     public void Ground_actor_does_not_hover_over_water()
     {
