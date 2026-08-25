@@ -38,6 +38,7 @@ sealed class HungerSystem : IGameSystem
     private const float SaturationRestoreRatio = 0.5f;
 
     private const float RegenHungerThreshold = 18f;
+    private const float RegenExhaustionCost = 6f;
     private const ulong StarveDamageIntervalTicks = 80; // 4s @ 20 TPS, vanilla-parity cadence.
     private const ulong RegenIntervalTicks = 80;
 
@@ -67,7 +68,10 @@ sealed class HungerSystem : IGameSystem
 
             AccrueExhaustion(player);
 
-            if (player.Hunger <= 0f && clock.CurrentTick % StarveDamageIntervalTicks == 0)
+            // Starvation has a health floor of 1 (vanilla's non-Hard-difficulty default — Zenith has
+            // no difficulty concept to gate this on, so it defaults to the common case: starving
+            // never kills on its own, it just leaves the player critically low).
+            if (player.Hunger <= 0f && player.Health > 1f && clock.CurrentTick % StarveDamageIntervalTicks == 0)
             {
                 // PlayerDamage already sends attributes/relays health for both outcomes.
                 PlayerDamage.ApplyCore(player, _players, DamageSource.Starve, 1f, clock.CurrentTick).Conclude(online);
@@ -78,6 +82,9 @@ sealed class HungerSystem : IGameSystem
                 clock.CurrentTick % RegenIntervalTicks == 0)
             {
                 player.Heal(1f);
+                // Every vanilla-parity natural heal costs exhaustion, same as sprinting/mining/damage
+                // — otherwise a well-fed player heals indefinitely at no food cost.
+                player.Exhaustion += RegenExhaustionCost;
                 player.Session.Protocol.Entity.SendPlayerAttributes(player);
                 PlayerVisibility.RelayHealth(player, online);
                 continue;

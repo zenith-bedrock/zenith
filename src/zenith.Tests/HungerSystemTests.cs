@@ -110,6 +110,27 @@ public class HungerSystemTests
         Assert.Equal(19f, player.Health);
     }
 
+    /// <summary>
+    /// Regression: starvation used to have no health floor and could kill the player outright.
+    /// Reference servers gate starvation damage below Hard difficulty so it can never be lethal;
+    /// Zenith has no difficulty concept, so it defaults to that common, non-lethal case.
+    /// </summary>
+    [Fact]
+    public void Starvation_never_reduces_health_below_one()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("starving-to-the-brink");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.Hunger = 0f;
+        _ = player.ApplyDamage(DamageSource.Generic, 19f, 0); // Health = 1
+
+        fx.Clock.AdvanceBy(80);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.False(player.IsDead);
+        Assert.Equal(1f, player.Health);
+    }
+
     [Fact]
     public void Creative_players_never_starve()
     {
@@ -140,6 +161,27 @@ public class HungerSystemTests
         fx.Clock.AdvanceBy(1); // now at tick 80
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(16f, player.Health);
+    }
+
+    /// <summary>
+    /// Regression: natural well-fed regen used to heal for free. Every vanilla-parity heal costs
+    /// exhaustion, same as sprinting/mining/damage — otherwise healing has no food cost at all.
+    /// </summary>
+    [Fact]
+    public void Well_fed_regeneration_costs_exhaustion()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("regen-cost");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.Hunger = 20f;
+        player.Exhaustion = 0f;
+        _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
+
+        fx.Clock.AdvanceBy(80);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(16f, player.Health);
+        Assert.Equal(6f, player.Exhaustion);
     }
 
     [Fact]
