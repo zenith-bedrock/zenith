@@ -140,7 +140,7 @@ src/
     Packets/       # DataPacket + ProtocolInfo — serialize only (sem Server/World)
     Protocol/      # *Protocol, ProtocolGate, ColumnSend — transmit
     Session/       # NetworkSession, handlers, ZenithSessionListener, PlayerVisibility
-    data/          # block_palette.nbt, item_palette.json, creative_items.json (EmbeddedResource)
+    data/          # block_palette.nbt, item_palette.json, creative_items.json, recipes.nbt (EmbeddedResource)
   raknet/
 ```
 
