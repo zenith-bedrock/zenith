@@ -13,7 +13,11 @@ namespace Zenith.Gameplay.Survival;
 /// </summary>
 sealed class EffectSystem : IGameSystem
 {
-    /// <summary>Vanilla-parity cadence: both effects tick once per second at amplifier 0.</summary>
+    /// <summary>
+    /// Vanilla-parity cadence at amplifier 0. Vanilla halves the tick interval per amplifier level
+    /// (<c>interval &gt;&gt; amplifier</c>) rather than scaling the per-tick amount — see
+    /// <see cref="TickPoison"/>/<see cref="TickRegeneration"/>.
+    /// </summary>
     private const ulong PoisonIntervalTicks = 25;
     private const ulong RegenIntervalTicks = 50;
 
@@ -100,22 +104,27 @@ sealed class EffectSystem : IGameSystem
         }
     }
 
-    /// <summary>Poison never reduces health below 1 and bypasses armor (vanilla parity, magic damage).</summary>
+    /// <summary>
+    /// Poison never reduces health below 1 and bypasses armor (vanilla parity, magic damage). Amount
+    /// per tick is always 1 — a higher amplifier ticks more often (<see cref="PoisonIntervalTicks"/>),
+    /// it does not deal more damage per tick.
+    /// </summary>
     private void TickPoison(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (clock.CurrentTick % PoisonIntervalTicks != 0) return;
+        if (clock.CurrentTick % (PoisonIntervalTicks >> effect.Amplifier) != 0) return;
         if (player.Health <= 1f) return;
 
-        var amount = MathF.Min(1f + effect.Amplifier, player.Health - 1f);
+        var amount = MathF.Min(1f, player.Health - 1f);
         PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, amount, clock.CurrentTick).Conclude(online);
     }
 
+    /// <summary>Amount per tick is always 1 — a higher amplifier ticks more often, matching Poison.</summary>
     private static void TickRegeneration(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (clock.CurrentTick % RegenIntervalTicks != 0) return;
+        if (clock.CurrentTick % (RegenIntervalTicks >> effect.Amplifier) != 0) return;
         if (player.Health >= player.MaxHealth) return;
 
-        player.Heal(1f + effect.Amplifier);
+        player.Heal(1f);
         player.Session.Protocol.Entity.SendPlayerAttributes(player);
         PlayerVisibility.RelayHealth(player, online);
     }

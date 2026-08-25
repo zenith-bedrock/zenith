@@ -150,6 +150,29 @@ public class EffectTests
         Assert.Equal(19f, player.Health);
     }
 
+    /// <summary>
+    /// Regression: amplifier used to scale the per-tick amount (e.g. amplifier 1 = 2 damage every 25
+    /// ticks). Reference servers instead halve the interval per amplifier level and keep the amount
+    /// fixed at 1 (<c>interval &gt;&gt; amplifier</c>) — two 1-damage ticks in a given window, not one
+    /// bigger tick.
+    /// </summary>
+    [Fact]
+    public void Higher_amplifier_poison_ticks_more_often_instead_of_dealing_more_damage_per_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fast-poison");
+        var system = new EffectSystem(fx.Players);
+
+        player.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 1, durationTicks: 100));
+        system.Tick(fx.Clock, fx.Players.Online); // tick 0 is a poison interval tick at every amplifier.
+        Assert.Equal(19f, player.Health);
+
+        fx.Clock.AdvanceBy(12); // interval at amplifier 1 is 25 >> 1 = 12, not the base 25.
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(18f, player.Health); // a second 1-damage tick, not a single 2-damage one.
+    }
+
     [Fact]
     public void Poison_never_reduces_health_below_one()
     {
@@ -158,17 +181,18 @@ public class EffectTests
         _ = player.ApplyDamage(DamageSource.Generic, 18.5f, 0); // Health = 1.5
         var system = new EffectSystem(fx.Players);
 
-        // Amplifier 3 would deal 4 damage — clamped so the poison tick leaves exactly 1 HP. Advance
-        // past the setup hit's own hit-invulnerability window first (Phase XXIII-B), landing exactly
-        // on the 25-tick poison interval.
+        // Amplifier 3 ticks every 25 >> 3 = 3 ticks (amplifier scales the interval, not the per-tick
+        // amount — see EffectSystem's doc). 12 is the first tick that is both a poison interval and
+        // past the setup hit's own hit-invulnerability window (Phase XXIII-B). The 0.5 that lands is
+        // clamped so it leaves exactly 1 HP rather than going lower.
         player.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 3, durationTicks: 100));
-        fx.Clock.AdvanceBy(25);
+        fx.Clock.AdvanceBy(12);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.False(player.IsDead);
         Assert.Equal(1f, player.Health);
 
-        fx.Clock.AdvanceBy(25); // the next poison interval must not push health below 1 either.
+        fx.Clock.AdvanceBy(3); // the next poison interval must not push health below 1 either.
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.False(player.IsDead);
