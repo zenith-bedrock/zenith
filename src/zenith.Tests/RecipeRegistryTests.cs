@@ -28,6 +28,51 @@ public class RecipeRegistryTests
         Assert.Equal(1, output.Count);
     }
 
+    /// <summary>Regression for ADR §138 — building/decoration blocks, same "no furnace needed" bar as the tool chain.</summary>
+    [Fact]
+    public void TryMatch_coal_and_stick_to_torch()
+    {
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var reg = RecipeRegistry.CreateDefault(palette);
+        var coal = StackId.FromItem(palette.Require("minecraft:coal"));
+        var stick = StackId.FromItem(palette.Require("minecraft:stick"));
+
+        Assert.True(reg.TryMatch([(coal, 1), (stick, 1)], out var output));
+        Assert.Equal(Blocks.Torch, output.Id.Value);
+        Assert.Equal(4, output.Count);
+    }
+
+    [Fact]
+    public void TryMatch_planks_and_stick_to_fence()
+    {
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var reg = RecipeRegistry.CreateDefault(palette);
+        var stick = StackId.FromItem(palette.Require("minecraft:stick"));
+
+        Assert.True(reg.TryMatch(
+            [(StackId.FromBlock(Blocks.OakPlanks), 4), (stick, 2)], out var output));
+        Assert.Equal(Blocks.OakFence, output.Id.Value);
+        Assert.Equal(3, output.Count);
+    }
+
+    [Fact]
+    public void TryMatch_stone_to_stone_bricks()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.Stone), 4)], out var output));
+        Assert.Equal(Blocks.StoneBricks, output.Id.Value);
+        Assert.Equal(4, output.Count);
+    }
+
+    [Fact]
+    public void TryMatch_cobblestone_to_wall()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.Cobblestone), 6)], out var output));
+        Assert.Equal(Blocks.CobblestoneWall, output.Id.Value);
+        Assert.Equal(6, output.Count);
+    }
+
     [Fact]
     public void TryMatch_rejects_wrong_counts()
     {
@@ -48,6 +93,26 @@ public class RecipeRegistryTests
         Assert.True(reg.TryCraft(inv, RecipeRegistry.OakLogToPlanks));
         Assert.True(inv.Get(3).IsEmpty);
         Assert.Equal(Blocks.OakPlanks, inv.Get(0).Id.Value);
+        Assert.Equal(4, inv.Get(0).Count);
+    }
+
+    [Fact]
+    public void TryCraft_coal_and_stick_to_torch_consumes_and_outputs()
+    {
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var reg = RecipeRegistry.CreateDefault(palette);
+        var coalId = palette.Require("minecraft:coal");
+        var stickId = palette.Require("minecraft:stick");
+
+        var inv = new PlayerInventory();
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            Assert.True(inv.TrySetBlock(i, Blocks.Air, 0));
+        Assert.True(inv.TrySetItem(0, coalId, 1));
+        Assert.True(inv.TrySetItem(1, stickId, 1));
+
+        Assert.True(reg.TryCraft(inv, RecipeRegistry.CoalAndStickToTorch));
+        // Both input slots are now empty; TryAdd places the output in the first free slot (0).
+        Assert.Equal(Blocks.Torch, inv.Get(0).Id.Value);
         Assert.Equal(4, inv.Get(0).Count);
     }
 

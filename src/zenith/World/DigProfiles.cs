@@ -100,8 +100,10 @@ static class DigProfiles
         RegisterUnlocked(Blocks.ShortGrass, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.Dandelion, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.Poppy, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
+        RegisterUnlocked(Blocks.Torch, 0.1, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
 
         // Wood / chest — axe effective; always harvestable for timing.
+        RegisterUnlocked(Blocks.OakFence, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.OakPlanks, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.OakLog, 2.0, ToolKind.None, ToolKind.Axe, requiresCorrectTool: false);
         RegisterUnlocked(Blocks.OakLeaves, 0.2, ToolKind.None, ToolKind.None, requiresCorrectTool: false);
@@ -115,6 +117,8 @@ static class DigProfiles
         RegisterUnlocked(Blocks.Stone, 1.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
         RegisterUnlocked(Blocks.Cobblestone, 2.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
         RegisterUnlocked(Blocks.Deepslate, 3.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.StoneBricks, 1.5, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
+        RegisterUnlocked(Blocks.CobblestoneWall, 2.0, ToolKind.Pickaxe, ToolKind.Pickaxe, requiresCorrectTool: true);
 
         // Phase XXVI — minimum harvest tier per vanilla-adjacent reference (coal: any pickaxe;
         // iron/copper/lapis: stone+; gold/diamond/redstone: iron+). Previously every ore only
