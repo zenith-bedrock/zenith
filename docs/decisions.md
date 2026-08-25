@@ -1885,6 +1885,24 @@ across reconnect. All are pre-existing, separately documented gaps this phase de
 
 See `docs/history/phases/phase-xxv-survival-foundation-findings.md` for the full record.
 
+**Adendo (ago 2026 — two more HungerSystem gaps closed by the same reference-parity audit):**
+
+1. **Starvation had no health floor.** `HungerSystem.Tick` applied `DamageSource.Starve` at 0 hunger
+   with no check against `player.Health` — it could kill the player outright. Reference servers gate
+   starvation below Hard difficulty (Dragonfly: `p.Health() > StarvationHealthLimit()`; PowerNukkitX:
+   `(difficulty==1 && health>10) || (difficulty==2 && health>1) || difficulty==3`) so it is never
+   lethal on its own below Hard. Zenith has no difficulty concept to gate this on, so it now defaults
+   to that common case: `player.Health > 1f` guards the starvation-damage branch, matching the same
+   floor `EffectSystem.TickPoison` already enforced for Poison.
+2. **Natural well-fed regen was free.** `HungerSystem`'s regen branch called `player.Heal(1f)` with no
+   `Exhaustion` cost, so a well-fed player healed indefinitely at no food cost. Reference servers pair
+   every natural heal with an exhaustion cost (Dragonfly `regenerate`: `p.Heal(1, ...); if exhaust {
+   p.Exhaust(6) }`; PowerNukkitX `PlayerFood.tick()`: `heal(...); exhaust(6)`). `HungerSystem` now adds
+   the same 6-exhaustion cost on every regen tick. Not fixed in the same pass: reference servers also
+   have a faster 10-tick regen cadence when food is full and saturated — Zenith keeps its single
+   80-tick cadence; this is a pacing difference, not a free-resource bug, and is left as a further
+   pre-existing gap rather than folded into this fix.
+
 ### 110. Ore harvest gates on `ToolTier`, not just `ToolKind` — closing a live, not latent, gap
 
 **Choice:** `DigProfile` gains a `MinHarvestTier` field (default `ToolTier.None`, meaning "any tier of
