@@ -64,8 +64,18 @@ sealed class MovementSystem : IGameSystem
                 // Phase XX narrow vehicle-control path: while mounted, position is driven by the
                 // vehicle's own system (currently MinecartSystem), not by client-reported AuthInput
                 // — the client's local position while camera-locked to a vehicle is not
-                // authoritative. Still drain the input so it doesn't apply stale once dismounted.
-                _ = player.TryConsumeMovementInput(out _);
+                // authoritative. Pitch/Yaw are still applied, though (ADR §136): the rider keeps
+                // looking around freely while riding (Bedrock does not lock the camera), and
+                // ApplyRiderSteering reads Yaw every tick to steer — discarding it here would freeze
+                // steering at whatever direction the player faced at the moment of mounting, and
+                // would also feed a stale Yaw into MinecartSystem's dismount teleport (found via a
+                // live-client bug report: exiting a vehicle left the player unable to act).
+                if (player.TryConsumeMovementInput(out var ridingInput))
+                {
+                    player.Pitch = ridingInput.Pitch;
+                    player.Yaw = ridingInput.Yaw;
+                    player.HeadYaw = ridingInput.Yaw;
+                }
                 continue;
             }
 
