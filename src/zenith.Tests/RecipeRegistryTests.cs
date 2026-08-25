@@ -74,6 +74,77 @@ public class RecipeRegistryTests
     }
 
     [Fact]
+    public void TryMatch_planks_to_crafting_table()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.OakPlanks), 4)], out var output));
+        Assert.Equal(Blocks.CraftingTable, output.Id.Value);
+        Assert.Equal(1, output.Count);
+    }
+
+    /// <summary>
+    /// Regression for ADR §139 — the bug report this whole feature closes: a chest's real vanilla
+    /// shape (8 planks in a 3x3 ring) cannot fit a 2x2 grid, so it must require a table even though
+    /// Zenith's shapeless matcher could otherwise satisfy the aggregate count from a personal grid.
+    /// </summary>
+    [Fact]
+    public void TryCraftFromGrid_refuses_a_table_only_recipe_without_a_table()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        var craftUi = new PlayerCraftUi();
+        for (var i = 0; i < 4; i++)
+            Assert.True(craftUi.TrySetGrid(i, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+
+        Assert.False(reg.TryCraftFromGrid(craftUi, RecipeRegistry.OakPlanksToChest, out _, 1, isAtCraftingTable: false));
+    }
+
+    [Fact]
+    public void TryCraftFromGrid_allows_a_table_only_recipe_at_a_table()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        var tableUi = new PlayerTableCraftUi();
+        for (var i = 0; i < 4; i++)
+            Assert.True(tableUi.TrySetGrid(i, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+
+        Assert.True(reg.TryCraftFromGrid(tableUi, RecipeRegistry.OakPlanksToChest, out var output, 1, isAtCraftingTable: true));
+        Assert.Equal(Blocks.Chest, output.Id.Value);
+        Assert.Equal(1, output.Count);
+    }
+
+    /// <summary>Tool recipes need a table too — the exact same gap as chest, real vanilla shapes just weren't the report's headline example.</summary>
+    [Fact]
+    public void TryCraftFromGrid_wooden_pickaxe_requires_a_table()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        var craftUi = new PlayerCraftUi();
+        Assert.True(craftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 3)));
+        Assert.True(craftUi.TrySetGrid(1, InventorySlot.OfItem(StickNetworkId(), 2)));
+
+        Assert.False(reg.TryCraftFromGrid(craftUi, RecipeRegistry.WoodenPickaxe, out _, 1, isAtCraftingTable: false));
+
+        var tableUi = new PlayerTableCraftUi();
+        Assert.True(tableUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 3)));
+        Assert.True(tableUi.TrySetGrid(1, InventorySlot.OfItem(StickNetworkId(), 2)));
+        Assert.True(reg.TryCraftFromGrid(tableUi, RecipeRegistry.WoodenPickaxe, out var output, 1, isAtCraftingTable: true));
+        Assert.True(output.Id.IsItem);
+    }
+
+    [Fact]
+    public void TryCraftFromGrid_allows_a_non_table_recipe_without_a_table()
+    {
+        var reg = RecipeRegistry.CreateDefault();
+        var craftUi = new PlayerCraftUi();
+        Assert.True(craftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+
+        Assert.True(reg.TryCraftFromGrid(craftUi, RecipeRegistry.OakLogToPlanks, out var output, 1, isAtCraftingTable: false));
+        Assert.Equal(Blocks.OakPlanks, output.Id.Value);
+        Assert.Equal(4, output.Count);
+    }
+
+    private static int StickNetworkId() =>
+        ItemPaletteLoader.FromEmbeddedResource().Require("minecraft:stick");
+
+    [Fact]
     public void TryMatch_rejects_wrong_counts()
     {
         var reg = RecipeRegistry.CreateDefault();
@@ -149,10 +220,10 @@ public class RecipeRegistryTests
     {
         var reg = RecipeRegistry.CreateDefault();
 
-        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var firstRead));
+        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var firstRead, out _));
         firstRead[0] = (StackId.FromBlock(Blocks.Stone), 99);
 
-        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var secondRead));
+        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var secondRead, out _));
         Assert.Equal(StackId.FromBlock(Blocks.OakLog), secondRead[0].Id);
         Assert.Equal(1, secondRead[0].Count);
     }

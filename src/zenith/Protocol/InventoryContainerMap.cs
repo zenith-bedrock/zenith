@@ -26,10 +26,14 @@ static class InventoryContainerMap
     /// <summary>Wire window ids — Gameplay must not reference <c>InventoryContentPacket</c> (ADR §56 hygiene).</summary>
     public const int WindowInventory = 0;
     public const int WindowChest = 2;
+    /// <summary>ADR §139 — distinct window id from <see cref="WindowChest"/>, arbitrary but stable within one session.</summary>
+    public const int WindowCraftingTable = 3;
     public const int WindowUI = 124;
     /// <summary>Legacy fixed window id for the armor InventoryContentPacket (Phase XI.2).</summary>
     public const int WindowArmor = 120;
     public const byte WindowTypeChest = 0;
+    /// <summary>gophertunnel <c>ContainerTypeWorkbench</c> = 1 (ADR §139).</summary>
+    public const byte WindowTypeWorkbench = 1;
     public const byte WindowTypeInventory = 0xff;
 
     /// <summary>Legacy characterization-test offset for open-container slots; not used by production transactions.</summary>
@@ -44,6 +48,13 @@ static class InventoryContainerMap
     public const int CraftResultFlat = CraftUiBase + PlayerCraftUi.GridSize;
 
     public const int CraftingGridWireOffset = 28;
+    /// <summary>
+    /// ADR §139 — the crafting table's 3×3 grid, verified against Dragonfly's
+    /// <c>craftingGridLargeOffset</c>/pmmp's <c>UIInventorySlotOffset::CRAFTING3X3_INPUT</c> (both
+    /// reverse-engineered from the client's own <c>PlayerUISlot</c> enum): wire slots 32-40, a
+    /// separate range from the 2×2 grid's 28-31, not a continuation of it.
+    /// </summary>
+    public const int CraftingTableGridWireOffset = 32;
     public const byte CraftingResultWireSlot = 50;
     public const int UiInventorySlotCount = 54;
 
@@ -61,6 +72,9 @@ static class InventoryContainerMap
 
     public static byte CraftGridWireSlot(int gridIndex) =>
         (byte)(CraftingGridWireOffset + gridIndex);
+
+    public static byte TableCraftGridWireSlot(int gridIndex) =>
+        (byte)(CraftingTableGridWireOffset + gridIndex);
 
     public static bool TryMap(byte containerId, byte slot, out InventorySlotReference reference)
     {
@@ -113,9 +127,18 @@ static class InventoryContainerMap
                 return true;
 
             case CraftingInput:
+                // Both grids share container id 13 on the wire (real Bedrock protocol) — decode
+                // structurally maps either range; InventorySlotResolver gates the table range on
+                // whether a crafting table is actually the open container (ADR §139).
                 if (slot is >= CraftingGridWireOffset and < CraftingGridWireOffset + PlayerCraftUi.GridSize)
                 {
                     reference = InventorySlotReference.CraftGrid(slot - CraftingGridWireOffset);
+                    return true;
+                }
+
+                if (slot is >= CraftingTableGridWireOffset and < CraftingTableGridWireOffset + PlayerTableCraftUi.GridSize)
+                {
+                    reference = InventorySlotReference.TableCraftGrid(slot - CraftingTableGridWireOffset);
                     return true;
                 }
 
@@ -158,6 +181,10 @@ static class InventoryContainerMap
             case InventorySlotArea.CraftGrid when reference.Index is >= 0 and < PlayerCraftUi.GridSize:
                 containerId = CraftingInput;
                 wireSlot = CraftGridWireSlot(reference.Index);
+                return true;
+            case InventorySlotArea.TableCraftGrid when reference.Index is >= 0 and < PlayerTableCraftUi.GridSize:
+                containerId = CraftingInput;
+                wireSlot = TableCraftGridWireSlot(reference.Index);
                 return true;
             case InventorySlotArea.CraftResult when reference.Index == 0:
                 containerId = CreatedOutput;

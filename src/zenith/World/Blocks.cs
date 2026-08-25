@@ -59,6 +59,7 @@ static class Blocks
     private static int _oakFence;
     private static int _stoneBricks;
     private static int _cobblestoneWall;
+    private static int _craftingTable;
     private static HashSet<int>? _chestIds;
     private static HashSet<int>? _placeableIds;
     private static HashSet<int>? _gravityIds;
@@ -109,6 +110,13 @@ static class Blocks
     public static int OakFence { get { EnsureLoaded(); return _oakFence; } }
     public static int StoneBricks { get { EnsureLoaded(); return _stoneBricks; } }
     public static int CobblestoneWall { get { EnsureLoaded(); return _cobblestoneWall; } }
+    public static int CraftingTable { get { EnsureLoaded(); return _craftingTable; } }
+
+    public static bool IsCraftingTable(int runtimeId)
+    {
+        EnsureLoaded();
+        return runtimeId == _craftingTable;
+    }
 
     /// <summary>Overworld min Y (Bedrock). Flat + noise share this floor.</summary>
     public const int FlatMinY = -64;
@@ -163,6 +171,7 @@ static class Blocks
         _oakFence = palette.Require("minecraft:oak_fence");
         _stoneBricks = palette.Require("minecraft:stone_bricks");
         _cobblestoneWall = palette.Require("minecraft:cobblestone_wall");
+        _craftingTable = palette.Require("minecraft:crafting_table");
         _chest = palette.Require("minecraft:chest");
         _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
         _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
@@ -191,7 +200,8 @@ static class Blocks
             _torch,
             _oakFence,
             _stoneBricks,
-            _cobblestoneWall
+            _cobblestoneWall,
+            _craftingTable
         ];
         _gravityIds = [_sand, _gravel];
         // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
@@ -207,6 +217,7 @@ static class Blocks
             [_oakFence] = "minecraft:oak_fence",
             [_stoneBricks] = "minecraft:stone_bricks",
             [_cobblestoneWall] = "minecraft:cobblestone_wall",
+            [_craftingTable] = "minecraft:crafting_table",
             [_air] = "minecraft:air",
             [_stone] = "minecraft:stone",
             [_grassBlock] = "minecraft:grass_block",
@@ -427,6 +438,7 @@ static class Blocks
             _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
             _shortGrass = _dandelion = _poppy = 0;
             _torch = _oakFence = _stoneBricks = _cobblestoneWall = 0;
+            _craftingTable = 0;
             _chestIds = null;
             _placeableIds = null;
             _gravityIds = null;

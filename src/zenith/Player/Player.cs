@@ -289,6 +289,9 @@ class Player
     /// <summary>Compatibility projection of the active player-inventory window.</summary>
     public bool InventoryWindowOpen => OpenContainer is { Target: OpenContainerSession.TargetKind.PlayerInventory };
 
+    /// <summary>Whether a crafting-table window is the currently active container (ADR §139).</summary>
+    public bool IsAtCraftingTable => OpenContainer is { Target: OpenContainerSession.TargetKind.CraftingTable };
+
     public OpenContainerSession OpenPlayerContainer(byte windowId, byte windowType)
     {
         lock (_containerLock)
@@ -304,6 +307,16 @@ class Player
         lock (_containerLock)
         {
             var session = OpenContainerSession.ChestView(windowId, windowType, ++_nextContainerGeneration, view);
+            _openContainer = session;
+            return session;
+        }
+    }
+
+    public OpenContainerSession OpenCraftingTableContainer(byte windowId, byte windowType)
+    {
+        lock (_containerLock)
+        {
+            var session = OpenContainerSession.CraftingTable(windowId, windowType, ++_nextContainerGeneration);
             _openContainer = session;
             return session;
         }
@@ -343,6 +356,9 @@ class Player
 
     /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
     public PlayerCraftUi CraftUi { get; } = new();
+
+    /// <summary>Ephemeral 3×3 crafting-table grid (ADR §139) — not persisted, only live while <see cref="OpenContainerSession.TargetKind.CraftingTable"/> is open.</summary>
+    public PlayerTableCraftUi TableCraftUi { get; } = new();
 
     /// <summary>GameLoop-only authoritative start; network submits <see cref="DigIntent"/> instead.</summary>
     public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks, StackId heldStackId = default)

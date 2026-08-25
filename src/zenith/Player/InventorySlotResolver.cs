@@ -27,6 +27,14 @@ static class InventorySlotResolver
                     ? player.CraftUi.GetGrid(reference.Index)
                     : InventorySlot.Empty;
 
+            case InventorySlotArea.TableCraftGrid:
+                // Only readable while a crafting table is actually the open container (ADR §139) —
+                // same "structural decode, authoritative-state gate at resolve time" pattern Chest
+                // already uses above for its own Target check.
+                return player.IsAtCraftingTable && reference.Index is >= 0 and < PlayerTableCraftUi.GridSize
+                    ? player.TableCraftUi.GetGrid(reference.Index)
+                    : InventorySlot.Empty;
+
             case InventorySlotArea.CraftResult:
                 return reference.Index == 0 ? player.CraftUi.Result : InventorySlot.Empty;
 
@@ -59,6 +67,11 @@ static class InventorySlotResolver
             case InventorySlotArea.CraftGrid:
                 return reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize &&
                        player.CraftUi.TrySetGrid(reference.Index, value);
+
+            case InventorySlotArea.TableCraftGrid:
+                return player.IsAtCraftingTable &&
+                       reference.Index >= 0 && reference.Index < PlayerTableCraftUi.GridSize &&
+                       player.TableCraftUi.TrySetGrid(reference.Index, value);
 
             case InventorySlotArea.CraftResult:
                 return reference.Index == 0 && player.CraftUi.TrySetResult(value);

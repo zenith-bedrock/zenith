@@ -51,6 +51,7 @@ public class BreakDurationTests
         Assert.True(BreakDuration.BreakTicks(Blocks.OakFence) > 0);
         Assert.True(BreakDuration.BreakTicks(Blocks.StoneBricks) > 0);
         Assert.True(BreakDuration.BreakTicks(Blocks.CobblestoneWall) > 0);
+        Assert.True(BreakDuration.BreakTicks(Blocks.CraftingTable) > 0);
     }
 
     [Fact]
@@ -179,8 +180,8 @@ public class ToolWireTests
         Assert.True(catalog.TryGet(CreativeCatalog.DiamondPickaxe, out var id, out var count));
         Assert.Equal(StackId.FromItem(Tools.Require("minecraft:diamond_pickaxe")), id);
         Assert.Equal(1, count);
-        // 8 original blocks + 4 ADR §138 blocks (torch, fence, stone bricks, cobblestone wall) + 12 tools.
-        Assert.Equal(12 + 12, catalog.SnapshotEntries().Count);
+        // 8 original blocks + 4 ADR §138 blocks + 1 ADR §139 crafting table + 12 tools.
+        Assert.Equal(13 + 12, catalog.SnapshotEntries().Count);
     }
 
     [Fact]

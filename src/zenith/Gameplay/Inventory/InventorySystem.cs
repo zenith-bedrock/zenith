@@ -149,6 +149,22 @@ sealed class InventorySystem : IGameSystem
                     $"Chest open for {player.Username} @ {intent.X},{intent.Y},{intent.Z} slots={view.SlotCount}");
                 break;
 
+            case InventoryWindowIntent.Kind.OpenCraftingTable:
+                // Same re-transmit-crash risk OpenInventory's dedup guard above exists for.
+                if (player.IsAtCraftingTable)
+                    return;
+
+                if (player.OpenChest.HasValue)
+                    ChestLidFanout.ReleaseOpener(online, _world, player);
+
+                var tableSession = player.OpenCraftingTableContainer(
+                    (byte)InventoryContainerMap.WindowCraftingTable,
+                    InventoryContainerMap.WindowTypeWorkbench);
+                inv.BeginOpenContainerSession(tableSession.Generation);
+                inv.SendCraftingTableOpen(intent.X, intent.Y, intent.Z);
+                inv.SendUiInventoryContent(player);
+                break;
+
             case InventoryWindowIntent.Kind.Close:
                 // Phase XXIII-B fix: real Bedrock clients (documented in PocketMine's
                 // InventoryManager::onClientRemoveWindow, "since 1.21.100 and probably earlier")
@@ -243,6 +259,7 @@ sealed class InventorySystem : IGameSystem
         var invSnap = inventory.CaptureSnapshot();
         var armorSnap = inventory.SnapshotArmor();
         var craftSnap = player.CraftUi.CaptureSnapshot();
+        var tableCraftSnap = player.TableCraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
         OpenChestView? chestView = player.OpenChest;
         if (chestView is { } cv)
@@ -257,27 +274,36 @@ sealed class InventorySystem : IGameSystem
             switch (action.Kind)
             {
                 case InventoryStackActionKind.CraftRecipe:
+                {
+                    // ADR §139: which physical grid has the ingredients follows which container is
+                    // actually open — a table-only recipe is refused inside TryCraftFromGrid itself
+                    // (isAtTable), not by which grid happened to be passed in.
+                    var isAtTable = player.IsAtCraftingTable;
+                    ICraftGrid grid = isAtTable ? player.TableCraftUi : player.CraftUi;
+
                     // Materialize CreatedOutput so same-request Take/Place can move it;
                     // refuse if a prior result is still sitting untaken.
                     if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty ||
-                        !_recipes.TryCraftFromGrid(player.CraftUi, action.RecipeNetId, out var crafted, action.CraftTimes) ||
+                        !_recipes.TryCraftFromGrid(grid, action.RecipeNetId, out var crafted, action.CraftTimes, isAtTable) ||
                         !TrySetSlot(player, InventorySlotReference.CraftResult, crafted))
                     {
                         ok = false;
                         break;
                     }
 
-                    for (var g = 0; g < PlayerCraftUi.GridSize; g++)
+                    for (var g = 0; g < grid.GridSize; g++)
                     {
-                        AddWireTouch(wireTouches, InventorySlotReference.CraftGrid(g),
+                        AddWireTouch(wireTouches,
+                            isAtTable ? InventorySlotReference.TableCraftGrid(g) : InventorySlotReference.CraftGrid(g),
                             InventoryContainerMap.CraftingInput,
-                            InventoryContainerMap.CraftGridWireSlot(g));
+                            isAtTable ? InventoryContainerMap.TableCraftGridWireSlot(g) : InventoryContainerMap.CraftGridWireSlot(g));
                     }
 
                     AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
                         InventoryContainerMap.CreatedOutput,
                         InventoryContainerMap.CraftingResultWireSlot);
                     break;
+                }
 
                 case InventoryStackActionKind.CraftCreative:
                     // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
@@ -401,6 +427,7 @@ sealed class InventorySystem : IGameSystem
             inventory.RestoreSnapshot(invSnap);
             inventory.RestoreArmorSnapshot(armorSnap);
             player.CraftUi.RestoreSnapshot(craftSnap);
+            player.TableCraftUi.RestoreSnapshot(tableCraftSnap);
             if (chestView is { } cvFail && chestSnap is not null)
                 _world.Chests.RestoreOpenSnapshot(cvFail, chestSnap);
             protocol.SendItemStackResponseError(intent.RequestId);

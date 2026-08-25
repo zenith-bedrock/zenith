@@ -208,6 +208,7 @@ static class FloorDropFanout
         }
 
         player.CraftUi.Clear();
+        player.TableCraftUi.Clear();
         player.Inventory.Clear();
         world.PersistInventory(player);
         world.PersistArmor(player);
@@ -218,10 +219,19 @@ static class FloorDropFanout
     private static List<DepositRequest> CollectDeathLoot(Player.Player player)
     {
         var requests = new List<DepositRequest>(
-            PlayerCraftUi.GridSize + PlayerInventory.FullInventorySize + PlayerInventory.ArmorSize + 2);
+            PlayerCraftUi.GridSize + PlayerTableCraftUi.GridSize + PlayerInventory.FullInventorySize + PlayerInventory.ArmorSize + 2);
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
             var slot = player.CraftUi.GetGrid(g);
+            if (!slot.IsEmpty)
+                requests.Add(new DepositRequest(slot.Id, slot.Count));
+        }
+
+        // ADR §139 — a player who dies at an open crafting table has real materials sitting in its
+        // 3x3 grid too; same treatment as the personal grid right above.
+        for (var g = 0; g < PlayerTableCraftUi.GridSize; g++)
+        {
+            var slot = player.TableCraftUi.GetGrid(g);
             if (!slot.IsEmpty)
                 requests.Add(new DepositRequest(slot.Id, slot.Count));
         }

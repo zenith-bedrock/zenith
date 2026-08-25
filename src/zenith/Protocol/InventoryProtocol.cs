@@ -114,6 +114,15 @@ sealed class InventoryProtocol
                 DescribeForWire(InventorySlotReference.CraftGrid(g), player.CraftUi.GetGrid(g));
         }
 
+        // Always reported, same as the personal grid above — harmless (all-empty) when no crafting
+        // table is open, and keeps this one "full window-124 shape" method the single source of
+        // truth for both grids (ADR §139).
+        for (var g = 0; g < PlayerTableCraftUi.GridSize; g++)
+        {
+            wire[InventoryContainerMap.CraftingTableGridWireOffset + g] =
+                DescribeForWire(InventorySlotReference.TableCraftGrid(g), player.TableCraftUi.GetGrid(g));
+        }
+
         wire[InventoryContainerMap.CraftingResultWireSlot] =
             DescribeForWire(InventorySlotReference.CraftResult, player.CraftUi.Result);
 
@@ -248,6 +257,19 @@ sealed class InventoryProtocol
         {
             WindowId = (byte)InventoryContentPacket.WindowChest,
             WindowType = ContainerOpenPacket.WindowTypeChest,
+            BlockX = blockX,
+            BlockY = blockY,
+            BlockZ = blockZ,
+            ActorUniqueId = -1
+        });
+    }
+
+    public void SendCraftingTableOpen(int blockX, int blockY, int blockZ)
+    {
+        _session.SendDataPacket(new ContainerOpenPacket
+        {
+            WindowId = (byte)InventoryContainerMap.WindowCraftingTable,
+            WindowType = ContainerOpenPacket.WindowTypeWorkbench,
             BlockX = blockX,
             BlockY = blockY,
             BlockZ = blockZ,

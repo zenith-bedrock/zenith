@@ -40,6 +40,10 @@ static class CraftingDataBuilder
                 [
                     new NetworkItemStack(palette.Require(outName), (ushort)snap.OutCount, outBlockRid)
                 ],
+                // ADR §139 — previously every recipe silently defaulted to "crafting_table"
+                // (ShapelessCraftingRecipe's own field default), including ones craftable in the
+                // personal 2×2 grid. Now reflects RecipeRegistry's actual RequiresTable per recipe.
+                Block = snap.RequiresTable ? "crafting_table" : "",
                 RecipeNetworkId = snap.NetId
             };
         }

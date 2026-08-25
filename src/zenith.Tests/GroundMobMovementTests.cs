@@ -82,6 +82,15 @@ public sealed class GroundMobMovementTests
         Assert.True(Blocks.BlocksMovement(Blocks.CobblestoneWall));
     }
 
+    /// <summary>Regression for ADR §139 — the crafting table is an ordinary full-solid block.</summary>
+    [Fact]
+    public void Crafting_table_blocks_movement_and_supports_ground_actors()
+    {
+        Blocks.EnsureLoaded();
+        Assert.True(Blocks.BlocksMovement(Blocks.CraftingTable));
+        Assert.True(Blocks.CanSupportGroundActor(Blocks.CraftingTable));
+    }
+
     [Fact]
     public void Ground_actor_does_not_hover_over_water()
     {

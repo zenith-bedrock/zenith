@@ -28,6 +28,31 @@ public class CraftingDataPacketTests
         Assert.Equal(RecipeRegistry.OakPlanksToChest, packet.Recipes[1].RecipeNetworkId);
     }
 
+    /// <summary>
+    /// Regression for ADR §139: every recipe used to default to "crafting_table" on the wire
+    /// (ShapelessCraftingRecipe's own field default), including ones craftable in the personal 2×2
+    /// grid. The Block field must now reflect each recipe's actual RequiresTable value.
+    /// </summary>
+    [Fact]
+    public void BuildCraftingData_sets_Block_per_recipe_RequiresTable()
+    {
+        var registry = RecipeRegistry.CreateDefault();
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        var packet = InventoryProtocol.BuildCraftingData(registry, palette);
+
+        var logToPlanks = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.OakLogToPlanks);
+        Assert.NotNull(logToPlanks);
+        Assert.Equal("", logToPlanks!.Block);
+
+        var planksToChest = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.OakPlanksToChest);
+        Assert.NotNull(planksToChest);
+        Assert.Equal("crafting_table", planksToChest!.Block);
+
+        var pickaxe = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.WoodenPickaxe);
+        Assert.NotNull(pickaxe);
+        Assert.Equal("crafting_table", pickaxe!.Block);
+    }
+
     [Fact]
     public void CraftingData_encode_shape_recipe_count_clear_and_net_ids()
     {
