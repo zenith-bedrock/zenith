@@ -11,12 +11,13 @@ using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 using Zenith.World;
+using Zenith.NetherNet;
 
 namespace Zenith.Session;
 
 /// <summary>
-/// Sessão de protocolo Bedrock de um cliente conectado, sentada em cima do transporte
-/// <see cref="RakNetSession"/>. Representa estado da conexão/rede; outbound tipado fica em
+/// Sessão de protocolo Bedrock de um cliente conectado, sentada em cima de um transporte
+/// de jogo. Representa estado da conexão/rede; outbound tipado fica em
 /// <see cref="Protocol"/>. Estado de jogo (Player, etc.) vive fora e não fala com RakNetSession.
 ///
 /// Dona do <see cref="ISessionHandler"/> ativo.
@@ -38,7 +39,15 @@ class NetworkSession
     private long _nextWorldStreamSequence;
     private long _completedWorldStreamSequence;
 
-    public RakNetSession RakSession { get; }
+    private readonly IGameTransportConnection _transport;
+    public RakNetSession RakSession => _transport is RakNetGameTransportConnection rak
+        ? rak.Session
+        : throw new InvalidOperationException("This Bedrock session is not using RakNet.");
+    public string EndPoint => _transport.EndPoint;
+    public bool IsClosed => _transport.IsClosed;
+    public bool HasGameIdentity { get => _transport.HasGameIdentity; set => _transport.HasGameIdentity = value; }
+    public bool RequiresGameServerTokenBinding => _transport.RequiresGameServerTokenBinding;
+    public NetherNetClientIdentity? ClientIdentity => _transport.ClientIdentity;
     public ServerContext Context { get; }
     public BedrockProtocol Protocol { get; }
 
@@ -67,8 +76,13 @@ class NetworkSession
     private ISessionHandler _handler;
 
     public NetworkSession(RakNetSession rakSession, ISessionHandler initialHandler, ServerContext context)
+        : this(new RakNetGameTransportConnection(rakSession), initialHandler, context)
     {
-        RakSession = rakSession;
+    }
+
+    public NetworkSession(IGameTransportConnection transport, ISessionHandler initialHandler, ServerContext context)
+    {
+        _transport = transport;
         Context = context;
         Protocol = new BedrockProtocol(this);
         _handler = initialHandler;
@@ -185,16 +199,20 @@ class NetworkSession
 
     /// <summary>Envelope de envio usado apenas pelos módulos <c>*Protocol</c> nesta assembly.</summary>
     internal void SendDataPacket(params DataPacket[] packets) =>
-        SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, DefaultOrderChannel, packets);
+        SendDataPacket(GameTransportPriority.Normal, CompressionAlgorithm, DefaultOrderChannel, packets);
 
     internal void SendDataPacket(byte orderChannel, params DataPacket[] packets) =>
-        SendDataPacket(RakNetSession.Priority.Normal, CompressionAlgorithm, orderChannel, packets);
+        SendDataPacket(GameTransportPriority.Normal, CompressionAlgorithm, orderChannel, packets);
 
     internal void SendDataPacket(RakNetSession.Priority priority, byte compression, params DataPacket[] packets) =>
-        SendDataPacket(priority, compression, DefaultOrderChannel, packets);
+        SendDataPacket(MapPriority(priority), compression, DefaultOrderChannel, packets);
 
     internal void SendDataPacket(
         RakNetSession.Priority priority, byte compression, byte orderChannel, params DataPacket[] packets)
+        => SendDataPacket(MapPriority(priority), compression, orderChannel, packets);
+
+    internal void SendDataPacket(
+        GameTransportPriority priority, byte compression, byte orderChannel, params DataPacket[] packets)
     {
         // packetNames does a LINQ Select + string.Join per call — method arguments are evaluated
         // eagerly regardless of whether Debug logging is enabled, so without this guard every single
@@ -202,7 +220,7 @@ class NetworkSession
         if (Context.Logger.IsDebugEnabled)
         {
             var packetNames = string.Join(", ", packets.Select(DescribeOutboundPacket));
-            Context.Logger.Debug($"Protocol outbound -> {RakSession.EndPoint} channel={orderChannel} {packetNames}");
+            Context.Logger.Debug($"Protocol outbound -> {_transport.EndPoint} channel={orderChannel} {packetNames}");
         }
 
         var gamePacket = new GamePacket
@@ -216,12 +234,15 @@ class NetworkSession
         {
             Reliability = GamePacketReliability,
             OrderChannel = orderChannel,
-            Buffer = gamePacket.EncodeOwned()
+            Buffer = gamePacket.EncodeOwned(_transport.IncludesGamePacketIdentifier)
         };
 
         Context.Diagnostics.RecordPacketSent(packets.Length, frame.Buffer.Length);
-        RakSession.SendFrame(frame, priority);
+        _transport.SendGameBatch(frame.Buffer, priority, orderChannel);
     }
+
+    private static GameTransportPriority MapPriority(RakNetSession.Priority priority) =>
+        priority == RakNetSession.Priority.Immediate ? GameTransportPriority.Immediate : GameTransportPriority.Normal;
 
     private static string DescribeOutboundPacket(DataPacket packet) => packet switch
     {
@@ -244,7 +265,7 @@ class NetworkSession
         return $"PlayerListPacket(0x{packet.Id:X}, type={(packet.Type == PlayerListPacket.TypeAdd ? "add" : "remove")}, entries={packet.Entries.Length}, {skinSummary})";
     }
 
-    public void Disconnect() => RakSession.Disconnect();
+    public void Disconnect() => _transport.Disconnect();
 
     /// <summary>
     /// Bedrock DisconnectPacket + flush outbound frames, then RakNet close.
@@ -252,12 +273,12 @@ class NetworkSession
     /// </summary>
     public void DisconnectWithMessage(string message)
     {
-        if (RakSession.IsClosed)
+        if (_transport.IsClosed)
             return;
 
         Protocol.Login.SendDisconnect(message);
-        RakSession.FlushOutgoing();
-        RakSession.Disconnect();
+        _transport.FlushOutgoing();
+        _transport.Disconnect();
     }
 
     /// <summary>
@@ -265,11 +286,11 @@ class NetworkSession
     /// </summary>
     public void FlushAndDisconnect()
     {
-        if (RakSession.IsClosed)
+        if (_transport.IsClosed)
             return;
 
-        RakSession.FlushOutgoing();
-        RakSession.Disconnect();
+        _transport.FlushOutgoing();
+        _transport.Disconnect();
     }
 
     /// <summary>
@@ -281,7 +302,7 @@ class NetworkSession
     /// </summary>
     public void HandleClose(DisconnectReason reason)
     {
-        Context.Logger.Info($"Session closed ({reason}): {RakSession.EndPoint}");
+        Context.Logger.Info($"Session closed ({reason}): {_transport.EndPoint}");
         StopWorldStreamWorker();
 
         if (Player is not null)
@@ -312,7 +333,7 @@ class NetworkSession
             Context.EventBus.Publish(new PlayerQuitEvent(Player, wasInGame));
         }
 
-        RakSession.HasGameIdentity = false;
+        _transport.HasGameIdentity = false;
         _handler.OnDisable(this);
     }
 
@@ -431,7 +452,18 @@ class NetworkSession
         var header = new DataPacket.HeaderInfo();
         header.Decode(ref stream);
 
-        if (!_handler.HandleDataPacket(this, header, ref stream))
+        if (header.Id == (int)ProtocolInfo.PACKET_VIOLATION_WARNING_PACKET)
+        {
+            var warning = DataPacket.From<PacketViolationWarningPacket>(ref stream);
+            var packetName = Enum.GetName(typeof(ProtocolInfo), warning.PacketId) ?? "UNKNOWN";
+            var context = warning.Context.Replace('\r', ' ').Replace('\n', ' ');
+            if (context.Length > 2048)
+                context = context[..2048] + "…";
+            Context.Logger.Warning(
+                $"Client packet violation: packet={warning.PacketId} ({packetName}), type={warning.ViolationType}, " +
+                $"severity={warning.Severity}, handler={_handler.GetType().Name}, context={context}");
+        }
+        else if (!_handler.HandleDataPacket(this, header, ref stream))
         {
             Context.Logger.Warning($"Unhandled Data Packet: {header.Id} (handler: {_handler.GetType().Name})");
         }

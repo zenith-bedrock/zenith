@@ -7,6 +7,111 @@ namespace Zenith.Tests;
 public class ServerConfigLoaderTests
 {
     [Fact]
+    public void Validate_accepts_nethernet_transport_and_settings()
+    {
+        var config = new ServerConfig
+        {
+            Network =
+            {
+                Transport = " NetherNet ",
+                NetherNet = { JoinUrl = "https://example.test/join", MaxMessageSize = 4096, MaximumFragmentSize = 512 }
+            }
+        };
+
+        config.Validate();
+        Assert.Equal("nethernet", config.Network.Transport);
+        Assert.Equal(4096, config.Network.NetherNet.MaxMessageSize);
+        Assert.Equal(19132, config.Network.NetherNet.IcePortRangeStart);
+        Assert.Equal(19151, config.Network.NetherNet.IcePortRangeEnd);
+    }
+
+    [Fact]
+    public async Task ZenithServer_keeps_nethernet_when_requested()
+    {
+        var config = new ServerConfig { Network = { Transport = "nethernet" } };
+        var dataDir = Path.Combine(Path.GetTempPath(), $"zenith-nethernet-config-{Guid.NewGuid():N}");
+        var previous = Environment.GetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable);
+        Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, dataDir);
+
+        try
+        {
+            var server = new ZenithServer(config, "unused");
+            try
+            {
+                Assert.Equal("nethernet", server.Config.Network.Transport);
+                Assert.Equal(19132, server.Config.Network.NetherNet.IcePortRangeStart);
+                Assert.Equal(19151, server.Config.Network.NetherNet.IcePortRangeEnd);
+            }
+            finally
+            {
+                await server.ShutdownAsync();
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ServerConfigPaths.DataDirEnvironmentVariable, previous);
+            if (Directory.Exists(dataDir))
+                Directory.Delete(dataDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validate_rejects_nethernet_ice_port_range_smaller_than_player_limit()
+    {
+        var config = new ServerConfig
+        {
+            Server = { MaxPlayers = 4 },
+            Network =
+            {
+                Transport = "nethernet",
+                NetherNet = { IcePortRangeStart = 30000, IcePortRangeEnd = 30002 }
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("at least server.max-players ports", exception.Message);
+    }
+
+    [Fact]
+    public void Validate_derives_nethernet_ice_range_from_server_port_and_capacity()
+    {
+        var config = new ServerConfig
+        {
+            Server = { Port = 40000, MaxPlayers = 5 },
+            Network = { Transport = "nethernet" }
+        };
+
+        config.Validate();
+
+        Assert.Equal(40000, config.Network.NetherNet.IcePortRangeStart);
+        Assert.Equal(40004, config.Network.NetherNet.IcePortRangeEnd);
+    }
+
+    [Fact]
+    public void Validate_rejects_unknown_transport()
+    {
+        var config = new ServerConfig { Network = { Transport = "quic" } };
+        var exception = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("network.transport", exception.Message);
+    }
+
+    [Fact]
+    public void Validate_rejects_nethernet_join_url_with_query_or_fragment()
+    {
+        var config = new ServerConfig
+        {
+            Network =
+            {
+                Transport = "nethernet",
+                NetherNet = { JoinUrl = "https://example.test/signaling?token=secret" }
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => config.Validate());
+        Assert.Contains("without a query or fragment", exception.Message);
+    }
+
+    [Fact]
     public void LoadOrCreate_writes_defaults_then_loads()
     {
         var path = Path.Combine(Path.GetTempPath(), $"zenith-cfg-{Guid.NewGuid():N}.yml");

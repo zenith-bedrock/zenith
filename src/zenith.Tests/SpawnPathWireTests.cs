@@ -18,8 +18,8 @@ public class SpawnPathWireTests
         Assert.Equal(0x7a, bytes[0]); // packet id varuint
         // Body length = encode length - 1 (id fits in one byte for 0x7a).
         Assert.Equal(1 + BiomeDefinitionListBlob.ByteLength, bytes.Length);
-        // First body byte is biome_definitions count varint — 87 biomes → 0x57.
-        Assert.Equal(0x57, bytes[1]);
+        // BDS 1.26.52.3 supplies 89 definitions; this is the captured wire body.
+        Assert.Equal(0x59, bytes[1]);
     }
 
     [Fact]

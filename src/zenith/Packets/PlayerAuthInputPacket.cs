@@ -12,7 +12,7 @@ readonly struct PlayerBlockAction
 }
 
 /// <summary>
-/// UseItem embedded in AuthInput's <c>transaction</c> option (protocol 2168+, ADR §89).
+/// UseItem embedded in AuthInput's <c>transaction</c> option (protocol 2193).
 /// </summary>
 readonly struct AuthItemInteraction
 {
@@ -22,6 +22,7 @@ readonly struct AuthItemInteraction
     public int BlockZ { get; init; }
     public int Face { get; init; }
     public int HotbarSlot { get; init; }
+    public byte Hand { get; init; }
     /// <summary>Client's runtime-id precondition for the clicked block.</summary>
     public int ClickedBlockRuntimeId { get; init; }
     /// <summary>Client-held ItemV4 descriptor; Session validates it against the authoritative hotbar slot.</summary>
@@ -29,14 +30,9 @@ readonly struct AuthItemInteraction
 }
 
 /// <summary>
-/// PlayerAuthInput — movement + optional BlockActions (server-authoritative block breaking).
-/// Protocol 2168+ (Cereal, ADR §89): the old packed-bitset input flags became a Cereal list of
-/// enum ordinals, and every conditional sub-structure (transaction / item stack request / block
-/// actions / vehicle rotation / predicted vehicle) became a genuine <c>option</c> with its own
-/// presence bool — gated by that bool directly, no longer by testing an input-flag bit. Verified
-/// byte-for-byte against a live capture cross-checked with minecraft-data's 1.26.40 protocol.json
-/// (every "option" reads its own bool; a preceding same-purpose "_presence" field exists on the
-/// wire too but is decorative — real presence is always the option's own bool).
+/// PlayerAuthInput protocol 2193 decoder. Input Data is a direct enum array, and protocol 2193
+/// removes redundant Cereal accessor-presence bytes from conditional fields. Their remaining
+/// option bools still gate transaction, stack request, block actions, and vehicle data.
 /// </summary>
 class PlayerAuthInputPacket : DataPacket
 {
@@ -92,27 +88,23 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
-        // input_data: option<array<uvarint32 count, zigzag32 flag ordinal>> — the option's own
-        // bool is the only presence marker (no preceding "_presence" companion for this one).
+        // Input Data is a required array in protocol 2193: count followed by enum values.
         InputSneaking = false;
         InputStartSprinting = false;
         InputStopSprinting = false;
         InputMissedSwing = false;
         InputOnGround = false;
-        if (stream.ReadBool())
+        var flagCount = stream.ReadUnsignedVarInt();
+        for (var i = 0; i < flagCount; i++)
         {
-            var flagCount = stream.ReadUnsignedVarInt();
-            for (var i = 0; i < flagCount; i++)
+            var flag = stream.ReadVarInt();
+            switch (flag)
             {
-                var flag = stream.ReadVarInt();
-                switch (flag)
-                {
-                    case InputFlagSneaking: InputSneaking = true; break;
-                    case InputFlagStartSprinting: InputStartSprinting = true; break;
-                    case InputFlagStopSprinting: InputStopSprinting = true; break;
-                    case InputFlagMissedSwing: InputMissedSwing = true; break;
-                    case InputFlagVerticalCollision: InputOnGround = true; break;
-                }
+                case InputFlagSneaking: InputSneaking = true; break;
+                case InputFlagStartSprinting: InputStartSprinting = true; break;
+                case InputFlagStopSprinting: InputStopSprinting = true; break;
+                case InputFlagMissedSwing: InputMissedSwing = true; break;
+                case InputFlagVerticalCollision: InputOnGround = true; break;
             }
         }
 
@@ -126,26 +118,21 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
-        _ = stream.ReadBool(); // transaction_presence (decorative, real gate is the option below)
         ItemInteraction = stream.ReadBool() ? ReadTransaction(ref stream) : null;
 
-        _ = stream.ReadBool(); // item_stack_request_presence (decorative)
         ItemStackRequest = stream.ReadBool()
             ? ItemStackRequestPacket.ReadEmbeddedRequest(ref stream)
             : null;
 
-        _ = stream.ReadBool(); // block_action_presence (decorative)
         InputPerformBlockActions = stream.ReadBool();
         BlockActions = InputPerformBlockActions ? ReadBlockActions(ref stream) : [];
 
-        _ = stream.ReadBool(); // vehicle_rotation_presence (decorative)
         if (stream.ReadBool())
         {
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
             _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         }
 
-        _ = stream.ReadBool(); // predicted_vehicle_presence (decorative)
         if (stream.ReadBool())
             _ = stream.ReadVarLong(); // zigzag64
 
@@ -189,37 +176,20 @@ class PlayerAuthInputPacket : DataPacket
     }
 
     /// <summary>
-    /// AuthInput's embedded <c>transaction</c> option — TransactionLegacy (unused, always
-    /// skipped) + optional legacy inventory actions (unused) + the real payload: TransactionUseItem.
+    /// AuthInput's embedded <c>transaction</c> option: legacy request/slot context, the base
+    /// inventory action array, then the reflected ItemUse transaction.
     /// </summary>
     private static AuthItemInteraction ReadTransaction(ref BinaryStream stream)
     {
-        _ = stream.ReadVarInt(); // legacy_request_id
-        if (stream.ReadBool()) // legacy_transactions option
-        {
-            var containerCount = stream.ReadUnsignedVarInt();
-            if (containerCount > InventoryTransactionPacket.MaxLegacySetItemContainers)
-                throw new InvalidDataException($"AuthInput has {containerCount} legacy containers (max {InventoryTransactionPacket.MaxLegacySetItemContainers}).");
-            for (var i = 0; i < containerCount; i++)
-            {
-                _ = stream.ReadByte(); // container_id
-                var slotCount = stream.ReadUnsignedVarInt();
-                if (slotCount > InventoryTransactionPacket.MaxLegacySetItemSlotsPerContainer)
-                    throw new InvalidDataException($"AuthInput legacy container has {slotCount} slots (max {InventoryTransactionPacket.MaxLegacySetItemSlotsPerContainer}).");
-                for (var j = 0; j < slotCount; j++)
-                    _ = stream.ReadByte(); // slot_id
-            }
-        }
+        var legacyRequestId = stream.ReadVarInt();
+        if (legacyRequestId != 0)
+            InventoryTransactionPacket.SkipLegacySetItemSlots(ref stream);
 
-        _ = stream.ReadBool(); // actions_presence (decorative)
-        if (stream.ReadBool()) // actions option
-        {
-            var actionCount = stream.ReadUnsignedVarInt();
-            if (actionCount > InventoryTransactionPacket.MaxActions)
-                throw new InvalidDataException($"AuthInput has {actionCount} legacy actions (max {InventoryTransactionPacket.MaxActions}).");
-            for (var i = 0; i < actionCount; i++)
-                SkipLegacyTransactionAction(ref stream);
-        }
+        var actionCount = stream.ReadUnsignedVarInt();
+        if (actionCount > InventoryTransactionPacket.MaxActions)
+            throw new InvalidDataException($"AuthInput has {actionCount} legacy actions (max {InventoryTransactionPacket.MaxActions}).");
+        for (var i = 0; i < actionCount; i++)
+            SkipLegacyTransactionAction(ref stream);
 
         // data: TransactionUseItem
         var actionType = stream.ReadVarInt(); // zigzag32 mapper
@@ -229,6 +199,7 @@ class PlayerAuthInputPacket : DataPacket
         var blockZ = stream.ReadVarInt();
         var face = stream.ReadByte(); // u8, not varint
         var hotbar = stream.ReadVarInt();
+        var hand = stream.ReadByte();
         var heldItem = ReadNetworkItemStackDescriptor(ref stream); // held_item (ItemV4)
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // player_pos
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -248,6 +219,7 @@ class PlayerAuthInputPacket : DataPacket
             BlockZ = blockZ,
             Face = face,
             HotbarSlot = hotbar,
+            Hand = hand,
             ClickedBlockRuntimeId = clickedBlockRuntimeId,
             HeldItem = heldItem
         };
@@ -256,13 +228,11 @@ class PlayerAuthInputPacket : DataPacket
     private static void SkipLegacyTransactionAction(ref BinaryStream stream)
     {
         _ = stream.ReadUnsignedVarInt(); // source_type (varint mapper)
-        _ = stream.ReadBool(); // container_presence (decorative)
         if (stream.ReadBool()) _ = stream.ReadByte(); // window_id (i8) option
-        _ = stream.ReadBool(); // flag_presence (decorative)
         if (stream.ReadBool()) _ = stream.ReadUnsignedVarInt(); // flags option
         _ = stream.ReadUnsignedVarInt(); // slot
-            _ = ReadNetworkItemStackDescriptor(ref stream); // old_item
-            _ = ReadNetworkItemStackDescriptor(ref stream); // new_item
+        _ = ReadNetworkItemStackDescriptor(ref stream); // old_item
+        _ = ReadNetworkItemStackDescriptor(ref stream); // new_item
     }
 
     /// <summary>

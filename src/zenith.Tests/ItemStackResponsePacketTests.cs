@@ -5,13 +5,12 @@ using Xunit;
 namespace Zenith.Tests;
 
 /// <summary>
-/// Byte-level Cereal wire checks: both response levels emit their required marker, then their
-/// actual optional-presence bit.
+/// Byte-level wire checks for the protocol 2193 optionals in ItemStackResponse.
 /// </summary>
 public class ItemStackResponsePacketTests
 {
     [Fact]
-    public void Error_writes_status_varint_then_required_true_and_no_containers()
+    public void Error_writes_one_false_presence_byte_for_no_containers()
     {
         var bytes = ItemStackResponsePacket.Error(5).Encode().ToArray();
         var stream = new BinaryStream(bytes);
@@ -20,13 +19,12 @@ public class ItemStackResponsePacketTests
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // responses count
         Assert.Equal(ItemStackResponseEntry.StatusError, stream.ReadByte());
         Assert.Equal(5, stream.ReadVarInt());
-        Assert.True(stream.ReadBool()); // required marker
         Assert.False(stream.ReadBool()); // containers option
         Assert.True(stream.IsEndOfFile);
     }
 
     [Fact]
-    public void Ok_with_stack_id_writes_required_markers_and_zigzag_payload()
+    public void Ok_with_stack_id_writes_one_presence_then_zigzag_payload()
     {
         var bytes = ItemStackResponsePacket.Ok(9, [
             new StackResponseContainerInfo
@@ -44,7 +42,6 @@ public class ItemStackResponsePacketTests
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // responses count
         Assert.Equal(ItemStackResponseEntry.StatusOk, stream.ReadByte());
         Assert.Equal(9, stream.ReadVarInt());
-        Assert.True(stream.ReadBool()); // required marker
         Assert.True(stream.ReadBool()); // containers option
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt()); // containers array count
 
@@ -56,7 +53,6 @@ public class ItemStackResponsePacketTests
         Assert.Equal(3, stream.ReadByte()); // slot
         Assert.Equal(3, stream.ReadByte()); // hotbar_slot
         Assert.Equal(2, stream.ReadByte()); // count
-        Assert.True(stream.ReadBool()); // required marker
         Assert.True(stream.ReadBool()); // item_stack_id option
         Assert.Equal(7, stream.ReadVarInt()); // item_stack_id payload
         Assert.Equal("", stream.ReadVarString());
@@ -66,7 +62,7 @@ public class ItemStackResponsePacketTests
     }
 
     [Fact]
-    public void Ok_without_stack_id_writes_required_true_then_optional_false()
+    public void Ok_without_stack_id_writes_false_false_no_payload()
     {
         var bytes = ItemStackResponsePacket.Ok(1, [
             new StackResponseContainerInfo
@@ -81,7 +77,6 @@ public class ItemStackResponsePacketTests
         stream.ReadUnsignedVarInt(); // responses count
         stream.ReadByte(); // status
         stream.ReadVarInt(); // request id
-        Assert.True(stream.ReadBool()); // required marker
         stream.ReadBool(); // containers option
         stream.ReadUnsignedVarInt(); // containers count
         stream.ReadByte(); // container id
@@ -91,7 +86,6 @@ public class ItemStackResponsePacketTests
         stream.ReadByte(); // hotbar_slot
         stream.ReadByte(); // count
 
-        Assert.True(stream.ReadBool()); // required marker
         Assert.False(stream.ReadBool()); // item_stack_id option
         Assert.Equal("", stream.ReadVarString());
         Assert.Equal("", stream.ReadVarString());

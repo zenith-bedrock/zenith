@@ -7,23 +7,24 @@ readonly struct SkinPersonaTintPiece
     public string Type { get; init; }
     public string[] Colors { get; init; }
 
-    public static SkinPersonaTintPiece Read(ref BinaryStream stream)
+    public static SkinPersonaTintPiece Read(ref BinaryStream stream, uint maxColors)
     {
-        var type = ToLoginType(stream.ReadVarString());
-        var colors = new string[4];
-        for (var i = 0; i < colors.Length; i++)
-            colors[i] = SerializedSkin.FormatColor(stream.ReadUInt(BinaryStream.Endianess.Big));
+        var type = stream.ReadVarString();
+        var count = stream.ReadUInt(BinaryStream.Endianess.Little);
+        if (count > maxColors)
+            throw new InvalidOperationException($"Skin tint colour count {count} exceeds cap {maxColors}.");
+        var colors = new string[count];
+        for (var i = 0; i < count; i++)
+            colors[i] = stream.ReadVarString();
         return new SkinPersonaTintPiece { Type = type, Colors = colors };
     }
 
     public void Write(ref BinaryStream writer)
     {
-        writer.WriteVarString(ToWireType(Type));
+        writer.WriteVarString(Type);
         var cols = Colors ?? [];
-        for (var i = 0; i < 4; i++)
-            writer.WriteUInt(i < cols.Length ? SerializedSkin.ParseWireColor(cols[i]) : 0, BinaryStream.Endianess.Big);
+        writer.WriteUInt((uint)cols.Length, BinaryStream.Endianess.Little);
+        foreach (var c in cols)
+            writer.WriteVarString(c);
     }
-
-    private static string ToWireType(string type) => type == "persona_hand" ? "hands" : (type ?? "").Replace("persona_", "", StringComparison.Ordinal);
-    private static string ToLoginType(string type) => type == "hands" ? "persona_hand" : type == "unsupported" ? type : "persona_" + type;
 }

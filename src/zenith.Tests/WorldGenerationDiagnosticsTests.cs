@@ -173,7 +173,6 @@ public sealed class WorldGenerationDiagnosticsTests
 
         public int SampleBaseBlock(int x, int y, int z) => 0;
         public int SampleSpawnFeetY(int x, int z) => 0;
-        public SpawnBiome SampleSpawnBiome(int x, int z) => SpawnBiome.Plains;
 
         public void Dispose()
         {
@@ -197,6 +196,5 @@ public sealed class WorldGenerationDiagnosticsTests
 
         public int SampleBaseBlock(int x, int y, int z) => 0;
         public int SampleSpawnFeetY(int x, int z) => 0;
-        public SpawnBiome SampleSpawnBiome(int x, int z) => SpawnBiome.Plains;
     }
 }

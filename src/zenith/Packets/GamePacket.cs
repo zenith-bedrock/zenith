@@ -34,10 +34,11 @@ class GamePacket
     public Span<byte> Encode() => EncodeOwned();
 
     /// <summary>Owned buffer for Frame send — avoids <c>Encode().ToArray()</c> double copy.</summary>
-    public byte[] EncodeOwned()
+    public byte[] EncodeOwned(bool includeTransportIdentifier = true)
     {
         var writer = new BinaryStream();
-        writer.WriteByte(GameId);
+        if (includeTransportIdentifier)
+            writer.WriteByte(GameId);
 
         var payloadWriter = new BinaryStream();
         foreach (var packet in Packets)

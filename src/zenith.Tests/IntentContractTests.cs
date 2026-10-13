@@ -159,9 +159,7 @@ public class IntentContractTests
 
     private static void WriteStackActionHeader(ref BinaryStream writer, byte legacyActionId)
     {
-        writer.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
-            ? legacyActionId
-            : legacyActionId - 2);
+        writer.WriteUnsignedVarInt(legacyActionId);
         writer.WriteByte(legacyActionId);
     }
 
@@ -1668,10 +1666,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(4, Blocks.Air, 0));
         var writer = new BinaryStream();
         writer.WriteVarInt(0); // legacy request id
-        writer.WriteBool(false); // legacy slots absent
-        writer.WriteBool(true); // transaction type present
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        writer.WriteBool(true); // actions present
         writer.WriteUnsignedVarInt(0); // no legacy actions
         writer.WriteUnsignedVarLong(99); // target actor runtime id
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
@@ -1705,10 +1700,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0); // legacy request id
-        writer.WriteBool(false); // legacy slots absent
-        writer.WriteBool(true); // transaction type present
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        writer.WriteBool(true); // actions present
         writer.WriteUnsignedVarInt(0); // no legacy actions
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
@@ -1741,10 +1733,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(target.RuntimeId);
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
@@ -1783,10 +1772,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
         writer.WriteVarInt(InventoryTransactionPacket.ActorInteract);
@@ -1817,10 +1803,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(99);
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
@@ -1848,10 +1831,7 @@ public class IntentContractTests
         player.SelectedHotbarSlot = 0;
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(0); // release
         writer.WriteVarInt(5); // hotbar slot
@@ -1881,10 +1861,7 @@ public class IntentContractTests
 
         var use = new BinaryStream();
         use.WriteVarInt(0);
-        use.WriteBool(false);
-        use.WriteBool(true);
         use.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        use.WriteBool(true);
         use.WriteUnsignedVarInt(0);
         use.WriteVarInt(99); // unknown UseItem action
         use.WriteByte(0);
@@ -1893,6 +1870,7 @@ public class IntentContractTests
         use.WriteVarInt(0);
         use.WriteByte(0);
         use.WriteVarInt(5);
+        use.WriteByte(InventoryTransactionPacket.HandMainhand);
         held.WriteNetworkItemStackDescriptor(ref use);
         for (var i = 0; i < 6; i++) use.WriteFloat(0, BinaryStream.Endianess.Little);
         use.WriteUnsignedVarInt(0);
@@ -1906,10 +1884,7 @@ public class IntentContractTests
 
         var actor = new BinaryStream();
         actor.WriteVarInt(0);
-        actor.WriteBool(false);
-        actor.WriteBool(true);
         actor.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
-        actor.WriteBool(true);
         actor.WriteUnsignedVarInt(0);
         actor.WriteUnsignedVarLong(99);
         actor.WriteVarInt(99); // unknown UseItemOnActor action
@@ -1924,10 +1899,7 @@ public class IntentContractTests
 
         var release = new BinaryStream();
         release.WriteVarInt(0);
-        release.WriteBool(false);
-        release.WriteBool(true);
         release.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
-        release.WriteBool(true);
         release.WriteUnsignedVarInt(0);
         release.WriteVarInt(99); // unknown Release action
         release.WriteVarInt(5);
@@ -1949,10 +1921,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(InventoryTransactionPacket.UseClickAir);
         writer.WriteByte(0);
@@ -1961,6 +1930,7 @@ public class IntentContractTests
         writer.WriteVarInt(0);
         writer.WriteByte(0);
         writer.WriteVarInt(0);
+        writer.WriteByte(InventoryTransactionPacket.HandMainhand);
         WriteNetworkItemAir(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1988,10 +1958,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
         writer.WriteByte(0);
@@ -2000,6 +1967,7 @@ public class IntentContractTests
         writer.WriteVarInt(10);
         writer.WriteByte(5); // place on the +X face, at 10,64,10
         writer.WriteVarInt(0);
+        writer.WriteByte(InventoryTransactionPacket.HandMainhand);
         held.WriteNetworkItemStackDescriptor(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -2030,10 +1998,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
         writer.WriteByte(0);
@@ -2042,6 +2007,7 @@ public class IntentContractTests
         writer.WriteVarInt(10);
         writer.WriteByte(5);
         writer.WriteVarInt(0);
+        writer.WriteByte(InventoryTransactionPacket.HandMainhand);
         held.WriteNetworkItemStackDescriptor(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -2062,6 +2028,48 @@ public class IntentContractTests
     }
 
     [Fact]
+    public void InventoryTransaction_offhand_use_is_rejected_without_hotbar_mutation()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("unsupported-offhand");
+        StandForPlace(player, 10, 64, 10);
+        Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 2));
+        player.SelectedHotbarSlot = 4;
+        var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+
+        var writer = new BinaryStream();
+        writer.WriteVarInt(0); // legacy request ID
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
+        writer.WriteUnsignedVarInt(0); // inventory actions
+        writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
+        writer.WriteByte(0); // trigger
+        writer.WriteVarInt(9);
+        writer.WriteVarInt(64);
+        writer.WriteVarInt(10);
+        writer.WriteByte(5);
+        writer.WriteVarInt(0); // hotbar slot
+        writer.WriteByte(1); // offhand
+        held.WriteNetworkItemStackDescriptor(ref writer);
+        for (var i = 0; i < 6; i++)
+            writer.WriteFloat(0, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(0);
+        writer.WriteByte(0);
+        writer.WriteByte(0);
+
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(
+            player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
+            ref stream));
+
+        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(4, player.SelectedHotbarSlot);
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
+        Assert.Equal(2, player.Inventory.Get(0).Count);
+    }
+
+    [Fact]
     public void InventoryTransaction_mismatch_resends_authoritative_inventory_view()
     {
         var fx = new IntentTestFixture();
@@ -2072,10 +2080,7 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeMismatch);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
 
         var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
@@ -2100,11 +2105,8 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(-2); // correlatable legacy request ID
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0); // no requested slot replay entries
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(2);
         WriteNormalInventoryAction(
             ref writer,
@@ -2154,11 +2156,8 @@ public class IntentContractTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(-2);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(2);
         WriteNormalInventoryAction(
             ref writer,
@@ -2205,11 +2204,9 @@ public class IntentContractTests
         NetworkItemStack newItem)
     {
         writer.WriteUnsignedVarInt(checked((int)sourceType));
-        writer.WriteBool(true); // required WindowID marker
         writer.WriteBool(windowId.HasValue);
         if (windowId is { } window)
             writer.WriteByte(window);
-        writer.WriteBool(true); // required SourceFlags marker
         writer.WriteBool(false);
         writer.WriteUnsignedVarInt(slot);
         oldItem.WriteNetworkItemStackDescriptor(ref writer);
@@ -3835,29 +3832,21 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void CreativeContent_empty_icon_uses_the_short_air_network_item_instance_descriptor()
+    public void CreativeContent_empty_icon_writes_the_complete_air_network_item_instance_descriptor()
     {
-        // CreativeContent uses NetworkItemInstanceDescriptor. An air item (NetworkId 0) still
-        // carries count/meta/block-runtime after its VarInt ID, but the trailing user-data blob
-        // collapses to a single bare zero-length varint — no NBT-length/can-place/can-break
-        // payload at all. Verified against gophertunnel's Writer.Item/itemUserData (protocol
-        // 2168): a non-air item gets the full 10-byte empty-lists blob; NetworkId==0 does not.
-        // The previous version of this test asserted the old, wrong 16-byte shape, which
-        // corrupted every byte after CreativeContentBuilder's Construction-group icon (a real
-        // air icon sent on every join) in the actual wire packet.
+        // Protocol 2193 requires every descriptor field even for air; its user data is empty.
         var emptyPk = new CreativeContentPacket
         {
             Groups = [new CreativeGroupEntry(1, "", NetworkItemStack.Empty)],
             Items = []
         };
         var bytes = emptyPk.Encode().ToArray();
-        // packet id + groups + category + name + short air item + items
-        Assert.True(bytes.Length > 5);
+        Assert.Equal(new byte[] { 0x91, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, bytes);
 
         var writer = new BinaryStream();
         NetworkItemStack.Empty.WriteItemStack(ref writer);
         var air = writer.GetBufferDisposing().ToArray();
-        Assert.Equal(6, air.Length); // network id + count + meta + block rid + bare zero-length user-data varint
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 0, 0 }, air);
     }
 
     [Fact]
@@ -3883,8 +3872,7 @@ public class IntentContractTests
     [Fact]
     public void CreativeContent_group_category_is_a_single_byte()
     {
-        // ADR §85: category is a wire mapper<u8> (one byte), not a fixed int32 — found via
-        // zenith-smoke-bot decoding CreativeContentPacket ("array size is abnormally large").
+        // Category is a wire mapper<u8> (one byte), not a fixed int32.
         var pk = new CreativeContentPacket
         {
             Groups = [new CreativeGroupEntry(CreativeContentPacket.CategoryConstruction, "", NetworkItemStack.Empty)],
@@ -3901,7 +3889,7 @@ public class IntentContractTests
         Assert.Equal((ushort)0, stream.ReadUShort(BinaryStream.Endianess.Little));
         Assert.Equal(0, stream.ReadUnsignedVarInt()); // metadata
         Assert.Equal(0, stream.ReadVarInt()); // block runtime ID
-        Assert.Equal(0, stream.ReadUnsignedVarInt()); // air item: bare zero-length user-data varint, no NBT/list blob
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // empty user data
         Assert.Equal(0, stream.ReadUnsignedVarInt()); // items count
         Assert.True(stream.IsEndOfFile);
     }

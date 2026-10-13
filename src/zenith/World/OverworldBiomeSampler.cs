@@ -88,22 +88,6 @@ static class OverworldBiomeSampler
     public static int NetworkIdAt(int worldX, int worldZ, int seed)
         => NetworkId(SampleKind(worldX, worldZ, seed));
 
-    public static SpawnBiome SampleSpawnBiome(int worldX, int worldZ, int seed)
-    {
-        var kind = SampleKind(worldX, worldZ, seed);
-        return new SpawnBiome((short)NetworkId(kind), WireName(kind));
-    }
-
-    public static string WireName(OverworldBiomeKind kind)
-        => kind switch
-        {
-            OverworldBiomeKind.Ocean => "ocean",
-            OverworldBiomeKind.Desert => "desert",
-            OverworldBiomeKind.Hills => "extreme_hills",
-            OverworldBiomeKind.Forest => "forest",
-            _ => "plains",
-        };
-
     /// <summary>
     /// Phase XXIV cross-reference finding: Ocean previously fell through to the Grass/Dirt default
     /// like Plains, giving every ocean floor a grass surface underwater — a real, visible bug (an

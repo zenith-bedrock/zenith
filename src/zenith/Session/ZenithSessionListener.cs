@@ -1,24 +1,19 @@
 using Zenith.Server;
-using Zenith.Session;
 using Zenith.Session.Handler;
+using Zenith.NetherNet;
 using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Stream;
 
 namespace Zenith.Session;
 
-/// <summary>
-/// Ponte entre o <see cref="RakNetSession"/> (transporte) e o <see cref="NetworkSession"/>
-/// (protocolo Bedrock). Essa é a única classe do lado do jogo que deveria tocar em raknet
-/// diretamente; todo o resto trabalha em cima de NetworkSession.
-///
-/// Agora que o raknet expõe OnSessionOpen/OnSessionClose, o ciclo de vida da NetworkSession
-/// é determinístico: criada no open, removida no close. Nada de depender do GC.
-/// </summary>
+/// <summary>Adapts RakNet and NetherNet peers to the same Bedrock session lifecycle.</summary>
 class ZenithSessionListener : IRakNetSessionListener
 {
     private readonly ServerContext _context;
-    private readonly Dictionary<RakNetSession, NetworkSession> _sessions = new();
+    private readonly Dictionary<IGameTransportConnection, NetworkSession> _sessions = new();
+    private readonly Dictionary<RakNetSession, RakNetGameTransportConnection> _raknet = new();
+    private readonly Dictionary<NetherNetConnection, NetherNetGameTransportConnection> _nethernet = new();
     private readonly object _gate = new();
     private bool _accepting = true;
 
@@ -26,34 +21,48 @@ class ZenithSessionListener : IRakNetSessionListener
 
     public void OnSessionOpen(RakNetSession rakSession)
     {
+        var transport = new RakNetGameTransportConnection(rakSession);
+        lock (_gate)
+            _raknet[rakSession] = transport;
+        if (!Open(transport))
+            rakSession.Disconnect(DisconnectReason.ServerDisconnect);
+    }
+
+    public void OnSessionClose(RakNetSession rakSession, DisconnectReason reason)
+    {
+        RakNetGameTransportConnection? transport;
+        lock (_gate)
+            _raknet.Remove(rakSession, out transport);
+        if (transport is not null)
+            Close(transport, reason);
+    }
+
+    public void OnNetherNetConnectionOpened(NetherNetConnection connection)
+    {
+        var transport = new NetherNetGameTransportConnection(connection);
         var reject = false;
         lock (_gate)
         {
             if (!_accepting)
                 reject = true;
             else
-                _sessions[rakSession] = new NetworkSession(rakSession, new LoginSessionHandler(), _context);
+            {
+                _sessions[transport] = new NetworkSession(transport, new LoginSessionHandler(), _context);
+                _nethernet[connection] = transport;
+            }
         }
-
-        // Disconnect synchronously invokes OnSessionClose; never do that while holding _gate.
         if (reject)
-            rakSession.Disconnect(DisconnectReason.ServerDisconnect);
-    }
-
-    public void OnSessionClose(RakNetSession rakSession, DisconnectReason reason)
-    {
-        NetworkSession session;
-        lock (_gate)
         {
-            if (!_sessions.Remove(rakSession, out session!)) return;
+            connection.Disconnect("Server is shutting down.");
+            return;
         }
-        session.HandleClose(reason);
+        connection.GameBatchReceived += OnNetherNetGameBatchReceived;
+        connection.Closed += OnNetherNetConnectionClosed;
+        if (connection.IsClosed)
+            Close(transport, DisconnectReason.ClientDisconnect);
     }
 
-    /// <summary>
-    /// Kick every open session with a Bedrock DisconnectPacket, then close transport (§41).
-    /// Snapshot under lock so Close callbacks can remove entries safely.
-    /// </summary>
+    /// <summary>Kicks each Bedrock session before closing its transport (§41).</summary>
     public void DisconnectAll(string message)
     {
         NetworkSession[] snapshot;
@@ -64,7 +73,6 @@ class ZenithSessionListener : IRakNetSessionListener
             session.DisconnectWithMessage(message);
     }
 
-    /// <summary>Stops new gameplay sessions and packet dispatch before transport shutdown.</summary>
     public void StopAccepting()
     {
         lock (_gate)
@@ -72,6 +80,43 @@ class ZenithSessionListener : IRakNetSessionListener
     }
 
     public bool HandleGamePacket(RakNetSession rakSession, ref BinaryStream stream)
+    {
+        RakNetGameTransportConnection? transport;
+        lock (_gate)
+            _raknet.TryGetValue(rakSession, out transport);
+        if (transport is null)
+        {
+            stream.Dispose();
+            return false;
+        }
+
+        return HandleGameBatch(transport, ref stream);
+    }
+
+    private bool Open(IGameTransportConnection transport)
+    {
+        lock (_gate)
+        {
+            if (!_accepting)
+                return false;
+            _sessions[transport] = new NetworkSession(transport, new LoginSessionHandler(), _context);
+            return true;
+        }
+    }
+
+    private void Close(IGameTransportConnection transport, DisconnectReason reason)
+    {
+        NetworkSession? session;
+        lock (_gate)
+        {
+            _sessions.Remove(transport, out session);
+            if (transport is NetherNetGameTransportConnection netherNet)
+                _nethernet.Remove(netherNet.Connection);
+        }
+        session?.HandleClose(reason);
+    }
+
+    private bool HandleGameBatch(IGameTransportConnection transport, ref BinaryStream stream)
     {
         NetworkSession? session;
         lock (_gate)
@@ -81,17 +126,40 @@ class ZenithSessionListener : IRakNetSessionListener
                 stream.Dispose();
                 return false;
             }
-            _sessions.TryGetValue(rakSession, out session);
+            _sessions.TryGetValue(transport, out session);
         }
 
         if (session is null)
         {
-            // Não deveria acontecer (OnSessionOpen roda antes de qualquer game packet chegar),
-            // mas não custa ser defensivo em vez de derrubar a conexão inteira.
             stream.Dispose();
             return false;
         }
-
         return session.HandleGamePacket(ref stream);
+    }
+
+    private void OnNetherNetGameBatchReceived(NetherNetConnection connection, byte[] batch)
+    {
+        NetherNetGameTransportConnection? transport;
+        lock (_gate)
+            _nethernet.TryGetValue(connection, out transport);
+        if (transport is null)
+            return;
+        var stream = new BinaryStream(batch);
+        HandleGameBatch(transport, ref stream);
+    }
+
+    private void OnNetherNetConnectionClosed(NetherNetConnection connection, string reason)
+    {
+        NetherNetGameTransportConnection? transport;
+        lock (_gate)
+            _nethernet.TryGetValue(connection, out transport);
+        if (transport is not null)
+        {
+            var disconnectReason = reason.Contains("shutdown", StringComparison.OrdinalIgnoreCase) ||
+                                   reason.Contains("server", StringComparison.OrdinalIgnoreCase)
+                ? DisconnectReason.ServerDisconnect
+                : DisconnectReason.ClientDisconnect;
+            Close(transport, disconnectReason);
+        }
     }
 }

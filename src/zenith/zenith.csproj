@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\raknet\raknet.csproj" />
+    <ProjectReference Include="..\nethernet\nethernet.csproj" />
     <ProjectReference Include="..\..\libs\nbt\nbt.csproj" />
     <ProjectReference Include="..\..\libs\leveldb\leveldb.csproj" />
     <ProjectReference Include="..\..\libs\diagnostics\diagnostics.csproj" />
@@ -14,6 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="data\manifest.json">
+      <LogicalName>bedrock_data_manifest.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\block_palette.nbt">
       <LogicalName>block_palette.nbt</LogicalName>
     </EmbeddedResource>
