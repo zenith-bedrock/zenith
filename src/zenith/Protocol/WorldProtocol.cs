@@ -66,6 +66,12 @@ sealed class WorldProtocol
         _session.SendDataPacket(new BiomeDefinitionListPacket());
     }
 
+    /// <summary>Vanilla jigsaw rules required by protocol 2193 clients before StartGame.</summary>
+    public void SendJigsawStructureData()
+    {
+        _session.SendDataPacket(new JigsawStructureDataPacket());
+    }
+
     /// <summary>
     /// LevelChunks per GamePacket on PreSpawn. 1 = one column per envelope so noise payloads
     /// do not inflate a single compressed batch past client comfort (ADR §14 adendo).

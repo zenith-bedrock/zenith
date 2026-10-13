@@ -33,6 +33,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
+                // Current Bedrock clients require the vanilla jigsaw rule compound before StartGame.
+                session.Protocol.World.SendJigsawStructureData();
                 // StartGame position is eye-space (feet + PlayerEyeHeight), not domain feet.
                 // SpawnBiomeType is a StartGame enum, not a Bedrock biome network ID. Zenith only
                 // uses vanilla biome definitions, so send Default and let chunks carry the biome.
