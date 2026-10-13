@@ -14,10 +14,7 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(InventoryTransactionPacket.MaxActions + 1);
 
         var bytes = writer.GetBufferDisposing().ToArray();
@@ -29,7 +26,6 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(-2);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(InventoryTransactionPacket.MaxLegacySetItemContainers + 1);
 
         var bytes = writer.GetBufferDisposing().ToArray();
@@ -51,10 +47,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0); // legacyRequestId
-        w.WriteBool(false); // no legacy slots
-        w.WriteBool(true); // type marker
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        w.WriteBool(true); // actions marker
         w.WriteUnsignedVarInt(0); // no inventory actions
 
         w.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
@@ -64,6 +57,7 @@ public class InventoryTransactionDtoTests
         w.WriteVarInt(12);
         w.WriteByte(1); // face
         w.WriteVarInt(0); // hotbar
+        w.WriteByte(1); // offhand
         WriteNetworkItemAir(ref w);
         for (var i = 0; i < 6; i++)
             w.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -82,6 +76,7 @@ public class InventoryTransactionDtoTests
         Assert.Equal(-60, packet.BlockY);
         Assert.Equal(12, packet.BlockZ);
         Assert.Equal(0, packet.HotbarSlot);
+        Assert.Equal((byte)1, packet.Hand);
         Assert.Equal(99, packet.ClickedBlockRuntimeId);
     }
 
@@ -90,10 +85,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0);
-        w.WriteBool(false);
-        w.WriteBool(true);
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        w.WriteBool(true);
         w.WriteUnsignedVarInt(0);
 
         w.WriteVarInt(InventoryTransactionPacket.UseDestroyBlock);
@@ -103,6 +95,7 @@ public class InventoryTransactionDtoTests
         w.WriteVarInt(5);
         w.WriteByte(1);
         w.WriteVarInt(2);
+        w.WriteByte(InventoryTransactionPacket.HandMainhand);
         WriteNetworkItemAir(ref w);
         for (var i = 0; i < 6; i++)
             w.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -120,6 +113,7 @@ public class InventoryTransactionDtoTests
         Assert.Equal(4, packet.BlockY);
         Assert.Equal(5, packet.BlockZ);
         Assert.Equal(2, packet.HotbarSlot);
+        Assert.Equal(InventoryTransactionPacket.HandMainhand, packet.Hand);
     }
 
     [Fact]
@@ -127,10 +121,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0);
-        w.WriteBool(false);
-        w.WriteBool(true);
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
-        w.WriteBool(true);
         w.WriteUnsignedVarInt(0);
 
         w.WriteVarInt(0); // release action
@@ -164,11 +155,8 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(-2); // legacy request id: even negative IDs carry slot sync metadata
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(0); // legacy slot sync entries
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
-        writer.WriteBool(true);
         writer.WriteUnsignedVarInt(2);
 
         WriteInventoryAction(
@@ -328,9 +316,7 @@ public class InventoryTransactionDtoTests
 
     private static void WriteActionHeader(ref BinaryStream writer, byte legacyActionId)
     {
-        writer.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
-            ? legacyActionId
-            : legacyActionId - 2);
+        writer.WriteUnsignedVarInt(legacyActionId);
         writer.WriteByte(legacyActionId);
     }
 
@@ -373,11 +359,9 @@ public class InventoryTransactionDtoTests
         NetworkItemStack newItem)
     {
         writer.WriteUnsignedVarInt(checked((int)sourceType));
-        writer.WriteBool(true); // required WindowID marker
         writer.WriteBool(windowId.HasValue);
         if (windowId is { } window)
             writer.WriteByte(window);
-        writer.WriteBool(true); // required SourceFlags marker
         writer.WriteBool(false);
         writer.WriteUnsignedVarInt(slot);
         oldItem.WriteNetworkItemStackDescriptor(ref writer);

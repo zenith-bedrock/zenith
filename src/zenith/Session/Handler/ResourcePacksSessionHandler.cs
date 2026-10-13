@@ -33,10 +33,9 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // PlayStatus(PLAYER_SPAWN) não é mandado aqui de propósito: PreSpawn manda
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
-                var spawnBiome = session.Context.World.SampleSpawnBiome(
-                    (int)MathF.Floor(player.PositionX),
-                    (int)MathF.Floor(player.PositionZ));
                 // StartGame position is eye-space (feet + PlayerEyeHeight), not domain feet.
+                // SpawnBiomeType is a StartGame enum, not a Bedrock biome network ID. Zenith only
+                // uses vanilla biome definitions, so send Default and let chunks carry the biome.
                 session.Protocol.World.SendStartGame(
                     levelName: session.Context.Config.World.Name,
                     entityRuntimeId: player.RuntimeId,
@@ -50,8 +49,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                     spawnBlockZ: (int)MathF.Floor(player.PositionZ),
                     useBlockNetworkIdHashes: true,
                     gameMode: (int)player.GameMode,
-                    biomeType: spawnBiome.NetworkId,
-                    biomeName: spawnBiome.WireName);
+                    biomeType: StartGamePacket.SpawnBiomeTypeDefault,
+                    biomeName: "");
                 session.Protocol.Inventory.SendItemRegistry();
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();

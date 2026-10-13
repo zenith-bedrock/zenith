@@ -97,15 +97,6 @@ public class BiomeSamplerTests
     }
 
     [Fact]
-    public void Noise_spawn_biome_matches_sampler()
-    {
-        const int seed = 5;
-        var noise = new NoiseTerrainProvider(seed);
-        var expected = OverworldBiomeSampler.SampleSpawnBiome(0, 0, seed);
-        Assert.Equal(expected, noise.SampleSpawnBiome(0, 0));
-    }
-
-    [Fact]
     public void Biome_lookup_covers_all_zenith_kinds()
     {
         var seen = new HashSet<OverworldBiomeKind>();

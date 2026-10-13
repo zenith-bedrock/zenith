@@ -1,9 +1,11 @@
 using System.Text.Json;
+using Zenith.Nbt;
 
 namespace Zenith.World;
 
 /// <summary>Entrada de <c>item_palette.json</c>.</summary>
-readonly record struct ItemPaletteEntry(string Name, short NetworkId, int Version, bool ComponentBased);
+readonly record struct ItemPaletteEntry(string Name, short NetworkId, int Version, bool ComponentBased,
+    NbtCompound? Components = null);
 
 /// <summary>Mapa bidirecional da palette completa do cliente.</summary>
 sealed class ItemPalette
@@ -80,7 +82,16 @@ static class ItemPaletteLoader
                 throw new InvalidOperationException($"item_palette id out of i16 range for '{name}': {id}");
             var version = el.TryGetProperty("version", out var v) ? v.GetInt32() : 0;
             var componentBased = el.TryGetProperty("component_based", out var c) && c.GetBoolean();
-            list.Add(new ItemPaletteEntry(name, (short)id, version, componentBased));
+            NbtCompound? components = null;
+            if (el.TryGetProperty("component_nbt_b64", out var encodedComponent))
+            {
+                var bytes = Convert.FromBase64String(encodedComponent.GetString()
+                    ?? throw new InvalidOperationException($"item_palette component NBT is null for '{name}'."));
+                var decoded = NbtCodec.Decode(bytes, NbtEncoding.Network);
+                if (decoded.BytesConsumed != bytes.Length || !decoded.Root.Tag.TryGetCompound(out components))
+                    throw new InvalidOperationException($"item_palette component NBT is not a complete compound for '{name}'.");
+            }
+            list.Add(new ItemPaletteEntry(name, (short)id, version, componentBased, components));
         }
 
         if (list.Count == 0)

@@ -1,0 +1,44 @@
+{
+  "minecraft_version": "1.26.52",
+  "protocol": 2193,
+  "source": {
+    "bds_version": "1.26.52.3",
+    "bds_url": "https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-1.26.52.3.zip",
+    "bds_archive_sha256": "2c9b98d07d2504786996f2335980e88bd969b4a77514925e75471a1349995825",
+    "endstone_version": "0.11.13",
+    "block_candidates": "previous Zenith palette plus minecraft-data 3.117.0 block states; new types from the captured BDS ItemRegistry",
+    "block_validation": "each state and runtime ID queried from BDS via Endstone create_block_data; new state domains accepted only when returned unchanged"
+  },
+  "counts": {
+    "block_states": 22091,
+    "block_types": 1477,
+    "items": 2076,
+    "item_component_definitions": 78,
+    "creative_groups": 124,
+    "creative_items": 1980,
+    "biomes": 89
+  },
+  "assets": {
+    "block_palette.nbt": {
+      "bytes": 233617,
+      "sha256": "40a8a2cb8ba3fc8385ca8c594e1fda6fe05ab56f29462783c5e42ca6042897b3"
+    },
+    "item_palette.json": {
+      "bytes": 320953,
+      "sha256": "f99fdb0e66ce56bb5415258ab4ba90c1fd98d1df69bf9028c43186db2d7e768c"
+    },
+    "creative_items.json": {
+      "bytes": 360217,
+      "sha256": "8bbb71157f1a91d02be05024389efe9cb2ffecad02bfca48ac8d6282cc295e19"
+    },
+    "biome_definitions.bin": {
+      "bytes": 7667,
+      "sha256": "6c444ef1401a2a7f0dcd1de4eb744b9235b8bd578035f626562e48f732a0fb69"
+    }
+  },
+  "captured_packet_bodies": {
+    "item_registry": "a3cc89a6378ee0c0c82560cfaf5963ec7beb19b2239f982ef9bc2b7faa1d028c",
+    "creative_content": "90680239ab38f5248e4f7fefc74103d4062a03aeab1f851e9c95474f6f408574",
+    "biome_definitions": "6c444ef1401a2a7f0dcd1de4eb744b9235b8bd578035f626562e48f732a0fb69"
+  }
+}

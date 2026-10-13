@@ -12,14 +12,14 @@ Documentação narrativa (comparações, DX, histórico de decisões): [`docs/`]
 | **Handler** | Orquestra o fluxo de conexão / inbound (state machine de sessão). |
 | **Protocol** | Traduz intenções já decididas em pacotes e transmite. |
 | **Packets** | Modelo + serialize/deserialize do wire format Bedrock. |
-| **RakNet** | Transporte UDP confiável. |
+| **Transports** | RakNet or NetherNet carry Bedrock batches; Session adapts the selected transport. |
 
 ```
 Quem decide?     Gameplay
 Quem orquestra?  Handler (conexão) / GameLoop (tick)
 Quem transmite?  Protocol
 Quem serializa?  Packets
-Quem envia?      RakNet
+Quem envia?      RakNet ou NetherNet
 ```
 
 ## Fluxos e dependências permitidas
@@ -27,19 +27,19 @@ Quem envia?      RakNet
 ### Outbound
 
 ```
-Gameplay → Protocol → Packets → Serializer → RakNet
+Gameplay → Protocol → Packets → Serializer → Session transport adapter → RakNet/NetherNet
 ```
 
 ### Inbound (movimento e input de jogo)
 
 ```
-RakNet thread
+Transport receive callback
     → Handler
     → estado pendente (ex. MovementInputState) — só intenção
     → GameLoop Tick
     → System (ex. MovementSystem)
     → Protocol
-    → RakNet
+    → selected transport
 ```
 
 A thread de rede **nunca** muta estado de gameplay (posição final, inventário, mundo). Só escreve intenção pendente. Mutação acontece no tick, de forma determinística.
@@ -113,7 +113,7 @@ Fan-out a “todos online” (ex. TimeSync / movimento **quando pose dirty**, AD
 - **GameClock** guarda tick / world time / TPS medido.
 - **Sistemas** (`IGameSystem`): ordem de **registro** = ordem de **execução**; cada um só com a própria lógica.
 - GameLoop é **single-threaded** até existir necessidade real de paralelismo.
-- Tick de **jogo** ≠ tick de **RakNet** (transporte).
+- Tick de **jogo** ≠ tick de **RakNet** (transporte). NetherNet usa callbacks WebRTC; ambos publicam batches para a mesma sessão Bedrock.
 
 Proibido no GameLoop como *orquestração genérica*: DI de pacotes, chat fan-out, session wiring. Sistemas (`MovementSystem`, `BlockDigSystem`, `BlockEditSystem`) mutam estado de domínio no tick — isso é o contrato inbound da regra 6.
 
@@ -140,8 +140,10 @@ src/
     Packets/       # DataPacket + ProtocolInfo — serialize only (sem Server/World)
     Protocol/      # *Protocol, ProtocolGate, ColumnSend — transmit
     Session/       # NetworkSession, handlers, ZenithSessionListener, PlayerVisibility
-    data/          # block_palette.nbt, item_palette.json, creative_items.json (EmbeddedResource)
+    data/          # palettes, creative reference, biome wire body, source manifest (EmbeddedResource)
   raknet/
+  nethernet/       # Zenith.NetherNet — WebRTC, full-ICE signaling, identity + framing; sem ref a zenith (§140)
+  nethernet.Tests/ # testes independentes do transporte
 ```
 
 Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Network/`.

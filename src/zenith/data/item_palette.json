@@ -14,7 +14,7 @@
     },
     {
       "name": "minecraft:acacia_chest_boat",
-      "id": 655,
+      "id": 657,
       "version": 2,
       "component_based": false
     },
@@ -146,7 +146,7 @@
     },
     {
       "name": "minecraft:allay_spawn_egg",
-      "id": 644,
+      "id": 646,
       "version": 2,
       "component_based": false
     },
@@ -176,7 +176,7 @@
     },
     {
       "name": "minecraft:amethyst_shard",
-      "id": 637,
+      "id": 639,
       "version": 2,
       "component_based": false
     },
@@ -218,7 +218,7 @@
     },
     {
       "name": "minecraft:angler_pottery_sherd",
-      "id": 670,
+      "id": 672,
       "version": 2,
       "component_based": false
     },
@@ -230,25 +230,26 @@
     },
     {
       "name": "minecraft:apple",
-      "id": 878,
+      "id": 882,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0BWFwcGxlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgIDDHVzZV9kdXJhdGlvbkAACQlpdGVtX3RhZ3MIAhFtaW5lY3JhZnQ6aXNfZm9vZAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUPaXRlbS5hcHBsZS5uYW1lAAoObWluZWNyYWZ0OmZvb2QBDmNhbl9hbHdheXNfZWF0AAMJbnV0cml0aW9uCAUTc2F0dXJhdGlvbl9tb2RpZmllcpqZmT4KEXVzaW5nX2NvbnZlcnRzX3RvAAAKDm1pbmVjcmFmdDp0YWdzCQR0YWdzCAIRbWluZWNyYWZ0OmlzX2Zvb2QAChdtaW5lY3JhZnQ6dXNlX2FuaW1hdGlvbggFdmFsdWUDZWF0AAoXbWluZWNyYWZ0OnVzZV9tb2RpZmllcnMBD2VtaXRfdmlicmF0aW9ucwEFEW1vdmVtZW50X21vZGlmaWVyMzOzPggLc3RhcnRfdXNpbmcGYWx3YXlzBQx1c2VfZHVyYXRpb27NzMw/AAAA"
     },
     {
       "name": "minecraft:archer_pottery_sherd",
-      "id": 671,
+      "id": 673,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:armadillo_scute",
-      "id": 720,
+      "id": 722,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:armadillo_spawn_egg",
-      "id": 719,
+      "id": 721,
       "version": 2,
       "component_based": false
     },
@@ -260,7 +261,7 @@
     },
     {
       "name": "minecraft:arms_up_pottery_sherd",
-      "id": 672,
+      "id": 674,
       "version": 2,
       "component_based": false
     },
@@ -310,11 +311,12 @@
       "name": "minecraft:baked_potato",
       "id": 281,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uCgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:balloon",
-      "id": 612,
+      "id": 614,
       "version": 2,
       "component_based": false
     },
@@ -338,7 +340,7 @@
     },
     {
       "name": "minecraft:bamboo_chest_raft",
-      "id": 667,
+      "id": 669,
       "version": 2,
       "component_based": false
     },
@@ -410,7 +412,7 @@
     },
     {
       "name": "minecraft:bamboo_raft",
-      "id": 666,
+      "id": 668,
       "version": 2,
       "component_based": false
     },
@@ -428,7 +430,7 @@
     },
     {
       "name": "minecraft:bamboo_sign",
-      "id": 665,
+      "id": 667,
       "version": 2,
       "component_based": false
     },
@@ -470,7 +472,7 @@
     },
     {
       "name": "minecraft:banner_pattern",
-      "id": 847,
+      "id": 849,
       "version": 2,
       "component_based": false
     },
@@ -532,7 +534,8 @@
       "name": "minecraft:beef",
       "id": 273,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:beehive",
@@ -544,19 +547,22 @@
       "name": "minecraft:beetroot",
       "id": 285,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uAgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:beetroot_seeds",
       "id": 295,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBJtaW5lY3JhZnQ6YmVldHJvb3QJCHBsYW50X2F0CAISbWluZWNyYWZ0OmZhcm1sYW5kARpwbGFudF9hdF9hbnlfc29saWRfc3VyZmFjZQAIDXBsYW50X2F0X2ZhY2UCdXAAAAA="
     },
     {
       "name": "minecraft:beetroot_soup",
       "id": 286,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8EYm93bAADGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQIDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:bell",
@@ -584,7 +590,7 @@
     },
     {
       "name": "minecraft:birch_chest_boat",
-      "id": 652,
+      "id": 654,
       "version": 2,
       "component_based": false
     },
@@ -698,9 +704,10 @@
     },
     {
       "name": "minecraft:black_bundle",
-      "id": 857,
+      "id": 861,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sWYnVuZGxlX2JsYWNrX29wZW5fYmFjawgRYnVuZGxlX29wZW5fZnJvbnQXYnVuZGxlX2JsYWNrX29wZW5fZnJvbnQIB2RlZmF1bHQMYnVuZGxlX2JsYWNrAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:black_candle",
@@ -727,14 +734,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:black_concrete_double_slab",
+      "id": -1234,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:black_concrete_powder",
       "id": -723,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:black_concrete_slab",
+      "id": -1218,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:black_concrete_stairs",
+      "id": -1214,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:black_cushion",
-      "id": 773,
+      "id": 775,
       "version": 2,
       "component_based": false
     },
@@ -752,7 +777,7 @@
     },
     {
       "name": "minecraft:black_harness",
-      "id": 730,
+      "id": 732,
       "version": 2,
       "component_based": false
     },
@@ -783,6 +808,24 @@
     {
       "name": "minecraft:black_wool",
       "id": -554,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:black_wool_double_slab",
+      "id": -1184,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:black_wool_slab",
+      "id": -1168,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:black_wool_stairs",
+      "id": -1164,
       "version": 2,
       "component_based": false
     },
@@ -818,7 +861,7 @@
     },
     {
       "name": "minecraft:blade_pottery_sherd",
-      "id": 673,
+      "id": 675,
       "version": 2,
       "component_based": false
     },
@@ -848,15 +891,16 @@
     },
     {
       "name": "minecraft:bleach",
-      "id": 610,
+      "id": 612,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:blue_bundle",
-      "id": 858,
+      "id": 862,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sVYnVuZGxlX2JsdWVfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBZidW5kbGVfYmx1ZV9vcGVuX2Zyb250CAdkZWZhdWx0C2J1bmRsZV9ibHVlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:blue_candle",
@@ -883,14 +927,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:blue_concrete_double_slab",
+      "id": -1243,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:blue_concrete_powder",
       "id": -719,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:blue_concrete_slab",
+      "id": -1227,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:blue_concrete_stairs",
+      "id": -1201,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:blue_cushion",
-      "id": 774,
+      "id": 776,
       "version": 2,
       "component_based": false
     },
@@ -902,7 +964,7 @@
     },
     {
       "name": "minecraft:blue_egg",
-      "id": 727,
+      "id": 729,
       "version": 2,
       "component_based": false
     },
@@ -914,7 +976,7 @@
     },
     {
       "name": "minecraft:blue_harness",
-      "id": 731,
+      "id": 733,
       "version": 2,
       "component_based": false
     },
@@ -961,6 +1023,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:blue_wool_double_slab",
+      "id": -1193,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:blue_wool_slab",
+      "id": -1177,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:blue_wool_stairs",
+      "id": -1151,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:board",
       "id": 606,
       "version": 2,
@@ -968,7 +1048,7 @@
     },
     {
       "name": "minecraft:boat",
-      "id": 843,
+      "id": 845,
       "version": 2,
       "component_based": false
     },
@@ -980,7 +1060,7 @@
     },
     {
       "name": "minecraft:bolt_armor_trim_smithing_template",
-      "id": 712,
+      "id": 714,
       "version": 2,
       "component_based": false
     },
@@ -1066,13 +1146,15 @@
       "name": "minecraft:bread",
       "id": 261,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uCgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:breeze_rod",
-      "id": 874,
+      "id": 878,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5CAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAEBEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0CmJyZWV6ZV9yb2QAAAUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9uAAAJCWl0ZW1fdGFncwAAChZtaW5lY3JhZnQ6ZGlzcGxheV9uYW1lCAV2YWx1ZRRpdGVtLmJyZWV6ZV9yb2QubmFtZQAKF21pbmVjcmFmdDpoYW5kX2VxdWlwcGVkAQV2YWx1ZQEAAAA="
     },
     {
       "name": "minecraft:breeze_spawn_egg",
@@ -1082,7 +1164,7 @@
     },
     {
       "name": "minecraft:brewer_pottery_sherd",
-      "id": 674,
+      "id": 676,
       "version": 2,
       "component_based": false
     },
@@ -1130,9 +1212,10 @@
     },
     {
       "name": "minecraft:brown_bundle",
-      "id": 859,
+      "id": 863,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sWYnVuZGxlX2Jyb3duX29wZW5fYmFjawgRYnVuZGxlX29wZW5fZnJvbnQXYnVuZGxlX2Jyb3duX29wZW5fZnJvbnQIB2RlZmF1bHQMYnVuZGxlX2Jyb3duAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:brown_candle",
@@ -1159,14 +1242,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:brown_concrete_double_slab",
+      "id": -1235,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:brown_concrete_powder",
       "id": -720,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:brown_concrete_slab",
+      "id": -1219,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:brown_concrete_stairs",
+      "id": -1213,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:brown_cushion",
-      "id": 775,
+      "id": 777,
       "version": 2,
       "component_based": false
     },
@@ -1178,7 +1279,7 @@
     },
     {
       "name": "minecraft:brown_egg",
-      "id": 728,
+      "id": 730,
       "version": 2,
       "component_based": false
     },
@@ -1190,7 +1291,7 @@
     },
     {
       "name": "minecraft:brown_harness",
-      "id": 732,
+      "id": 734,
       "version": 2,
       "component_based": false
     },
@@ -1237,8 +1338,26 @@
       "component_based": false
     },
     {
+      "name": "minecraft:brown_wool_double_slab",
+      "id": -1185,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:brown_wool_slab",
+      "id": -1169,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:brown_wool_stairs",
+      "id": -1163,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:brush",
-      "id": 693,
+      "id": 695,
       "version": 2,
       "component_based": false
     },
@@ -1286,13 +1405,14 @@
     },
     {
       "name": "minecraft:bundle",
-      "id": 860,
+      "id": 864,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sQYnVuZGxlX29wZW5fYmFjawgRYnVuZGxlX29wZW5fZnJvbnQRYnVuZGxlX29wZW5fZnJvbnQIB2RlZmF1bHQGYnVuZGxlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:burn_pottery_sherd",
-      "id": 675,
+      "id": 677,
       "version": 2,
       "component_based": false
     },
@@ -1334,21 +1454,22 @@
     },
     {
       "name": "minecraft:camel_husk_spawn_egg",
-      "id": 669,
+      "id": 671,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:camel_spawn_egg",
-      "id": 668,
+      "id": 670,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:camera",
-      "id": 607,
+      "id": 609,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMID21pbmVjcmFmdDpibG9jaxBtaW5lY3JhZnQ6Y2FtZXJhChBtaW5lY3JhZnQ6Y2FtZXJhBRNibGFja19iYXJzX2R1cmF0aW9uzcxMPgUXYmxhY2tfYmFyc19zY3JlZW5fcmF0aW8K16M9BRBwaWN0dXJlX2R1cmF0aW9uAACAPwUQc2h1dHRlcl9kdXJhdGlvbs3MTD4FFHNodXR0ZXJfc2NyZWVuX3JhdGlvAAAAPwUTc2xpZGVfYXdheV9kdXJhdGlvbs3MTD4AAxZtaW5lY3JhZnQ6dXNlX2R1cmF0aW9uwJoMAAA="
     },
     {
       "name": "minecraft:campfire",
@@ -1370,7 +1491,7 @@
     },
     {
       "name": "minecraft:carpet",
-      "id": 790,
+      "id": 792,
       "version": 2,
       "component_based": false
     },
@@ -1378,7 +1499,8 @@
       "name": "minecraft:carrot",
       "id": 279,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAoObWluZWNyYWZ0OnNlZWQIC2Nyb3BfcmVzdWx0EW1pbmVjcmFmdDpjYXJyb3RzCQhwbGFudF9hdAgCEm1pbmVjcmFmdDpmYXJtbGFuZAEacGxhbnRfYXRfYW55X3NvbGlkX3N1cmZhY2UACA1wbGFudF9hdF9mYWNlAnVwAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:carrot_on_a_stick",
@@ -1490,13 +1612,13 @@
     },
     {
       "name": "minecraft:chemistry_table",
-      "id": 836,
+      "id": 838,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:cherry_boat",
-      "id": 662,
+      "id": 664,
       "version": 2,
       "component_based": false
     },
@@ -1508,7 +1630,7 @@
     },
     {
       "name": "minecraft:cherry_chest_boat",
-      "id": 663,
+      "id": 665,
       "version": 2,
       "component_based": false
     },
@@ -1580,7 +1702,7 @@
     },
     {
       "name": "minecraft:cherry_sign",
-      "id": 664,
+      "id": 666,
       "version": 2,
       "component_based": false
     },
@@ -1628,7 +1750,7 @@
     },
     {
       "name": "minecraft:chest_boat",
-      "id": 658,
+      "id": 660,
       "version": 2,
       "component_based": false
     },
@@ -1642,7 +1764,8 @@
       "name": "minecraft:chicken",
       "id": 275,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoCAwlhbXBsaWZpZXIABQZjaGFuY2WamZk+CA1kZXNjcmlwdGlvbklkDXBvdGlvbi5odW5nZXIDCGR1cmF0aW9uPAMCaWQiCARuYW1lBmh1bmdlcgADCW51dHJpdGlvbgQDDW9uX3VzZV9hY3Rpb24BCQxvbl91c2VfcmFuZ2UFBgAAAEEAAABBAAAAQQUTc2F0dXJhdGlvbl9tb2RpZmllcpqZmT4IEXVzaW5nX2NvbnZlcnRzX3RvAAADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:chicken_spawn_egg",
@@ -1750,7 +1873,8 @@
       "name": "minecraft:chorus_fruit",
       "id": 568,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAEDDWNvb2xkb3duX3RpbWUoCA1jb29sZG93bl90eXBlC2Nob3J1c2ZydWl0AwludXRyaXRpb24IAw1vbl91c2VfYWN0aW9uAAkMb25fdXNlX3JhbmdlBQYAAABBAAAAQQAAAEEFE3NhdHVyYXRpb25fbW9kaWZpZXKamZk+CBF1c2luZ19jb252ZXJ0c190bwAAAxZtaW5lY3JhZnQ6dXNlX2R1cmF0aW9uQAAA"
     },
     {
       "name": "minecraft:chorus_plant",
@@ -1874,7 +1998,7 @@
     },
     {
       "name": "minecraft:coast_armor_trim_smithing_template",
-      "id": 697,
+      "id": 699,
       "version": 2,
       "component_based": false
     },
@@ -1948,7 +2072,8 @@
       "name": "minecraft:cod",
       "id": 264,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzczMPQgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:cod_bucket",
@@ -1970,7 +2095,7 @@
     },
     {
       "name": "minecraft:colored_torch_bp",
-      "id": 841,
+      "id": 843,
       "version": 2,
       "component_based": false
     },
@@ -1994,7 +2119,7 @@
     },
     {
       "name": "minecraft:colored_torch_rg",
-      "id": 840,
+      "id": 842,
       "version": 2,
       "component_based": false
     },
@@ -2030,7 +2155,7 @@
     },
     {
       "name": "minecraft:compound",
-      "id": 608,
+      "id": 610,
       "version": 2,
       "component_based": false
     },
@@ -2042,13 +2167,13 @@
     },
     {
       "name": "minecraft:concrete",
-      "id": 824,
+      "id": 826,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:concrete_powder",
-      "id": 825,
+      "id": 827,
       "version": 2,
       "component_based": false
     },
@@ -2062,53 +2187,61 @@
       "name": "minecraft:cooked_beef",
       "id": 274,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uEAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzcxMPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:cooked_chicken",
       "id": 276,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:cooked_cod",
       "id": 268,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uCgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:cooked_mutton",
       "id": 561,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzcxMPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:cooked_porkchop",
       "id": 263,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uEAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzcxMPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:cooked_rabbit",
       "id": 289,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uCgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:cooked_salmon",
       "id": 269,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzcxMPwgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:cookie",
       "id": 271,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzczMPQgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:copper_axe",
-      "id": 750,
+      "id": 752,
       "version": 2,
       "component_based": false
     },
@@ -2126,7 +2259,7 @@
     },
     {
       "name": "minecraft:copper_boots",
-      "id": 755,
+      "id": 757,
       "version": 2,
       "component_based": false
     },
@@ -2150,7 +2283,7 @@
     },
     {
       "name": "minecraft:copper_chestplate",
-      "id": 753,
+      "id": 755,
       "version": 2,
       "component_based": false
     },
@@ -2162,7 +2295,7 @@
     },
     {
       "name": "minecraft:copper_golem_spawn_egg",
-      "id": 746,
+      "id": 748,
       "version": 2,
       "component_based": false
     },
@@ -2180,19 +2313,19 @@
     },
     {
       "name": "minecraft:copper_helmet",
-      "id": 752,
+      "id": 754,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_hoe",
-      "id": 751,
+      "id": 753,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_horse_armor",
-      "id": 757,
+      "id": 759,
       "version": 2,
       "component_based": false
     },
@@ -2210,19 +2343,19 @@
     },
     {
       "name": "minecraft:copper_leggings",
-      "id": 754,
+      "id": 756,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_nautilus_armor",
-      "id": 761,
+      "id": 763,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_nugget",
-      "id": 756,
+      "id": 758,
       "version": 2,
       "component_based": false
     },
@@ -2234,25 +2367,26 @@
     },
     {
       "name": "minecraft:copper_pickaxe",
-      "id": 749,
+      "id": 751,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_shovel",
-      "id": 748,
+      "id": 750,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:copper_spear",
-      "id": 850,
+      "id": 854,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UECBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZRoBBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0DGNvcHBlcl9zcGVhcgAABQxtaW5pbmdfc3BlZWQAAIA/AQ5zaG91bGRfZGVzcGF3bgEBD3N0YWNrZWRfYnlfZGF0YQADDXVzZV9hbmltYXRpb24AAwx1c2VfZHVyYXRpb26A5K8BAAkJaXRlbV90YWdzCAQVbWluZWNyYWZ0OmNvcHBlcl90aWVyEm1pbmVjcmFmdDppc19zcGVhcgoSbWluZWNyYWZ0OmNvb2xkb3duCAhjYXRlZ29yeQVzcGVhcgUIZHVyYXRpb26amVk/CAR0eXBlBmF0dGFjawAKEG1pbmVjcmFmdDpkYW1hZ2UCBXZhbHVlAgAAChZtaW5lY3JhZnQ6ZGlzcGxheV9uYW1lCAV2YWx1ZRZpdGVtLmNvcHBlcl9zcGVhci5uYW1lAAoUbWluZWNyYWZ0OmR1cmFiaWxpdHkKDWRhbWFnZV9jaGFuY2UDA21heMgBAwNtaW4AAAMObWF4X2R1cmFiaWxpdHn8AgAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUNAAoXbWluZWNyYWZ0OmhhbmRfZXF1aXBwZWQBBXZhbHVlAQAKGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAKEWRhbWFnZV9jb25kaXRpb25zAgxtYXhfZHVyYXRpb276AAUSbWluX3JlbGF0aXZlX3NwZWVkMzOTQAUJbWluX3NwZWVkAAAAAAAFD2RhbWFnZV9tb2RpZmllcgAAAAAFEWRhbWFnZV9tdWx0aXBsaWVyhetRPwIFZGVsYXkNAAoTZGlzbW91bnRfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uUAAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZAAAQEEABQ1oaXRib3hfbWFyZ2luAACAPgoUa25vY2tiYWNrX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbqUABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQzM6NAAAoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoZbWluZWNyYWZ0OnBpZXJjaW5nX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAABQ1oaXRib3hfbWFyZ2luAACAPgoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAoUbWluZWNyYWZ0OnJlcGFpcmFibGUJDHJlcGFpcl9pdGVtcwoECQVpdGVtcwoCCARuYW1lFm1pbmVjcmFmdDpjb3BwZXJfc3BlYXIACA1yZXBhaXJfYW1vdW50KWNvbnRleHQub3RoZXItPnF1ZXJ5LnJlbWFpbmluZ19kdXJhYmlsaXR5AAkFaXRlbXMKAggEbmFtZRZtaW5lY3JhZnQ6Y29wcGVyX2luZ290AAgNcmVwYWlyX2Ftb3VudBtxdWVyeS5tYXhfZHVyYWJpbGl0eSAqIDAuMjUAAAoYbWluZWNyYWZ0OnN3aW5nX2R1cmF0aW9uBQV2YWx1ZZqZWT8AChZtaW5lY3JhZnQ6c3dpbmdfc291bmRzCAphdHRhY2tfaGl0HGl0ZW0uY29wcGVyX3NwZWFyLmF0dGFja19oaXQIC2F0dGFja19taXNzHWl0ZW0uY29wcGVyX3NwZWFyLmF0dGFja19taXNzAAoObWluZWNyYWZ0OnRhZ3MJBHRhZ3MIBBVtaW5lY3JhZnQ6Y29wcGVyX3RpZXISbWluZWNyYWZ0OmlzX3NwZWFyAAoXbWluZWNyYWZ0OnVzZV9tb2RpZmllcnMBD2VtaXRfdmlicmF0aW9ucwAFEW1vdmVtZW50X21vZGlmaWVyAACAPwgLc3RhcnRfc291bmQVaXRlbS5jb3BwZXJfc3BlYXIudXNlCAtzdGFydF91c2luZwZhbHdheXMFDHVzZV9kdXJhdGlvbgCgjEcAAAA="
     },
     {
       "name": "minecraft:copper_sword",
-      "id": 747,
+      "id": 749,
       "version": 2,
       "component_based": false
     },
@@ -2270,25 +2404,25 @@
     },
     {
       "name": "minecraft:coral",
-      "id": 818,
+      "id": 820,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:coral_block",
-      "id": 794,
+      "id": 796,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:coral_fan",
-      "id": 803,
+      "id": 805,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:coral_fan_dead",
-      "id": 804,
+      "id": 806,
       "version": 2,
       "component_based": false
     },
@@ -2354,7 +2488,7 @@
     },
     {
       "name": "minecraft:creaking_spawn_egg",
-      "id": 725,
+      "id": 727,
       "version": 2,
       "component_based": false
     },
@@ -2384,7 +2518,7 @@
     },
     {
       "name": "minecraft:crimson_door",
-      "id": 630,
+      "id": 632,
       "version": 2,
       "component_based": false
     },
@@ -2456,7 +2590,7 @@
     },
     {
       "name": "minecraft:crimson_sign",
-      "id": 628,
+      "id": 630,
       "version": 2,
       "component_based": false
     },
@@ -2564,9 +2698,10 @@
     },
     {
       "name": "minecraft:cyan_bundle",
-      "id": 861,
+      "id": 865,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sVYnVuZGxlX2N5YW5fb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBZidW5kbGVfY3lhbl9vcGVuX2Zyb250CAdkZWZhdWx0C2J1bmRsZV9jeWFuAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:cyan_candle",
@@ -2593,14 +2728,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:cyan_concrete_double_slab",
+      "id": -1241,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:cyan_concrete_powder",
       "id": -717,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:cyan_concrete_slab",
+      "id": -1225,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:cyan_concrete_stairs",
+      "id": -1210,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:cyan_cushion",
-      "id": 776,
+      "id": 778,
       "version": 2,
       "component_based": false
     },
@@ -2618,7 +2771,7 @@
     },
     {
       "name": "minecraft:cyan_harness",
-      "id": 733,
+      "id": 735,
       "version": 2,
       "component_based": false
     },
@@ -2653,6 +2806,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:cyan_wool_double_slab",
+      "id": -1191,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:cyan_wool_slab",
+      "id": -1175,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:cyan_wool_stairs",
+      "id": -1160,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:damaged_anvil",
       "id": -960,
       "version": 2,
@@ -2666,7 +2837,7 @@
     },
     {
       "name": "minecraft:danger_pottery_sherd",
-      "id": 676,
+      "id": 678,
       "version": 2,
       "component_based": false
     },
@@ -2684,7 +2855,7 @@
     },
     {
       "name": "minecraft:dark_oak_chest_boat",
-      "id": 656,
+      "id": 658,
       "version": 2,
       "component_based": false
     },
@@ -3164,7 +3335,7 @@
     },
     {
       "name": "minecraft:diamond_nautilus_armor",
-      "id": 764,
+      "id": 766,
       "version": 2,
       "component_based": false
     },
@@ -3188,9 +3359,10 @@
     },
     {
       "name": "minecraft:diamond_spear",
-      "id": 851,
+      "id": 855,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UICBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZRQBBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0DWRpYW1vbmRfc3BlYXIAAAUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9ugOSvAQAJCWl0ZW1fdGFncwgGFm1pbmVjcmFmdDpkaWFtb25kX3RpZXIdbWluZWNyYWZ0OnRyYW5zZm9ybWFibGVfaXRlbXMSbWluZWNyYWZ0OmlzX3NwZWFyChJtaW5lY3JhZnQ6Y29vbGRvd24ICGNhdGVnb3J5BXNwZWFyBQhkdXJhdGlvbmZmhj8IBHR5cGUGYXR0YWNrAAoQbWluZWNyYWZ0OmRhbWFnZQIFdmFsdWUEAAAKFm1pbmVjcmFmdDpkaXNwbGF5X25hbWUIBXZhbHVlF2l0ZW0uZGlhbW9uZF9zcGVhci5uYW1lAAoUbWluZWNyYWZ0OmR1cmFiaWxpdHkKDWRhbWFnZV9jaGFuY2UDA21heMgBAwNtaW4AAAMObWF4X2R1cmFiaWxpdHmwGAAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUKAAoXbWluZWNyYWZ0OmhhbmRfZXF1aXBwZWQBBXZhbHVlAQAKGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAKEWRhbWFnZV9jb25kaXRpb25zAgxtYXhfZHVyYXRpb27IAAUSbWluX3JlbGF0aXZlX3NwZWVkMzOTQAUJbWluX3NwZWVkAAAAAAAFD2RhbWFnZV9tb2RpZmllcgAAAAAFEWRhbWFnZV9tdWx0aXBsaWVympmJPwIFZGVsYXkKAAoTZGlzbW91bnRfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uPAAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZAAAIEEABQ1oaXRib3hfbWFyZ2luAACAPgoUa25vY2tiYWNrX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvboIABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQzM6NAAAoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoZbWluZWNyYWZ0OnBpZXJjaW5nX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAABQ1oaXRib3hfbWFyZ2luAACAPgoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAoUbWluZWNyYWZ0OnJlcGFpcmFibGUJDHJlcGFpcl9pdGVtcwoECQVpdGVtcwoCCARuYW1lF21pbmVjcmFmdDpkaWFtb25kX3NwZWFyAAgNcmVwYWlyX2Ftb3VudCljb250ZXh0Lm90aGVyLT5xdWVyeS5yZW1haW5pbmdfZHVyYWJpbGl0eQAJBWl0ZW1zCgIIBG5hbWURbWluZWNyYWZ0OmRpYW1vbmQACA1yZXBhaXJfYW1vdW50G3F1ZXJ5Lm1heF9kdXJhYmlsaXR5ICogMC4yNQAAChhtaW5lY3JhZnQ6c3dpbmdfZHVyYXRpb24FBXZhbHVlZmaGPwAKFm1pbmVjcmFmdDpzd2luZ19zb3VuZHMICmF0dGFja19oaXQdaXRlbS5kaWFtb25kX3NwZWFyLmF0dGFja19oaXQIC2F0dGFja19taXNzHml0ZW0uZGlhbW9uZF9zcGVhci5hdHRhY2tfbWlzcwAKDm1pbmVjcmFmdDp0YWdzCQR0YWdzCAYWbWluZWNyYWZ0OmRpYW1vbmRfdGllch1taW5lY3JhZnQ6dHJhbnNmb3JtYWJsZV9pdGVtcxJtaW5lY3JhZnQ6aXNfc3BlYXIAChdtaW5lY3JhZnQ6dXNlX21vZGlmaWVycwEPZW1pdF92aWJyYXRpb25zAAURbW92ZW1lbnRfbW9kaWZpZXIAAIA/CAtzdGFydF9zb3VuZBZpdGVtLmRpYW1vbmRfc3BlYXIudXNlCAtzdGFydF91c2luZwZhbHdheXMFDHVzZV9kdXJhdGlvbgCgjEcAAAA="
     },
     {
       "name": "minecraft:diamond_sword",
@@ -3242,7 +3414,7 @@
     },
     {
       "name": "minecraft:disc_fragment_5",
-      "id": 650,
+      "id": 652,
       "version": 2,
       "component_based": false
     },
@@ -3272,31 +3444,31 @@
     },
     {
       "name": "minecraft:double_plant",
-      "id": 812,
+      "id": 814,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:double_stone_block_slab",
-      "id": 799,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:double_stone_block_slab2",
-      "id": 800,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:double_stone_block_slab3",
       "id": 801,
       "version": 2,
       "component_based": false
     },
     {
-      "name": "minecraft:double_stone_block_slab4",
+      "name": "minecraft:double_stone_block_slab2",
       "id": 802,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:double_stone_block_slab3",
+      "id": 803,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:double_stone_block_slab4",
+      "id": 804,
       "version": 2,
       "component_based": false
     },
@@ -3328,7 +3500,8 @@
       "name": "minecraft:dried_kelp",
       "id": 270,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uAgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzczMPQgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbiAAAA=="
     },
     {
       "name": "minecraft:dried_kelp_block",
@@ -3356,19 +3529,19 @@
     },
     {
       "name": "minecraft:dune_armor_trim_smithing_template",
-      "id": 696,
+      "id": 698,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:dye",
-      "id": 846,
+      "id": 848,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:echo_shard",
-      "id": 660,
+      "id": 662,
       "version": 2,
       "component_based": false
     },
@@ -4144,7 +4317,8 @@
       "name": "minecraft:enchanted_golden_apple",
       "id": 259,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMBDm1pbmVjcmFmdDpmb2lsAQoObWluZWNyYWZ0OmZvb2QBDmNhbl9hbHdheXNfZWF0AQMNY29vbGRvd25fdGltZQAIDWNvb2xkb3duX3R5cGUACQdlZmZlY3RzCggDCWFtcGxpZmllcgIFBmNoYW5jZQAAgD8IDWRlc2NyaXB0aW9uSWQTcG90aW9uLnJlZ2VuZXJhdGlvbgMIZHVyYXRpb248AwJpZBQIBG5hbWUMcmVnZW5lcmF0aW9uAAMJYW1wbGlmaWVyBgUGY2hhbmNlAACAPwgNZGVzY3JpcHRpb25JZBFwb3Rpb24uYWJzb3JwdGlvbgMIZHVyYXRpb27wAQMCaWQsCARuYW1lCmFic29ycHRpb24AAwlhbXBsaWZpZXIABQZjaGFuY2UAAIA/CA1kZXNjcmlwdGlvbklkEXBvdGlvbi5yZXNpc3RhbmNlAwhkdXJhdGlvbtgEAwJpZBYIBG5hbWUKcmVzaXN0YW5jZQADCWFtcGxpZmllcgAFBmNoYW5jZQAAgD8IDWRlc2NyaXB0aW9uSWQVcG90aW9uLmZpcmVSZXNpc3RhbmNlAwhkdXJhdGlvbtgEAwJpZBgIBG5hbWUPZmlyZV9yZXNpc3RhbmNlAAMJbnV0cml0aW9uCAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPwgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:enchanting_table",
@@ -4166,7 +4340,7 @@
     },
     {
       "name": "minecraft:end_crystal",
-      "id": 849,
+      "id": 851,
       "version": 2,
       "component_based": false
     },
@@ -4268,7 +4442,7 @@
     },
     {
       "name": "minecraft:explorer_pottery_sherd",
-      "id": 677,
+      "id": 679,
       "version": 2,
       "component_based": false
     },
@@ -4370,7 +4544,7 @@
     },
     {
       "name": "minecraft:eye_armor_trim_smithing_template",
-      "id": 700,
+      "id": 702,
       "version": 2,
       "component_based": false
     },
@@ -4388,7 +4562,7 @@
     },
     {
       "name": "minecraft:fence",
-      "id": 792,
+      "id": 794,
       "version": 2,
       "component_based": false
     },
@@ -4502,7 +4676,7 @@
     },
     {
       "name": "minecraft:flow_armor_trim_smithing_template",
-      "id": 711,
+      "id": 713,
       "version": 2,
       "component_based": false
     },
@@ -4514,7 +4688,7 @@
     },
     {
       "name": "minecraft:flow_pottery_sherd",
-      "id": 678,
+      "id": 680,
       "version": 2,
       "component_based": false
     },
@@ -4562,7 +4736,7 @@
     },
     {
       "name": "minecraft:friend_pottery_sherd",
-      "id": 679,
+      "id": 681,
       "version": 2,
       "component_based": false
     },
@@ -4574,7 +4748,7 @@
     },
     {
       "name": "minecraft:frog_spawn_egg",
-      "id": 641,
+      "id": 643,
       "version": 2,
       "component_based": false
     },
@@ -4640,13 +4814,14 @@
     },
     {
       "name": "minecraft:glow_berries",
-      "id": 879,
+      "id": 883,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAoObWluZWNyYWZ0OnNlZWQIC2Nyb3BfcmVzdWx0FG1pbmVjcmFmdDpjYXZlX3ZpbmVzCQhwbGFudF9hdAgECmNhdmVfdmluZXMcY2F2ZV92aW5lc19oZWFkX3dpdGhfYmVycmllcwEacGxhbnRfYXRfYW55X3NvbGlkX3N1cmZhY2UBCA1wbGFudF9hdF9mYWNlBGRvd24AAxZtaW5lY3JhZnQ6dXNlX2R1cmF0aW9uQAAA"
     },
     {
       "name": "minecraft:glow_frame",
-      "id": 636,
+      "id": 638,
       "version": 2,
       "component_based": true
     },
@@ -4670,7 +4845,7 @@
     },
     {
       "name": "minecraft:glow_stick",
-      "id": 615,
+      "id": 617,
       "version": 2,
       "component_based": false
     },
@@ -4694,7 +4869,7 @@
     },
     {
       "name": "minecraft:goat_horn",
-      "id": 640,
+      "id": 642,
       "version": 2,
       "component_based": false
     },
@@ -4732,7 +4907,8 @@
       "name": "minecraft:golden_apple",
       "id": 258,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAEDDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoEAwlhbXBsaWZpZXICBQZjaGFuY2UAAIA/CA1kZXNjcmlwdGlvbklkE3BvdGlvbi5yZWdlbmVyYXRpb24DCGR1cmF0aW9uCgMCaWQUCARuYW1lDHJlZ2VuZXJhdGlvbgADCWFtcGxpZmllcgAFBmNoYW5jZQAAgD8IDWRlc2NyaXB0aW9uSWQRcG90aW9uLmFic29ycHRpb24DCGR1cmF0aW9u8AEDAmlkLAgEbmFtZQphYnNvcnB0aW9uAAMJbnV0cml0aW9uCAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPwgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:golden_axe",
@@ -4750,7 +4926,8 @@
       "name": "minecraft:golden_carrot",
       "id": 283,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPwgRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:golden_chestplate",
@@ -4790,7 +4967,7 @@
     },
     {
       "name": "minecraft:golden_nautilus_armor",
-      "id": 763,
+      "id": 765,
       "version": 2,
       "component_based": false
     },
@@ -4814,9 +4991,10 @@
     },
     {
       "name": "minecraft:golden_spear",
-      "id": 852,
+      "id": 856,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UCCBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZSwBBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0CmdvbGRfc3BlYXIAAAUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9ugOSvAQAJCWl0ZW1fdGFncwgEFW1pbmVjcmFmdDpnb2xkZW5fdGllchJtaW5lY3JhZnQ6aXNfc3BlYXIKEm1pbmVjcmFmdDpjb29sZG93bggIY2F0ZWdvcnkFc3BlYXIFCGR1cmF0aW9uMzNzPwgEdHlwZQZhdHRhY2sAChBtaW5lY3JhZnQ6ZGFtYWdlAgV2YWx1ZQEAAAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUWaXRlbS5nb2xkZW5fc3BlYXIubmFtZQAKFG1pbmVjcmFmdDpkdXJhYmlsaXR5Cg1kYW1hZ2VfY2hhbmNlAwNtYXjIAQMDbWluAAADDm1heF9kdXJhYmlsaXR5PAAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUWAAoXbWluZWNyYWZ0OmhhbmRfZXF1aXBwZWQBBXZhbHVlAQAKGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAKEWRhbWFnZV9jb25kaXRpb25zAgxtYXhfZHVyYXRpb24TAQUSbWluX3JlbGF0aXZlX3NwZWVkMzOTQAUJbWluX3NwZWVkAAAAAAAFD2RhbWFnZV9tb2RpZmllcgAAAAAFEWRhbWFnZV9tdWx0aXBsaWVyMzMzPwIFZGVsYXkOAAoTZGlzbW91bnRfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uRgAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZAAAUEEABQ1oaXRib3hfbWFyZ2luAACAPgoUa25vY2tiYWNrX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbqoABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQzM6NAAAoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoZbWluZWNyYWZ0OnBpZXJjaW5nX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAABQ1oaXRib3hfbWFyZ2luAACAPgoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAoUbWluZWNyYWZ0OnJlcGFpcmFibGUJDHJlcGFpcl9pdGVtcwoECQVpdGVtcwoCCARuYW1lFm1pbmVjcmFmdDpnb2xkZW5fc3BlYXIACA1yZXBhaXJfYW1vdW50KWNvbnRleHQub3RoZXItPnF1ZXJ5LnJlbWFpbmluZ19kdXJhYmlsaXR5AAkFaXRlbXMKAggEbmFtZRRtaW5lY3JhZnQ6Z29sZF9pbmdvdAAIDXJlcGFpcl9hbW91bnQbcXVlcnkubWF4X2R1cmFiaWxpdHkgKiAwLjI1AAAKGG1pbmVjcmFmdDpzd2luZ19kdXJhdGlvbgUFdmFsdWUzM3M/AAoWbWluZWNyYWZ0OnN3aW5nX3NvdW5kcwgKYXR0YWNrX2hpdBxpdGVtLmdvbGRlbl9zcGVhci5hdHRhY2tfaGl0CAthdHRhY2tfbWlzcx1pdGVtLmdvbGRlbl9zcGVhci5hdHRhY2tfbWlzcwAKDm1pbmVjcmFmdDp0YWdzCQR0YWdzCAQVbWluZWNyYWZ0OmdvbGRlbl90aWVyEm1pbmVjcmFmdDppc19zcGVhcgAKF21pbmVjcmFmdDp1c2VfbW9kaWZpZXJzAQ9lbWl0X3ZpYnJhdGlvbnMABRFtb3ZlbWVudF9tb2RpZmllcgAAgD8IC3N0YXJ0X3NvdW5kFWl0ZW0uZ29sZGVuX3NwZWFyLnVzZQgLc3RhcnRfdXNpbmcGYWx3YXlzBQx1c2VfZHVyYXRpb24AoIxHAAAA"
     },
     {
       "name": "minecraft:golden_sword",
@@ -4874,9 +5052,10 @@
     },
     {
       "name": "minecraft:gray_bundle",
-      "id": 862,
+      "id": 866,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sVYnVuZGxlX2dyYXlfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBZidW5kbGVfZ3JheV9vcGVuX2Zyb250CAdkZWZhdWx0C2J1bmRsZV9ncmF5AAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:gray_candle",
@@ -4903,14 +5082,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:gray_concrete_double_slab",
+      "id": -1233,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:gray_concrete_powder",
       "id": -715,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:gray_concrete_slab",
+      "id": -1217,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:gray_concrete_stairs",
+      "id": -1208,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:gray_cushion",
-      "id": 777,
+      "id": 779,
       "version": 2,
       "component_based": false
     },
@@ -4928,7 +5125,7 @@
     },
     {
       "name": "minecraft:gray_harness",
-      "id": 734,
+      "id": 736,
       "version": 2,
       "component_based": false
     },
@@ -4963,10 +5160,29 @@
       "component_based": false
     },
     {
+      "name": "minecraft:gray_wool_double_slab",
+      "id": -1183,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:gray_wool_slab",
+      "id": -1167,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:gray_wool_stairs",
+      "id": -1158,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:green_bundle",
-      "id": 863,
+      "id": 867,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sWYnVuZGxlX2dyZWVuX29wZW5fYmFjawgRYnVuZGxlX29wZW5fZnJvbnQXYnVuZGxlX2dyZWVuX29wZW5fZnJvbnQIB2RlZmF1bHQMYnVuZGxlX2dyZWVuAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:green_candle",
@@ -4993,14 +5209,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:green_concrete_double_slab",
+      "id": -1240,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:green_concrete_powder",
       "id": -721,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:green_concrete_slab",
+      "id": -1224,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:green_concrete_stairs",
+      "id": -1212,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:green_cushion",
-      "id": 778,
+      "id": 780,
       "version": 2,
       "component_based": false
     },
@@ -5018,7 +5252,7 @@
     },
     {
       "name": "minecraft:green_harness",
-      "id": 735,
+      "id": 737,
       "version": 2,
       "component_based": false
     },
@@ -5053,6 +5287,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:green_wool_double_slab",
+      "id": -1190,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:green_wool_slab",
+      "id": -1174,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:green_wool_stairs",
+      "id": -1162,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:grindstone",
       "id": -195,
       "version": 2,
@@ -5078,7 +5330,7 @@
     },
     {
       "name": "minecraft:guster_pottery_sherd",
-      "id": 680,
+      "id": 682,
       "version": 2,
       "component_based": false
     },
@@ -5090,7 +5342,7 @@
     },
     {
       "name": "minecraft:happy_ghast_spawn_egg",
-      "id": 729,
+      "id": 731,
       "version": 2,
       "component_based": false
     },
@@ -5276,13 +5528,13 @@
     },
     {
       "name": "minecraft:hard_stained_glass",
-      "id": 838,
+      "id": 840,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:hard_stained_glass_pane",
-      "id": 839,
+      "id": 841,
       "version": 2,
       "component_based": false
     },
@@ -5330,13 +5582,13 @@
     },
     {
       "name": "minecraft:heart_pottery_sherd",
-      "id": 681,
+      "id": 683,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:heartbreak_pottery_sherd",
-      "id": 682,
+      "id": 684,
       "version": 2,
       "component_based": false
     },
@@ -5368,7 +5620,8 @@
       "name": "minecraft:honey_bottle",
       "id": 604,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAEDDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBCQ5yZW1vdmVfZWZmZWN0cwMCJgUTc2F0dXJhdGlvbl9tb2RpZmllcs3MzD0IEXVzaW5nX2NvbnZlcnRzX3RvDGdsYXNzX2JvdHRsZQADGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZSADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25QAAA="
     },
     {
       "name": "minecraft:honeycomb",
@@ -5426,13 +5679,13 @@
     },
     {
       "name": "minecraft:host_armor_trim_smithing_template",
-      "id": 710,
+      "id": 712,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:howl_pottery_sherd",
-      "id": 683,
+      "id": 685,
       "version": 2,
       "component_based": false
     },
@@ -5450,7 +5703,7 @@
     },
     {
       "name": "minecraft:ice_bomb",
-      "id": 609,
+      "id": 611,
       "version": 2,
       "component_based": false
     },
@@ -5600,7 +5853,7 @@
     },
     {
       "name": "minecraft:iron_nautilus_armor",
-      "id": 762,
+      "id": 764,
       "version": 2,
       "component_based": false
     },
@@ -5630,9 +5883,10 @@
     },
     {
       "name": "minecraft:iron_spear",
-      "id": 853,
+      "id": 857,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UGCBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZRwBBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0Cmlyb25fc3BlYXIAAAUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9ugOSvAQAJCWl0ZW1fdGFncwgEE21pbmVjcmFmdDppcm9uX3RpZXISbWluZWNyYWZ0OmlzX3NwZWFyChJtaW5lY3JhZnQ6Y29vbGRvd24ICGNhdGVnb3J5BXNwZWFyBQhkdXJhdGlvbjMzcz8IBHR5cGUGYXR0YWNrAAoQbWluZWNyYWZ0OmRhbWFnZQIFdmFsdWUDAAAKFm1pbmVjcmFmdDpkaXNwbGF5X25hbWUIBXZhbHVlFGl0ZW0uaXJvbl9zcGVhci5uYW1lAAoUbWluZWNyYWZ0OmR1cmFiaWxpdHkKDWRhbWFnZV9jaGFuY2UDA21heMgBAwNtaW4AAAMObWF4X2R1cmFiaWxpdHn0AwAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUOAAoXbWluZWNyYWZ0OmhhbmRfZXF1aXBwZWQBBXZhbHVlAQAKGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAKEWRhbWFnZV9jb25kaXRpb25zAgxtYXhfZHVyYXRpb27hAAUSbWluX3JlbGF0aXZlX3NwZWVkMzOTQAUJbWluX3NwZWVkAAAAAAAFD2RhbWFnZV9tb2RpZmllcgAAAAAFEWRhbWFnZV9tdWx0aXBsaWVyMzNzPwIFZGVsYXkMAAoTZGlzbW91bnRfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uMgAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZAAAMEEABQ1oaXRib3hfbWFyZ2luAACAPgoUa25vY2tiYWNrX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbocABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQzM6NAAAoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoZbWluZWNyYWZ0OnBpZXJjaW5nX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAABQ1oaXRib3hfbWFyZ2luAACAPgoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAoUbWluZWNyYWZ0OnJlcGFpcmFibGUJDHJlcGFpcl9pdGVtcwoECQVpdGVtcwoCCARuYW1lFG1pbmVjcmFmdDppcm9uX3NwZWFyAAgNcmVwYWlyX2Ftb3VudCljb250ZXh0Lm90aGVyLT5xdWVyeS5yZW1haW5pbmdfZHVyYWJpbGl0eQAJBWl0ZW1zCgIIBG5hbWUUbWluZWNyYWZ0Omlyb25faW5nb3QACA1yZXBhaXJfYW1vdW50G3F1ZXJ5Lm1heF9kdXJhYmlsaXR5ICogMC4yNQAAChhtaW5lY3JhZnQ6c3dpbmdfZHVyYXRpb24FBXZhbHVlMzNzPwAKFm1pbmVjcmFmdDpzd2luZ19zb3VuZHMICmF0dGFja19oaXQaaXRlbS5pcm9uX3NwZWFyLmF0dGFja19oaXQIC2F0dGFja19taXNzG2l0ZW0uaXJvbl9zcGVhci5hdHRhY2tfbWlzcwAKDm1pbmVjcmFmdDp0YWdzCQR0YWdzCAQTbWluZWNyYWZ0Omlyb25fdGllchJtaW5lY3JhZnQ6aXNfc3BlYXIAChdtaW5lY3JhZnQ6dXNlX21vZGlmaWVycwEPZW1pdF92aWJyYXRpb25zAAURbW92ZW1lbnRfbW9kaWZpZXIAAIA/CAtzdGFydF9zb3VuZBNpdGVtLmlyb25fc3BlYXIudXNlCAtzdGFydF91c2luZwZhbHdheXMFDHVzZV9kdXJhdGlvbgCgjEcAAAA="
     },
     {
       "name": "minecraft:iron_sword",
@@ -5780,7 +6034,7 @@
     },
     {
       "name": "minecraft:jungle_chest_boat",
-      "id": 653,
+      "id": 655,
       "version": 2,
       "component_based": false
     },
@@ -6008,13 +6262,13 @@
     },
     {
       "name": "minecraft:leaves",
-      "id": 806,
+      "id": 808,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:leaves2",
-      "id": 807,
+      "id": 809,
       "version": 2,
       "component_based": false
     },
@@ -6032,7 +6286,7 @@
     },
     {
       "name": "minecraft:light_block",
-      "id": 842,
+      "id": 844,
       "version": 2,
       "component_based": false
     },
@@ -6134,9 +6388,10 @@
     },
     {
       "name": "minecraft:light_blue_bundle",
-      "id": 864,
+      "id": 868,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sbYnVuZGxlX2xpZ2h0X2JsdWVfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBxidW5kbGVfbGlnaHRfYmx1ZV9vcGVuX2Zyb250CAdkZWZhdWx0EWJ1bmRsZV9saWdodF9ibHVlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:light_blue_candle",
@@ -6163,14 +6418,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:light_blue_concrete_double_slab",
+      "id": -1242,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_blue_concrete_powder",
       "id": -711,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:light_blue_concrete_slab",
+      "id": -1226,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_blue_concrete_stairs",
+      "id": -1204,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_blue_cushion",
-      "id": 779,
+      "id": 781,
       "version": 2,
       "component_based": false
     },
@@ -6188,7 +6461,7 @@
     },
     {
       "name": "minecraft:light_blue_harness",
-      "id": 736,
+      "id": 738,
       "version": 2,
       "component_based": false
     },
@@ -6223,10 +6496,29 @@
       "component_based": false
     },
     {
+      "name": "minecraft:light_blue_wool_double_slab",
+      "id": -1192,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_blue_wool_slab",
+      "id": -1176,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_blue_wool_stairs",
+      "id": -1154,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_gray_bundle",
-      "id": 865,
+      "id": 869,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sbYnVuZGxlX2xpZ2h0X2dyYXlfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBxidW5kbGVfbGlnaHRfZ3JheV9vcGVuX2Zyb250CAdkZWZhdWx0EWJ1bmRsZV9saWdodF9ncmF5AAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:light_gray_candle",
@@ -6253,14 +6545,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:light_gray_concrete_double_slab",
+      "id": -1232,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_gray_concrete_powder",
       "id": -716,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:light_gray_concrete_slab",
+      "id": -1216,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_gray_concrete_stairs",
+      "id": -1209,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_gray_cushion",
-      "id": 780,
+      "id": 782,
       "version": 2,
       "component_based": false
     },
@@ -6272,7 +6582,7 @@
     },
     {
       "name": "minecraft:light_gray_harness",
-      "id": 737,
+      "id": 739,
       "version": 2,
       "component_based": false
     },
@@ -6307,6 +6617,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:light_gray_wool_double_slab",
+      "id": -1182,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_gray_wool_slab",
+      "id": -1166,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:light_gray_wool_stairs",
+      "id": -1159,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:light_weighted_pressure_plate",
       "id": 147,
       "version": 2,
@@ -6332,9 +6660,10 @@
     },
     {
       "name": "minecraft:lime_bundle",
-      "id": 866,
+      "id": 870,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sVYnVuZGxlX2xpbWVfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBZidW5kbGVfbGltZV9vcGVuX2Zyb250CAdkZWZhdWx0C2J1bmRsZV9saW1lAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:lime_candle",
@@ -6361,14 +6690,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:lime_concrete_double_slab",
+      "id": -1239,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:lime_concrete_powder",
       "id": -713,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:lime_concrete_slab",
+      "id": -1223,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:lime_concrete_stairs",
+      "id": -1206,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:lime_cushion",
-      "id": 781,
+      "id": 783,
       "version": 2,
       "component_based": false
     },
@@ -6386,7 +6733,7 @@
     },
     {
       "name": "minecraft:lime_harness",
-      "id": 738,
+      "id": 740,
       "version": 2,
       "component_based": false
     },
@@ -6417,6 +6764,24 @@
     {
       "name": "minecraft:lime_wool",
       "id": -559,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:lime_wool_double_slab",
+      "id": -1189,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:lime_wool_slab",
+      "id": -1173,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:lime_wool_stairs",
+      "id": -1156,
       "version": 2,
       "component_based": false
     },
@@ -6482,19 +6847,19 @@
     },
     {
       "name": "minecraft:lodestone_compass",
-      "id": 616,
+      "id": 618,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:log",
-      "id": 791,
+      "id": 793,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:log2",
-      "id": 820,
+      "id": 822,
       "version": 2,
       "component_based": false
     },
@@ -6512,9 +6877,10 @@
     },
     {
       "name": "minecraft:magenta_bundle",
-      "id": 867,
+      "id": 871,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sYYnVuZGxlX21hZ2VudGFfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBlidW5kbGVfbWFnZW50YV9vcGVuX2Zyb250CAdkZWZhdWx0DmJ1bmRsZV9tYWdlbnRhAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:magenta_candle",
@@ -6541,14 +6907,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:magenta_concrete_double_slab",
+      "id": -1245,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:magenta_concrete_powder",
       "id": -710,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:magenta_concrete_slab",
+      "id": -1229,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:magenta_concrete_stairs",
+      "id": -1203,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:magenta_cushion",
-      "id": 782,
+      "id": 784,
       "version": 2,
       "component_based": false
     },
@@ -6566,7 +6950,7 @@
     },
     {
       "name": "minecraft:magenta_harness",
-      "id": 739,
+      "id": 741,
       "version": 2,
       "component_based": false
     },
@@ -6601,6 +6985,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:magenta_wool_double_slab",
+      "id": -1195,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:magenta_wool_slab",
+      "id": -1179,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:magenta_wool_stairs",
+      "id": -1153,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:magma",
       "id": 213,
       "version": 2,
@@ -6620,7 +7022,7 @@
     },
     {
       "name": "minecraft:mangrove_boat",
-      "id": 648,
+      "id": 650,
       "version": 2,
       "component_based": false
     },
@@ -6632,13 +7034,13 @@
     },
     {
       "name": "minecraft:mangrove_chest_boat",
-      "id": 657,
+      "id": 659,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:mangrove_door",
-      "id": 646,
+      "id": 648,
       "version": 2,
       "component_based": false
     },
@@ -6710,7 +7112,7 @@
     },
     {
       "name": "minecraft:mangrove_sign",
-      "id": 647,
+      "id": 649,
       "version": 2,
       "component_based": false
     },
@@ -6758,7 +7160,7 @@
     },
     {
       "name": "minecraft:medicine",
-      "id": 613,
+      "id": 615,
       "version": 2,
       "component_based": false
     },
@@ -6778,13 +7180,15 @@
       "name": "minecraft:melon_seeds",
       "id": 293,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBRtaW5lY3JhZnQ6bWVsb25fc3RlbQkIcGxhbnRfYXQIAhJtaW5lY3JhZnQ6ZmFybWxhbmQBGnBsYW50X2F0X2FueV9zb2xpZF9zdXJmYWNlAAgNcGxhbnRfYXRfZmFjZQJ1cAAAAA=="
     },
     {
       "name": "minecraft:melon_slice",
       "id": 272,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:melon_stem",
@@ -6806,7 +7210,7 @@
     },
     {
       "name": "minecraft:miner_pottery_sherd",
-      "id": 684,
+      "id": 686,
       "version": 2,
       "component_based": false
     },
@@ -6824,7 +7228,7 @@
     },
     {
       "name": "minecraft:monster_egg",
-      "id": 822,
+      "id": 824,
       "version": 2,
       "component_based": false
     },
@@ -6908,7 +7312,7 @@
     },
     {
       "name": "minecraft:mourner_pottery_sherd",
-      "id": 685,
+      "id": 687,
       "version": 2,
       "component_based": false
     },
@@ -6976,7 +7380,8 @@
       "name": "minecraft:mushroom_stew",
       "id": 260,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8EYm93bAADGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQIDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:music_disc_11",
@@ -6992,7 +7397,7 @@
     },
     {
       "name": "minecraft:music_disc_5",
-      "id": 649,
+      "id": 651,
       "version": 2,
       "component_based": true
     },
@@ -7004,7 +7409,7 @@
     },
     {
       "name": "minecraft:music_disc_bounce",
-      "id": 835,
+      "id": 837,
       "version": 2,
       "component_based": true
     },
@@ -7022,13 +7427,13 @@
     },
     {
       "name": "minecraft:music_disc_creator",
-      "id": 830,
+      "id": 832,
       "version": 2,
       "component_based": true
     },
     {
       "name": "minecraft:music_disc_creator_music_box",
-      "id": 831,
+      "id": 833,
       "version": 2,
       "component_based": true
     },
@@ -7040,7 +7445,7 @@
     },
     {
       "name": "minecraft:music_disc_lava_chicken",
-      "id": 834,
+      "id": 836,
       "version": 2,
       "component_based": true
     },
@@ -7058,25 +7463,25 @@
     },
     {
       "name": "minecraft:music_disc_otherside",
-      "id": 639,
+      "id": 641,
       "version": 2,
       "component_based": true
     },
     {
       "name": "minecraft:music_disc_pigstep",
-      "id": 633,
+      "id": 635,
       "version": 2,
       "component_based": true
     },
     {
       "name": "minecraft:music_disc_precipice",
-      "id": 832,
+      "id": 834,
       "version": 2,
       "component_based": true
     },
     {
       "name": "minecraft:music_disc_relic",
-      "id": 713,
+      "id": 715,
       "version": 2,
       "component_based": true
     },
@@ -7094,7 +7499,7 @@
     },
     {
       "name": "minecraft:music_disc_tears",
-      "id": 833,
+      "id": 835,
       "version": 2,
       "component_based": true
     },
@@ -7114,7 +7519,8 @@
       "name": "minecraft:mutton",
       "id": 560,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:mycelium",
@@ -7136,7 +7542,7 @@
     },
     {
       "name": "minecraft:nautilus_spawn_egg",
-      "id": 758,
+      "id": 760,
       "version": 2,
       "component_based": false
     },
@@ -7184,7 +7590,7 @@
     },
     {
       "name": "minecraft:nether_sprouts",
-      "id": 634,
+      "id": 636,
       "version": 2,
       "component_based": true
     },
@@ -7198,7 +7604,8 @@
       "name": "minecraft:nether_wart",
       "id": 294,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBVtaW5lY3JhZnQ6bmV0aGVyX3dhcnQJCHBsYW50X2F0CAIJc291bF9zYW5kARpwbGFudF9hdF9hbnlfc29saWRfc3VyZmFjZQAIDXBsYW50X2F0X2ZhY2UCdXAAAAA="
     },
     {
       "name": "minecraft:nether_wart_block",
@@ -7214,7 +7621,7 @@
     },
     {
       "name": "minecraft:netherite_axe",
-      "id": 620,
+      "id": 622,
       "version": 2,
       "component_based": false
     },
@@ -7226,85 +7633,86 @@
     },
     {
       "name": "minecraft:netherite_boots",
-      "id": 626,
+      "id": 628,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:netherite_chestplate",
-      "id": 624,
+      "id": 626,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:netherite_helmet",
-      "id": 623,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:netherite_hoe",
-      "id": 621,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:netherite_horse_armor",
-      "id": 766,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:netherite_ingot",
-      "id": 622,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:netherite_leggings",
       "id": 625,
       "version": 2,
       "component_based": false
     },
     {
-      "name": "minecraft:netherite_nautilus_armor",
-      "id": 765,
+      "name": "minecraft:netherite_hoe",
+      "id": 623,
       "version": 2,
       "component_based": false
     },
     {
-      "name": "minecraft:netherite_pickaxe",
-      "id": 619,
+      "name": "minecraft:netherite_horse_armor",
+      "id": 768,
       "version": 2,
       "component_based": false
     },
     {
-      "name": "minecraft:netherite_scrap",
+      "name": "minecraft:netherite_ingot",
+      "id": 624,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:netherite_leggings",
       "id": 627,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:netherite_nautilus_armor",
+      "id": 767,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:netherite_pickaxe",
+      "id": 621,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:netherite_scrap",
+      "id": 629,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:netherite_shovel",
-      "id": 618,
+      "id": 620,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:netherite_spear",
-      "id": 854,
+      "id": 858,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UKCBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZR4BBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0D25ldGhlcml0ZV9zcGVhcgAABQxtaW5pbmdfc3BlZWQAAIA/AQ5zaG91bGRfZGVzcGF3bgEBD3N0YWNrZWRfYnlfZGF0YQADDXVzZV9hbmltYXRpb24AAwx1c2VfZHVyYXRpb26A5K8BAAkJaXRlbV90YWdzCAQYbWluZWNyYWZ0Om5ldGhlcml0ZV90aWVyEm1pbmVjcmFmdDppc19zcGVhcgoSbWluZWNyYWZ0OmNvb2xkb3duCAhjYXRlZ29yeQVzcGVhcgUIZHVyYXRpb24zM5M/CAR0eXBlBmF0dGFjawAKEG1pbmVjcmFmdDpkYW1hZ2UCBXZhbHVlBQAAChZtaW5lY3JhZnQ6ZGlzcGxheV9uYW1lCAV2YWx1ZRlpdGVtLm5ldGhlcml0ZV9zcGVhci5uYW1lAAoUbWluZWNyYWZ0OmR1cmFiaWxpdHkKDWRhbWFnZV9jaGFuY2UDA21heMgBAwNtaW4AAAMObWF4X2R1cmFiaWxpdHncHwAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUPAAoYbWluZWNyYWZ0OmZpcmVfcmVzaXN0YW50AQV2YWx1ZQEAChdtaW5lY3JhZnQ6aGFuZF9lcXVpcHBlZAEFdmFsdWUBAAoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uChhtaW5lY3JhZnQ6a2luZXRpY193ZWFwb24KDmNyZWF0aXZlX3JlYWNoBQNtYXgAAPBABQNtaW4AAABAAAoRZGFtYWdlX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbq8ABRJtaW5fcmVsYXRpdmVfc3BlZWQzM5NABQltaW5fc3BlZWQAAAAAAAUPZGFtYWdlX21vZGlmaWVyAAAAAAURZGFtYWdlX211bHRpcGxpZXKamZk/AgVkZWxheQgAChNkaXNtb3VudF9jb25kaXRpb25zAgxtYXhfZHVyYXRpb24yAAUSbWluX3JlbGF0aXZlX3NwZWVkAAAAAAUJbWluX3NwZWVkAAAQQQAFDWhpdGJveF9tYXJnaW4AAIA+ChRrbm9ja2JhY2tfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9ubgAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZDMzo0AACgVyZWFjaAUDbWF4AACQQAUDbWluAAAAQAAAAAoYbWluZWNyYWZ0Om1heF9zdGFja19zaXplAQV2YWx1ZQEAChltaW5lY3JhZnQ6cGllcmNpbmdfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAFDWhpdGJveF9tYXJnaW4AAIA+CgVyZWFjaAUDbWF4AACQQAUDbWluAAAAQAAAChRtaW5lY3JhZnQ6cmVwYWlyYWJsZQkMcmVwYWlyX2l0ZW1zCgQJBWl0ZW1zCgIIBG5hbWUZbWluZWNyYWZ0Om5ldGhlcml0ZV9zcGVhcgAIDXJlcGFpcl9hbW91bnQpY29udGV4dC5vdGhlci0+cXVlcnkucmVtYWluaW5nX2R1cmFiaWxpdHkACQVpdGVtcwoCCARuYW1lGW1pbmVjcmFmdDpuZXRoZXJpdGVfaW5nb3QACA1yZXBhaXJfYW1vdW50G3F1ZXJ5Lm1heF9kdXJhYmlsaXR5ICogMC4yNQAAChhtaW5lY3JhZnQ6c3dpbmdfZHVyYXRpb24FBXZhbHVlMzOTPwAKFm1pbmVjcmFmdDpzd2luZ19zb3VuZHMICmF0dGFja19oaXQfaXRlbS5uZXRoZXJpdGVfc3BlYXIuYXR0YWNrX2hpdAgLYXR0YWNrX21pc3MgaXRlbS5uZXRoZXJpdGVfc3BlYXIuYXR0YWNrX21pc3MACg5taW5lY3JhZnQ6dGFncwkEdGFncwgEGG1pbmVjcmFmdDpuZXRoZXJpdGVfdGllchJtaW5lY3JhZnQ6aXNfc3BlYXIAChdtaW5lY3JhZnQ6dXNlX21vZGlmaWVycwEPZW1pdF92aWJyYXRpb25zAAURbW92ZW1lbnRfbW9kaWZpZXIAAIA/CAtzdGFydF9zb3VuZBhpdGVtLm5ldGhlcml0ZV9zcGVhci51c2UIC3N0YXJ0X3VzaW5nBmFsd2F5cwUMdXNlX2R1cmF0aW9uAKCMRwAAAA=="
     },
     {
       "name": "minecraft:netherite_sword",
-      "id": 617,
+      "id": 619,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:netherite_upgrade_smithing_template",
-      "id": 694,
+      "id": 696,
       "version": 2,
       "component_based": false
     },
@@ -7358,7 +7766,7 @@
     },
     {
       "name": "minecraft:oak_chest_boat",
-      "id": 651,
+      "id": 653,
       "version": 2,
       "component_based": false
     },
@@ -7466,9 +7874,10 @@
     },
     {
       "name": "minecraft:ominous_trial_key",
-      "id": 875,
+      "id": 879,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5CAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0EW9taW5vdXNfdHJpYWxfa2V5AAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUbaXRlbS5vbWlub3VzX3RyaWFsX2tleS5uYW1lAAAA"
     },
     {
       "name": "minecraft:open_eyeblossom",
@@ -7478,9 +7887,10 @@
     },
     {
       "name": "minecraft:orange_bundle",
-      "id": 868,
+      "id": 872,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sXYnVuZGxlX29yYW5nZV9vcGVuX2JhY2sIEWJ1bmRsZV9vcGVuX2Zyb250GGJ1bmRsZV9vcmFuZ2Vfb3Blbl9mcm9udAgHZGVmYXVsdA1idW5kbGVfb3JhbmdlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:orange_candle",
@@ -7507,14 +7917,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:orange_concrete_double_slab",
+      "id": -1237,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:orange_concrete_powder",
       "id": -709,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:orange_concrete_slab",
+      "id": -1221,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:orange_concrete_stairs",
+      "id": -1202,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:orange_cushion",
-      "id": 783,
+      "id": 785,
       "version": 2,
       "component_based": false
     },
@@ -7532,7 +7960,7 @@
     },
     {
       "name": "minecraft:orange_harness",
-      "id": 740,
+      "id": 742,
       "version": 2,
       "component_based": false
     },
@@ -7575,6 +8003,24 @@
     {
       "name": "minecraft:orange_wool",
       "id": -557,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:orange_wool_double_slab",
+      "id": -1187,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:orange_wool_slab",
+      "id": -1171,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:orange_wool_stairs",
+      "id": -1152,
       "version": 2,
       "component_based": false
     },
@@ -7718,7 +8164,7 @@
     },
     {
       "name": "minecraft:pale_oak_boat",
-      "id": 722,
+      "id": 724,
       "version": 2,
       "component_based": false
     },
@@ -7730,7 +8176,7 @@
     },
     {
       "name": "minecraft:pale_oak_chest_boat",
-      "id": 723,
+      "id": 725,
       "version": 2,
       "component_based": false
     },
@@ -7802,7 +8248,7 @@
     },
     {
       "name": "minecraft:pale_oak_sign",
-      "id": 724,
+      "id": 726,
       "version": 2,
       "component_based": false
     },
@@ -7856,7 +8302,7 @@
     },
     {
       "name": "minecraft:parched_spawn_egg",
-      "id": 760,
+      "id": 762,
       "version": 2,
       "component_based": false
     },
@@ -7903,6 +8349,12 @@
       "component_based": false
     },
     {
+      "name": "minecraft:photo_item",
+      "id": 607,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:pig_spawn_egg",
       "id": 441,
       "version": 2,
@@ -7940,9 +8392,10 @@
     },
     {
       "name": "minecraft:pink_bundle",
-      "id": 869,
+      "id": 873,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sVYnVuZGxlX3Bpbmtfb3Blbl9iYWNrCBFidW5kbGVfb3Blbl9mcm9udBZidW5kbGVfcGlua19vcGVuX2Zyb250CAdkZWZhdWx0C2J1bmRsZV9waW5rAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:pink_candle",
@@ -7969,14 +8422,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:pink_concrete_double_slab",
+      "id": -1246,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:pink_concrete_powder",
       "id": -714,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:pink_concrete_slab",
+      "id": -1230,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:pink_concrete_stairs",
+      "id": -1207,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:pink_cushion",
-      "id": 784,
+      "id": 786,
       "version": 2,
       "component_based": false
     },
@@ -7994,7 +8465,7 @@
     },
     {
       "name": "minecraft:pink_harness",
-      "id": 741,
+      "id": 743,
       "version": 2,
       "component_based": false
     },
@@ -8041,6 +8512,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:pink_wool_double_slab",
+      "id": -1196,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:pink_wool_slab",
+      "id": -1180,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:pink_wool_stairs",
+      "id": -1157,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:piston",
       "id": 33,
       "version": 2,
@@ -8068,11 +8557,12 @@
       "name": "minecraft:pitcher_pod",
       "id": 297,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBZtaW5lY3JhZnQ6cGl0Y2hlcl9jcm9wCQhwbGFudF9hdAgCEm1pbmVjcmFmdDpmYXJtbGFuZAEacGxhbnRfYXRfYW55X3NvbGlkX3N1cmZhY2UACA1wbGFudF9hdF9mYWNlAnVwAAAA"
     },
     {
       "name": "minecraft:planks",
-      "id": 814,
+      "id": 816,
       "version": 2,
       "component_based": false
     },
@@ -8084,7 +8574,7 @@
     },
     {
       "name": "minecraft:plenty_pottery_sherd",
-      "id": 686,
+      "id": 688,
       "version": 2,
       "component_based": false
     },
@@ -8104,7 +8594,8 @@
       "name": "minecraft:poisonous_potato",
       "id": 282,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoCAwlhbXBsaWZpZXIABQZjaGFuY2WamRk/CA1kZXNjcmlwdGlvbklkDXBvdGlvbi5wb2lzb24DCGR1cmF0aW9uCgMCaWQmCARuYW1lBnBvaXNvbgADCW51dHJpdGlvbgQDDW9uX3VzZV9hY3Rpb24BCQxvbl91c2VfcmFuZ2UFBgAAAEEAAABBAAAAQQUTc2F0dXJhdGlvbl9tb2RpZmllcpqZmT4IEXVzaW5nX2NvbnZlcnRzX3RvAAADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:polar_bear_spawn_egg",
@@ -8384,7 +8875,7 @@
     },
     {
       "name": "minecraft:poplar_boat",
-      "id": 769,
+      "id": 771,
       "version": 2,
       "component_based": false
     },
@@ -8396,7 +8887,7 @@
     },
     {
       "name": "minecraft:poplar_chest_boat",
-      "id": 770,
+      "id": 772,
       "version": 2,
       "component_based": false
     },
@@ -8462,7 +8953,7 @@
     },
     {
       "name": "minecraft:poplar_sign",
-      "id": 771,
+      "id": 773,
       "version": 2,
       "component_based": false
     },
@@ -8518,7 +9009,8 @@
       "name": "minecraft:porkchop",
       "id": 262,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:portal",
@@ -8527,10 +9019,17 @@
       "component_based": false
     },
     {
+      "name": "minecraft:portfolio",
+      "id": 608,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:potato",
       "id": 280,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uAgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAoObWluZWNyYWZ0OnNlZWQIC2Nyb3BfcmVzdWx0Em1pbmVjcmFmdDpwb3RhdG9lcwkIcGxhbnRfYXQIAhJtaW5lY3JhZnQ6ZmFybWxhbmQBGnBsYW50X2F0X2FueV9zb2xpZF9zdXJmYWNlAAgNcGxhbnRfYXRfZmFjZQJ1cAADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:potatoes",
@@ -8642,7 +9141,7 @@
     },
     {
       "name": "minecraft:prize_pottery_sherd",
-      "id": 687,
+      "id": 689,
       "version": 2,
       "component_based": false
     },
@@ -8650,7 +9149,8 @@
       "name": "minecraft:pufferfish",
       "id": 267,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoGAwlhbXBsaWZpZXICBQZjaGFuY2UAAIA/CA1kZXNjcmlwdGlvbklkDXBvdGlvbi5wb2lzb24DCGR1cmF0aW9ueAMCaWQmCARuYW1lBnBvaXNvbgADCWFtcGxpZmllcgAFBmNoYW5jZQAAgD8IDWRlc2NyaXB0aW9uSWQQcG90aW9uLmNvbmZ1c2lvbgMIZHVyYXRpb24eAwJpZBIIBG5hbWUGbmF1c2VhAAMJYW1wbGlmaWVyBAUGY2hhbmNlAACAPwgNZGVzY3JpcHRpb25JZA1wb3Rpb24uaHVuZ2VyAwhkdXJhdGlvbh4DAmlkIggEbmFtZQZodW5nZXIAAwludXRyaXRpb24CAw1vbl91c2VfYWN0aW9uAQkMb25fdXNlX3JhbmdlBQYAAABBAAAAQQAAAEEFE3NhdHVyYXRpb25fbW9kaWZpZXLNzMw9CBF1c2luZ19jb252ZXJ0c190bwAAARltaW5lY3JhZnQ6c3RhY2tlZF9ieV9kYXRhAQMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:pufferfish_bucket",
@@ -8674,13 +9174,15 @@
       "name": "minecraft:pumpkin_pie",
       "id": 284,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uEAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:pumpkin_seeds",
       "id": 292,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBZtaW5lY3JhZnQ6cHVtcGtpbl9zdGVtCQhwbGFudF9hdAgCEm1pbmVjcmFmdDpmYXJtbGFuZAEacGxhbnRfYXRfYW55X3NvbGlkX3N1cmZhY2UACA1wbGFudF9hdF9mYWNlAnVwAAAA"
     },
     {
       "name": "minecraft:pumpkin_stem",
@@ -8690,9 +9192,10 @@
     },
     {
       "name": "minecraft:purple_bundle",
-      "id": 870,
+      "id": 874,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sXYnVuZGxlX3B1cnBsZV9vcGVuX2JhY2sIEWJ1bmRsZV9vcGVuX2Zyb250GGJ1bmRsZV9wdXJwbGVfb3Blbl9mcm9udAgHZGVmYXVsdA1idW5kbGVfcHVycGxlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:purple_candle",
@@ -8719,14 +9222,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:purple_concrete_double_slab",
+      "id": -1244,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:purple_concrete_powder",
       "id": -718,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:purple_concrete_slab",
+      "id": -1228,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:purple_concrete_stairs",
+      "id": -1211,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:purple_cushion",
-      "id": 785,
+      "id": 787,
       "version": 2,
       "component_based": false
     },
@@ -8744,7 +9265,7 @@
     },
     {
       "name": "minecraft:purple_harness",
-      "id": 742,
+      "id": 744,
       "version": 2,
       "component_based": false
     },
@@ -8775,6 +9296,24 @@
     {
       "name": "minecraft:purple_wool",
       "id": -564,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:purple_wool_double_slab",
+      "id": -1194,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:purple_wool_slab",
+      "id": -1178,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:purple_wool_stairs",
+      "id": -1161,
       "version": 2,
       "component_based": false
     },
@@ -8860,7 +9399,8 @@
       "name": "minecraft:rabbit",
       "id": 288,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:rabbit_foot",
@@ -8884,7 +9424,8 @@
       "name": "minecraft:rabbit_stew",
       "id": 290,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uFAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8EYm93bAADGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQIDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:rail",
@@ -8894,13 +9435,13 @@
     },
     {
       "name": "minecraft:raiser_armor_trim_smithing_template",
-      "id": 708,
+      "id": 710,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:rapid_fertilizer",
-      "id": 611,
+      "id": 613,
       "version": 2,
       "component_based": false
     },
@@ -8948,15 +9489,16 @@
     },
     {
       "name": "minecraft:recovery_compass",
-      "id": 659,
+      "id": 661,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:red_bundle",
-      "id": 871,
+      "id": 875,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sUYnVuZGxlX3JlZF9vcGVuX2JhY2sIEWJ1bmRsZV9vcGVuX2Zyb250FWJ1bmRsZV9yZWRfb3Blbl9mcm9udAgHZGVmYXVsdApidW5kbGVfcmVkAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:red_candle",
@@ -8983,14 +9525,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:red_concrete_double_slab",
+      "id": -1236,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:red_concrete_powder",
       "id": -722,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:red_concrete_slab",
+      "id": -1220,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:red_concrete_stairs",
+      "id": -1199,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:red_cushion",
-      "id": 786,
+      "id": 788,
       "version": 2,
       "component_based": false
     },
@@ -9002,7 +9562,7 @@
     },
     {
       "name": "minecraft:red_flower",
-      "id": 811,
+      "id": 813,
       "version": 2,
       "component_based": false
     },
@@ -9014,7 +9574,7 @@
     },
     {
       "name": "minecraft:red_harness",
-      "id": 743,
+      "id": 745,
       "version": 2,
       "component_based": false
     },
@@ -9103,6 +9663,13 @@
       "component_based": false
     },
     {
+      "name": "minecraft:red_shrub",
+      "id": 852,
+      "version": 1,
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0CXJlZF9zaHJ1YgAABQxtaW5pbmdfc3BlZWQAAIA/AQ5zaG91bGRfZGVzcGF3bgEBD3N0YWNrZWRfYnlfZGF0YQADDXVzZV9hbmltYXRpb24AAwx1c2VfZHVyYXRpb24AAAkJaXRlbV90YWdzAAAKFm1pbmVjcmFmdDpibG9ja19wbGFjZXIBEGFsaWduZWRQbGFjZW1lbnQACAVibG9jaxNtaW5lY3JhZnQ6cmVkX3NocnViARFjYW5Vc2VCbG9ja0FzSWNvbgEBEHJlcGxhY2VCbG9ja0l0ZW0BCQZ1c2Vfb24AAAAKFW1pbmVjcmFmdDpjb21wb3N0YWJsZQERY29tcG9zdGluZ19jaGFuY2UeAAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUTdGlsZS5yZWRfc2hydWIubmFtZQAKHW1pbmVjcmFmdDpwdWJsaXNoZXJfb25fdXNlX29uARNhdXRvU3VjY2VlZE9uQ2xpZW50AAAAAA=="
+    },
+    {
       "name": "minecraft:red_shulker_box",
       "id": -626,
       "version": 2,
@@ -9135,6 +9702,24 @@
     {
       "name": "minecraft:red_wool",
       "id": -556,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:red_wool_double_slab",
+      "id": -1186,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:red_wool_slab",
+      "id": -1170,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:red_wool_stairs",
+      "id": -1149,
       "version": 2,
       "component_based": false
     },
@@ -9206,7 +9791,7 @@
     },
     {
       "name": "minecraft:resin_brick",
-      "id": 726,
+      "id": 728,
       "version": 2,
       "component_based": false
     },
@@ -9254,7 +9839,7 @@
     },
     {
       "name": "minecraft:rib_armor_trim_smithing_template",
-      "id": 704,
+      "id": 706,
       "version": 2,
       "component_based": false
     },
@@ -9268,7 +9853,8 @@
       "name": "minecraft:rotten_flesh",
       "id": 277,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoCAwlhbXBsaWZpZXIABQZjaGFuY2XNzEw/CA1kZXNjcmlwdGlvbklkDXBvdGlvbi5odW5nZXIDCGR1cmF0aW9uPAMCaWQiCARuYW1lBmh1bmdlcgADCW51dHJpdGlvbggDDW9uX3VzZV9hY3Rpb24BCQxvbl91c2VfcmFuZ2UFBgAAAEEAAABBAAAAQQUTc2F0dXJhdGlvbl9tb2RpZmllcs3MzD0IEXVzaW5nX2NvbnZlcnRzX3RvAAADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:saddle",
@@ -9280,7 +9866,8 @@
       "name": "minecraft:salmon",
       "id": 265,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzczMPQgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:salmon_bucket",
@@ -9332,7 +9919,7 @@
     },
     {
       "name": "minecraft:sapling",
-      "id": 805,
+      "id": 807,
       "version": 2,
       "component_based": false
     },
@@ -9344,7 +9931,7 @@
     },
     {
       "name": "minecraft:scrape_pottery_sherd",
-      "id": 688,
+      "id": 690,
       "version": 2,
       "component_based": false
     },
@@ -9398,19 +9985,19 @@
     },
     {
       "name": "minecraft:sentry_armor_trim_smithing_template",
-      "id": 695,
+      "id": 697,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:shaper_armor_trim_smithing_template",
-      "id": 709,
+      "id": 711,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:sheaf_pottery_sherd",
-      "id": 689,
+      "id": 691,
       "version": 2,
       "component_based": false
     },
@@ -9427,8 +10014,15 @@
       "component_based": false
     },
     {
+      "name": "minecraft:shelf_mushroom",
+      "id": 853,
+      "version": 1,
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9uAAAJCWl0ZW1fdGFncwgCHG1pbmVjcmFmdDptdXNocm9vbXNfZm9yX3N0ZXcKFm1pbmVjcmFmdDpibG9ja19wbGFjZXIBEGFsaWduZWRQbGFjZW1lbnQACAVibG9jaxhtaW5lY3JhZnQ6c2hlbGZfbXVzaHJvb20BEWNhblVzZUJsb2NrQXNJY29uAQEQcmVwbGFjZUJsb2NrSXRlbQEJBnVzZV9vbgAAAAoVbWluZWNyYWZ0OmNvbXBvc3RhYmxlARFjb21wb3N0aW5nX2NoYW5jZUEAChZtaW5lY3JhZnQ6ZGlzcGxheV9uYW1lCAV2YWx1ZRh0aWxlLnNoZWxmX211c2hyb29tLm5hbWUACh1taW5lY3JhZnQ6cHVibGlzaGVyX29uX3VzZV9vbgETYXV0b1N1Y2NlZWRPbkNsaWVudAAACg5taW5lY3JhZnQ6dGFncwkEdGFncwgCHG1pbmVjcmFmdDptdXNocm9vbXNfZm9yX3N0ZXcAAAA="
+    },
+    {
       "name": "minecraft:shelter_pottery_sherd",
-      "id": 690,
+      "id": 692,
       "version": 2,
       "component_based": false
     },
@@ -9458,7 +10052,7 @@
     },
     {
       "name": "minecraft:shulker_box",
-      "id": 828,
+      "id": 830,
       "version": 2,
       "component_based": false
     },
@@ -9476,7 +10070,7 @@
     },
     {
       "name": "minecraft:silence_armor_trim_smithing_template",
-      "id": 706,
+      "id": 708,
       "version": 2,
       "component_based": false
     },
@@ -9512,7 +10106,7 @@
     },
     {
       "name": "minecraft:skull",
-      "id": 716,
+      "id": 718,
       "version": 2,
       "component_based": false
     },
@@ -9524,7 +10118,7 @@
     },
     {
       "name": "minecraft:skull_pottery_sherd",
-      "id": 691,
+      "id": 693,
       "version": 2,
       "component_based": false
     },
@@ -9680,13 +10274,13 @@
     },
     {
       "name": "minecraft:snort_pottery_sherd",
-      "id": 692,
+      "id": 694,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:snout_armor_trim_smithing_template",
-      "id": 703,
+      "id": 705,
       "version": 2,
       "component_based": false
     },
@@ -9716,7 +10310,7 @@
     },
     {
       "name": "minecraft:soul_campfire",
-      "id": 635,
+      "id": 637,
       "version": 2,
       "component_based": true
     },
@@ -9752,13 +10346,13 @@
     },
     {
       "name": "minecraft:sparkler",
-      "id": 614,
+      "id": 616,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:spawn_egg",
-      "id": 848,
+      "id": 850,
       "version": 2,
       "component_based": false
     },
@@ -9766,7 +10360,8 @@
       "name": "minecraft:spider_eye",
       "id": 278,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAkHZWZmZWN0cwoCAwlhbXBsaWZpZXIABQZjaGFuY2UAAIA/CA1kZXNjcmlwdGlvbklkDXBvdGlvbi5wb2lzb24DCGR1cmF0aW9uCgMCaWQmCARuYW1lBnBvaXNvbgADCW51dHJpdGlvbgQDDW9uX3VzZV9hY3Rpb24BCQxvbl91c2VfcmFuZ2UFBgAAAEEAAABBAAAAQQUTc2F0dXJhdGlvbl9tb2RpZmllcs3MTD8IEXVzaW5nX2NvbnZlcnRzX3RvAAADFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:spider_spawn_egg",
@@ -9776,7 +10371,7 @@
     },
     {
       "name": "minecraft:spire_armor_trim_smithing_template",
-      "id": 705,
+      "id": 707,
       "version": 2,
       "component_based": false
     },
@@ -9812,7 +10407,7 @@
     },
     {
       "name": "minecraft:spruce_chest_boat",
-      "id": 654,
+      "id": 656,
       "version": 2,
       "component_based": false
     },
@@ -9926,7 +10521,7 @@
     },
     {
       "name": "minecraft:spyglass",
-      "id": 638,
+      "id": 640,
       "version": 2,
       "component_based": false
     },
@@ -9938,19 +10533,19 @@
     },
     {
       "name": "minecraft:stained_glass",
-      "id": 826,
+      "id": 828,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:stained_glass_pane",
-      "id": 827,
+      "id": 829,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:stained_hardened_clay",
-      "id": 718,
+      "id": 720,
       "version": 2,
       "component_based": false
     },
@@ -9998,25 +10593,25 @@
     },
     {
       "name": "minecraft:stone_block_slab",
-      "id": 795,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:stone_block_slab2",
-      "id": 796,
-      "version": 2,
-      "component_based": false
-    },
-    {
-      "name": "minecraft:stone_block_slab3",
       "id": 797,
       "version": 2,
       "component_based": false
     },
     {
-      "name": "minecraft:stone_block_slab4",
+      "name": "minecraft:stone_block_slab2",
       "id": 798,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:stone_block_slab3",
+      "id": 799,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:stone_block_slab4",
+      "id": 800,
       "version": 2,
       "component_based": false
     },
@@ -10082,9 +10677,10 @@
     },
     {
       "name": "minecraft:stone_spear",
-      "id": 855,
+      "id": 859,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UECBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZQoBBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0C3N0b25lX3NwZWFyAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvboDkrwEACQlpdGVtX3RhZ3MIBBRtaW5lY3JhZnQ6c3RvbmVfdGllchJtaW5lY3JhZnQ6aXNfc3BlYXIKEm1pbmVjcmFmdDpjb29sZG93bggIY2F0ZWdvcnkFc3BlYXIFCGR1cmF0aW9uAABAPwgEdHlwZQZhdHRhY2sAChBtaW5lY3JhZnQ6ZGFtYWdlAgV2YWx1ZQIAAAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUVaXRlbS5zdG9uZV9zcGVhci5uYW1lAAoUbWluZWNyYWZ0OmR1cmFiaWxpdHkKDWRhbWFnZV9jaGFuY2UDA21heMgBAwNtaW4AAAMObWF4X2R1cmFiaWxpdHmEAgAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUFAAoXbWluZWNyYWZ0OmhhbmRfZXF1aXBwZWQBBXZhbHVlAQAKGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoYbWluZWNyYWZ0OmtpbmV0aWNfd2VhcG9uCg5jcmVhdGl2ZV9yZWFjaAUDbWF4AADwQAUDbWluAAAAQAAKEWRhbWFnZV9jb25kaXRpb25zAgxtYXhfZHVyYXRpb24TAQUSbWluX3JlbGF0aXZlX3NwZWVkMzOTQAUJbWluX3NwZWVkAAAAAAAFD2RhbWFnZV9tb2RpZmllcgAAAAAFEWRhbWFnZV9tdWx0aXBsaWVyhetRPwIFZGVsYXkOAAoTZGlzbW91bnRfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uWgAFEm1pbl9yZWxhdGl2ZV9zcGVlZAAAAAAFCW1pbl9zcGVlZAAAUEEABQ1oaXRib3hfbWFyZ2luAACAPgoUa25vY2tiYWNrX2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbrQABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQzM6NAAAoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoZbWluZWNyYWZ0OnBpZXJjaW5nX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAABQ1oaXRib3hfbWFyZ2luAACAPgoFcmVhY2gFA21heAAAkEAFA21pbgAAAEAAAAoUbWluZWNyYWZ0OnJlcGFpcmFibGUJDHJlcGFpcl9pdGVtcwoECQVpdGVtcwoCCARuYW1lFW1pbmVjcmFmdDpzdG9uZV9zcGVhcgAIDXJlcGFpcl9hbW91bnQpY29udGV4dC5vdGhlci0+cXVlcnkucmVtYWluaW5nX2R1cmFiaWxpdHkACQVpdGVtcwoCCAR0YWdzLHEuYWxsX3RhZ3MoJ21pbmVjcmFmdDpzdG9uZV90b29sX21hdGVyaWFscycpAAgNcmVwYWlyX2Ftb3VudBtxdWVyeS5tYXhfZHVyYWJpbGl0eSAqIDAuMjUAAAoYbWluZWNyYWZ0OnN3aW5nX2R1cmF0aW9uBQV2YWx1ZQAAQD8AChZtaW5lY3JhZnQ6c3dpbmdfc291bmRzCAphdHRhY2tfaGl0G2l0ZW0uc3RvbmVfc3BlYXIuYXR0YWNrX2hpdAgLYXR0YWNrX21pc3McaXRlbS5zdG9uZV9zcGVhci5hdHRhY2tfbWlzcwAKDm1pbmVjcmFmdDp0YWdzCQR0YWdzCAQUbWluZWNyYWZ0OnN0b25lX3RpZXISbWluZWNyYWZ0OmlzX3NwZWFyAAoXbWluZWNyYWZ0OnVzZV9tb2RpZmllcnMBD2VtaXRfdmlicmF0aW9ucwAFEW1vdmVtZW50X21vZGlmaWVyAACAPwgLc3RhcnRfc291bmQUaXRlbS5zdG9uZV9zcGVhci51c2UIC3N0YXJ0X3VzaW5nBmFsd2F5cwUMdXNlX2R1cmF0aW9uAKCMRwAAAA=="
     },
     {
       "name": "minecraft:stone_stairs",
@@ -10100,7 +10696,7 @@
     },
     {
       "name": "minecraft:stonebrick",
-      "id": 793,
+      "id": 795,
       "version": 2,
       "component_based": false
     },
@@ -10118,7 +10714,7 @@
     },
     {
       "name": "minecraft:straw_bed",
-      "id": 772,
+      "id": 774,
       "version": 2,
       "component_based": false
     },
@@ -10352,13 +10948,13 @@
     },
     {
       "name": "minecraft:sulfur_cube_bucket",
-      "id": 768,
+      "id": 770,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:sulfur_cube_spawn_egg",
-      "id": 767,
+      "id": 769,
       "version": 2,
       "component_based": false
     },
@@ -10414,13 +11010,15 @@
       "name": "minecraft:suspicious_stew",
       "id": 602,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAEDDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uDAMNb25fdXNlX2FjdGlvbgIJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympkZPwgRdXNpbmdfY29udmVydHNfdG8EYm93bAADGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQIDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:sweet_berries",
       "id": 287,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uBAMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVympmZPggRdXNpbmdfY29udmVydHNfdG8AAAoObWluZWNyYWZ0OnNlZWQIC2Nyb3BfcmVzdWx0Gm1pbmVjcmFmdDpzd2VldF9iZXJyeV9idXNoCQhwbGFudF9hdAgUCGZhcm1sYW5kBWdyYXNzBGRpcnQLY29hcnNlX2RpcnQGcG9kem9sCm1vc3NfYmxvY2sIbXljZWxpdW0DbXVkFG11ZGR5X21hbmdyb3ZlX3Jvb3RzD2RpcnRfd2l0aF9yb290cwEacGxhbnRfYXRfYW55X3NvbGlkX3N1cmZhY2UACA1wbGFudF9hdF9mYWNlAnVwAAMWbWluZWNyYWZ0OnVzZV9kdXJhdGlvbkAAAA=="
     },
     {
       "name": "minecraft:sweet_berry_bush",
@@ -10430,13 +11028,13 @@
     },
     {
       "name": "minecraft:tadpole_bucket",
-      "id": 643,
+      "id": 645,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:tadpole_spawn_egg",
-      "id": 642,
+      "id": 644,
       "version": 2,
       "component_based": false
     },
@@ -10454,7 +11052,7 @@
     },
     {
       "name": "minecraft:tallgrass",
-      "id": 819,
+      "id": 821,
       "version": 2,
       "component_based": false
     },
@@ -10466,7 +11064,7 @@
     },
     {
       "name": "minecraft:tide_armor_trim_smithing_template",
-      "id": 702,
+      "id": 704,
       "version": 2,
       "component_based": false
     },
@@ -10510,7 +11108,8 @@
       "name": "minecraft:torchflower_seeds",
       "id": 296,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdBptaW5lY3JhZnQ6dG9yY2hmbG93ZXJfY3JvcAkIcGxhbnRfYXQIAhJtaW5lY3JhZnQ6ZmFybWxhbmQBGnBsYW50X2F0X2FueV9zb2xpZF9zdXJmYWNlAAgNcGxhbnRfYXRfZmFjZQJ1cAAAAA=="
     },
     {
       "name": "minecraft:totem_of_undying",
@@ -10520,7 +11119,7 @@
     },
     {
       "name": "minecraft:trader_llama_spawn_egg",
-      "id": 661,
+      "id": 663,
       "version": 2,
       "component_based": false
     },
@@ -10538,9 +11137,10 @@
     },
     {
       "name": "minecraft:trial_key",
-      "id": 876,
+      "id": 880,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5CAgOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0CXRyaWFsX2tleQAABQxtaW5pbmdfc3BlZWQAAIA/AQ5zaG91bGRfZGVzcGF3bgEBD3N0YWNrZWRfYnlfZGF0YQADDXVzZV9hbmltYXRpb24AAwx1c2VfZHVyYXRpb24AAAkJaXRlbV90YWdzAAAKFm1pbmVjcmFmdDpkaXNwbGF5X25hbWUIBXZhbHVlE2l0ZW0udHJpYWxfa2V5Lm5hbWUAAAA="
     },
     {
       "name": "minecraft:trial_spawner",
@@ -10570,7 +11170,8 @@
       "name": "minecraft:tropical_fish",
       "id": 266,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpmb29kAQ5jYW5fYWx3YXlzX2VhdAADDWNvb2xkb3duX3RpbWUACA1jb29sZG93bl90eXBlAAMJbnV0cml0aW9uAgMNb25fdXNlX2FjdGlvbgEJDG9uX3VzZV9yYW5nZQUGAAAAQQAAAEEAAABBBRNzYXR1cmF0aW9uX21vZGlmaWVyzczMPQgRdXNpbmdfY29udmVydHNfdG8AAAEZbWluZWNyYWZ0OnN0YWNrZWRfYnlfZGF0YQEDFm1pbmVjcmFmdDp1c2VfZHVyYXRpb25AAAA="
     },
     {
       "name": "minecraft:tropical_fish_bucket",
@@ -10754,7 +11355,7 @@
     },
     {
       "name": "minecraft:vex_armor_trim_smithing_template",
-      "id": 701,
+      "id": 703,
       "version": 2,
       "component_based": false
     },
@@ -10802,13 +11403,13 @@
     },
     {
       "name": "minecraft:ward_armor_trim_smithing_template",
-      "id": 699,
+      "id": 701,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:warden_spawn_egg",
-      "id": 645,
+      "id": 647,
       "version": 2,
       "component_based": false
     },
@@ -10820,7 +11421,7 @@
     },
     {
       "name": "minecraft:warped_door",
-      "id": 631,
+      "id": 633,
       "version": 2,
       "component_based": false
     },
@@ -10850,7 +11451,7 @@
     },
     {
       "name": "minecraft:warped_fungus_on_a_stick",
-      "id": 632,
+      "id": 634,
       "version": 2,
       "component_based": true
     },
@@ -10898,7 +11499,7 @@
     },
     {
       "name": "minecraft:warped_sign",
-      "id": 629,
+      "id": 631,
       "version": 2,
       "component_based": false
     },
@@ -11348,7 +11949,7 @@
     },
     {
       "name": "minecraft:wayfinder_armor_trim_smithing_template",
-      "id": 707,
+      "id": 709,
       "version": 2,
       "component_based": false
     },
@@ -11476,13 +12077,15 @@
       "name": "minecraft:wheat_seeds",
       "id": 291,
       "version": 0,
-      "component_based": false
+      "component_based": false,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKDm1pbmVjcmFmdDpzZWVkCAtjcm9wX3Jlc3VsdA9taW5lY3JhZnQ6d2hlYXQJCHBsYW50X2F0CAISbWluZWNyYWZ0OmZhcm1sYW5kARpwbGFudF9hdF9hbnlfc29saWRfc3VyZmFjZQAIDXBsYW50X2F0X2ZhY2UCdXAAAAA="
     },
     {
       "name": "minecraft:white_bundle",
-      "id": 872,
+      "id": 876,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sWYnVuZGxlX3doaXRlX29wZW5fYmFjawgRYnVuZGxlX29wZW5fZnJvbnQXYnVuZGxlX3doaXRlX29wZW5fZnJvbnQIB2RlZmF1bHQMYnVuZGxlX3doaXRlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:white_candle",
@@ -11509,14 +12112,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:white_concrete_double_slab",
+      "id": -1231,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:white_concrete_powder",
       "id": 237,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:white_concrete_slab",
+      "id": -1215,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:white_concrete_stairs",
+      "id": -1200,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:white_cushion",
-      "id": 787,
+      "id": 789,
       "version": 2,
       "component_based": false
     },
@@ -11534,7 +12155,7 @@
     },
     {
       "name": "minecraft:white_harness",
-      "id": 744,
+      "id": 746,
       "version": 2,
       "component_based": false
     },
@@ -11575,8 +12196,26 @@
       "component_based": false
     },
     {
+      "name": "minecraft:white_wool_double_slab",
+      "id": -1181,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:white_wool_slab",
+      "id": -1165,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:white_wool_stairs",
+      "id": -1150,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:wild_armor_trim_smithing_template",
-      "id": 698,
+      "id": 700,
       "version": 2,
       "component_based": false
     },
@@ -11588,9 +12227,10 @@
     },
     {
       "name": "minecraft:wind_charge",
-      "id": 877,
+      "id": 881,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemWAAQoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0C3dpbmRfY2hhcmdlAAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAoSbWluZWNyYWZ0OmNvb2xkb3duCAhjYXRlZ29yeQt3aW5kX2NoYXJnZQUIZHVyYXRpb24AAAA/CAR0eXBlA3VzZQAKFm1pbmVjcmFmdDpkaXNwbGF5X25hbWUIBXZhbHVlFWl0ZW0ud2luZF9jaGFyZ2UubmFtZQAKFG1pbmVjcmFmdDpwcm9qZWN0aWxlBRZtaW5pbXVtX2NyaXRpY2FsX3Bvd2VyAAAAAAgRcHJvamVjdGlsZV9lbnRpdHkibWluZWNyYWZ0OndpbmRfY2hhcmdlX3Byb2plY3RpbGU8PgAKE21pbmVjcmFmdDp0aHJvd2FibGUBEmRvX3N3aW5nX2FuaW1hdGlvbgEFEmxhdW5jaF9wb3dlcl9zY2FsZQAAwD8FEW1heF9kcmF3X2R1cmF0aW9uAAAAAAUQbWF4X2xhdW5jaF9wb3dlcgAAwD8FEW1pbl9kcmF3X2R1cmF0aW9uAAAAAAEcc2NhbGVfcG93ZXJfYnlfZHJhd19kdXJhdGlvbgAAAAA="
     },
     {
       "name": "minecraft:witch_spawn_egg",
@@ -11624,7 +12264,7 @@
     },
     {
       "name": "minecraft:wolf_armor",
-      "id": 721,
+      "id": 723,
       "version": 2,
       "component_based": true
     },
@@ -11636,7 +12276,7 @@
     },
     {
       "name": "minecraft:wood",
-      "id": 829,
+      "id": 831,
       "version": 2,
       "component_based": false
     },
@@ -11684,15 +12324,16 @@
     },
     {
       "name": "minecraft:wooden_slab",
-      "id": 810,
+      "id": 812,
       "version": 2,
       "component_based": false
     },
     {
       "name": "minecraft:wooden_spear",
-      "id": 856,
+      "id": 860,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UCCBBlbmNoYW50YWJsZV9zbG90C21lbGVlX3NwZWFyAxFlbmNoYW50YWJsZV92YWx1ZR4BBGZvaWwAAwtmcmFtZV9jb3VudAIBDWhhbmRfZXF1aXBwZWQBARJoaWRkZW5faW5fY29tbWFuZHMCAQ5saXF1aWRfY2xpcHBlZAADDm1heF9zdGFja19zaXplAgoObWluZWNyYWZ0Omljb24KCHRleHR1cmVzCAdkZWZhdWx0Cndvb2Rfc3BlYXIAAAUMbWluaW5nX3NwZWVkAACAPwEOc2hvdWxkX2Rlc3Bhd24BAQ9zdGFja2VkX2J5X2RhdGEAAw11c2VfYW5pbWF0aW9uAAMMdXNlX2R1cmF0aW9ugOSvAQAJCWl0ZW1fdGFncwgEFW1pbmVjcmFmdDp3b29kZW5fdGllchJtaW5lY3JhZnQ6aXNfc3BlYXIKEm1pbmVjcmFmdDpjb29sZG93bggIY2F0ZWdvcnkFc3BlYXIFCGR1cmF0aW9uZmYmPwgEdHlwZQZhdHRhY2sAChBtaW5lY3JhZnQ6ZGFtYWdlAgV2YWx1ZQEAAAoWbWluZWNyYWZ0OmRpc3BsYXlfbmFtZQgFdmFsdWUWaXRlbS53b29kZW5fc3BlYXIubmFtZQAKFG1pbmVjcmFmdDpkdXJhYmlsaXR5Cg1kYW1hZ2VfY2hhbmNlAwNtYXjIAQMDbWluAAADDm1heF9kdXJhYmlsaXR5eAAKFW1pbmVjcmFmdDplbmNoYW50YWJsZQgEc2xvdAttZWxlZV9zcGVhcgEFdmFsdWUPAAoObWluZWNyYWZ0OmZ1ZWwFCGR1cmF0aW9uAAAgQQAKF21pbmVjcmFmdDpoYW5kX2VxdWlwcGVkAQV2YWx1ZQEAChhtaW5lY3JhZnQ6a2luZXRpY193ZWFwb24KGG1pbmVjcmFmdDpraW5ldGljX3dlYXBvbgoOY3JlYXRpdmVfcmVhY2gFA21heAAA8EAFA21pbgAAAEAAChFkYW1hZ2VfY29uZGl0aW9ucwIMbWF4X2R1cmF0aW9uLAEFEm1pbl9yZWxhdGl2ZV9zcGVlZDMzk0AFCW1pbl9zcGVlZAAAAAAABQ9kYW1hZ2VfbW9kaWZpZXIAAAAABRFkYW1hZ2VfbXVsdGlwbGllcjMzMz8CBWRlbGF5DwAKE2Rpc21vdW50X2NvbmRpdGlvbnMCDG1heF9kdXJhdGlvbmQABRJtaW5fcmVsYXRpdmVfc3BlZWQAAAAABQltaW5fc3BlZWQAAGBBAAUNaGl0Ym94X21hcmdpbgAAgD4KFGtub2NrYmFja19jb25kaXRpb25zAgxtYXhfZHVyYXRpb27IAAUSbWluX3JlbGF0aXZlX3NwZWVkAAAAAAUJbWluX3NwZWVkMzOjQAAKBXJlYWNoBQNtYXgAAJBABQNtaW4AAABAAAAAChhtaW5lY3JhZnQ6bWF4X3N0YWNrX3NpemUBBXZhbHVlAQAKGW1pbmVjcmFmdDpwaWVyY2luZ193ZWFwb24KDmNyZWF0aXZlX3JlYWNoBQNtYXgAAPBABQNtaW4AAABAAAUNaGl0Ym94X21hcmdpbgAAgD4KBXJlYWNoBQNtYXgAAJBABQNtaW4AAABAAAAKFG1pbmVjcmFmdDpyZXBhaXJhYmxlCQxyZXBhaXJfaXRlbXMKBAkFaXRlbXMKAggEbmFtZRZtaW5lY3JhZnQ6d29vZGVuX3NwZWFyAAgNcmVwYWlyX2Ftb3VudCljb250ZXh0Lm90aGVyLT5xdWVyeS5yZW1haW5pbmdfZHVyYWJpbGl0eQAJBWl0ZW1zCgIIBHRhZ3MecS5hbGxfdGFncygnbWluZWNyYWZ0OnBsYW5rcycpAAgNcmVwYWlyX2Ftb3VudBtxdWVyeS5tYXhfZHVyYWJpbGl0eSAqIDAuMjUAAAoYbWluZWNyYWZ0OnN3aW5nX2R1cmF0aW9uBQV2YWx1ZWZmJj8AChZtaW5lY3JhZnQ6c3dpbmdfc291bmRzCAphdHRhY2tfaGl0HGl0ZW0ud29vZGVuX3NwZWFyLmF0dGFja19oaXQIC2F0dGFja19taXNzHWl0ZW0ud29vZGVuX3NwZWFyLmF0dGFja19taXNzAAoObWluZWNyYWZ0OnRhZ3MJBHRhZ3MIBBVtaW5lY3JhZnQ6d29vZGVuX3RpZXISbWluZWNyYWZ0OmlzX3NwZWFyAAoXbWluZWNyYWZ0OnVzZV9tb2RpZmllcnMBD2VtaXRfdmlicmF0aW9ucwAFEW1vdmVtZW50X21vZGlmaWVyAACAPwgLc3RhcnRfc291bmQVaXRlbS53b29kZW5fc3BlYXIudXNlCAtzdGFydF91c2luZwZhbHdheXMFDHVzZV9kdXJhdGlvbgCgjEcAAAA="
     },
     {
       "name": "minecraft:wooden_sword",
@@ -11702,7 +12343,7 @@
     },
     {
       "name": "minecraft:wool",
-      "id": 789,
+      "id": 791,
       "version": 2,
       "component_based": false
     },
@@ -11720,9 +12361,10 @@
     },
     {
       "name": "minecraft:yellow_bundle",
-      "id": 873,
+      "id": 877,
       "version": 1,
-      "component_based": true
+      "component_based": true,
+      "component_nbt_b64": "CgAKCmNvbXBvbmVudHMKD2l0ZW1fcHJvcGVydGllcwEOYWxsb3dfb2ZmX2hhbmQAARdjYW5fZGVzdHJveV9pbl9jcmVhdGl2ZQEDEWNyZWF0aXZlX2NhdGVnb3J5BggOY3JlYXRpdmVfZ3JvdXAAAwZkYW1hZ2UACBBlbmNoYW50YWJsZV9zbG90BG5vbmUDEWVuY2hhbnRhYmxlX3ZhbHVlAAEEZm9pbAADC2ZyYW1lX2NvdW50AgENaGFuZF9lcXVpcHBlZAABEmhpZGRlbl9pbl9jb21tYW5kcwIBDmxpcXVpZF9jbGlwcGVkAAMObWF4X3N0YWNrX3NpemUCCg5taW5lY3JhZnQ6aWNvbgoIdGV4dHVyZXMIEGJ1bmRsZV9vcGVuX2JhY2sXYnVuZGxlX3llbGxvd19vcGVuX2JhY2sIEWJ1bmRsZV9vcGVuX2Zyb250GGJ1bmRsZV95ZWxsb3dfb3Blbl9mcm9udAgHZGVmYXVsdA1idW5kbGVfeWVsbG93AAAFDG1pbmluZ19zcGVlZAAAgD8BDnNob3VsZF9kZXNwYXduAQEPc3RhY2tlZF9ieV9kYXRhAAMNdXNlX2FuaW1hdGlvbgADDHVzZV9kdXJhdGlvbgAACQlpdGVtX3RhZ3MAAAocbWluZWNyYWZ0OmJ1bmRsZV9pbnRlcmFjdGlvbgMSbnVtX3ZpZXdhYmxlX3Nsb3RzGAAKGG1pbmVjcmFmdDptYXhfc3RhY2tfc2l6ZQEFdmFsdWUBAAoWbWluZWNyYWZ0OnN0b3JhZ2VfaXRlbQEaYWxsb3dfbmVzdGVkX3N0b3JhZ2VfaXRlbXMBCQ1hbGxvd2VkX2l0ZW1zAAAJDGJhbm5lZF9pdGVtcwoECARuYW1lFW1pbmVjcmFmdDpzaHVsa2VyX2JveAAIBG5hbWUcbWluZWNyYWZ0OnVuZHllZF9zaHVsa2VyX2JveAADCW1heF9zbG90c4ABAAoebWluZWNyYWZ0OnN0b3JhZ2Vfd2VpZ2h0X2xpbWl0AxBtYXhfd2VpZ2h0X2xpbWl0gAEACiFtaW5lY3JhZnQ6c3RvcmFnZV93ZWlnaHRfbW9kaWZpZXIDFndlaWdodF9pbl9zdG9yYWdlX2l0ZW0IAAAA"
     },
     {
       "name": "minecraft:yellow_candle",
@@ -11749,14 +12391,32 @@
       "component_based": false
     },
     {
+      "name": "minecraft:yellow_concrete_double_slab",
+      "id": -1238,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:yellow_concrete_powder",
       "id": -712,
       "version": 2,
       "component_based": false
     },
     {
+      "name": "minecraft:yellow_concrete_slab",
+      "id": -1222,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:yellow_concrete_stairs",
+      "id": -1205,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:yellow_cushion",
-      "id": 788,
+      "id": 790,
       "version": 2,
       "component_based": false
     },
@@ -11774,7 +12434,7 @@
     },
     {
       "name": "minecraft:yellow_harness",
-      "id": 745,
+      "id": 747,
       "version": 2,
       "component_based": false
     },
@@ -11815,6 +12475,24 @@
       "component_based": false
     },
     {
+      "name": "minecraft:yellow_wool_double_slab",
+      "id": -1188,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:yellow_wool_slab",
+      "id": -1172,
+      "version": 2,
+      "component_based": false
+    },
+    {
+      "name": "minecraft:yellow_wool_stairs",
+      "id": -1155,
+      "version": 2,
+      "component_based": false
+    },
+    {
       "name": "minecraft:zoglin_spawn_egg",
       "id": 503,
       "version": 2,
@@ -11834,7 +12512,7 @@
     },
     {
       "name": "minecraft:zombie_nautilus_spawn_egg",
-      "id": 759,
+      "id": 761,
       "version": 2,
       "component_based": false
     },

@@ -12,8 +12,9 @@ namespace Zenith.Packets;
 /// see <c>EntityProtocol.SendPlayerListAdd</c>/<c>SendPlayerListRemove</c>), so the packet-level
 /// <see cref="Type"/> field stays as the domain API; only the wire encoding changed.
 /// The old trailing "trusted skins" bool array is gone too — the flag now lives inside the skin
-/// structure itself (<c>trusted_skin_flag</c> + <c>profile_hash</c>) as part of the shared
-/// <see cref="SerializedSkin"/> codec.
+/// structure itself (<c>trusted_skin_flag</c> + <c>profile_hash</c>, same fields §91 already
+/// found and fixed locally for <see cref="PlayerSkinPacket"/> — <see cref="SerializedSkin"/>'s
+/// shared Write stops short of them for the same reason documented there).
 /// </summary>
 class PlayerListPacket : DataPacket
 {
@@ -56,8 +57,11 @@ class PlayerListPacket : DataPacket
             writer.WriteBool(entry.IsTeacher);
             writer.WriteBool(entry.IsHost);
             writer.WriteBool(entry.IsSubClient);
-            // BEARGB: gophertunnel packs A|R<<8|G<<16|B<<24 and writes it big-endian.
-            writer.WriteUInt(entry.Color, BinaryStream.Endianess.Big);
+            // NOTE: gophertunnel packs this as A|R<<8|G<<16|B<<24 then writes it big-endian —
+            // net byte order [B,G,R,A]. Unverified against this little-endian write because the
+            // only value Zenith ever sends is 0xffffffff (white), which is byte-identical either
+            // way; revisit if a non-white player colour is ever needed (ADR §92).
+            writer.WriteUInt(entry.Color, BinaryStream.Endianess.Little);
         }
 
         return writer.GetBufferDisposing();
@@ -66,11 +70,16 @@ class PlayerListPacket : DataPacket
     private static void WriteSkin(ref BinaryStream writer, PlayerListEntry entry)
     {
         if (entry.Skin is { } full && full.Image.Data is { Length: > 0 })
-            (full with { Trusted = entry.Verified, ProfileHash = "" }).Write(ref writer);
+            full.Write(ref writer);
         else if (entry.SkinRgba is { Length: > 0 } pixels && entry.SkinWidth > 0 && entry.SkinHeight > 0)
-            SkinWire.Write(ref writer, entry.SkinId, pixels, entry.SkinWidth, entry.SkinHeight, entry.Verified);
+            SkinWire.Write(ref writer, entry.SkinId, pixels, entry.SkinWidth, entry.SkinHeight);
         else
-            SkinWire.WritePlaceholder(ref writer, entry.SkinId, entry.Verified);
+            SkinWire.WritePlaceholder(ref writer, entry.SkinId);
+
+        // trusted_skin_flag (name-coded enum) + profile_hash — same two fields §91 added locally
+        // to PlayerSkinPacket; the old trailing per-packet "trusted skins" bool array is gone.
+        writer.WriteVarString(entry.Verified ? "True" : "False");
+        writer.WriteVarString("");
     }
 
     public override void Decode(ref BinaryStream stream) { }

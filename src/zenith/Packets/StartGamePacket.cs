@@ -6,6 +6,8 @@ namespace Zenith.Packets;
 class StartGamePacket : DataPacket
 {
     public const int GeneratorInfinite = 1;
+    public const short SpawnBiomeTypeDefault = 0;
+    public const short SpawnBiomeTypeUserDefined = 1;
     public const int EducationEditionOfferNone = 0;
     public const int XblBroadcastModeDefault = 0;
     public const int PlatformBroadcastModeDefault = 0;
@@ -24,8 +26,8 @@ class StartGamePacket : DataPacket
     public float Pitch;
     public float Yaw;
     public long Seed = 0;
-    public short BiomeType = 0;
-    public string BiomeName = "plains";
+    public short BiomeType = SpawnBiomeTypeDefault;
+    public string BiomeName = "";
     public int Dimension = DimensionId.Overworld;
     public int Generator = GeneratorInfinite;
     public int GameType = AbilityBits.WireGameModeSurvival;

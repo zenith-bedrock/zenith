@@ -161,6 +161,31 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "transport": {
+          "type": "string",
+          "enum": ["raknet", "nethernet"],
+          "default": "raknet",
+          "description": "Explicit Bedrock transport. NetherNet uses HTTP signaling and WebRTC data channels."
+        },
+        "nether-net": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "join-url": { "type": "string", "format": "uri", "default": "http://127.0.0.1:19132" },
+            "listen-url": { "type": "string", "default": "", "description": "Local HTTP signaling listener. Empty derives http://+:server.port." },
+            "ice-bind-address": { "type": "string", "default": "", "description": "Optional local address for the server ICE UDP sockets; empty lets the WebRTC runtime choose." },
+            "ice-servers": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "default": [],
+              "description": "Optional STUN/TURN URLs for server-reflexive or relay ICE candidates. Keep empty unless NAT requires them."
+            },
+            "ice-port-range-start": { "type": "integer", "minimum": 0, "maximum": 65535, "default": 0 },
+            "ice-port-range-end": { "type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "description": "Both ICE port values may be 0 to derive the range from server.port and server.max-players; otherwise the inclusive range must have at least one UDP port per player." },
+            "max-message-size": { "type": "integer", "minimum": 1, "default": 1048576 },
+            "maximum-fragment-size": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 16384 }
+          }
+        },
         "compression-threshold": {
           "type": "integer",
           "minimum": 0,

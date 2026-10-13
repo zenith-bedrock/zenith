@@ -30,7 +30,10 @@ public class UiSoundEmotePacketTests
             PositionZ = -2.25f,
             Volume = 0.5f,
             Pitch = 1.25f,
-            ServerSoundHandle = 0x1122334455667788UL
+            LoopCount = 3,
+            BypassListenerRangeCheck = true,
+            ServerSoundHandle = 0x1122334455667788UL,
+            PlaybackPositionSeconds = 12.5f
         };
         var decoded = RoundTrip(original, ProtocolInfo.PLAY_SOUND_PACKET, () => new PlaySoundPacket());
         Assert.Equal(original.SoundName, decoded.SoundName);
@@ -39,11 +42,14 @@ public class UiSoundEmotePacketTests
         Assert.Equal(original.PositionZ, decoded.PositionZ);
         Assert.Equal(original.Volume, decoded.Volume);
         Assert.Equal(original.Pitch, decoded.Pitch);
+        Assert.Equal(original.LoopCount, decoded.LoopCount);
+        Assert.Equal(original.BypassListenerRangeCheck, decoded.BypassListenerRangeCheck);
         Assert.Equal(original.ServerSoundHandle, decoded.ServerSoundHandle);
+        Assert.Equal(original.PlaybackPositionSeconds, decoded.PlaybackPositionSeconds);
     }
 
     [Fact]
-    public void PlaySound_roundtrips_without_optional_handle()
+    public void PlaySound_roundtrips_without_optional_fields()
     {
         var original = new PlaySoundPacket
         {
@@ -53,11 +59,52 @@ public class UiSoundEmotePacketTests
             PositionZ = 0f,
             Volume = 1f,
             Pitch = 1f,
-            ServerSoundHandle = null
+            LoopCount = 0,
+            BypassListenerRangeCheck = false,
+            ServerSoundHandle = null,
+            PlaybackPositionSeconds = null
         };
         var decoded = RoundTrip(original, ProtocolInfo.PLAY_SOUND_PACKET, () => new PlaySoundPacket());
         Assert.Null(decoded.ServerSoundHandle);
+        Assert.Null(decoded.PlaybackPositionSeconds);
+        Assert.Equal(0, decoded.LoopCount);
+        Assert.False(decoded.BypassListenerRangeCheck);
         Assert.Equal("note.harp", decoded.SoundName);
+    }
+
+    [Fact]
+    public void PlaySound_encode_matches_protocol_2193_field_order()
+    {
+        var packet = new PlaySoundPacket
+        {
+            SoundName = "test.sound",
+            PositionX = 1f,
+            PositionY = 2f,
+            PositionZ = 3f,
+            Volume = 0.75f,
+            Pitch = 1.25f,
+            LoopCount = 4,
+            BypassListenerRangeCheck = true,
+            ServerSoundHandle = 0x0102030405060708UL,
+            PlaybackPositionSeconds = 2.5f
+        };
+
+        var stream = new BinaryStream(packet.Encode().ToArray());
+        Assert.Equal((int)ProtocolInfo.PLAY_SOUND_PACKET, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal("test.sound", stream.ReadVarString());
+        Assert.Equal(8, stream.ReadVarInt());
+        Assert.Equal(16, stream.ReadVarInt());
+        Assert.Equal(24, stream.ReadVarInt());
+        Assert.Equal(0.75f, stream.ReadFloat(BinaryStream.Endianess.Little));
+        Assert.Equal(1.25f, stream.ReadFloat(BinaryStream.Endianess.Little));
+        Assert.Equal(4, stream.ReadVarInt());
+        Assert.True(stream.ReadBool());
+        Assert.True(stream.ReadBool());
+        Assert.Equal(0x0102030405060708UL, stream.ReadULong(BinaryStream.Endianess.Little));
+        Assert.True(stream.ReadBool());
+        Assert.Equal(2.5f, stream.ReadFloat(BinaryStream.Endianess.Little));
+        Assert.True(stream.IsEndOfFile);
+        stream.Dispose();
     }
 
     [Fact]

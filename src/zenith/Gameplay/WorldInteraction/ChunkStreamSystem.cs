@@ -118,7 +118,7 @@ sealed class ChunkStreamSystem : IGameSystem
         if (!player.TryConsumeSpawnReady())
             return;
 
-        if (!player.IsSpawning || player.IsInGame || player.Session.RakSession.IsClosed)
+        if (!player.IsSpawning || player.IsInGame || player.Session.IsClosed)
             return;
 
         player.Session.Context.Logger.Info($"{player.Username} finished spawning; entering in-game phase.");
@@ -199,7 +199,7 @@ sealed class ChunkStreamSystem : IGameSystem
         if (!_preSpawnPublications.TryGetValue(player, out var publication))
             return;
 
-        if (player.Session.RakSession.IsClosed
+        if (player.Session.IsClosed
             || (player.IsInGame && !publication.SpawnReleased)
             || (player.IsSpawning && !publication.SpawnReleased))
         {

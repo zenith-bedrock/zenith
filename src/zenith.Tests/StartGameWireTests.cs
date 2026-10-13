@@ -2,6 +2,7 @@ using Zenith.Packets;
 using Zenith.Session;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
+using Zenith.Raknet.Stream;
 using Zenith.Server;
 using Xunit;
 
@@ -21,10 +22,10 @@ public class StartGameWireTests
     }
 
     [Fact]
-    public void Protocol_identity_matches_client_2168_layout()
+    public void Protocol_identity_matches_client_2193_layout()
     {
-        Assert.Equal(2168, ServerIdentity.ProtocolVersion);
-        Assert.Equal("1.26.40", ServerIdentity.VersionName);
+        Assert.Equal(2193, ServerIdentity.ProtocolVersion);
+        Assert.Equal("1.26.52", ServerIdentity.VersionName);
     }
 
     [Fact]
@@ -71,6 +72,25 @@ public class StartGameWireTests
     }
 
     [Fact]
+    public void StartGame_default_spawn_biome_uses_the_enum_not_a_biome_network_id()
+    {
+        var packet = new StartGamePacket { LevelName = "test", EntityId = 1 };
+        var stream = new BinaryStream(packet.Encode().ToArray());
+
+        _ = stream.ReadUnsignedVarInt(); // packet id
+        _ = stream.ReadVarLong(); // EntityId
+        _ = stream.ReadUnsignedVarLong(); // EntityRuntimeID
+        _ = stream.ReadVarInt(); // PlayerGameMode
+        for (var i = 0; i < 5; i++)
+            _ = stream.ReadFloat(BinaryStream.Endianess.Little); // pos xyz + pitch/yaw
+        _ = stream.ReadLong(BinaryStream.Endianess.Little); // Seed
+
+        Assert.Equal(StartGamePacket.SpawnBiomeTypeDefault,
+            stream.ReadShort(BinaryStream.Endianess.Little));
+        Assert.Equal("", stream.ReadVarString()); // UserDefinedBiomeName is unused for vanilla biomes
+    }
+
+    [Fact]
     public void StartGame_player_permissions_is_a_raw_byte_not_a_varint()
     {
         // PlayerPermissionLevel's underlying is int8 -> one raw byte, no zigzag compression.
@@ -84,7 +104,8 @@ public class StartGameWireTests
         _ = stream.ReadVarLong(); // EntityId
         _ = stream.ReadUnsignedVarLong(); // EntityRuntimeID
         _ = stream.ReadVarInt(); // PlayerGameMode
-        for (var i = 0; i < 5; i++) _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // pos xyz + pitch/yaw
+        for (var i = 0; i < 5; i++)
+            _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // pos xyz + pitch/yaw
         _ = stream.ReadLong(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // Seed
         _ = stream.ReadShort(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // BiomeType
         _ = stream.ReadVarString(); // BiomeName
@@ -93,22 +114,31 @@ public class StartGameWireTests
         _ = stream.ReadVarInt(); // GameType
         _ = stream.ReadBool(); // Hardcore
         _ = stream.ReadVarInt(); // Difficulty
-        _ = stream.ReadVarInt(); _ = stream.ReadVarInt(); _ = stream.ReadVarInt(); // WorldSpawn BlockPos
+        _ = stream.ReadVarInt();
+        _ = stream.ReadVarInt();
+        _ = stream.ReadVarInt(); // WorldSpawn BlockPos
         _ = stream.ReadBool(); // AchievementsDisabled
         _ = stream.ReadVarInt(); // EditorWorldType
-        _ = stream.ReadBool(); _ = stream.ReadBool(); // CreatedInEditor, ExportedFromEditor
+        _ = stream.ReadBool();
+        _ = stream.ReadBool(); // CreatedInEditor, ExportedFromEditor
         _ = stream.ReadVarInt(); // DayCycleLockTime
         _ = stream.ReadUnsignedVarInt(); // EducationEditionOffer (unsigned per ADR §93)
         _ = stream.ReadBool(); // EducationFeaturesEnabled
         _ = stream.ReadVarString(); // EducationProductID
         _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // RainLevel
         _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // LightningLevel
-        _ = stream.ReadBool(); _ = stream.ReadBool(); _ = stream.ReadBool(); // Confirmed/MultiPlayer/LAN
-        _ = stream.ReadVarInt(); _ = stream.ReadVarInt(); // XBL/PlatformBroadcastMode
-        _ = stream.ReadBool(); _ = stream.ReadBool(); // CommandsEnabled, TexturePackRequired
+        _ = stream.ReadBool();
+        _ = stream.ReadBool();
+        _ = stream.ReadBool(); // Confirmed/MultiPlayer/LAN
+        _ = stream.ReadVarInt();
+        _ = stream.ReadVarInt(); // XBL/PlatformBroadcastMode
+        _ = stream.ReadBool();
+        _ = stream.ReadBool(); // CommandsEnabled, TexturePackRequired
         _ = stream.ReadUnsignedVarInt(); // GameRules length
         _ = stream.ReadUInt(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // Experiments length
-        _ = stream.ReadBool(); _ = stream.ReadBool(); _ = stream.ReadBool(); // ExperimentsToggled/BonusChest/StartWithMap
+        _ = stream.ReadBool();
+        _ = stream.ReadBool();
+        _ = stream.ReadBool(); // ExperimentsToggled/BonusChest/StartWithMap
 
         Assert.Equal(0x02, stream.ReadByte()); // PlayerPermissions — raw byte, not varint
     }

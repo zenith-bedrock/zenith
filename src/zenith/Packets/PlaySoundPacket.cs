@@ -4,7 +4,8 @@ namespace Zenith.Packets;
 
 /// <summary>
 /// PlaySound (0x56) — server → client. Position is SoundPos (BlockPos of world*8).
-/// Optional handle is fixed LE uint64 when present.
+/// Protocol 2193 places the listener-range bypass before the optional sound handle and adds an
+/// optional playback position after it. Loop count is a required preceding field.
 /// </summary>
 sealed class PlaySoundPacket : DataPacket
 {
@@ -20,7 +21,10 @@ sealed class PlaySoundPacket : DataPacket
     public float Volume { get; set; } = 1f;
     public float Pitch { get; set; } = 1f;
 
+    public int LoopCount { get; set; }
+    public bool BypassListenerRangeCheck { get; set; }
     public ulong? ServerSoundHandle { get; set; }
+    public float? PlaybackPositionSeconds { get; set; }
 
     public override void Decode(ref BinaryStream stream)
     {
@@ -30,10 +34,17 @@ sealed class PlaySoundPacket : DataPacket
         PositionZ = stream.ReadVarInt() / 8f;
         Volume = stream.ReadFloat(BinaryStream.Endianess.Little);
         Pitch = stream.ReadFloat(BinaryStream.Endianess.Little);
+        LoopCount = stream.ReadVarInt();
+        BypassListenerRangeCheck = stream.ReadBool();
         if (stream.ReadBool())
             ServerSoundHandle = stream.ReadULong(BinaryStream.Endianess.Little);
         else
             ServerSoundHandle = null;
+
+        if (stream.ReadBool())
+            PlaybackPositionSeconds = stream.ReadFloat(BinaryStream.Endianess.Little);
+        else
+            PlaybackPositionSeconds = null;
     }
 
     public override Span<byte> Encode()
@@ -46,10 +57,22 @@ sealed class PlaySoundPacket : DataPacket
         writer.WriteVarInt((int)(PositionZ * 8f));
         writer.WriteFloat(Volume, BinaryStream.Endianess.Little);
         writer.WriteFloat(Pitch, BinaryStream.Endianess.Little);
+        writer.WriteVarInt(LoopCount);
+        writer.WriteBool(BypassListenerRangeCheck);
         if (ServerSoundHandle is { } handle)
         {
             writer.WriteBool(true);
             writer.WriteULong(handle, BinaryStream.Endianess.Little);
+        }
+        else
+        {
+            writer.WriteBool(false);
+        }
+
+        if (PlaybackPositionSeconds is { } playbackPosition)
+        {
+            writer.WriteBool(true);
+            writer.WriteFloat(playbackPosition, BinaryStream.Endianess.Little);
         }
         else
         {
