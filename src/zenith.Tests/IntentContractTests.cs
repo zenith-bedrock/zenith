@@ -3883,7 +3883,7 @@ public class IntentContractTests
         var stream = new BinaryStream(bytes);
         Assert.Equal((int)ProtocolInfo.CREATIVE_CONTENT_PACKET, stream.ReadUnsignedVarInt());
         Assert.Equal(1, stream.ReadUnsignedVarInt()); // groups count
-        Assert.Equal((byte)CreativeContentPacket.CategoryConstruction, stream.ReadByte()); // category — exactly one byte
+        Assert.Equal((byte)1, stream.ReadByte()); // Construction in retail 1.26.52; exactly one byte
         Assert.Equal("", stream.ReadVarString());
         Assert.Equal(0, stream.ReadVarInt()); // empty icon ID
         Assert.Equal((ushort)0, stream.ReadUShort(BinaryStream.Endianess.Little));
