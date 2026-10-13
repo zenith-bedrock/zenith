@@ -61,6 +61,8 @@ enum ProtocolInfo : int
     SET_LOCAL_PLAYER_AS_INITIALIZED_PACKET = 0x71,
     NETWORK_CHUNK_PUBLISHER_UPDATE_PACKET = 0x79,
     BIOME_DEFINITION_LIST_PACKET = 0x7a,
+    /// <summary>Vanilla jigsaw rule data sent before StartGame (protocol 2193 packet 313).</summary>
+    JIGSAW_STRUCTURE_DATA_PACKET = 0x139,
     LEVEL_SOUND_EVENT_PACKET = 0x7b,
     CLIENT_CACHE_STATUS_PACKET = 0x81,
     NETWORK_SETTINGS_PACKET = 0x8f,

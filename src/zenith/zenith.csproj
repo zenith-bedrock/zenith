@@ -30,6 +30,9 @@
     <EmbeddedResource Include="data\biome_definitions.bin">
       <LogicalName>biome_definitions.bin</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\jigsaw_structures_data.nbt">
+      <LogicalName>jigsaw_structures_data.nbt</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <PropertyGroup>

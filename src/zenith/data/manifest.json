@@ -6,6 +6,8 @@
     "bds_url": "https://www.minecraft.net/bedrockdedicatedserver/bin-win/bedrock-server-1.26.52.3.zip",
     "bds_archive_sha256": "2c9b98d07d2504786996f2335980e88bd969b4a77514925e75471a1349995825",
     "endstone_version": "0.11.13",
+    "jigsaw_structure_data_source": "Axolotl-PM BedrockData 6.9.0+bedrock-1.26.50, commit 488f81d2ab95841337fb9331efe9d6b74ceddb07 (protocol 2193, CC0-1.0)",
+    "jigsaw_structure_data_url": "https://raw.githubusercontent.com/axolotl-pm/BedrockData/488f81d2ab95841337fb9331efe9d6b74ceddb07/jigsaw_structures_data.nbt",
     "block_candidates": "previous Zenith palette plus minecraft-data 3.117.0 block states; new types from the captured BDS ItemRegistry",
     "block_validation": "each state and runtime ID queried from BDS via Endstone create_block_data; new state domains accepted only when returned unchanged"
   },
@@ -34,11 +36,16 @@
     "biome_definitions.bin": {
       "bytes": 7667,
       "sha256": "6c444ef1401a2a7f0dcd1de4eb744b9235b8bd578035f626562e48f732a0fb69"
+    },
+    "jigsaw_structures_data.nbt": {
+      "bytes": 209307,
+      "sha256": "d15c9786ef12b21b7e67e022d884cc1a1d3e96081296d4f904eae95f34b3c3b1"
     }
   },
   "captured_packet_bodies": {
     "item_registry": "a3cc89a6378ee0c0c82560cfaf5963ec7beb19b2239f982ef9bc2b7faa1d028c",
     "creative_content": "90680239ab38f5248e4f7fefc74103d4062a03aeab1f851e9c95474f6f408574",
-    "biome_definitions": "6c444ef1401a2a7f0dcd1de4eb744b9235b8bd578035f626562e48f732a0fb69"
+    "biome_definitions": "6c444ef1401a2a7f0dcd1de4eb744b9235b8bd578035f626562e48f732a0fb69",
+    "jigsaw_structure_data": "d15c9786ef12b21b7e67e022d884cc1a1d3e96081296d4f904eae95f34b3c3b1"
   }
 }

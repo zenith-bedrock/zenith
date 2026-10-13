@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Xunit;
+using Zenith.Nbt;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.World;
@@ -20,6 +21,29 @@ public class SpawnPathWireTests
         Assert.Equal(1 + BiomeDefinitionListBlob.ByteLength, bytes.Length);
         // BDS 1.26.52.3 supplies 89 definitions; this is the captured wire body.
         Assert.Equal(0x59, bytes[1]);
+    }
+
+    [Fact]
+    public void Jigsaw_structure_data_encodes_the_vanilla_network_nbt_compound()
+    {
+        Assert.True(JigsawStructureDataBlob.ByteLength > 2,
+            "embedded jigsaw_structures_data.nbt must contain the vanilla rule compound");
+
+        var bytes = new JigsawStructureDataPacket().Encode().ToArray();
+        var stream = new Zenith.Raknet.Stream.BinaryStream(bytes);
+        Assert.Equal(313, (int)stream.ReadUnsignedVarInt());
+
+        var decoded = NbtCodec.Decode(
+            stream.Buffer.AsSpan(stream.Offset, stream.Length - stream.Offset), NbtEncoding.Network);
+        Assert.Equal(JigsawStructureDataBlob.ByteLength, decoded.BytesConsumed);
+        Assert.Equal(string.Empty, decoded.Root.Name);
+        Assert.True(decoded.Root.Tag.TryGetCompound(out var rules));
+        Assert.True(rules.TryGet("jigsaws", out var jigsawRulesTag));
+        Assert.True(jigsawRulesTag.TryGetList(out var jigsawRules));
+        Assert.Equal(NbtType.Compound, jigsawRules.ElementType);
+        Assert.True(jigsawRules.Count > 0);
+        stream.Offset += decoded.BytesConsumed;
+        Assert.True(stream.IsEndOfFile);
     }
 
     [Fact]
