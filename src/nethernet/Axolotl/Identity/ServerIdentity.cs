@@ -39,6 +39,41 @@ public sealed class ServerIdentity
         return new ServerIdentity(key, PublicKey.FromEcdsa(key));
     }
 
+    /// <summary>
+    /// Loads the operator key from <paramref name="path"/> (PKCS#8, DER or PEM), creating and persisting a new one
+    /// when the file does not exist. Keeping this file keeps the server's identity, so players are not asked to
+    /// trust it again.
+    /// </summary>
+    public static ServerIdentity LoadOrCreate(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+
+        if (!File.Exists(full))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            var generated = Generate();
+            File.WriteAllBytes(full, generated.PrivateKey.ExportPkcs8PrivateKey());
+            return generated;
+        }
+
+        var bytes = File.ReadAllBytes(full);
+        if (bytes.AsSpan().StartsWith("-----BEGIN"u8))
+            return FromPrivateKeyPem(System.Text.Encoding.ASCII.GetString(bytes));
+
+        var key = ECDsa.Create();
+        try
+        {
+            key.ImportPkcs8PrivateKey(bytes, out _);
+        }
+        catch (CryptographicException e)
+        {
+            key.Dispose();
+            throw new IdentityException($"The private key in {full} could not be read: {e.Message}", e);
+        }
+        return new ServerIdentity(key, PublicKey.FromEcdsa(key));
+    }
+
     public byte[] Sign(byte[] input)
     {
         try
