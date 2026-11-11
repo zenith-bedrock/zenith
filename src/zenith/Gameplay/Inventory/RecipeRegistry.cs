@@ -272,7 +272,10 @@ sealed class RecipeRegistry
         if (maxAffordable < 1)
             return false;
 
-        times = Math.Clamp(times, 1, maxAffordable);
+        // A client that asks for more crafts than the grid affords has a different idea of the grid than we do;
+        // crafting fewer would desync its Consume list from what we consume, so refuse (inventory-audit #2b).
+        if (times > maxAffordable)
+            return false;
 
         var snap = craftUi.CaptureSnapshot();
         foreach (var (id, count) in needed)
