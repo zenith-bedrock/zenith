@@ -8,7 +8,7 @@ runtime truth, not how it got there.
 ## Coordinate and yaw convention
 
 Reverse-engineered from the pre-existing (pre-Phase-XXIII) movement code and centralized in
-[`LookMath`](../src/zenith/Gameplay/LookMath.cs) rather than changed:
+[`LookMath`](../src/zenith/Gameplay/Entities/LookMath.cs) rather than changed:
 
 - Yaw `0°` faces `+Z`.
 - Yaw increases **clockwise** viewed from above: `+X` is `-90°`, `-Z` is `±180°`, `-X` is `+90°`.

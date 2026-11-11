@@ -16,6 +16,12 @@ partial class InGameSessionHandler
         Player.Player player,
         in AuthItemInteraction use)
     {
+        if (use.Hand != InventoryTransactionPacket.HandMainhand)
+        {
+            session.Context.Logger.Debug($"Rejected UseItem from unsupported hand {use.Hand} for {player.Username}.");
+            return;
+        }
+
         var face = use.Face is >= 0 and <= 255 ? (byte)use.Face : (byte)0;
         HandleUseItem(
             session,

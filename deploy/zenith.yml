@@ -41,8 +41,23 @@ chat:
   max-length: 512
   rate-capacity: 8
   rate-refill-per-second: 4
+
 network:
   compression-threshold: 256
+  transport: nethernet
+  nether-net:
+    join-url: http://127.0.0.1:19132
+    listen-url: ""
+    # Empty binds all local interfaces. Set a concrete NIC address when the host has several.
+    ice-bind-address: ""
+    # Usually empty. Add STUN/TURN only when NAT requires a public or relayed candidate.
+    ice-servers: []
+    # When both values are 0 and transport is nethernet, Zenith derives a UDP range from
+    # server.port through server.port + server.max-players - 1. Open/forward that range over UDP.
+    ice-port-range-start: 0
+    ice-port-range-end: 0
+    max-message-size: 1048576
+    maximum-fragment-size: 16384
 # Independent severity ladders (ops-first defaults). Aliases: none|info|warn|error|debug|all
 log:
   server: info

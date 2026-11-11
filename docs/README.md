@@ -20,6 +20,7 @@ Task-oriented — you have a specific thing to do.
 | [Vanilla behavior guide](vanilla-behavior.md) | Testing in-game: what should match vanilla, what to report as a bug |
 | [Alpha gate](alpha-gate.md) | `v0.0.1-alpha` tag checklist (compose / test / non-goals) |
 | [Protocol churn](protocol-churn.md) | Checklist for bumping to a new Bedrock client protocol (ADR §22) |
+| [Protocol import](protocol-import.md) | `protocol-import` tool: pull/scaffold/diff Mojang packet schemas |
 | [Runtime and behavioral validation](runtime-validation.md) | Load baseline and real-client differential-smoke workflow |
 | [Runtime diagnostics](diagnostics.md) | Diagnostics library, snapshots, instrumentation and overhead checks |
 | [Disconnect lifecycle](disconnect-lifecycle.md) | Session/gameplay teardown, persistence and event semantics |
@@ -33,6 +34,11 @@ Explains the current, concrete shape of the game runtime — read these before t
 | Doc | Covers |
 |-----|--------|
 | [ECS runtime](ecs.md) | The real ECS in `src/zenith/Ecs/` — `EntityId`/generation, component storage, query semantics, structural mutation, runtime-id mapping, migration model (Zombie/Minecart/Projectile), what's deliberately not built (archetypes, scheduler, plugin API) |
+| [Entity fidelity](entity-fidelity.md) | Entity yaw/pitch, movement fidelity findings and known gaps |
+| [Entity fidelity validation](entity-fidelity-validation.md) | How entity fidelity is validated against a real client |
+| [Entity behavior matrix](entity-behavior-matrix.md) | Per-mob behavior coverage vs vanilla |
+| [World generation](world-generation.md) | Overworld generation pipeline |
+| [NetherNet](nethernet.md) | Independent WebRTC/NetherNet transport: signaling, identity, framing (ADR §140) |
 | [Entity catalog](entities.md) | Every runtime/gameplay category (Player, mobs, vehicles, projectiles, drops), what's ECS-backed vs. the OOP `IDamageableActor` pattern, capability matrix, and the evidence trail for what's shared vs. only looks similar |
 
 ## Reference

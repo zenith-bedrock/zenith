@@ -77,6 +77,26 @@ class LoginSessionHandler : ISessionHandler
             return;
         }
 
+        if (session.RequiresGameServerTokenBinding)
+        {
+            var transportIdentity = session.ClientIdentity;
+            var matchesTransportIdentity = transportIdentity is not null &&
+                string.Equals(transportIdentity.GameServerToken, packet.AuthInfo.Token, StringComparison.Ordinal);
+            if (transportIdentity is not null && !matchesTransportIdentity)
+            {
+                session.Context.Logger.Warning("Rejected NetherNet login: Login token differs from the SDP identity token.");
+                session.Disconnect();
+                return;
+            }
+            if (authType == LoginPacket.AuthenticationInfo.TypeFull &&
+                (!matchesTransportIdentity || transportIdentity?.TokenAuthenticated != true))
+            {
+                session.Context.Logger.Warning("Rejected NetherNet FULL login: GameServerToken was not authenticated during signaling.");
+                session.Disconnect();
+                return;
+            }
+        }
+
         LoginIdentity.ParsedIdentity identity;
         try
         {
@@ -204,7 +224,7 @@ class LoginSessionHandler : ISessionHandler
         }
 
         session.Player = player;
-        session.RakSession.HasGameIdentity = true;
+        session.HasGameIdentity = true;
 
         session.Context.EventBus.Publish(new PlayerLoginEvent(player));
 

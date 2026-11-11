@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Zenith.NetherNet</AssemblyName>
+    <RootNamespace>Zenith.NetherNet</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>Zenith.NetherNet</PackageId>
+    <Version>0.0.2-alpha</Version>
+    <Description>NetherNet WebRTC transport, framing, and HTTP signaling primitives.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="nethernet.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DataChannelDotnet" />
+  </ItemGroup>
+</Project>

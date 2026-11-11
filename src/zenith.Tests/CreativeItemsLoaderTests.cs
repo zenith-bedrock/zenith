@@ -6,7 +6,7 @@ using Zenith.World;
 namespace Zenith.Tests;
 
 /// <summary>
-/// Regression for ADR §140's core claim: a creative item's `block_state_b64` embeds the exact same
+/// Regression for ADR §142's core claim: a creative item's `block_state_b64` embeds the exact same
 /// `network_id` <c>block_palette.nbt</c> already uses as Zenith's own block runtime id — verified
 /// byte-for-byte against `minecraft:oak_planks` in both files before this loader was written.
 /// </summary>
@@ -64,14 +64,20 @@ public class CreativeItemsLoaderTests
         Assert.False(planks.Icon.IsEmpty);
     }
 
-    /// <summary>Real vanilla data: some groups use the "minecraft:empty" icon sentinel (client falls
-    /// back to the group's first item) instead of a real icon — must resolve without throwing.</summary>
+    /// <summary>The "minecraft:empty" group-icon sentinel (client falls back to the group's first item)
+    /// must resolve to an empty stack id without throwing. Uses inline JSON because the current
+    /// BDS 1.26.52 catalog no longer contains any sentinel group.</summary>
     [Fact]
     public void Groups_with_the_empty_icon_sentinel_resolve_to_an_empty_stack_id()
     {
         var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var data = CreativeItemsLoader.FromEmbeddedResource(palette);
+        const string json = """
+            {"groups":[{"creative_category":1,"name":"itemGroup.name.test","icon":{"id":"minecraft:empty"}}],
+             "items":[{"id":"minecraft:stick","group_index":0}]}
+            """;
+        using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+        var data = CreativeItemsLoader.FromJsonStream(stream, palette);
 
-        Assert.Contains(data.Groups, g => g.Icon.IsEmpty);
+        Assert.True(Assert.Single(data.Groups).Icon.IsEmpty);
     }
 }

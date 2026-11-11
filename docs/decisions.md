@@ -876,7 +876,7 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 
 1. **`OverworldBiomeSampler`** — ocean / plains / desert / hills / forest; Bedrock network ids (0–4); height bias + surface block (sand vs grass) + tree density.
 2. **Column wire** — `ChunkPayloads` writes sampled biome id per subchunk section (center of chunk).
-3. **StartGame** — `ITerrainProvider.SampleSpawnBiome` → `BiomeType` / `BiomeName` at join (flat stays plains).
+3. **StartGame** — vanilla spawn settings use `SpawnBiomeType::Default` (0); actual biome network IDs remain in the chunk biome palettes. `UserDefinedBiomeName` is reserved for custom biome definitions, which Zenith does not author.
 4. **Flat** unchanged (plains biome + grass column).
 
 **Why:** Visible variety + correct client biome tint/F3 without a definition dump or BDS tables.
@@ -884,6 +884,8 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 **Non-goals:** biome JSON, 3D biome blending, taiga/swamp/jungle, mob spawn rules, **custom** BiomeDefinitionList authoring, persisting `c:` on miss. (Embedded vanilla list for join is §70 — not this product.)
 
 **Status (jul 2026):** Shipped — sampler + column wire + spawn biome + leaf tests.
+
+**Adendo (out 2026 — StartGame spawn enum):** The value written to `SpawnBiomeType` is an enum (`Default=0`, `UserDefined=1`), not a biome network ID. The former `SampleSpawnBiome` path passed vanilla biome IDs (including `plains=1`) as that enum and sent a built-in name as `UserDefinedBiomeName`. Removed that conflation: Zenith now sends `Default` with an empty user-defined name; actual terrain biomes continue to be transmitted in chunk palettes. Added a StartGame wire regression test. No packet was added.
 
 ### 68. Pterodactyl / Wings hosting (egg + panel hooks)
 
@@ -926,10 +928,11 @@ Flat mode **unchanged** (classic Y -61). Features live only in `SampleNoiseBlock
 Client leave-loading prerequisites (wire order SSOT; no `JoinOrchestrator`):
 
 1. **Pose gate** — `World.TryHealSpawnFeet` before StartGame (buried flat `pd:` into noise must not trap the camera).
-2. **Non-empty `BiomeDefinitionList`** — embedded vanilla wire body (`data/biome_definitions.bin`); not a custom biome-JSON product (§66 non-goal stays for *authoring*).
-3. **`PLAYER_SPAWN` only after a ready disk** centered on feet: `world.spawn-ready-radius` (default **2**, validate `0..spawn-chunk-radius`). PreSpawn loads/publishes `min(view, spawn-ready-radius)`; tracker view radius stays the client request (capped by `spawn-chunk-radius`).
-4. **One column pipeline** — `ColumnSend` + `PlayerChunkTracker` + backpressure for ready-disk and the remaining ring. `ChunkStreamSystem` runs while `Player.IsSpawning` **or** `IsInGame` (stream during SpawnResponse, DF-style terrain-after-spawn-protocol).
-5. Inventory seed + MovePlayer teleport before `PlayStatus(PLAYER_SPAWN)` (PM-shaped).
+2. **Jigsaw rules before `StartGame`** — send `JigsawStructureData` (packet 313) with the vanilla Network-NBT compound embedded from Axolotl BedrockData; modern 2193 clients require the structure rule data during join.
+3. **Non-empty `BiomeDefinitionList`** — embedded vanilla wire body (`data/biome_definitions.bin`); not a custom biome-JSON product (§66 non-goal stays for *authoring*).
+4. **`PLAYER_SPAWN` only after a ready disk** centered on feet: `world.spawn-ready-radius` (default **2**, validate `0..spawn-chunk-radius`). PreSpawn loads/publishes `min(view, spawn-ready-radius)`; tracker view radius stays the client request (capped by `spawn-chunk-radius`).
+5. **One column pipeline** — `ColumnSend` + `PlayerChunkTracker` + backpressure for ready-disk and the remaining ring. `ChunkStreamSystem` runs while `Player.IsSpawning` **or** `IsInGame` (stream during SpawnResponse, DF-style terrain-after-spawn-protocol).
+6. Inventory seed + MovePlayer teleport before `PlayStatus(PLAYER_SPAWN)` (PM-shaped).
 
 **Clarifies:** §14 PreSpawn/stream adendos; §66 “no BiomeDefinitionList payload” applied to *custom* biome dumps — embedded vanilla list is join contract, not biome product.
 
@@ -3332,7 +3335,37 @@ shape grammar the engine doesn't have).
 `Blocks.cs`, `DigProfiles.cs`, `InGameUseItemHandler.cs`, `InventorySystem.cs`,
 `FloorDropFanout.cs`.
 
-### 140. Real Mojang game data, owned end-to-end: a first-party `.brarchive` reader, and the real vanilla creative catalog
+### 140. NetherNet is a complete independent transport
+
+**Choice:** Keep RakNet as the default and support `network.transport: raknet|nethernet`. The `Zenith.NetherNet` leaf project owns HTTP signaling, WebRTC ICE/DTLS/SCTP, identity assertions, and the NetherNet frame codec. Zenith's Session layer adapts either transport to the same Bedrock session lifecycle. Transport dependencies do not point into `zenith`; the session adapter lives in Zenith.
+
+**Why:** Mojang's onboarding guide requires full ICE SDP exchange at `GET /v1/join` and `POST /v1/join/{networkId}`, a server identity assertion in every answer, client identity validation, and two channels: ordered/reliable and unordered/unreliable. NetherNet frames the Bedrock batch separately from RakNet's message identifier and split packets. Keeping WebRTC and its signaling in the leaf library preserves the transport boundary, while the narrow Session adapter lets gameplay and Protocol remain transport-agnostic.
+
+**Implementation:** `DataChannelDotnet` supplies native libdatachannel peers with the SCTP channel modes required by Bedrock. The operator identity key persists under Zenith's data root. Before parsing remote SDP, the server validates the client token and its detached fingerprint assertion, then strips the client-only `a=identity` attribute. Each answer contains a full ICE candidate list and a persistent operator assertion. The host binds per-peer ICE sockets within the configured UDP range and sends/receives framed game batches through the common Session adapter. Authentication acceptance remains governed by `auth.accept`; NetherNet FULL login must present the same GameServerToken that was authenticated during signaling. Unsupported or malformed handshake input fails closed. Selecting NetherNet never silently changes the transport.
+
+**Verification:** Leaf tests cover offer/answer identity signatures, fingerprint canonicalization, SDP stripping/insertion, framing, bounded signaling, and local full-ICE negotiation between native libdatachannel peers. That integration exchanges both required channels and verifies frames in both directions. The installed smoke-bot dependencies also include a NetherNet client; against a temporary Zenith server, a small HTTP signaling adapter completed protocol 2193 login through `login_success`, `start_game`, chunk delivery, and `spawn`. This used offline auth and confirmed that the answer included `a=identity`; it did not exercise the retail client's TOFU prompt or Xbox identity validation. No Bedrock packet was added for the transport.
+
+**Client identity compatibility (2026-10-12):** Accept `cpk` as either an EC/P-384 JWK object or a Base64 DER SubjectPublicKeyInfo string, as both `go-nethernet` and Axolotl handle. DER parsing requires a complete P-384 public key; malformed JSON claim types are rejected before property access. Token authentication and the detached fingerprint signature remain required by their existing policy. Signed fingerprint strings retain their exact SDP spelling. Server identity tokens continue emitting JWK objects, as required by Mojang's current guide. Leaf tests cover both formats, malformed keys, tampering, and key ownership.
+
+**Channel callback lifetime (2026-10-12):** Capture each channel's managed label during registration. Close/error callbacks can arrive after native metadata disposal, so they use that snapshot instead of reading `IRtcDataChannel.Label`. Leaf tests cover both channels, late/repeated callbacks, and preservation of the first close reason; the WebRTC integration test also closes a channel remotely and drains the connection.
+
+**Franchise signing-key format (2026-10-12):** The live issuer's OpenID discovery confirms RS256 and its `.well-known/keys` endpoint returns an RSA JWKS (`keys`, Base64URL `n`/`e`). Replace the incorrect `authenticationKeys`/DER `publicKey` parser. Cache public RSA parameter snapshots so key refresh does not dispose objects used by concurrent validations. FULL login still requires successful issuer signature/claims validation and the same token bound to the signaling DTLS fingerprints. Validation diagnostics distinguish claim, key-fetch and signature failures without logging tokens; caller cancellation propagates. Offline tests sign tokens against a published-format JWKS and verify rejection of invalid claims, unknown signatures and unavailable keys.
+
+### 141. Stable Bedrock 1.26.52 targets protocol 2193
+
+**Choice:** Keep `ServerIdentity` on Bedrock 1.26.52 / protocol 2193, using Mojang's 1.26.51 schema release as the wire reference because the 1.26.52 hotfix does not publish a new schema. Apply the 2193 deltas to packets Zenith currently handles: ItemUse's `Hand` byte, direct required Input Data array encoding, removal of redundant Cereal accessor-presence bytes in `InventoryTransactionPacket` and `PlayerAuthInputPacket`, one optional-presence byte per optional in `ItemStackResponsePacket`, and `PlaySoundPacket`'s loop count, listener-range bypass flag, optional server sound handle, and optional playback position.
+
+**Why:** A successful protocol handshake does not prove packet compatibility. The previous decoders consumed obsolete markers, treated required Input Data as optional, and omitted the new hand field, which shifted item-use payloads and could corrupt the click position, target block, and client prediction. Offhand item-use is decoded but rejected until Zenith models offhand state; silently applying it to a selected hotbar slot would mutate the wrong item.
+
+**Verification:** Focused 2193 byte-layout tests were updated for these paths, including PlaySound with both optionals present and absent. The field gates were cross-checked against Endstone's version-aware `input.py`, `item_stack.py`, and `sound.py` schemas and its r26_u5 protocol docs. `dotnet test zenith.sln -c Release` passed all 1403 tests, including the StartGame biome-enum regression test. The smoke-bot using the 1.26.51 schema for protocol 2193 received `join`, `start_game`, and `spawn` from Zenith 1.26.52. That validates the protocol join path through spawn; the bot does not render the graphical client or verify the reported UI error screen. See [`protocol-churn.md`](protocol-churn.md) for the scope and review notes.
+
+**Data refresh (2026-10-12):** Queried official BDS 1.26.52.3 through Endstone 0.11.13 and captured its stable ItemRegistry, CreativeContent and BiomeDefinitionList. Updated embedded assets to 22,091 validated block states, 2,076 items, 78 non-empty item NBT definitions, 1,980 creative reference entries and 89 biomes. The existing ItemRegistry encoder now preserves component definitions rather than replacing them with empty NBT. A source manifest and offline importer record versions and hashes. The operator plans to reset the world and create fresh files; old numeric IDs are not migrated, and no operator files were deleted here. Focused and full solution test counts are recorded in the [2026-10-12 follow-up audit](history/audits/2026-10-12-bedrock-data-nethernet.md). The smoke bot reaches spawn over both RakNet and NetherNet; the NetherNet test additionally validates full-ICE/WebRTC negotiation and both channel modes.
+
+**Retail CreativeContent rejection (2026-10-13):** Decode `PacketViolationWarning` (156) in the common session infrastructure so the client's rejected packet ID, severity and context remain visible at every login stage. The retail client identified `CreativeContent` (145): its anonymous group's air icon incorrectly ended after the zero item ID. Protocol 2193's [NetworkItemInstanceDescriptorData](https://github.com/Mojang/bedrock-protocol-docs/blob/v1.26.51/json/NetworkItemInstanceDescriptorData.json) requires the count, metadata, block runtime ID and user-data length even for air. Fix the shared `WriteItemStack` writer, preserving the non-air format and covering the creative group/entry boundary with a fixed byte fixture. An independent 1.26.51 decoder consumes the corrected production catalog completely (25 items, 529 bytes); the old bytes decode zero items and leave 512 trailing bytes. A smoke bot accepting a partial parse does not prove retail packet acceptance. This also preserves the correct air descriptor for CraftingData outputs; no transport, authentication or gameplay behavior changes.
+
+**Retail creative category correction (2026-10-13):** The retail 1.26.52 client reported `Invalid enum value` when `Construction` was sent as `0`, after the descriptor truncation was fixed. Keep the category at wire value `1` for the client target and pin that byte in the CreativeContent fixture. This runtime evidence takes precedence over the inconsistent 1.26.51 schema page/changelog metadata for the 1.26.52 hotfix.
+
+### 142. Real Mojang game data, owned end-to-end: a first-party `.brarchive` reader, and the real vanilla creative catalog
 
 **Context:** asked to audit how reference servers (PocketMine-MP, PowerNukkitX, Dragonfly) load their
 creative/survival/crafting catalogs and whether Zenith's own approach — one hand-typed
@@ -3427,3 +3460,7 @@ attempted here); running `gamedata-import` (or requiring a BDS install) at serve
 `Protocol/CreativeContentBuilder.cs`.
 
 When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
+
+
+
+**Nota (nov 2026, merge com §140/§141):** os números de catálogo acima (1.875 itens / 123 grupos; sentinela `minecraft:empty`) refletem o `creative_items.json` anterior. O refresh BDS 1.26.52.3 (§141) trouxe 1.980 entradas / 124 grupos e nenhum grupo com ícone sentinela; o teste do sentinela passou a usar JSON inline. Renumerado de §140 para §142 por colisão com NetherNet.

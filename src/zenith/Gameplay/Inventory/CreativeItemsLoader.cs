@@ -4,10 +4,10 @@ using Zenith.World;
 
 namespace Zenith.Gameplay.Inventory;
 
-/// <summary>One entry from `creative_items.json`'s `items` array (ADR §140).</summary>
+/// <summary>One entry from `creative_items.json`'s `items` array (ADR §142).</summary>
 readonly record struct CreativeItemData(StackId Id, int GroupIndex);
 
-/// <summary>One entry from `creative_items.json`'s `groups` array (ADR §140).</summary>
+/// <summary>One entry from `creative_items.json`'s `groups` array (ADR §142).</summary>
 readonly record struct CreativeGroupData(int Category, string Name, StackId Icon);
 
 /// <summary>Full parsed contents of `creative_items.json` — the real vanilla creative catalog.</summary>
@@ -24,7 +24,7 @@ sealed class CreativeItemsData
 }
 
 /// <summary>
-/// Loads the real vanilla creative catalog (ADR §140) — 1,875 items across 123 real category
+/// Loads the real vanilla creative catalog (ADR §142) — 1,875 items across 123 real category
 /// groups, already bundled as `creative_items.json` but unloaded by anything before this (named as
 /// a deferred gap in ADR §38 back in July, never picked back up until now).
 ///

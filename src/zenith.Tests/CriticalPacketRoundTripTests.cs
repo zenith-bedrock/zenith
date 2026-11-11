@@ -7,6 +7,28 @@ namespace Zenith.Tests;
 public class CriticalPacketRoundTripTests
 {
     [Fact]
+    public void PacketViolationWarning_roundtrips_rejected_packet_and_context()
+    {
+        var original = new PacketViolationWarningPacket
+        {
+            ViolationType = 0,
+            Severity = 2,
+            PacketId = 145,
+            Context = "BinaryStream read() incomplete readNoHeader failed! packetId: 145"
+        };
+        var stream = new BinaryStream(original.Encode().ToArray());
+        Assert.Equal(156, stream.ReadUnsignedVarInt());
+        var decoded = new PacketViolationWarningPacket();
+        decoded.Decode(ref stream);
+        Assert.Equal(original.ViolationType, decoded.ViolationType);
+        Assert.Equal(original.Severity, decoded.Severity);
+        Assert.Equal(original.PacketId, decoded.PacketId);
+        Assert.Equal(original.Context, decoded.Context);
+        Assert.True(stream.IsEndOfFile);
+        stream.Dispose();
+    }
+
+    [Fact]
     public void UpdateBlock_roundtrips_coords_and_runtime_id()
     {
         var original = new UpdateBlockPacket

@@ -70,6 +70,7 @@ src/
   zenith/        Game server (Gameplay, Packets, Protocol, Session, World, Player, Server, …)
     data/        Embedded palettes (block_palette.nbt, item_palette.json, …)
   raknet/        Reliable UDP transport
+  nethernet/     Zenith.NetherNet HTTP signaling, WebRTC data channels, identity and framing
   *.Tests/
 deploy/          Product image + Compose/Dokploy + Pterodactyl adapters — not used by dotnet run
 docs/            Narrative documentation

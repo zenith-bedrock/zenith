@@ -4,7 +4,8 @@ using Zenith.Raknet.Stream;
 namespace Zenith.Packets;
 
 /// <summary>Wire DTO for ItemRegistry — domain <c>ItemPaletteEntry</c> is mapped in Protocol.</summary>
-readonly record struct ItemRegistryWireEntry(string Name, short NetworkId, int Version, bool ComponentBased);
+readonly record struct ItemRegistryWireEntry(string Name, short NetworkId, int Version, bool ComponentBased,
+    NbtCompound? Components = null);
 
 /// <summary>
 /// ItemRegistry (0xa2) — full item palette for the client after StartGame.
@@ -32,7 +33,9 @@ sealed class ItemRegistryPacket : DataPacket
             writer.WriteShort(entry.NetworkId, BinaryStream.Endianess.Little);
             writer.WriteBool(entry.ComponentBased);
             writer.WriteVarInt(entry.Version);
-            writer.Write(emptyComponent);
+            writer.Write(entry.Components is null
+                ? emptyComponent
+                : NbtCodec.Encode(new NbtNamedTag("", NbtTag.Compound(entry.Components)), NbtEncoding.Network));
         }
 
         return writer.GetBufferDisposing();
