@@ -152,4 +152,18 @@ public class CraftingDataPacketTests
         Assert.Equal(9, stream.ReadUnsignedVarInt());
         Assert.True(stream.IsEndOfFile);
     }
+
+    [Fact]
+    public void Shield_output_carries_the_trailing_blocking_tick_in_its_extra_blob()
+    {
+        var plain = new BinaryStream();
+        new NetworkItemStack(5, 1, 0).WriteItemStack(ref plain);
+        var shield = new BinaryStream();
+        new NetworkItemStack(5, 1, 0, IsShield: true).WriteItemStack(ref shield);
+        Assert.Equal(plain.GetBufferDisposing().Length + 8, shield.GetBufferDisposing().Length);
+
+        var shieldRecipe = Array.Find(Build().ShapedRecipes, r => r.RecipeId == "minecraft:shield");
+        Assert.NotNull(shieldRecipe);
+        Assert.True(shieldRecipe!.Outputs[0].IsShield);
+    }
 }
