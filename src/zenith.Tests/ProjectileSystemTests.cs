@@ -194,7 +194,7 @@ public sealed class ProjectileSystemTests
         late.Chunks.RememberMany([(0, 0)]);
         Tick(system, spatial, fx);
         foreach (var player in fx.Players.Online)
-            player.Session.RakSession.Tick();
+            player.Session.RakSession().Tick();
 
         Assert.True(fx.Transport.Captured.Count > before);
     }

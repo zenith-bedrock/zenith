@@ -24,7 +24,7 @@ public class ColumnSendTests
         fx.World.FloorDrops.AddOrMerge(20, 64, 5, drop, 1, entityRuntimeIdIfNew: 1002);
 
         ColumnSend.EmitFloorDropsInColumn(player.Session, fx.World, chunkX: 0, chunkZ: 0);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
 
         Assert.Single(fx.Transport.Captured);
     }
@@ -36,7 +36,7 @@ public class ColumnSendTests
         var player = fx.AddInGamePlayer("empty-column");
 
         ColumnSend.EmitFloorDropsInColumn(player.Session, fx.World, chunkX: 0, chunkZ: 0);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
 
         Assert.Empty(fx.Transport.Captured);
     }
@@ -48,7 +48,7 @@ public class ColumnSendTests
         var player = fx.AddInGamePlayer("no-columns");
 
         ColumnSend.EmitOverlaysToSession(player.Session, fx.World, []);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
 
         Assert.Empty(fx.Transport.Captured);
     }
@@ -61,7 +61,7 @@ public class ColumnSendTests
         fx.World.SetBlock(5, 64, 5, Blocks.Stone);
 
         ColumnSend.EmitOverlaysToSession(player.Session, fx.World, [(0, 0)]);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
 
         Assert.NotEmpty(fx.Transport.Captured);
     }
@@ -87,7 +87,7 @@ public class ColumnSendTests
         // extra datagram, but it always adds bytes.
         var baselineColumn = await fx.World.GetOrCreateColumnAsync(0, 0);
         ColumnSend.EmitToSession(baselinePlayer.Session, baselineColumn, orderChannel: 0);
-        baselinePlayer.Session.RakSession.Tick();
+        baselinePlayer.Session.RakSession().Tick();
         var baselineBytes = BytesSentTo(fx, baselinePlayer);
 
         // Same read, but this time a live edit lands in the window between the read and the send —
@@ -96,7 +96,7 @@ public class ColumnSendTests
         fx.World.SetBlock(5, 64, 5, Blocks.Stone);
 
         ColumnSend.EmitToSession(lateEditPlayer.Session, column, orderChannel: 0);
-        lateEditPlayer.Session.RakSession.Tick();
+        lateEditPlayer.Session.RakSession().Tick();
         var lateEditBytes = BytesSentTo(fx, lateEditPlayer);
 
         Assert.True(lateEditBytes > baselineBytes);
@@ -106,7 +106,7 @@ public class ColumnSendTests
     {
         var total = 0;
         foreach (var (endPoint, datagram) in fx.Transport.CapturedByEndpoint)
-            if (endPoint.Equals(player.Session.RakSession.EndPoint))
+            if (endPoint.Equals(player.Session.RakSession().EndPoint))
                 total += datagram.Length;
         return total;
     }

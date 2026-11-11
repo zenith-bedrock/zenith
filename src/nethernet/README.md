@@ -1,11 +1,11 @@
 # Zenith.NetherNet
 
-`Zenith.NetherNet` is the independent .NET library for Zenith's Bedrock NetherNet transport. It owns HTTP full-ICE signaling, WebRTC peer connections, operator/client identity assertions, and NetherNet data-channel framing. It has no reference to Zenith gameplay, packets, or RakNet.
+Independent .NET library for the Bedrock NetherNet transport: HTTP and LAN signaling, SDP negotiation, identity assertions and WebRTC data channels. It has no reference to Zenith gameplay, packets or RakNet.
 
-The library uses `DataChannelDotnet`, a managed binding to native libdatachannel, because the transport requires both fully reliable ordered channels and `maxRetransmits=0` unordered channels. Package/runtime support follows the upstream NuGet package's included native assets. See [`docs/nethernet.md`](../../docs/nethernet.md) for the wire contract, configuration, authentication, and network setup.
+It is a 1:1 port of [`axolotl-nethernet`](https://github.com/axolotl-pm/NetherNet) under `Axolotl/`, built on `DataChannelDotnet` (managed binding to libdatachannel), which provides the reliable and `maxRetransmits=0` channel modes the protocol needs. `NetherNetServer` is single-threaded and tick-driven; `NetherNetServerRunner` runs it on its own thread and accepts commands from any thread.
 
-Build and run the transport tests from the repository root:
+Zenith plugs it in through `src/zenith/Network/NetherNet/`. See [`docs/nethernet.md`](../../docs/nethernet.md).
 
 ```powershell
-dotnet test src/nethernet.Tests/nethernet.Tests.csproj -c Release
+dotnet test src/nethernet.Tests/nethernet.Tests.csproj
 ```

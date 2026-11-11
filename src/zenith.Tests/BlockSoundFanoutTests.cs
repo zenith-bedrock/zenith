@@ -58,6 +58,6 @@ public class BlockSoundFanoutTests
     private static void FlushRaknet(Zenith.Player.PlayerManager players)
     {
         foreach (var p in players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
     }
 }

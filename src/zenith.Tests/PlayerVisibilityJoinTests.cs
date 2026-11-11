@@ -41,12 +41,12 @@ public class PlayerVisibilityJoinTests
 
         PlayerVisibility.AnnounceJoin(bob, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
 
         Assert.True(fx.Transport.Captured.Count >= 1,
             "joiner must receive the PlayerList/AddPlayer bootstrap for standing peers");
 
-        var bootstrapPacketIds = ReadUnsplitPacketIds(fx, bob.Session.RakSession.EndPoint);
+        var bootstrapPacketIds = ReadUnsplitPacketIds(fx, bob.Session.RakSession().EndPoint);
         Assert.Contains((int)ProtocolInfo.ADD_PLAYER_PACKET, bootstrapPacketIds);
         Assert.DoesNotContain((int)ProtocolInfo.MOVE_ACTOR_ABSOLUTE_PACKET, bootstrapPacketIds);
         Assert.DoesNotContain((int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET, bootstrapPacketIds);
@@ -60,7 +60,7 @@ public class PlayerVisibilityJoinTests
             alice.PositionX, alice.PositionY, alice.PositionZ, alice.Pitch, alice.Yaw));
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
         Assert.Empty(fx.Transport.Captured);
     }
 

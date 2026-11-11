@@ -11,6 +11,64 @@ namespace Zenith.NetherNet.Axolotl.Transport.WebRtc;
 /// <summary>A STUN or TURN server for ICE (port of the reference <c>NetherNetIceServer</c>).</summary>
 public sealed record IceServer(bool IsTurn, string Host, int Port, string Username = "", string Password = "")
 {
+    /// <summary>Parses <c>stun:host[:port]</c> or <c>turn:[user:pass@]host[:port]</c> (default ports 3478).</summary>
+    public static IceServer Parse(string url)
+    {
+        var text = url.Trim();
+        var colon = text.IndexOf(':');
+        if (colon < 0)
+            throw new ArgumentException($"ICE server \"{url}\" must start with stun: or turn:");
+        var scheme = text[..colon].ToLowerInvariant();
+        if (scheme is not ("stun" or "turn"))
+            throw new ArgumentException($"ICE server \"{url}\" must start with stun: or turn:");
+        var rest = text[(colon + 1)..].TrimStart('/');
+
+        var username = "";
+        var password = "";
+        var at = rest.LastIndexOf('@');
+        if (at >= 0)
+        {
+            if (scheme == "stun")
+                throw new ArgumentException($"STUN server \"{url}\" cannot carry credentials");
+            var credentials = rest[..at];
+            rest = rest[(at + 1)..];
+            var split = credentials.IndexOf(':');
+            username = Uri.UnescapeDataString(split < 0 ? credentials : credentials[..split]);
+            password = split < 0 ? "" : Uri.UnescapeDataString(credentials[(split + 1)..]);
+        }
+
+        string host;
+        var port = 3478;
+        if (rest.StartsWith('['))
+        {
+            var close = rest.IndexOf(']');
+            if (close < 0)
+                throw new ArgumentException($"ICE server \"{url}\" has an unterminated IPv6 address");
+            host = rest[1..close];
+            var tail = rest[(close + 1)..];
+            if (tail.Length > 0 && !TryPort(tail.TrimStart(':'), out port))
+                throw new ArgumentException($"ICE server \"{url}\" has an invalid port");
+        }
+        else
+        {
+            var portSeparator = rest.LastIndexOf(':');
+            if (portSeparator >= 0)
+            {
+                host = rest[..portSeparator];
+                if (!TryPort(rest[(portSeparator + 1)..], out port))
+                    throw new ArgumentException($"ICE server \"{url}\" has an invalid port");
+            }
+            else
+                host = rest;
+        }
+        if (host.Length == 0)
+            throw new ArgumentException($"ICE server \"{url}\" has no host");
+        return new IceServer(scheme == "turn", host, port, username, password);
+    }
+
+    private static bool TryPort(string text, out int port) =>
+        int.TryParse(text, out port) && port is >= 1 and <= 65535;
+
     /// <summary>libdatachannel URL form: <c>stun:host:port</c> or <c>turn:user:pass@host:port</c>.</summary>
     public string ToUrl()
     {

@@ -14,7 +14,7 @@ public class ServerConfigLoaderTests
             Network =
             {
                 Transport = " NetherNet ",
-                NetherNet = { JoinUrl = "https://example.test/join", MaxMessageSize = 4096, MaximumFragmentSize = 512 }
+                NetherNet = { JoinUrl = "https://example.test/join", MaxMessageSize = 4096 }
             }
         };
 

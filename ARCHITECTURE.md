@@ -139,14 +139,15 @@ src/
     Event/ Log/
     Packets/       # DataPacket + ProtocolInfo — serialize only (sem Server/World)
     Protocol/      # *Protocol, ProtocolGate, ColumnSend — transmit
-    Session/       # NetworkSession, handlers, ZenithSessionListener, PlayerVisibility
+    Session/       # NetworkSession, handlers, PlayerVisibility
+    Network/       # fronteira de transporte: IGameTransport*, GameSessionHost, adapters RakNet/NetherNet, GameTransportFactory (§143)
     data/          # palettes, creative reference, recipes.nbt, biome wire body, source manifest (EmbeddedResource)
   raknet/
-  nethernet/       # Zenith.NetherNet — WebRTC, full-ICE signaling, identity + framing; sem ref a zenith (§140)
+  nethernet/       # Zenith.NetherNet — WebRTC, full-ICE signaling, identity + framing; sem ref a zenith (§140, §143)
   nethernet.Tests/ # testes independentes do transporte
 ```
 
-Pastas = papéis (decide / transmit / serialize). Não recriar um catch-all `Network/`.
+Pastas = papéis (decide / transmit / serialize). `Network/` é só a fronteira de transporte (§143), não um catch-all.
 
 `Gameplay/` é organizado por domínio, não por mecanismo de execução: `IGameSystem` já é tratado como execution model (não como boundary — regra acima), então um antigo `Systems/` flat (agrupava tudo que "roda no tick", independente de domínio) foi abandonado. Um contribuidor deve prever a pasta pelo domínio/responsabilidade do código, não vasculhar um diretório único. Não recriar `Common/Utils/Helpers/Misc/Core/Managers/Shared/Infrastructure/Services/` dentro de `Gameplay/`.
 

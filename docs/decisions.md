@@ -434,7 +434,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Choice:** Soft-rescue self → `EntityProtocol.SendMovePlayerTeleport` (`MovePlayer` mode Teleport, cause Command). Graceful stop: `IChunkStorage.FlushAsync` (InMemory noop; LevelDB `WhenAll` pending Puts + `DrainOverlayWrites`) via `World.FlushPersistenceAsync`, then dispose storage, then RakNet. `Program` completes the same shutdown path from **CancelKeyPress**, **SIGINT**, and **SIGTERM** (Docker/Dokploy stop) — 5s flush timeout → Warning. Flush **never** on GameLoop tick (ADR §13).
 
-**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `ZenithSessionListener.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (no fixed sleep — drain outbound frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong trailing `0` matches common Bedrock list clients; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
+**Adendo (jul 2026 — shutdown DisconnectPacket):** Before LevelDB flush / UDP close, `GameSessionHost.DisconnectAll("Server closed")` sends Bedrock `DisconnectPacket` (Immediate) + `FlushOutgoing` then RakNet close (no fixed sleep — drain outbound frames synchronously). Abrupt socket death left clients on “host lost” / stuck LAN error UI. MOTD pong trailing `0` matches common Bedrock list clients; RakNet GUID persisted in `server.guid` so LAN identity is stable across restarts.
 
 **Why:** Own camera stayed in void after Absolute-only rescue; Ctrl+C could drop last bag/chest Puts; container SIGTERM previously skipped flush entirely. Operational trust before death/drop-entity surface.
 
@@ -3464,3 +3464,18 @@ When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
 
 
 **Nota (nov 2026, merge com §140/§141):** os números de catálogo acima (1.875 itens / 123 grupos; sentinela `minecraft:empty`) refletem o `creative_items.json` anterior. O refresh BDS 1.26.52.3 (§141) trouxe 1.980 entradas / 124 grupos e nenhum grupo com ícone sentinela; o teste do sentinela passou a usar JSON inline. Renumerado de §140 para §142 por colisão com NetherNet.
+
+## 143. Transport boundary: `Network/`, NetherNet rebuilt on the axolotl port (nov 2026)
+
+**Problem:** the session layer leaked RakNet (`RakNetSession.Priority`, `NetworkSession.RakSession`, a RakNet-typed constructor); `ZenithSessionListener` was a RakNet listener with NetherNet bolted on through parallel dictionaries; telemetry took `RakNetServer`; `ZenithServer` chose one transport with `if/else` at start, run and shutdown; the client identity type lived in the NetherNet library. NetherNet itself was a bespoke host that had only been exercised with the smoke bot.
+
+**Choice:**
+1. `src/nethernet/Axolotl/` is a 1:1 C# port of `axolotl-nethernet` (the reference used by the Essential server), then adapted: HTTP + LAN signaling, SDP negotiation, identity, WebRTC (`DataChannelDotnet`), single-UDP ICE mux, MTU, candidate advertising, connection budgets. Deviations are DataChannelDotnet limits (no RTT/byte counters/buffered amount; reliability inferred from channel label; SCTP heartbeat validated but not applied). The old `NetherNetHost`/frame codec/signaling server and their tests were deleted.
+2. `src/zenith/Network/` (narrowly reverses §48: a **transport boundary**, not the old junk drawer): `IGameTransport` (run/stop-accepting/shutdown/statistics), `IGameTransportConnection` (what a Bedrock session may ask of the wire), `IGameTransportHost` (what a transport may tell the server), `GameSessionHost` (the only code that knows both sides), `GameTransportFactory` (the only reader of transport config). `RakNetTransport` and `NetherNetTransport` are symmetric adapters. `network.transport: both` runs them together.
+3. Sessions take `GameTransportPriority`/`GameTransportCloseReason`/`TransportIdentity` (transport-neutral); telemetry takes `TransportStatistics`. The Login handler binds the Bedrock token to `TransportIdentity` for any transport that requires it.
+4. `NetherNetServer` is single-threaded; `NetherNetServerRunner` owns its thread and queues commands from other threads.
+5. Franchise verification is split into pure sync validation (`FranchiseTokenValidator.Validate`) plus a background-refreshed key cache (`FranchiseTokenVerifier : ITokenVerifier`), so it never does I/O on the negotiation path. The operator key file (`nethernet-operator-key.pk8`) is read unchanged, preserving TOFU trust.
+
+**Config (breaking, pre-release):** `network.transport` gains `both`; `maximum-fragment-size` removed; `max-message-size` capped at 262144; new `tls-certificate`, `tls-private-key`, `reverse-proxy-header/-networks`, `lan-discovery`, `ice-udp-mux`, `advertise-addresses`, `mtu`. ICE range defaults start at `server.port + 1` when RakNet also runs.
+
+**Open:** retail-client validation over the new library; protocol bump 2193 → 2225 for 26.60+ clients; `BinaryStream` still lives in the RakNet assembly and is used by `Packets/` (candidate for a neutral shared library).

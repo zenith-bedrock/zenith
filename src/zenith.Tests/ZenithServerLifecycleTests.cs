@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Zenith.Gameplay.Runtime;
+using Zenith.Network;
 using Zenith.Player;
 using Zenith.Server;
 using Xunit;
@@ -14,7 +15,7 @@ public sealed class ZenithServerLifecycleTests
     {
         var server = CreateServer(port: 0);
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        server.RakNetServer.OnListening = _ => listening.TrySetResult();
+        server.Transports.OfType<Zenith.Network.RakNet.RakNetTransport>().Single().Server.OnListening = _ => listening.TrySetResult();
 
         var run = server.RunAsync();
         Assert.Same(run, server.RunAsync());

@@ -1,5 +1,5 @@
 using Zenith.Diagnostics;
-using Zenith.Raknet;
+using Zenith.Network;
 using Zenith.World;
 
 namespace Zenith.Server;
@@ -183,7 +183,7 @@ sealed class ServerRuntimeDiagnostics
     }
 
     public void RecordRuntimeHealth(
-        TimeSpan elapsed, double tps, int players, int actors, int chunkOverlays, int systems, RakNetServer raknet)
+        TimeSpan elapsed, double tps, int players, int actors, int chunkOverlays, int systems, TransportStatistics transport)
     {
         if (elapsed.TotalMilliseconds > 50d) Runtime.Increment(_overBudgetTicks);
         Runtime.Set(_tps, (long)Math.Round(tps * 1_000d));
@@ -196,12 +196,12 @@ sealed class ServerRuntimeDiagnostics
         Runtime.Set(_gen0, GC.CollectionCount(0));
         Runtime.Set(_gen1, GC.CollectionCount(1));
         Runtime.Set(_gen2, GC.CollectionCount(2));
-        Runtime.Set(_datagramsSent, raknet.SentDatagrams);
-        Runtime.Set(_datagramsReceived, raknet.ReceivedDatagrams);
+        Runtime.Set(_datagramsSent, transport.SentDatagrams);
+        Runtime.Set(_datagramsReceived, transport.ReceivedDatagrams);
 
         var seconds = Math.Max(elapsed.TotalSeconds, double.Epsilon);
-        var sentBytes = raknet.SentBytes;
-        var receivedBytes = raknet.ReceivedBytes;
+        var sentBytes = transport.SentBytes;
+        var receivedBytes = transport.ReceivedBytes;
         Runtime.Set(_bandwidthOut, (long)((sentBytes - _lastSentBytes) / seconds));
         Runtime.Set(_bandwidthIn, (long)((receivedBytes - _lastReceivedBytes) / seconds));
         _lastSentBytes = sentBytes;

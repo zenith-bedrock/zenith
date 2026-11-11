@@ -87,14 +87,14 @@ public sealed class PlayerDamageGameModeTests
         Assert.True(withoutDirectionResult.Applied);
         Flush(fx);
 
-        Assert.True(SentSetActorMotion(fx, withDirection.Session.RakSession.EndPoint));
-        Assert.False(SentSetActorMotion(fx, withoutDirection.Session.RakSession.EndPoint));
+        Assert.True(SentSetActorMotion(fx, withDirection.Session.RakSession().EndPoint));
+        Assert.False(SentSetActorMotion(fx, withoutDirection.Session.RakSession().EndPoint));
     }
 
     private static void Flush(IntentTestFixture fx)
     {
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
     }
 
     private static bool SentSetActorMotion(IntentTestFixture fx, IPEndPoint recipient)

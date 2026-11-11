@@ -13,10 +13,11 @@
 | `Server/` | Boot, config, identity, context |
 | `Packets/` | Wire models — **serialize only** (no Server/World/Player) |
 | `Protocol/` | Transmit already-decided outcomes (`*Protocol`, ColumnSend, ProtocolGate) |
-| `Session/` | Inbound SM — handlers, NetworkSession, ZenithSessionListener, PlayerVisibility |
+| `Session/` | Inbound SM — handlers, NetworkSession, PlayerVisibility |
+| `Network/` | Transport boundary only — `IGameTransport*`, `GameSessionHost`, RakNet/NetherNet adapters, `GameTransportFactory` (§143) |
 | `Event/` `Log/` `data/` | Infra / embedded assets |
 
-**Do not recreate `Network/`** as a catch-all. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`, `src/nethernet`) stay separate and never reference `zenith`.
+`Network/` is the transport boundary, **not** a catch-all: sessions/handlers/gameplay never reference a concrete transport, only `IGameTransportConnection`. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`, `src/nethernet`) stay separate and never reference `zenith`.
 
 **Single-writer gameplay ownership:** authoritative `Player`/`World`/inventory/combat state is
 normally written only by its owning gameplay execution context (currently the GameLoop). Network

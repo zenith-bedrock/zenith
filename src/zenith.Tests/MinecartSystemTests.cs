@@ -162,12 +162,12 @@ public sealed class MinecartSystemTests
 
         player.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
         var afterMountBytes = BytesSentTo(fx, player); // baseline: just SetActorLink(Rider)
 
         player.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
-        player.Session.RakSession.Tick();
+        player.Session.RakSession().Tick();
         var dismountTickBytes = BytesSentTo(fx, player) - afterMountBytes;
 
         Assert.Null(player.RidingEntityId);
@@ -180,7 +180,7 @@ public sealed class MinecartSystemTests
     {
         var total = 0;
         foreach (var (endPoint, datagram) in fx.Transport.CapturedByEndpoint)
-            if (endPoint.Equals(player.Session.RakSession.EndPoint))
+            if (endPoint.Equals(player.Session.RakSession().EndPoint))
                 total += datagram.Length;
         return total;
     }
@@ -356,7 +356,7 @@ public sealed class MinecartSystemTests
         second.Chunks.RememberMany([(0, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);
@@ -381,7 +381,7 @@ public sealed class MinecartSystemTests
         late.Chunks.RememberMany([(0, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
 
         // The late joiner's viewer-reconciliation enter path sends the mount link alongside the
         // spawn/health packets — a strictly larger capture delta than a plain unoccupied spawn.

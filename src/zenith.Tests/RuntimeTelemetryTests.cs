@@ -1,3 +1,4 @@
+using Zenith.Network;
 using Zenith.Raknet;
 using Zenith.Raknet.Log;
 using Zenith.Server;
@@ -11,9 +12,8 @@ public sealed class RuntimeTelemetryTests
     public void RecordTick_tracksBudgetAndFlushDuration()
     {
         var telemetry = new RuntimeTelemetry(new NullLogger());
-        var raknet = new RakNetServer(port: 0);
-
-        telemetry.RecordTick(TimeSpan.FromMilliseconds(51), players: 2, actors: 3, raknet);
+        
+        telemetry.RecordTick(TimeSpan.FromMilliseconds(51), players: 2, actors: 3, default(TransportStatistics));
         telemetry.RecordFlush(TimeSpan.FromMilliseconds(17));
 
         var snapshot = telemetry.Snapshot;

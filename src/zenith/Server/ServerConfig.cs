@@ -160,7 +160,12 @@ sealed class ServerConfig
 
     public sealed class NetworkSection
     {
+        /// <summary><c>raknet</c>, <c>nethernet</c> or <c>both</c> (every listed transport accepts players at the same time).</summary>
         public string Transport { get; set; } = "raknet";
+        [YamlIgnore]
+        public bool UsesRakNet => Transport is "raknet" or "both";
+        [YamlIgnore]
+        public bool UsesNetherNet => Transport is "nethernet" or "both";
         public NetherNetSection NetherNet { get; set; } = new();
         public int CompressionThreshold { get; set; } = 256;
 
@@ -176,14 +181,40 @@ sealed class ServerConfig
 
     public sealed class NetherNetSection
     {
+        /// <summary>Public address players use to reach the signaling endpoint; its host also names the server identity.</summary>
         public string JoinUrl { get; set; } = "http://127.0.0.1:19132";
+
+        /// <summary>Where signaling listens (<c>http://+:port</c> binds every interface). Empty derives it from <c>server.port</c>.</summary>
         public string ListenUrl { get; set; } = "";
+
+        /// <summary>PEM certificate that turns the signaling endpoint into HTTPS; empty serves plain HTTP.</summary>
+        public string TlsCertificate { get; set; } = "";
+        public string TlsPrivateKey { get; set; } = "";
+
+        /// <summary>Header carrying the real client address behind a reverse proxy (e.g. <c>X-Forwarded-For</c>); empty trusts nothing.</summary>
+        public string ReverseProxyHeader { get; set; } = "";
+
+        /// <summary>Networks (IP or CIDR) of the proxies allowed to set <see cref="ReverseProxyHeader"/>.</summary>
+        public List<string> ReverseProxyNetworks { get; set; } = [];
+
+        /// <summary>Answers Bedrock LAN discovery (UDP 7551) so the server shows up in the Friends/LAN tab.</summary>
+        public bool LanDiscovery { get; set; }
+
         public string IceBindAddress { get; set; } = "";
         public List<string> IceServers { get; set; } = [];
+
+        /// <summary>Serve every WebRTC connection from one UDP port (the first of the ICE range) instead of one port per player.</summary>
+        public bool IceUdpMux { get; set; }
         public int IcePortRangeStart { get; set; }
         public int IcePortRangeEnd { get; set; }
-        public int MaxMessageSize { get; set; } = 1024 * 1024;
-        public int MaximumFragmentSize { get; set; } = 16 * 1024;
+
+        /// <summary>Public IPs offered to clients as ICE candidates (for servers behind NAT or in containers).</summary>
+        public List<string> AdvertiseAddresses { get; set; } = [];
+
+        public int Mtu { get; set; } = 1200;
+
+        /// <summary>Largest NetherNet message one SCTP datagram sequence may carry.</summary>
+        public int MaxMessageSize { get; set; } = 262144;
     }
 
     /// <summary>
@@ -203,6 +234,90 @@ sealed class ServerConfig
         /// accumulate files.
         /// </summary>
         public bool ToFile { get; set; } = false;
+    }
+
+    private void ValidateNetherNet()
+    {
+        var nn = Network.NetherNet;
+        if (!Uri.TryCreate(nn.JoinUrl, UriKind.Absolute, out var joinUri) ||
+            joinUri.Scheme is not ("http" or "https") ||
+            !string.IsNullOrEmpty(joinUri.Query) ||
+            !string.IsNullOrEmpty(joinUri.Fragment))
+            throw new InvalidOperationException("network.nether-net.join-url must be an absolute http or https URL without a query or fragment.");
+        if (string.IsNullOrWhiteSpace(nn.ListenUrl))
+            nn.ListenUrl = $"http://+:{Server.Port}";
+        nn.ListenUrl = nn.ListenUrl.Trim();
+        const string wildcardListenPrefix = "http://+:";
+        var isWildcardListen = nn.ListenUrl.StartsWith(wildcardListenPrefix, StringComparison.OrdinalIgnoreCase);
+        var parseableListenUrl = isWildcardListen
+            ? "http://127.0.0.1:" + nn.ListenUrl[wildcardListenPrefix.Length..]
+            : nn.ListenUrl;
+        if (!Uri.TryCreate(parseableListenUrl, UriKind.Absolute, out var listenUri) ||
+            listenUri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(listenUri.Query) ||
+            !string.IsNullOrEmpty(listenUri.Fragment) || !string.IsNullOrEmpty(listenUri.UserInfo))
+            throw new InvalidOperationException("network.nether-net.listen-url must be an absolute http(s) URL without a query or fragment.");
+
+        nn.TlsCertificate = (nn.TlsCertificate ?? string.Empty).Trim();
+        nn.TlsPrivateKey = (nn.TlsPrivateKey ?? string.Empty).Trim();
+        if (nn.TlsPrivateKey.Length > 0 && nn.TlsCertificate.Length == 0)
+            throw new InvalidOperationException("network.nether-net.tls-private-key requires tls-certificate.");
+
+        nn.ReverseProxyHeader = (nn.ReverseProxyHeader ?? string.Empty).Trim();
+        nn.ReverseProxyNetworks ??= [];
+        if (nn.ReverseProxyHeader.Length > 0 && nn.ReverseProxyNetworks.Count == 0)
+            throw new InvalidOperationException("network.nether-net.reverse-proxy-header requires reverse-proxy-networks.");
+        if (nn.ReverseProxyHeader.Length == 0 && nn.ReverseProxyNetworks.Count > 0)
+            throw new InvalidOperationException("network.nether-net.reverse-proxy-networks requires reverse-proxy-header.");
+
+        if (nn.MaxMessageSize is < 2 or > 262144)
+            throw new InvalidOperationException($"network.nether-net.max-message-size must be 2..262144 (got {nn.MaxMessageSize}).");
+        if (nn.Mtu is < 620 or > 4144)
+            throw new InvalidOperationException($"network.nether-net.mtu must be 620..4144 (got {nn.Mtu}).");
+
+        if (nn.IceServers is null)
+            throw new InvalidOperationException("network.nether-net.ice-servers must not be null.");
+        nn.IceServers = nn.IceServers.Select(server => server?.Trim() ?? string.Empty).ToList();
+        foreach (var server in nn.IceServers)
+        {
+            Zenith.NetherNet.Axolotl.Transport.WebRtc.IceServer parsed;
+            try
+            {
+                parsed = Zenith.NetherNet.Axolotl.Transport.WebRtc.IceServer.Parse(server);
+            }
+            catch (ArgumentException e)
+            {
+                throw new InvalidOperationException($"network.nether-net.ice-servers: {e.Message}");
+            }
+            if (nn.IceUdpMux && parsed.IsTurn)
+                throw new InvalidOperationException("network.nether-net.ice-udp-mux cannot be combined with TURN servers.");
+        }
+        nn.AdvertiseAddresses = (nn.AdvertiseAddresses ?? []).Select(address => address?.Trim() ?? string.Empty).ToList();
+        foreach (var address in nn.AdvertiseAddresses)
+            if (!System.Net.IPAddress.TryParse(address, out _))
+                throw new InvalidOperationException($"network.nether-net.advertise-addresses: '{address}' is not an IP address.");
+
+        if ((nn.IcePortRangeStart == 0) != (nn.IcePortRangeEnd == 0))
+            throw new InvalidOperationException("network.nether-net.ice-port-range-start and ice-port-range-end must both be 0 or both be configured.");
+        if (nn.IcePortRangeStart == 0)
+        {
+            // Default: one UDP port per player. When RakNet shares the host it already owns server.port, so start after it.
+            if (Server.Port == 0)
+                throw new InvalidOperationException("server.port must be non-zero when deriving the NetherNet ICE UDP port range.");
+            var start = Network.UsesRakNet ? Server.Port + 1 : Server.Port;
+            var end = (long)start + Server.MaxPlayers - 1;
+            if (end > 65535)
+                throw new InvalidOperationException(
+                    "The default NetherNet ICE port range exceeds 65535. Configure network.nether-net.ice-port-range-start and ice-port-range-end explicitly.");
+            nn.IcePortRangeStart = start;
+            nn.IcePortRangeEnd = (int)end;
+        }
+        if (nn.IcePortRangeStart is < 1 or > 65535 || nn.IcePortRangeEnd is < 1 or > 65535 ||
+            nn.IcePortRangeEnd < nn.IcePortRangeStart)
+            throw new InvalidOperationException("network.nether-net.ice-port-range must be 1..65535 with end >= start, or both 0 for automatic configuration.");
+        if (!nn.IceUdpMux && nn.IcePortRangeEnd - nn.IcePortRangeStart + 1 < Server.MaxPlayers)
+            throw new InvalidOperationException("The NetherNet ICE UDP port range must contain at least server.max-players ports (or enable ice-udp-mux).");
+        if (Network.UsesRakNet && Server.Port >= nn.IcePortRangeStart && Server.Port <= nn.IcePortRangeEnd)
+            throw new InvalidOperationException("The NetherNet ICE UDP port range must not include server.port when RakNet is enabled.");
     }
 
     /// <summary>
@@ -294,56 +409,10 @@ sealed class ServerConfig
         if (Network is null || Network.NetherNet is null)
             throw new InvalidOperationException("network and network.nether-net must not be null.");
         Network.Transport = (Network.Transport ?? string.Empty).Trim().ToLowerInvariant();
-        if (Network.Transport is not ("raknet" or "nethernet"))
-            throw new InvalidOperationException($"network.transport must be raknet or nethernet (got '{Network.Transport}').");
-        if (!Uri.TryCreate(Network.NetherNet.JoinUrl, UriKind.Absolute, out var joinUri) ||
-            joinUri.Scheme is not ("http" or "https") ||
-            !string.IsNullOrEmpty(joinUri.Query) ||
-            !string.IsNullOrEmpty(joinUri.Fragment))
-            throw new InvalidOperationException("network.nether-net.join-url must be an absolute http or https URL without a query or fragment.");
-        if (string.IsNullOrWhiteSpace(Network.NetherNet.ListenUrl))
-            Network.NetherNet.ListenUrl = $"http://+:{Server.Port}";
-        Network.NetherNet.ListenUrl = Network.NetherNet.ListenUrl.Trim();
-        const string wildcardListenPrefix = "http://+:";
-        var isWildcardListen = Network.NetherNet.ListenUrl.StartsWith(wildcardListenPrefix, StringComparison.OrdinalIgnoreCase);
-        var parseableListenUrl = isWildcardListen
-            ? "http://127.0.0.1:" + Network.NetherNet.ListenUrl[wildcardListenPrefix.Length..]
-            : Network.NetherNet.ListenUrl;
-        if (!Uri.TryCreate(parseableListenUrl, UriKind.Absolute, out var listenUri) ||
-            listenUri.Scheme != "http" || !string.IsNullOrEmpty(listenUri.Query) ||
-            !string.IsNullOrEmpty(listenUri.Fragment) || !string.IsNullOrEmpty(listenUri.UserInfo))
-            throw new InvalidOperationException("network.nether-net.listen-url must be an absolute http URL without a query or fragment.");
-        if (Network.NetherNet.MaxMessageSize < 1)
-            throw new InvalidOperationException($"network.nether-net.max-message-size must be > 0 (got {Network.NetherNet.MaxMessageSize}).");
-        if (Network.NetherNet.MaximumFragmentSize is < 1 or > 65535)
-            throw new InvalidOperationException($"network.nether-net.maximum-fragment-size must be 1..65535 (got {Network.NetherNet.MaximumFragmentSize}).");
-        if (Network.NetherNet.MaximumFragmentSize > Network.NetherNet.MaxMessageSize)
-            throw new InvalidOperationException("network.nether-net.maximum-fragment-size must not exceed max-message-size.");
-        if (Network.NetherNet.IceServers is null)
-            throw new InvalidOperationException("network.nether-net.ice-servers must not be null.");
-        if (Network.NetherNet.IceServers.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("network.nether-net.ice-servers must not contain empty entries.");
-        Network.NetherNet.IceServers = Network.NetherNet.IceServers.Select(server => server.Trim()).ToList();
-        if ((Network.NetherNet.IcePortRangeStart == 0) != (Network.NetherNet.IcePortRangeEnd == 0))
-            throw new InvalidOperationException("network.nether-net.ice-port-range-start and ice-port-range-end must both be 0 or both be configured.");
-        if (Network.NetherNet.IcePortRangeStart == 0 && Network.Transport == "nethernet")
-        {
-            if (Server.Port == 0)
-                throw new InvalidOperationException("server.port must be non-zero when deriving the NetherNet ICE UDP port range.");
-            var end = (long)Server.Port + Server.MaxPlayers - 1;
-            if (end > 65535)
-                throw new InvalidOperationException(
-                    "The default NetherNet ICE port range exceeds 65535. Configure network.nether-net.ice-port-range-start and ice-port-range-end explicitly.");
-            Network.NetherNet.IcePortRangeStart = Server.Port;
-            Network.NetherNet.IcePortRangeEnd = (int)end;
-        }
-        if (Network.NetherNet.IcePortRangeStart is < 0 or > 65535 ||
-            Network.NetherNet.IcePortRangeEnd is < 0 or > 65535 ||
-            (Network.NetherNet.IcePortRangeStart != 0 && Network.NetherNet.IcePortRangeEnd < Network.NetherNet.IcePortRangeStart))
-            throw new InvalidOperationException("network.nether-net.ice-port-range must be 1..65535 with end >= start, or both 0 for automatic configuration.");
-        if (Network.Transport == "nethernet" &&
-            Network.NetherNet.IcePortRangeEnd - Network.NetherNet.IcePortRangeStart + 1 < Server.MaxPlayers)
-            throw new InvalidOperationException("The NetherNet ICE UDP port range must contain at least server.max-players ports.");
+        if (Network.Transport is not ("raknet" or "nethernet" or "both"))
+            throw new InvalidOperationException($"network.transport must be raknet, nethernet or both (got '{Network.Transport}').");
+        if (Network.UsesNetherNet)
+            ValidateNetherNet();
 
         if (Network.CompressionThreshold < 0)
             throw new InvalidOperationException($"network.compression-threshold must be >= 0 (got {Network.CompressionThreshold}).");

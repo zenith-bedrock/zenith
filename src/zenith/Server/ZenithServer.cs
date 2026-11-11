@@ -14,7 +14,7 @@ using Zenith.Session;
 using Zenith.Player;
 using Zenith.Raknet;
 using Zenith.Raknet.Log;
-using Zenith.NetherNet;
+using Zenith.Network;
 using Zenith.World;
 
 namespace Zenith.Server;
@@ -29,7 +29,8 @@ class ZenithServer
     private readonly object _lifecycleGate = new();
     private readonly IChunkStorage _chunkStorage;
     private readonly ILogger _logger;
-    private readonly ZenithSessionListener _sessionListener;
+    private readonly GameSessionHost _sessionHost;
+    private readonly IReadOnlyList<IGameTransport> _transports;
     private readonly GravitySystem _gravity;
     private readonly RuntimeTelemetry _telemetry;
     private readonly AsyncLogSink _logSink;
@@ -38,12 +39,10 @@ class ZenithServer
     private Task? _runTask;
     private Task? _shutdownTask;
     private Task? _gameLoopTask;
-    private Task? _raknetTask;
-    private Task? _nethernetTask;
     private LifecycleState _lifecycleState;
 
-    public RakNetServer RakNetServer { get; }
-    private readonly NetherNetHost? _netherNetHost;
+    /// <summary>The transports clients can connect through (see <c>network.transport</c>).</summary>
+    internal IReadOnlyList<IGameTransport> Transports => _transports;
     public ServerContext Context { get; }
     public GameLoop GameLoop { get; }
     public ServerConfig Config { get; }
@@ -171,61 +170,14 @@ class ZenithServer
                 world.ChunkResidency.Release(cx, cz);
         });
 
-        _sessionListener = new ZenithSessionListener(Context);
-        var serverGuid = LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger);
-        RakNetServer = new RakNetServer(config.Server.Port, serverGuid, config.Network.SocketBufferBytes)
-        {
-            Logger = raknetLogger,
-            SessionListener = _sessionListener,
-            MaxConnections = (uint)config.Server.MaxPlayers,
-            MaxConnectionsPerAddress = (uint)config.Server.MaxPlayersPerIp,
-            Motd = config.Server.Motd,
-            SubMotd = config.Server.SubMotd,
-            ListGameMode = config.Server.Gamemode,
-            ProtocolVersion = ServerIdentity.ProtocolVersion,
-            VersionName = ServerIdentity.VersionName,
-            OnlinePlayerCount = () => Context.PlayerManager.Count,
-            OnListening = _ => serverLogger.Info("Server ready.")
-        };
-        if (string.Equals(config.Network.Transport, "nethernet", StringComparison.Ordinal))
-        {
-            var joinUri = new Uri(config.Network.NetherNet.JoinUrl, UriKind.Absolute);
-            var netherNetIdentity = NetherNetServerIdentity.LoadOrCreate(
-                Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "nethernet-operator-key.pk8"), joinUri.Host);
-            _netherNetHost = new NetherNetHost(
-                config.Network.NetherNet.ListenUrl,
-                joinUri,
-                () => new NetherNetServerInfo(
-                    config.Server.Motd,
-                    ServerIdentity.ProtocolVersion,
-                    ServerIdentity.VersionName,
-                    config.World.Name,
-                    Context.PlayerManager.Count,
-                    config.Server.MaxPlayers,
-                    string.Equals(config.Server.Gamemode, "Creative", StringComparison.Ordinal) ? 1 : 0),
-                netherNetIdentity,
-                config.Auth.AllowsXbox
-                    ? (token, cancellationToken) => FranchiseTokenValidator.ValidateAsync(
-                        token, cancellationToken,
-                        reason => serverLogger.Warning($"NetherNet GameServerToken rejected: {reason}"))
-                    : null,
-                allowAnonymous: config.Auth.AllowsOfflineFallback || config.Auth.AllowsSelfSigned,
-                allowUnverifiedToken: config.Auth.AllowsOfflineFallback || config.Auth.AllowsSelfSigned,
-                config.Network.NetherNet.MaxMessageSize,
-                config.Network.NetherNet.MaximumFragmentSize,
-                config.Server.MaxPlayers,
-                iceBindAddress: string.IsNullOrWhiteSpace(config.Network.NetherNet.IceBindAddress)
-                    ? null
-                    : config.Network.NetherNet.IceBindAddress,
-                icePortRangeBegin: (ushort)config.Network.NetherNet.IcePortRangeStart,
-                icePortRangeEnd: (ushort)config.Network.NetherNet.IcePortRangeEnd,
-                iceServers: config.Network.NetherNet.IceServers,
-                onSignalingError: exception => serverLogger.Error($"NetherNet signaling failed: {exception}"));
-            _netherNetHost.ConnectionOpened += _sessionListener.OnNetherNetConnectionOpened;
-            serverLogger.Info(
-                $"NetherNet signaling: {config.Network.NetherNet.JoinUrl} (listen {config.Network.NetherNet.ListenUrl}); " +
-                $"ICE UDP ports {config.Network.NetherNet.IcePortRangeStart}-{config.Network.NetherNet.IcePortRangeEnd}");
-        }
+        _sessionHost = new GameSessionHost(Context);
+        _transports = GameTransportFactory.Create(config, new GameTransportEnvironment(
+            _sessionHost,
+            serverLogger,
+            raknetLogger,
+            () => Context.PlayerManager.Count,
+            ServerConfigPaths.ResolvePersistentRoot(),
+            LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger)));
         _telemetry = new RuntimeTelemetry(serverLogger);
         var diagnosticsFileTicks = 0L;
         const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
@@ -235,13 +187,16 @@ class ZenithServer
                          bats.Active.Count + villagers.Active.Count +
                          world.FallingBlocks.Active.Count + world.FloorDrops.Count;
             diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
-                diagnostics.Systems.Count, RakNetServer);
-            _telemetry.RecordTick(elapsed, players.Count, actors, RakNetServer);
+                diagnostics.Systems.Count, TransportStatistics());
+            _telemetry.RecordTick(elapsed, players.Count, actors, TransportStatistics());
 
             if (_diagnosticsFileWriter is not null && ++diagnosticsFileTicks % diagnosticsFileEveryTicks == 0)
                 _diagnosticsFileWriter.WriteLine(diagnostics.Runtime.CaptureSnapshot().ToJson(indented: false));
         });
     }
+
+    private TransportStatistics TransportStatistics() =>
+        _transports.Aggregate(default(TransportStatistics), (total, transport) => total + transport.Statistics);
 
     /// <summary>
     /// Phase XIII.2: the systems that need only <see cref="PlayerManager"/> — registered before
@@ -525,12 +480,8 @@ class ZenithServer
     private async Task RunCoreAsync()
     {
         var gameLoopTask = _gameLoopTask = GameLoop.RunAsync(_lifetime.Token);
-        Task transportTask;
-        if (_netherNetHost is not null)
-            transportTask = _nethernetTask = _netherNetHost.StartAsync(_lifetime.Token);
-        else
-            transportTask = _raknetTask = RakNetServer.StartAsync();
-        var completed = await Task.WhenAny(gameLoopTask, transportTask).ConfigureAwait(false);
+        var transportTasks = _transports.Select(transport => transport.RunAsync(_lifetime.Token)).ToArray();
+        var completed = await Task.WhenAny(transportTasks.Append(gameLoopTask)).ConfigureAwait(false);
         try
         {
             await completed.ConfigureAwait(false);
@@ -562,18 +513,16 @@ class ZenithServer
         try
         {
             _lifetime.Cancel();
-            _sessionListener.StopAccepting();
-            _netherNetHost?.StopAccepting();
+            _sessionHost.StopAccepting();
+            foreach (var transport in _transports)
+                transport.StopAccepting();
 
             // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose queues each
             // session's inventory/player-data persist for the GameLoop to drain.
             _logger.Info("Disconnecting sessions...");
-            _sessionListener.DisconnectAll("Server closed");
+            _sessionHost.DisconnectAll("Server closed");
 
-            if (_netherNetHost is not null)
-                await _netherNetHost.DisposeAsync().ConfigureAwait(false);
-            else
-                await RakNetServer.ShutdownAsync().ConfigureAwait(false);
+            await Task.WhenAll(_transports.Select(transport => transport.ShutdownAsync())).ConfigureAwait(false);
 
             Task? gameLoop;
             lock (_lifecycleGate)
