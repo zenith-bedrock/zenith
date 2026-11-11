@@ -448,6 +448,12 @@ partial class InGameSessionHandler
                 break;
 
             case InventoryTransactionPacket.TypeItemUse:
+                if (packet.Hand != InventoryTransactionPacket.HandMainhand)
+                {
+                    session.Context.Logger.Debug($"Rejected UseItem from unsupported hand {packet.Hand} for {player.Username}.");
+                    break;
+                }
+
                 HandleUseItem(
                     session,
                     player,

@@ -14,6 +14,7 @@ using Zenith.Session;
 using Zenith.Player;
 using Zenith.Raknet;
 using Zenith.Raknet.Log;
+using Zenith.NetherNet;
 using Zenith.World;
 
 namespace Zenith.Server;
@@ -38,9 +39,11 @@ class ZenithServer
     private Task? _shutdownTask;
     private Task? _gameLoopTask;
     private Task? _raknetTask;
+    private Task? _nethernetTask;
     private LifecycleState _lifecycleState;
 
     public RakNetServer RakNetServer { get; }
+    private readonly NetherNetHost? _netherNetHost;
     public ServerContext Context { get; }
     public GameLoop GameLoop { get; }
     public ServerConfig Config { get; }
@@ -50,6 +53,7 @@ class ZenithServer
 
     public ZenithServer(ServerConfig config, string configPath)
     {
+        config.ValidateForRuntime();
         Config = config;
         ConfigPath = configPath;
 
@@ -183,6 +187,45 @@ class ZenithServer
             OnlinePlayerCount = () => Context.PlayerManager.Count,
             OnListening = _ => serverLogger.Info("Server ready.")
         };
+        if (string.Equals(config.Network.Transport, "nethernet", StringComparison.Ordinal))
+        {
+            var joinUri = new Uri(config.Network.NetherNet.JoinUrl, UriKind.Absolute);
+            var netherNetIdentity = NetherNetServerIdentity.LoadOrCreate(
+                Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "nethernet-operator-key.pk8"), joinUri.Host);
+            _netherNetHost = new NetherNetHost(
+                config.Network.NetherNet.ListenUrl,
+                joinUri,
+                () => new NetherNetServerInfo(
+                    config.Server.Motd,
+                    ServerIdentity.ProtocolVersion,
+                    ServerIdentity.VersionName,
+                    config.World.Name,
+                    Context.PlayerManager.Count,
+                    config.Server.MaxPlayers,
+                    string.Equals(config.Server.Gamemode, "Creative", StringComparison.Ordinal) ? 1 : 0),
+                netherNetIdentity,
+                config.Auth.AllowsXbox
+                    ? (token, cancellationToken) => FranchiseTokenValidator.ValidateAsync(
+                        token, cancellationToken,
+                        reason => serverLogger.Warning($"NetherNet GameServerToken rejected: {reason}"))
+                    : null,
+                allowAnonymous: config.Auth.AllowsOfflineFallback || config.Auth.AllowsSelfSigned,
+                allowUnverifiedToken: config.Auth.AllowsOfflineFallback || config.Auth.AllowsSelfSigned,
+                config.Network.NetherNet.MaxMessageSize,
+                config.Network.NetherNet.MaximumFragmentSize,
+                config.Server.MaxPlayers,
+                iceBindAddress: string.IsNullOrWhiteSpace(config.Network.NetherNet.IceBindAddress)
+                    ? null
+                    : config.Network.NetherNet.IceBindAddress,
+                icePortRangeBegin: (ushort)config.Network.NetherNet.IcePortRangeStart,
+                icePortRangeEnd: (ushort)config.Network.NetherNet.IcePortRangeEnd,
+                iceServers: config.Network.NetherNet.IceServers,
+                onSignalingError: exception => serverLogger.Error($"NetherNet signaling failed: {exception}"));
+            _netherNetHost.ConnectionOpened += _sessionListener.OnNetherNetConnectionOpened;
+            serverLogger.Info(
+                $"NetherNet signaling: {config.Network.NetherNet.JoinUrl} (listen {config.Network.NetherNet.ListenUrl}); " +
+                $"ICE UDP ports {config.Network.NetherNet.IcePortRangeStart}-{config.Network.NetherNet.IcePortRangeEnd}");
+        }
         _telemetry = new RuntimeTelemetry(serverLogger);
         var diagnosticsFileTicks = 0L;
         const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
@@ -482,8 +525,12 @@ class ZenithServer
     private async Task RunCoreAsync()
     {
         var gameLoopTask = _gameLoopTask = GameLoop.RunAsync(_lifetime.Token);
-        var raknetTask = _raknetTask = RakNetServer.StartAsync();
-        var completed = await Task.WhenAny(gameLoopTask, raknetTask).ConfigureAwait(false);
+        Task transportTask;
+        if (_netherNetHost is not null)
+            transportTask = _nethernetTask = _netherNetHost.StartAsync(_lifetime.Token);
+        else
+            transportTask = _raknetTask = RakNetServer.StartAsync();
+        var completed = await Task.WhenAny(gameLoopTask, transportTask).ConfigureAwait(false);
         try
         {
             await completed.ConfigureAwait(false);
@@ -516,13 +563,17 @@ class ZenithServer
         {
             _lifetime.Cancel();
             _sessionListener.StopAccepting();
+            _netherNetHost?.StopAccepting();
 
             // Kick with Bedrock DisconnectPacket before UDP dies (§41) — HandleClose queues each
             // session's inventory/player-data persist for the GameLoop to drain.
             _logger.Info("Disconnecting sessions...");
             _sessionListener.DisconnectAll("Server closed");
 
-            await RakNetServer.ShutdownAsync().ConfigureAwait(false);
+            if (_netherNetHost is not null)
+                await _netherNetHost.DisposeAsync().ConfigureAwait(false);
+            else
+                await RakNetServer.ShutdownAsync().ConfigureAwait(false);
 
             Task? gameLoop;
             lock (_lifecycleGate)

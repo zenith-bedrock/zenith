@@ -46,16 +46,20 @@ readonly struct StackRequestSlotInfo
 
 readonly struct DecodedStackRequestAction
 {
+    public const int MaxActions = 64;
+    public const int MaxCustomNames = 64;
+    public const int MaxCraftResultDescriptors = 64;
+
     public byte ActionType { get; init; }
     public byte Count { get; init; }
+    public byte ResultSlot { get; init; }
+    public int HotbarSlot { get; init; }
+    public int StackNetworkId { get; init; }
     public StackRequestSlotInfo Source { get; init; }
     public StackRequestSlotInfo Destination { get; init; }
     public uint RecipeNetId { get; init; }
     public uint CreativeNetId { get; init; }
     public byte CraftTimes { get; init; }
-    public byte ResultSlot { get; init; }
-    public int HotbarSlot { get; init; }
-    public int StackNetworkId { get; init; }
     public bool Supported { get; init; }
 }
 
@@ -67,24 +71,19 @@ readonly struct DecodedItemStackRequest
 }
 
 /// <summary>
-/// ItemStackRequest (0x93) — decode take/place/swap/container + CraftRecipe/CraftCreative;
+/// ItemStackRequest (0x93) — decode take/place/swap/container + destroy + CraftRecipe/CraftCreative;
 /// Consume/Create are supported no-ops so craft UI requests are not rejected wholesale.
 /// CraftResultsDeprecated skipado como supported (no-op); restantes unsupported.
 ///
-/// Action type numbers and per-action field widths follow protocol 2168. Each Cereal action has
-/// its uvarint union variant followed by the legacy <c>uint8 Action type</c>; the two container
-/// action IDs are omitted from the union, so variants at and after 7 map to legacy IDs +2. The
-/// typed client request id remains a zigzag varint despite its underlying <c>int32_t</c> storage
-/// type.
+/// Action type numbers and per-action field widths verified against minecraft-data 1.26.40's
+/// live protocol.json (ADR §90) — <c>PlaceInContainer</c>/<c>TakeOutContainer</c> never existed
+/// in the real enum (a prior invention shifted every action from LabTableCombine onward by two),
+/// and every action carries a <c>legacy_type_id</c> byte right after <c>type_id</c> that Zenith
+/// never read.
 /// </summary>
 sealed class ItemStackRequestPacket : DataPacket
 {
-    // Matches PocketMine's protective request cap. A vanilla craft request can legitimately
-    // touch many slots, but never needs an unbounded client-controlled allocation.
-    public const int MaxRequestsPerPacket = 60;
-    public const int MaxActionsPerRequest = 60;
-    public const int MaxFilterStringsPerRequest = 64;
-    public const int MaxDeprecatedResults = 64;
+    public const int MaxRequestsPerPacket = 64;
 
     public const byte ActionTake = 0;
     public const byte ActionPlace = 1;
@@ -93,19 +92,17 @@ sealed class ItemStackRequestPacket : DataPacket
     public const byte ActionDestroy = 4;
     public const byte ActionConsume = 5;
     public const byte ActionCreate = 6;
-    public const byte ActionPlaceInContainer = 7;
-    public const byte ActionTakeOutContainer = 8;
-    public const byte ActionLabTableCombine = 9;
-    public const byte ActionBeaconPayment = 10;
-    public const byte ActionMineBlock = 11;
-    public const byte ActionCraftRecipe = 12;
-    public const byte ActionCraftRecipeAuto = 13;
-    public const byte ActionCraftCreative = 14;
-    public const byte ActionCraftRecipeOptional = 15;
-    public const byte ActionCraftGrindstone = 16;
-    public const byte ActionCraftLoom = 17;
-    public const byte ActionCraftNonImplemented = 18;
-    public const byte ActionCraftResultsDeprecated = 19;
+    public const byte ActionLabTableCombine = 7;
+    public const byte ActionBeaconPayment = 8;
+    public const byte ActionMineBlock = 9;
+    public const byte ActionCraftRecipe = 10;
+    public const byte ActionCraftRecipeAuto = 11;
+    public const byte ActionCraftCreative = 12;
+    public const byte ActionCraftRecipeOptional = 13;
+    public const byte ActionCraftGrindstone = 14;
+    public const byte ActionCraftLoom = 15;
+    public const byte ActionCraftNonImplemented = 16;
+    public const byte ActionCraftResultsDeprecated = 17;
 
     public override int Id => (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET;
 
@@ -118,6 +115,7 @@ sealed class ItemStackRequestPacket : DataPacket
         var count = stream.ReadUnsignedVarInt();
         if (count > MaxRequestsPerPacket)
             throw new InvalidDataException($"ItemStackRequest has {count} requests (max {MaxRequestsPerPacket}).");
+
         var list = new DecodedItemStackRequest[count];
         for (var i = 0; i < count; i++)
             list[i] = ReadEntry(ref stream);
@@ -131,8 +129,9 @@ sealed class ItemStackRequestPacket : DataPacket
     {
         var requestId = stream.ReadVarInt();
         var actionCount = stream.ReadUnsignedVarInt();
-        if (actionCount > MaxActionsPerRequest)
-            throw new InvalidDataException($"ItemStackRequest {requestId} has {actionCount} actions (max {MaxActionsPerRequest}).");
+        if (actionCount > DecodedStackRequestAction.MaxActions)
+            throw new InvalidDataException($"ItemStackRequest has {actionCount} actions (max {DecodedStackRequestAction.MaxActions}).");
+
         var actions = new DecodedStackRequestAction[actionCount];
         var allSupported = true;
         for (var i = 0; i < actionCount; i++)
@@ -144,8 +143,9 @@ sealed class ItemStackRequestPacket : DataPacket
 
         // custom_names — filter strings the client wants applied (anvil/sign/book text etc.).
         var filterCount = stream.ReadUnsignedVarInt();
-        if (filterCount > MaxFilterStringsPerRequest)
-            throw new InvalidDataException($"ItemStackRequest {requestId} has {filterCount} filter strings (max {MaxFilterStringsPerRequest}).");
+        if (filterCount > DecodedStackRequestAction.MaxCustomNames)
+            throw new InvalidDataException($"ItemStackRequest has {filterCount} custom names (max {DecodedStackRequestAction.MaxCustomNames}).");
+
         for (var i = 0; i < filterCount; i++)
             stream.ReadVarString();
         stream.ReadInt(BinaryStream.Endianess.Little); // cause (mapper li32)
@@ -160,10 +160,8 @@ sealed class ItemStackRequestPacket : DataPacket
 
     private static DecodedStackRequestAction ReadAction(ref BinaryStream stream)
     {
-        var variant = stream.ReadUnsignedVarInt();
-        var type = stream.ReadByte();
-        if (type != LegacyActionId(variant))
-            throw new InvalidDataException($"ItemStackRequest action variant {variant} disagrees with legacy ID {type}.");
+        var type = (byte)stream.ReadUnsignedVarInt();
+        _ = stream.ReadByte(); // legacy_type_id — always present, unused
 
         switch (type)
         {
@@ -233,21 +231,14 @@ sealed class ItemStackRequestPacket : DataPacket
                 };
             }
             case ActionCreate:
-                // Zenith presently has one authoritative pending result (CreatedOutput slot 0).
-                // Retain the wire index so Session can reject a multi-result request instead of
-                // acknowledging a result that the domain cannot represent.
-                var resultSlot = stream.ReadByte();
+                // Output materialize is domain TryCraft — Create is wire ack only (no pendingResults).
+                var resultSlot = stream.ReadByte(); // result_slot_id
                 return new DecodedStackRequestAction
                 {
                     ActionType = type,
                     ResultSlot = resultSlot,
                     Supported = true
                 };
-            case ActionPlaceInContainer:
-            case ActionTakeOutContainer:
-                // These legacy action IDs are omitted from the Cereal variant list and are not
-                // emitted by the vanilla 2168 client. If received, reject the whole request.
-                return Unsupported(type);
             case ActionLabTableCombine:
                 return Unsupported(type); // void — no fields
             case ActionBeaconPayment:
@@ -256,8 +247,8 @@ sealed class ItemStackRequestPacket : DataPacket
                 return Unsupported(type);
             case ActionMineBlock:
                 var hotbarSlot = stream.ReadVarInt();
-                _ = stream.ReadVarInt(); // predicted durability: no authoritative durability state yet
-                var stackNetworkId = stream.ReadInt(BinaryStream.Endianess.Little);
+                stream.ReadVarInt(); // predicted_durability
+                var stackNetworkId = stream.ReadInt(BinaryStream.Endianess.Little); // network_id (li32)
                 return new DecodedStackRequestAction
                 {
                     ActionType = type,
@@ -316,8 +307,9 @@ sealed class ItemStackRequestPacket : DataPacket
             case ActionCraftResultsDeprecated:
             {
                 var n = stream.ReadUnsignedVarInt();
-                if (n > MaxDeprecatedResults)
-                    throw new InvalidDataException($"ItemStackRequest has {n} deprecated craft results (max {MaxDeprecatedResults}).");
+                if (n > DecodedStackRequestAction.MaxCraftResultDescriptors)
+                    throw new InvalidDataException($"ItemStackRequest has {n} craft result descriptors (max {DecodedStackRequestAction.MaxCraftResultDescriptors}).");
+
                 for (var i = 0; i < n; i++)
                     SkipInstanceDescriptor(ref stream);
                 stream.ReadByte(); // times_crafted
@@ -330,13 +322,6 @@ sealed class ItemStackRequestPacket : DataPacket
             default:
                 return Unsupported(type);
         }
-    }
-
-    private static byte LegacyActionId(int variant)
-    {
-        if (variant > ActionCraftResultsDeprecated - 2)
-            throw new InvalidDataException($"Unknown ItemStackRequest action variant {variant}.");
-        return checked((byte)(variant < ActionPlaceInContainer ? variant : variant + 2));
     }
 
     private static DecodedStackRequestAction Unsupported(byte type) => new()

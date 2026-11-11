@@ -211,7 +211,7 @@ partial class InGameSessionHandler : ISessionHandler
     {
         var packet = DataPacket.From<DisconnectPacket>(ref stream);
         session.Context.Logger.Info(
-            $"DisconnectPacket from {session.Player?.Username ?? session.RakSession.EndPoint.ToString()}: " +
+            $"DisconnectPacket from {session.Player?.Username ?? session.EndPoint}: " +
             $"reason={packet.Reason}, message={packet.Message}");
         session.Disconnect();
     }

@@ -180,7 +180,7 @@ public class ToolWireTests
         Assert.True(catalog.TryGet(CreativeCatalog.DiamondPickaxe, out var id, out var count));
         Assert.Equal(StackId.FromItem(Tools.Require("minecraft:diamond_pickaxe")), id);
         Assert.Equal(1, count);
-        // ADR §140: real vanilla catalog, filtered by the same Blocks+DigProfiles/Tools safety gate
+        // ADR §142: real vanilla catalog, filtered by the same Blocks+DigProfiles/Tools safety gate
         // this catalog always used — 33 blocks (the 13 pinned starter blocks + every other block
         // with a real name and a curated DigProfiles row: ores, cobblestone, deepslate, oak_leaves,
         // short_grass/dandelion/poppy) + 12 curated tools.

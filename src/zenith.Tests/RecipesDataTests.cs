@@ -11,7 +11,7 @@ namespace Zenith.Tests;
 /// BDS install's `recipes.brarchive` by `tools/gamedata-import` (see that tool's own tests for the
 /// import/conversion logic) — is actually present in the shipped assembly and decodes correctly.
 /// Not yet consumed by any gameplay system (RecipeRegistry stays hand-curated/shapeless — see
-/// ADR §140's non-goals); this is a pipeline integrity check, not a gameplay test.
+/// ADR §142's non-goals); this is a pipeline integrity check, not a gameplay test.
 /// </summary>
 public class RecipesDataTests
 {

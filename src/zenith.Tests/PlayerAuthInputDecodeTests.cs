@@ -5,8 +5,8 @@ using Xunit;
 namespace Zenith.Tests;
 
 /// <summary>
-/// Wire shapes here are byte-verified against a live capture of a real client
-/// (bedrock-protocol) cross-checked with minecraft-data's 1.26.40 protocol.json — see ADR §89.
+/// Wire shapes characterize protocol 2193 and the Cereal presence-byte removal documented by
+/// Mojang's 1.26.51 schema changelog.
 /// </summary>
 public class PlayerAuthInputDecodeTests
 {
@@ -22,11 +22,10 @@ public class PlayerAuthInputDecodeTests
         w.WriteFloat(0, BinaryStream.Endianess.Little); // head_yaw
     }
 
-    private static void WriteEmptyInputData(ref BinaryStream w) => w.WriteBool(false);
+    private static void WriteEmptyInputData(ref BinaryStream w) => w.WriteUnsignedVarInt(0);
 
     private static void WriteInputDataFlags(ref BinaryStream w, params int[] flags)
     {
-        w.WriteBool(true);
         w.WriteUnsignedVarInt(flags.Length);
         foreach (var f in flags)
             w.WriteVarInt(f);
@@ -47,17 +46,13 @@ public class PlayerAuthInputDecodeTests
 
     private static void WriteNoTransactionNoItemStackRequest(ref BinaryStream w)
     {
-        w.WriteBool(false); // transaction_presence (decorative)
         w.WriteBool(false); // transaction option
-        w.WriteBool(false); // item_stack_request_presence (decorative)
         w.WriteBool(false); // item_stack_request option
     }
 
     private static void WriteNoVehicleTail(ref BinaryStream w)
     {
-        w.WriteBool(false); // vehicle_rotation_presence (decorative)
         w.WriteBool(false); // vehicle_rotation option
-        w.WriteBool(false); // predicted_vehicle_presence (decorative)
         w.WriteBool(false); // predicted_vehicle option
         for (var i = 0; i < 7; i++)
             w.WriteFloat(0, BinaryStream.Endianess.Little); // analogue/camera/raw
@@ -65,9 +60,7 @@ public class PlayerAuthInputDecodeTests
 
     private static void WriteStackActionHeader(ref BinaryStream w, byte legacyActionId)
     {
-        w.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
-            ? legacyActionId
-            : legacyActionId - 2);
+        w.WriteUnsignedVarInt(legacyActionId);
         w.WriteByte(legacyActionId);
     }
 
@@ -87,7 +80,6 @@ public class PlayerAuthInputDecodeTests
         WriteEmptyInputData(ref w);
         WriteModesAndTick(ref w);
         WriteNoTransactionNoItemStackRequest(ref w);
-        w.WriteBool(false); // block_action_presence (decorative)
         w.WriteBool(false); // block_action option
         WriteNoVehicleTail(ref w);
 
@@ -115,7 +107,6 @@ public class PlayerAuthInputDecodeTests
         WriteModesAndTick(ref w);
         WriteNoTransactionNoItemStackRequest(ref w);
         w.WriteBool(false);
-        w.WriteBool(false);
         WriteNoVehicleTail(ref w);
 
         var stream = new BinaryStream(w.GetBufferDisposing().ToArray());
@@ -139,7 +130,6 @@ public class PlayerAuthInputDecodeTests
         WriteNoTransactionNoItemStackRequest(ref w);
 
         // block_action option: present, 1 entry (predict_destroy at 10,-60,20 face 1)
-        w.WriteBool(false); // block_action_presence (decorative)
         w.WriteBool(true); // block_action option
         w.WriteUnsignedVarInt(1);
         w.WriteVarInt(PlayerAuthInputPacket.ActionPredictDestroy);
@@ -165,16 +155,13 @@ public class PlayerAuthInputDecodeTests
     }
 
     private static void WriteUseItemTransaction(
-        ref BinaryStream w, int actionType, int x, int y, int z, int face, int hotbar)
+        ref BinaryStream w, int actionType, int x, int y, int z, int face, int hotbar,
+        byte hand = InventoryTransactionPacket.HandMainhand)
     {
-        w.WriteBool(false); // transaction_presence (decorative)
         w.WriteBool(true); // transaction option
 
         w.WriteVarInt(0); // legacy_request_id
-        w.WriteBool(false); // legacy_transactions option
-
-        w.WriteBool(false); // actions_presence (decorative)
-        w.WriteBool(false); // actions option
+        w.WriteUnsignedVarInt(0); // no legacy actions
 
         w.WriteVarInt(actionType);
         w.WriteByte(0); // trigger_type
@@ -183,6 +170,7 @@ public class PlayerAuthInputDecodeTests
         w.WriteVarInt(z);
         w.WriteByte((byte)face);
         w.WriteVarInt(hotbar);
+        w.WriteByte(hand);
 
         // held_item: ItemV4, air (network_id=0)
         w.WriteShort(0, BinaryStream.Endianess.Little);
@@ -198,7 +186,6 @@ public class PlayerAuthInputDecodeTests
         w.WriteByte(0); // client_prediction
         w.WriteByte(0); // client_cooldown_state
 
-        w.WriteBool(false); // item_stack_request_presence (decorative)
         w.WriteBool(false); // item_stack_request option
     }
 
@@ -211,7 +198,6 @@ public class PlayerAuthInputDecodeTests
         WriteModesAndTick(ref w);
         WriteUseItemTransaction(ref w, InventoryTransactionPacket.UseDestroyBlock, 3, 4, 5, 1, 0);
 
-        w.WriteBool(false); // block_action_presence (decorative)
         w.WriteBool(true); // block_action option
         w.WriteUnsignedVarInt(1);
         w.WriteVarInt(PlayerAuthInputPacket.ActionPredictDestroy);
@@ -238,6 +224,7 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(4, packet.ItemInteraction.Value.BlockY);
         Assert.Equal(5, packet.ItemInteraction.Value.BlockZ);
         Assert.Equal(0, packet.ItemInteraction.Value.HotbarSlot);
+        Assert.Equal(InventoryTransactionPacket.HandMainhand, packet.ItemInteraction.Value.Hand);
         Assert.True(packet.ItemInteraction.Value.HeldItem.IsEmpty);
         Assert.True(stream.IsEndOfFile);
     }
@@ -249,9 +236,8 @@ public class PlayerAuthInputDecodeTests
         WritePoseAndModes(ref w, pitch: 1f);
         WriteEmptyInputData(ref w);
         WriteModesAndTick(ref w);
-        WriteUseItemTransaction(ref w, InventoryTransactionPacket.UseClickBlock, 8, -60, 12, 1, 0);
+        WriteUseItemTransaction(ref w, InventoryTransactionPacket.UseClickBlock, 8, -60, 12, 1, 0, hand: 1);
 
-        w.WriteBool(false); // block_action_presence (decorative)
         w.WriteBool(false); // block_action option
 
         WriteNoVehicleTail(ref w);
@@ -266,6 +252,7 @@ public class PlayerAuthInputDecodeTests
         Assert.Equal(-60, packet.ItemInteraction.Value.BlockY);
         Assert.Equal(12, packet.ItemInteraction.Value.BlockZ);
         Assert.Equal(0, packet.ItemInteraction.Value.ClickedBlockRuntimeId);
+        Assert.Equal((byte)1, packet.ItemInteraction.Value.Hand);
         Assert.Empty(packet.BlockActions);
         Assert.True(stream.IsEndOfFile);
     }
@@ -277,9 +264,7 @@ public class PlayerAuthInputDecodeTests
         WritePoseAndModes(ref w);
         WriteEmptyInputData(ref w);
         WriteModesAndTick(ref w);
-        w.WriteBool(false); // transaction_presence (decorative)
         w.WriteBool(false); // transaction option
-        w.WriteBool(false); // item_stack_request_presence (decorative)
         w.WriteBool(true); // item_stack_request option
         w.WriteVarInt(44); // request id, embedded has no request count
         w.WriteUnsignedVarInt(2); // actions
@@ -292,7 +277,6 @@ public class PlayerAuthInputDecodeTests
         WriteSlotInfo(ref w, 28, 0); // hotbar
         w.WriteUnsignedVarInt(0); // filter strings
         w.WriteInt(0, BinaryStream.Endianess.Little); // filter cause
-        w.WriteBool(false); // block_action_presence (decorative)
         w.WriteBool(false); // block_action option
         WriteNoVehicleTail(ref w);
 

@@ -4,7 +4,7 @@ using Zenith.Gameplay.Inventory;
 
 namespace Zenith.Protocol;
 
-/// <summary>Builds CreativeContentPacket from <see cref="CreativeCatalog"/> SSOT (ADR §38 / §54 / §140).</summary>
+/// <summary>Builds CreativeContentPacket from <see cref="CreativeCatalog"/> SSOT (ADR §38 / §54 / §142).</summary>
 static class CreativeContentBuilder
 {
     /// <summary>Wire DTOs from <see cref="CreativeCatalog"/> SSOT (ADR §38).</summary>
@@ -55,7 +55,7 @@ static class CreativeContentBuilder
     /// any name the block palette / item palette already knows works, with no <see cref="DigProfiles"/>
     /// or <see cref="Tools"/> gate. An empty <see cref="StackId"/> (real vanilla groups use a
     /// "minecraft:empty" sentinel — client falls back to the group's first item) maps to
-    /// <see cref="NetworkItemStack.Empty"/>, matching what this builder already sent before ADR §140.
+    /// <see cref="NetworkItemStack.Empty"/>, matching what this builder already sent before ADR §142.
     /// </summary>
     private static NetworkItemStack ResolveIcon(StackId icon, ItemPalette palette)
     {

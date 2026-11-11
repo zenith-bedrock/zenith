@@ -10,8 +10,8 @@ readonly struct StackResponseSlotInfo
     public int StackNetworkId { get; init; }
 
     /// <summary>
-    /// Cereal writes a required <c>true</c> marker followed by the optional stack-net-id's
-    /// presence bit and, when present, its zigzag32 payload.
+    /// Protocol 2193 keeps the optional presence byte and removes the redundant Cereal accessor
+    /// marker. A nonzero amount carries the stack net ID.
     /// </summary>
     public void Write(ref BinaryStream writer)
     {
@@ -19,7 +19,6 @@ readonly struct StackResponseSlotInfo
         writer.WriteByte(HotbarSlot);
         writer.WriteByte(Count);
         var hasStackId = StackNetworkId != 0;
-        writer.WriteBool(true); // required marker in ItemStackResponseSlotInfo
         writer.WriteBool(hasStackId); // item_stack_id option
         if (hasStackId)
             writer.WriteVarInt(StackNetworkId);
@@ -53,15 +52,14 @@ readonly struct ItemStackResponseEntry
     public StackResponseContainerInfo[] ContainerInfo { get; init; }
 
     /// <summary>
-    /// Cereal writes a required <c>true</c> marker then the optional container-array presence bit.
+    /// The response always writes the Containers optional's presence byte. Protocol 2193 removed
+    /// the redundant Cereal accessor marker; the value follows only for a successful response.
     /// </summary>
     public void Write(ref BinaryStream writer)
     {
         writer.WriteByte(Status);
-        // TypedClientNetId<ItemStackRequestIdTag> serializes as zigzag varint at protocol 2168.
         writer.WriteVarInt(RequestId);
         var hasContainers = Status == StatusOk && ContainerInfo.Length > 0;
-        writer.WriteBool(true); // required marker in ItemStackResponseInfo
         writer.WriteBool(hasContainers); // containers option
         if (hasContainers)
         {

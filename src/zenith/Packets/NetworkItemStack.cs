@@ -55,16 +55,8 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     }
 
     /// <summary>
-    /// NetworkItemInstanceDescriptor (VarInt network id + block runtime + a conditional extra
-    /// blob). Used by CreativeContent (group icons, item entries) and CraftingData outputs.
-    ///
-    /// The extra blob is NOT unconditional — verified against gophertunnel's <c>Writer.Item</c>/
-    /// <c>itemUserData</c> (protocol 2168 tag, `D:\Development\bedrock\gophertunnel`): when
-    /// <c>NetworkId == 0</c> (air — e.g. `CreativeContentBuilder`'s Construction group icon,
-    /// sent on every join), only a bare zero-length varint is written, NOT the 10-byte
-    /// NBT-length + can_place/can_break blob below. Writing the full 10 bytes unconditionally
-    /// (the previous shape here) corrupted every byte after it in the packet for that real,
-    /// production call site — found by reading the reference implementation, not by symptom.
+    /// ItemStack without stack net id (VarInt network id + block runtime + empty extra blob).
+    /// Use from: CreativeContent, CraftingData outputs.
     /// </summary>
     public void WriteItemStack(ref BinaryStream writer)
     {
@@ -73,9 +65,11 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         writer.WriteUnsignedVarInt(Meta);
         writer.WriteVarInt(BlockRuntimeId);
 
+        // Protocol 2193 writes the complete descriptor even for air. Only its user-data
+        // buffer is empty; omitting the preceding fields consumes the next entry instead.
         if (NetworkId == 0)
         {
-            writer.WriteUnsignedVarInt(0); // air: bare empty-user-data marker, no NBT/list blob at all
+            writer.WriteUnsignedVarInt(0);
             return;
         }
 

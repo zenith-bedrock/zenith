@@ -7,7 +7,7 @@
   "exported_at": "2026-07-21T00:00:00+00:00",
   "name": "Zenith Bedrock",
   "author": "diegosantosaraujo@outlook.com",
-  "description": "Zenith — layered C# Bedrock server (protocol 1001). Same product image as Compose. Config: zenith.yml under /home/container (ZENITH_DATA).",
+  "description": "Zenith — layered C# Bedrock server (protocol 2193 / Bedrock 1.26.52). Same product image as Compose. Config: zenith.yml under /home/container (ZENITH_DATA).",
   "features": [],
   "docker_images": {
     "Zenith": "ghcr.io/zenith-bedrock/zenith:latest"

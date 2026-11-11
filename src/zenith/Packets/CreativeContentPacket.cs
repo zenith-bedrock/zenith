@@ -8,7 +8,7 @@ namespace Zenith.Packets;
 /// </summary>
 sealed class CreativeContentPacket : DataPacket
 {
-    /// <summary>Creative inventory category: Construction (wire enum value 1).</summary>
+    /// <summary>Creative inventory category: Construction (wire enum value 1 for the retail 1.26.52 client).</summary>
     public const int CategoryConstruction = 1;
 
     public override int Id => (int)ProtocolInfo.CREATIVE_CONTENT_PACKET;

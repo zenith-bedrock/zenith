@@ -4,14 +4,14 @@ using Zenith.World;
 namespace Zenith.Gameplay.Inventory;
 
 /// <summary>
-/// Creative palette SSOT (ADR §38/§140). Net ids reminted via CreativeContentPacket.
+/// Creative palette SSOT (ADR §38/§142). Net ids reminted via CreativeContentPacket.
 /// Blocks use block runtime ids; curated tools use item network ids (ADR §27).
 ///
-/// Backing data is the real vanilla catalog (<see cref="CreativeItemsLoader"/>, ADR §140) — every
+/// Backing data is the real vanilla catalog (<see cref="CreativeItemsLoader"/>, ADR §142) — every
 /// entry it offers is filtered through the same safety gate this catalog always used: a block is
 /// exposed only if it has a <see cref="Blocks"/> name AND a <see cref="DigProfiles"/> entry; an item
 /// is exposed only if it's one of <see cref="Tools"/>'s curated tools. This is unchanged from the
-/// pre-§140 hand-typed registration — the win is real names/icons/vanilla groups instead of one fake
+/// pre-§142 hand-typed registration — the win is real names/icons/vanilla groups instead of one fake
 /// placeholder group, and every future <c>DigProfiles</c>/<c>Tools</c> addition is picked up here
 /// automatically, no more hand-typed <c>RegisterBlock</c> call per item.
 ///
@@ -122,7 +122,7 @@ sealed class CreativeCatalog
     };
 
     /// <summary>
-    /// Safety gate (ADR §38, unchanged by §140): a block is exposed only once it has a real name
+    /// Safety gate (ADR §38, unchanged by §142): a block is exposed only once it has a real name
     /// AND a curated <see cref="DigProfiles"/> row; a pure item is exposed only if it's one of
     /// <see cref="Tools"/>'s curated tools. Keeps the ~1,800-item real catalog from exposing a
     /// multi-state block (stairs/slabs/doors) with no defined physics.

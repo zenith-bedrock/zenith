@@ -6,6 +6,22 @@ namespace Zenith.Tests;
 public class ItemPaletteTests
 {
     [Fact]
+    public void Stable_2193_registry_preserves_updated_ids_and_component_definitions()
+    {
+        var palette = ItemPaletteLoader.FromEmbeddedResource();
+        Assert.Equal(2076, palette.Count);
+        Assert.Equal(-1220, palette.Require("minecraft:red_concrete_slab"));
+        Assert.Equal(668, palette.Require("minecraft:bamboo_raft"));
+        Assert.Equal(862, palette.Require("minecraft:blue_bundle"));
+        Assert.Equal(78, palette.Entries.Count(entry => entry.Components is not null));
+        var spear = Assert.Single(palette.Entries, entry => entry.Name == "minecraft:stone_spear");
+        Assert.NotNull(spear.Components);
+        Assert.True(spear.Components.TryGet("components", out var components));
+        Assert.True(components.TryGetCompound(out var definitions));
+        Assert.True(definitions.Count > 0);
+    }
+
+    [Fact]
     public void Embedded_palette_resolves_air_stone_grass_network_ids()
     {
         var palette = ItemPaletteLoader.FromEmbeddedResource();

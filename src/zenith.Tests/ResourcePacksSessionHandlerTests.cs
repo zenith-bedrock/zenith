@@ -48,8 +48,9 @@ public class ResourcePacksSessionHandlerTests
     }
 
     /// <summary>
-    /// STATUS_COMPLETED triggers the whole pre-spawn seed sequence: StartGame, ItemRegistry,
-    /// CreativeContent, CraftingData, AvailableCommands, BiomeDefinitionList, LocalActorData,
+    /// STATUS_COMPLETED triggers the whole pre-spawn seed sequence: JigsawStructureData,
+    /// StartGame, ItemRegistry, CreativeContent, CraftingData,
+    /// AvailableCommands, BiomeDefinitionList, LocalActorData,
     /// PlayerAttributes, LocalAbilities, AdventureSettings — all or nothing, since a thrown exception
     /// partway through (e.g. an unresolved dependency) would leave the client stuck exactly like the
     /// original ADR §83 bug did. Not asserting an exact datagram count — RakNet's own frame/MTU

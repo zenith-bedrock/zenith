@@ -13,6 +13,26 @@ namespace Zenith.Tests;
 public class NetworkItemStackDescriptorTests
 {
     [Fact]
+    public void CreativeContent_anonymous_group_keeps_the_following_item_aligned()
+    {
+        var packet = new CreativeContentPacket
+        {
+            Groups = [new CreativeGroupEntry(1, "", NetworkItemStack.Empty)],
+            Items = [new CreativeItemEntry(7, new NetworkItemStack(5, 1, 7), 0)]
+        };
+
+        // Protocol 2193: header; group count/category/name; complete air icon;
+        // item count/net id; item descriptor with ten-byte user data; group index.
+        Assert.Equal(new byte[]
+        {
+            0x91, 0x01, 1, 1, 0,
+            0, 0, 0, 0, 0, 0,
+            1, 7, 10, 1, 0, 0, 14, 10,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        }, packet.Encode().ToArray());
+    }
+
+    [Fact]
     public void WriteNetworkItemStackDescriptor_with_stack_net_id_has_no_extra_tag_byte()
     {
         var stack = new NetworkItemStack(NetworkId: 5, Count: 4, BlockRuntimeId: 0, Meta: 0, StackNetworkId: 3);

@@ -30,8 +30,8 @@ sealed class WorldProtocol
         int spawnBlockZ = 0,
         bool useBlockNetworkIdHashes = true,
         int gameMode = AbilityBits.WireGameModeSurvival,
-        short biomeType = 0,
-        string biomeName = "plains")
+        short biomeType = StartGamePacket.SpawnBiomeTypeDefault,
+        string biomeName = "")
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -64,6 +64,12 @@ sealed class WorldProtocol
     public void SendBiomeDefinitionList()
     {
         _session.SendDataPacket(new BiomeDefinitionListPacket());
+    }
+
+    /// <summary>Vanilla jigsaw rules required by protocol 2193 clients before StartGame.</summary>
+    public void SendJigsawStructureData()
+    {
+        _session.SendDataPacket(new JigsawStructureDataPacket());
     }
 
     /// <summary>

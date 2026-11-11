@@ -90,9 +90,7 @@ public class InventoryPacketEncodeTests
 {
     private static void WriteStackActionHeader(ref BinaryStream writer, byte legacyActionId)
     {
-        writer.WriteUnsignedVarInt(legacyActionId < ItemStackRequestPacket.ActionPlaceInContainer
-            ? legacyActionId
-            : legacyActionId - 2);
+        writer.WriteUnsignedVarInt(legacyActionId);
         writer.WriteByte(legacyActionId);
     }
 
@@ -313,7 +311,7 @@ public class InventoryPacketEncodeTests
     }
 
     [Fact]
-    public void ItemStackResponse_writes_Cereal_required_and_optional_markers()
+    public void ItemStackResponse_writes_protocol_2193_option_markers()
     {
         var bytes = ItemStackResponsePacket.Ok(42, [
             new StackResponseContainerInfo
@@ -328,7 +326,6 @@ public class InventoryPacketEncodeTests
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
         Assert.Equal(ItemStackResponseEntry.StatusOk, stream.ReadByte());
         Assert.Equal(42, stream.ReadVarInt());
-        Assert.True(stream.ReadBool()); // Cereal required marker
         Assert.True(stream.ReadBool()); // containers present
         Assert.Equal(1, (int)stream.ReadUnsignedVarInt());
         Assert.Equal(InventoryContainerMap.CombinedHotbarAndInventory, stream.ReadByte());
@@ -337,7 +334,6 @@ public class InventoryPacketEncodeTests
         Assert.Equal(3, stream.ReadByte());
         Assert.Equal(3, stream.ReadByte());
         Assert.Equal(5, stream.ReadByte());
-        Assert.True(stream.ReadBool()); // Cereal required marker
         Assert.True(stream.ReadBool()); // stack id present
         Assert.Equal(9, stream.ReadVarInt());
     }

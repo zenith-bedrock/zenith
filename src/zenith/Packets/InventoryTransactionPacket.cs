@@ -44,6 +44,8 @@ class InventoryTransactionPacket : DataPacket
     public const int ActorInteract = 0;
     public const int ActorAttack = 1;
 
+    public const byte HandMainhand = 0;
+
     public const int ReleaseActionRelease = 0;
 
     public const uint TypeNormal = 0;
@@ -64,6 +66,7 @@ class InventoryTransactionPacket : DataPacket
     public int BlockZ { get; set; }
     public byte BlockFace { get; set; }
     public int HotbarSlot { get; set; }
+    public byte Hand { get; set; }
     /// <summary>
     /// Client's runtime-id precondition for the block it clicked. Zero means the client did
     /// not supply a target-state precondition; a nonzero value must agree with the authoritative
@@ -92,25 +95,11 @@ class InventoryTransactionPacket : DataPacket
     public override void Decode(ref BinaryStream stream)
     {
         LegacyRequestId = stream.ReadVarInt();
-        HasLegacySetItemSlots = stream.ReadBool();
+        HasLegacySetItemSlots = LegacyRequestId != 0;
         if (HasLegacySetItemSlots)
-        {
-            var slotCount = stream.ReadUnsignedVarInt();
-            if (slotCount > MaxLegacySetItemContainers)
-                throw new InvalidDataException($"InventoryTransaction has {slotCount} legacy containers (max {MaxLegacySetItemContainers}).");
-            for (var i = 0; i < slotCount; i++)
-            {
-                stream.ReadByte();
-                var inner = stream.ReadUnsignedVarInt();
-                if (inner > MaxLegacySetItemSlotsPerContainer)
-                    throw new InvalidDataException($"InventoryTransaction legacy container has {inner} slots (max {MaxLegacySetItemSlotsPerContainer}).");
-                for (var j = 0; j < inner; j++) stream.ReadByte();
-            }
-        }
+            SkipLegacySetItemSlots(ref stream);
 
-        stream.ReadBool(); // has transaction type marker
         TransactionType = (uint)stream.ReadUnsignedVarInt();
-        stream.ReadBool(); // has actions marker
         var actionCount = stream.ReadUnsignedVarInt();
         if (actionCount > MaxActions)
             throw new InvalidDataException($"InventoryTransaction has {actionCount} actions (max {MaxActions}).");
@@ -135,12 +124,25 @@ class InventoryTransactionPacket : DataPacket
         }
     }
 
+    internal static void SkipLegacySetItemSlots(ref BinaryStream stream)
+    {
+        var slotCount = stream.ReadUnsignedVarInt();
+        if (slotCount > MaxLegacySetItemContainers)
+            throw new InvalidDataException($"InventoryTransaction has {slotCount} legacy containers (max {MaxLegacySetItemContainers}).");
+        for (var i = 0; i < slotCount; i++)
+        {
+            stream.ReadByte();
+            var inner = stream.ReadUnsignedVarInt();
+            if (inner > MaxLegacySetItemSlotsPerContainer)
+                throw new InvalidDataException($"InventoryTransaction legacy container has {inner} slots (max {MaxLegacySetItemSlotsPerContainer}).");
+            for (var j = 0; j < inner; j++) stream.ReadByte();
+        }
+    }
+
     private static DecodedInventoryTransactionAction ReadInventoryAction(ref BinaryStream stream)
     {
         var sourceType = (uint)stream.ReadUnsignedVarInt();
-        _ = stream.ReadBool(); // required marker around the window optional
         byte? window = stream.ReadBool() ? stream.ReadByte() : null;
-        _ = stream.ReadBool(); // required marker around the source-flags optional
         uint? flags = stream.ReadBool() ? (uint)stream.ReadUnsignedVarInt() : null;
         var slot = stream.ReadUnsignedVarInt();
         var oldItem = ReadNetworkItem(ref stream);
@@ -165,6 +167,7 @@ class InventoryTransactionPacket : DataPacket
         BlockZ = stream.ReadVarInt();
         BlockFace = stream.ReadByte();
         HotbarSlot = stream.ReadVarInt();
+        Hand = stream.ReadByte();
         HeldItem = ReadNetworkItem(ref stream);
         HeldBlockRuntimeId = HeldItem.BlockRuntimeId;
 

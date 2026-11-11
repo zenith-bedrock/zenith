@@ -26,7 +26,7 @@ sealed class InventoryProtocol
         for (var i = 0; i < palette.Count; i++)
         {
             var e = palette[i];
-            wire[i] = new ItemRegistryWireEntry(e.Name, e.NetworkId, e.Version, e.ComponentBased);
+            wire[i] = new ItemRegistryWireEntry(e.Name, e.NetworkId, e.Version, e.ComponentBased, e.Components);
         }
 
         _session.SendDataPacket(new ItemRegistryPacket { Entries = wire });

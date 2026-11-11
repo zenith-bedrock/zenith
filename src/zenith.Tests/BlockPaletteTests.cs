@@ -12,6 +12,16 @@ public class BlockPaletteTests
     private const int ExpectedGrass = unchecked((int)0xDE3128B4); // -567203660
 
     [Fact]
+    public void Stable_2193_palette_resolves_updated_pane_stair_and_new_slab_states()
+    {
+        var palette = BlockPaletteLoader.FromEmbeddedResource();
+        Assert.Equal(22091, palette.ReverseCount);
+        Assert.Equal(764450303, palette.Require("minecraft:blue_stained_glass_pane"));
+        Assert.Equal(-1029516991, palette.Require("minecraft:stone_stairs"));
+        Assert.Equal(1948266517, palette.Require("minecraft:red_concrete_slab"));
+    }
+
+    [Fact]
     public void Block_palette_file_resolves_air_stone_grass_network_ids()
     {
         var path = Path.Combine(FindRepoRoot(), "src", "zenith", "data", "block_palette.nbt");

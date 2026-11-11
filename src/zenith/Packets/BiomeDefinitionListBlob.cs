@@ -4,7 +4,7 @@ namespace Zenith.Packets;
 
 /// <summary>
 /// Embedded vanilla <c>BiomeDefinitionList</c> wire body (defs + string_list, no packet id).
-/// Source: minecraft-data bedrock biomes encoded to protocol 1.26.x shape (ADR §70).
+/// Source: exact BDS 1.26.52.3 / protocol 2193 packet body; provenance in data/manifest.json.
 /// </summary>
 static class BiomeDefinitionListBlob
 {

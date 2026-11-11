@@ -12,13 +12,15 @@ static class ServerIdentity
 
     /// <summary>
     /// Bedrock protocol number (client <c>RequestNetworkSettings</c> / MOTD).
-    /// The compatibility target is protocol 2168 / 1.26.40: the current live client and the
-    /// verified Endstone r26_u4 snapshot both require this exact network version. The existing
-    /// 2168+ Cereal packet paths remain in place; this is a wire-identity downgrade, not a blind
-    /// source revert. See <c>docs/protocol-import.md</c> for the reconciled-snapshot workflow.
+    /// Targets stable Bedrock 1.26.52 (protocol 2193; same protocol schema as 1.26.51).
+    /// The 2193 schema adds <c>Hand</c> to ItemUseInventoryTransaction and removes redundant
+    /// Cereal accessor-presence bytes from InventoryTransaction, PlayerAuthInput, and
+    /// ItemStackResponse. Zenith's implemented packet support is tracked in
+    /// <c>docs/protocol-churn.md</c>; this version gate alone does not imply every Bedrock packet
+    /// is implemented or verified against a live client.
     /// </summary>
-    public const int ProtocolVersion = 2168;
+    public const int ProtocolVersion = 2193;
 
     /// <summary>String de versão de jogo no wire (StartGame / ResourcePackStack). SSOT.</summary>
-    public const string VersionName = "1.26.40";
+    public const string VersionName = "1.26.52";
 }

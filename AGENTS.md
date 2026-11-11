@@ -16,7 +16,7 @@
 | `Session/` | Inbound SM — handlers, NetworkSession, ZenithSessionListener, PlayerVisibility |
 | `Event/` `Log/` `data/` | Infra / embedded assets |
 
-**Do not recreate `Network/`** as a catch-all. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`) stay separate and never reference `zenith`.
+**Do not recreate `Network/`** as a catch-all. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`, `src/nethernet`) stay separate and never reference `zenith`.
 
 **Single-writer gameplay ownership:** authoritative `Player`/`World`/inventory/combat state is
 normally written only by its owning gameplay execution context (currently the GameLoop). Network
@@ -39,7 +39,7 @@ them; for resource movement, test conservation across all participating stores.
 - **Technical references:** [`docs/technical-reference.md`](docs/technical-reference.md) — protocol SSOT, ADR § index, external study repos (PM/DF/Endstone/Mojang), what is owned vs borrowed
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — H1 closed; pick from **Yes-next** (no PM parity chase)
 - Refs habit: [`docs/dx.md`](docs/dx.md) — Dragonfly essentials + PocketMine issues as footgun catalog (not plugin/command framework copy)
-- DX: [`docs/dx.md`](docs/dx.md) — includes how to use Mojang `bedrock-protocol-docs` (`r/26_u4`) vs Zenith protocol **2169** (ADR §79 — ~23 packets still pre-Cereal, tracked debt)
+- DX: [`docs/dx.md`](docs/dx.md) — includes how to use Mojang `bedrock-protocol-docs` (`r/26_u4`) as a historical **2169** reference vs Zenith's current stable target **2193 / Bedrock 1.26.52**; ADR §79's original migration ledger is historical and later closures are recorded under §82–§93
 - Naming: [`docs/naming.md`](docs/naming.md) — verb prefixes (`Handle`/`Apply`/`Try`/`Send`/`Relay`…); **no `Maybe*`**
 - Platform health (not H1 product): [`docs/robustness-dx-debt.md`](docs/robustness-dx-debt.md) + ADR §54 — includes **critical delivery risks** (dirty&gt;remote, store SoftCap, leaf CI vs Bedrock E2E)
 - Protocol smoke bot (ADR §58): [`zenith-bedrock/zenith-smoke-bot`](https://github.com/zenith-bedrock/zenith-smoke-bot) — Bun + bedrock-protocol; **not** inside this C# repo

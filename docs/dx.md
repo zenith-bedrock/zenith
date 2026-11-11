@@ -78,7 +78,7 @@ Platform-health debt (Online-once, dig/UI on tick, send GC, …) lives in [`robu
 17. Reconnect playerdata (ADR §60): world LevelDB `pd:{uuid}` pose + GameMode; reserve Mojang `player_*` keys; no `players/` volume.
 18. Dual storage (ADR §61): ZLDB default; Mojang worlds via `IChunkStorage` backend + offline converter — never mix schemas or silently reinterpret paths.
 19. World domain (ADR §62/§71): `World` façade owns default **Overworld `Dimension`** (`ITerrainProvider` + wire id); `WorldStorageKeys` for KV prefixes — BDS/gen plug in without rewriting overlays. Nether/End Dimensions deferred.
-20. Terrain gen (ADR §63–§67/§71/§72): `world.terrain: flat | noise` applies to overworld Dimension. Noise = **FastNoiseLite** (vendored Auburn MIT) OpenSimplex2 FBm height + **continuous** climate bias (no per-block hash), worm caves, ore, trees, ruins. Join/respawn = `SampleSpawnFeetY`; StartGame biome from `SampleSpawnBiome`. Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy. Continuity: adjacent surface |ΔY| ≤ `MaxAdjacentSurfaceStep` (6).
+20. Terrain gen (ADR §63–§67/§71/§72): `world.terrain: flat | noise` applies to overworld Dimension. Noise = **FastNoiseLite** (vendored Auburn MIT) OpenSimplex2 FBm height + **continuous** climate bias (no per-block hash), worm caves, ore, trees, ruins. Join/respawn = `SampleSpawnFeetY`; vanilla biome IDs travel in chunk palettes and StartGame uses `SpawnBiomeType::Default` (custom biome names only for actual custom definitions). Existing `c:` blobs override config. Column `maxWorldY` includes cross-chunk tree canopy. Continuity: adjacent surface |ΔY| ≤ `MaxAdjacentSurfaceStep` (6).
 21. Join terrain contract (ADR §70): pose heal → registries → **embedded** BiomeDefinitionList → PreSpawn ready-disk (`world.spawn-ready-radius`, default 2) → inventory/teleport → `PLAYER_SPAWN` → ChunkStream while `IsSpawning` fills the view ring. Ready-disk gen budget ≈ Measured `Noise_GetRadiusAsync` radius **2** (not full `spawn-chunk-radius`).
 22. **Sparse world IO (ADR §45):** base terrain stays RAM on miss (no identical `c:` Put); disk writes are overlays / dirty blobs / inventory / playerdata. Prefer “IO only when state diverges from gen,” not “materialize every column.”
 23. **CreativeContent wire (ADR §31/§52):** one send at join (all modes); remint on every `/gamemode` change (PM-shaped). Survival join + later Creative switch ⇒ two lifetime sends is normal.
@@ -143,9 +143,9 @@ Wave-2 extremes: `bun run smoke:wave2` (peer-ground → … → gravity → reco
 
 ### Bedrock references (local clones)
 
-Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs` (`r/26_u4`), `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`), `gophertunnel`, `bedrock-v/protocol`, and **`endstone-bedrock-protocol`** (`EndstoneMC/bedrock-protocol` — ADR §82). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
+Sibling tree (not in Zenith repo): `~/Development/references/bedrock/` — `bedrock-protocol-docs`, `pocketmine-mp`, `dragonfly`, `serenityjs`, `endstone`, `powernukkitx`, **`Vedrock`**, **`vlang-leveldb`** (zlib Bedrock-shaped), **`goleveldb-mcpe`** (`df-mc/goleveldb`), `gophertunnel`, `bedrock-v/protocol`, and **`endstone-bedrock-protocol`** (`EndstoneMC/bedrock-protocol` — ADR §82). Use for wire/world/storage study; do not vendor into the C# tree. Dimension envelope: SerenityJS / Dragonfly. Overworld noise leaf: vendored Auburn **FastNoiseLite** (ADR §72); composition algorithms inspired by PocketMine `Normal`.
 
-**Cereal-era (protocol 2168+) packet shapes specifically:** prefer `endstone-bedrock-protocol`'s `protocol/*.py` over the others. gophertunnel / `bedrock-v/protocol` / Endstone's C++ headers are all currently at **2168**, meaning for anything on the §79 Cereal-migration list their code still shows the shape being *replaced*, not the new one — a real trap, hit once already (§81). `endstone-bedrock-protocol` versions its schema explicitly (`@type(until=2168)` / `@type(since=2168)`, covering 975/1001/2168/2181 in one file), so the delta reads directly off the source instead of being inferred from a single snapshot. Its `CLAUDE.md` is worth reading before trusting any one field — it documents which source wins for which aspect (names vs. wire shape vs. golden bytes) and a list of settled disagreements.
+**Cereal-era (protocol 2168+) packet shapes specifically:** use `EndstoneMC/bedrock-protocol`'s versioned `protocol/*.py` schema as a cross-check. Its version table includes stable protocol **2193** (listed as 1.26.50.5) and preview **2211** (1.26.60.25), so inspect each field's `since`/`until` range. It confirms the 2193 AuthInput and embedded ItemUse marker removals, ItemStackResponse optional markers, and PlaySound field gates. This is distinct from Endstone's BDS C++ headers; do not assume those headers reflect the latest wire schema. The Mojang schema remains authoritative for the exact target release, and preview-only fields must not be copied into the stable 2193 implementation.
 
 **How to use refs when implementing a leaf (later checklist):**
 
@@ -160,16 +160,18 @@ Before a product leaf: skim DF for the smallest honest path, then skim **open/cl
 
 ### Bedrock protocol docs (official)
 
-Clone (not in-repo): [`Mojang/bedrock-protocol-docs`](https://github.com/Mojang/bedrock-protocol-docs) branch **`r/26_u4`** → typically `~/Development/references/bedrock/bedrock-protocol-docs/`.
+The local clone supplied for this task is a **preview** snapshot, Bedrock **1.26.60-beta.30 / protocol 2225**. As of 2026-10-12, the stable target is **1.26.52 / protocol 2193**; use the stable Mojang 1.26.51 schema and Endstone protocol-docs r26_u5 to review stable wire shapes. Do not use the local preview snapshot as the stable packet contract.
 
 | Source | Role for Zenith |
 |--------|-----------------|
-| `ServerIdentity.ProtocolVersion` (**2169**) / `VersionName` (**1.26.50**) | What we announce today (ADR §79) |
-| Docs JSON `x-protocol-version` on `r/26_u4` (**2169** / **1.26.50**) | Current target — matches `ServerIdentity` since the §79 bump |
-| `changelog_2168_07_07_26.md` | What changed to reach 2169 — **~23 packets moved to Cereal serialization, not backwards compatible.** Use it as the migration checklist; Zenith closed the tracked shipped-packet debt in ADR §§88–93. |
-| PocketMine `BedrockProtocol` / Endstone BDS headers (older, pre-Cereal era) | Wire cross-check for the ~23 debt packets until they're migrated — these still reflect the pre-Cereal shape Zenith currently encodes |
+| `ServerIdentity.ProtocolVersion` (**2193**) / `VersionName` (**1.26.52**) | Current stable Bedrock target |
+| Mojang stable schema tag `1.26.51` (**2193**) | Official stable packet schema; 1.26.52 retains the same protocol |
+| Endstone protocol-docs **r26_u5** (**1.26.52.3 / 2193**) | Independent BDS-extracted stable protocol cross-check |
+| Local Mojang docs snapshot **1.26.60-beta.30 / 2225** | Preview reference only; compare changes before using for stable implementation |
+| Protocol churn checklist | Tracks reviewed 2169→2193 serializer deltas and remaining live-client validation; ADR §92/§93 supersede §79's historical `PlayerListPacket` / `StartGamePacket` debt entries |
+| PocketMine `BedrockProtocol` / Endstone BDS headers (older, pre-Cereal era) | Cross-check for legacy-shaped fields only; do not apply those encodings to packets already migrated to 2193 |
 
-**Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against `r/26_u4` (2169) — **except** the §79 Cereal-debt list, which stays pre-Cereal shaped until migrated (don't half-migrate one packet's fields to Cereal without doing the tagged-variant/optional-presence-byte encoding correctly — see ADR §79 non-goals).
+**Rules:** Quiet-ACK unknown client→server noise (no WARNING) ≠ partial product. New **product** packets: full Encode/Decode + tests against Mojang's 2193 schema. Don't claim full protocol compatibility merely because the handshake accepts 2193; use `protocol-churn.md` for packet-specific review and live-client status.
 
 Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live in [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
