@@ -63,6 +63,7 @@ sealed class AddActorPacket : DataPacket
         writer.WriteUnsignedVarInt(0); // EntityProperties.int list — empty
         writer.WriteUnsignedVarInt(0); // EntityProperties.float list — empty
         writer.WriteUnsignedVarInt(0); // EntityLinks — empty
+        writer.WriteBool(false); // Passenger Block Data (optional, 2225) — absent
         return writer.GetBufferDisposing();
     }
 

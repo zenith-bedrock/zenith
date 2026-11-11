@@ -30,4 +30,9 @@ sealed partial class AnimatePacket : DataPacket
     [WireString]
     [WireOptional]
     public string? SwingSource { get; set; }
+
+    /// <summary>Optional (2225): which hand animates (HandSlot). Null → optional bool false.</summary>
+    [Wire]
+    [WireOptional]
+    public byte? Hand { get; set; }
 }

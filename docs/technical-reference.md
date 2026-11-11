@@ -8,11 +8,13 @@ Comments and ADR tags (`ADR §N`, `§N`) appear in many files. **They are pointe
 
 | Field | Value | Defined in |
 |-------|--------|------------|
-| Bedrock protocol | **2193** | [`src/zenith/Server/ServerIdentity.cs`](../src/zenith/Server/ServerIdentity.cs) |
-| Game version (wire) | **1.26.52** | same |
+| Bedrock protocol | **2225** | [`src/zenith/Server/ServerIdentity.cs`](../src/zenith/Server/ServerIdentity.cs) |
+| Game version (wire) | **1.26.62** | same |
 | Product / release | **0.0.2-alpha** | same (`ProductVersion` — Docker tags, logs; not on Bedrock wire) |
 
-Targets Bedrock **1.26.52** (released as a hotfix after 1.26.51) with protocol **2193**; the Mojang schema tag for 1.26.51 also uses 2193. The 2193 packet changes applied here include ItemUse's `Hand`, AuthInput's required Input Data array, removal of obsolete Cereal accessor-presence bytes, ItemStackResponse optionals, and the PlaySound loop-count/bypass/optional fields. Live-client validation remains outstanding; a matching protocol number does not imply complete support for every packet. See [`protocol-churn.md`](protocol-churn.md) for the migration checklist and verification status.
+Targets Bedrock **1.26.62** with protocol **2225** (wire reviewed against Mojang `bedrock-protocol-docs` v1.26.51 → v1.26.62; see [`protocol-churn.md`](protocol-churn.md)). The paragraph below describes the earlier 2193 step, which 2225 builds on:
+
+Previously **1.26.52** with protocol **2193**; the Mojang schema tag for 1.26.51 also uses 2193. The 2193 packet changes applied here include ItemUse's `Hand`, AuthInput's required Input Data array, removal of obsolete Cereal accessor-presence bytes, ItemStackResponse optionals, and the PlaySound loop-count/bypass/optional fields. Live-client validation remains outstanding; a matching protocol number does not imply complete support for every packet. See [`protocol-churn.md`](protocol-churn.md) for the migration checklist and verification status.
 
 ## Authoritative docs inside this repo
 

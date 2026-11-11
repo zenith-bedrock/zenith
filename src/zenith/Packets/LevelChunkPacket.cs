@@ -36,6 +36,7 @@ class LevelChunkPacket : DataPacket
         writer.WriteUnsignedVarInt(0); // CacheMetadata list - always present since 2168, empty when cache disabled
         writer.WriteUnsignedVarInt(ExtraPayload.Length);
         writer.Write(ExtraPayload);
+        writer.WriteBool(false); // Is Client Biome Update (2225): server biomes do not override the client's
         return writer.GetBufferDisposing();
     }
 

@@ -16,8 +16,8 @@ public class BedrockDataManifestTests
         Assert.NotNull(stream);
         using var manifest = JsonDocument.Parse(stream);
         var root = manifest.RootElement;
-        Assert.Equal(ServerIdentity.ProtocolVersion, root.GetProperty("protocol").GetInt32());
-        Assert.Equal(ServerIdentity.VersionName, root.GetProperty("minecraft_version").GetString());
+        Assert.Equal(ServerIdentity.EmbeddedDataProtocolVersion, root.GetProperty("protocol").GetInt32());
+        Assert.Equal(ServerIdentity.EmbeddedDataVersionName, root.GetProperty("minecraft_version").GetString());
         foreach (var asset in root.GetProperty("assets").EnumerateObject())
         {
             using var resource = assembly.GetManifestResourceStream(asset.Name);

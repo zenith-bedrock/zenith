@@ -101,8 +101,9 @@ sealed class ItemStackRequestPacket : DataPacket
     public const byte ActionCraftRecipeOptional = 13;
     public const byte ActionCraftGrindstone = 14;
     public const byte ActionCraftLoom = 15;
-    public const byte ActionCraftNonImplemented = 16;
-    public const byte ActionCraftResultsDeprecated = 17;
+    public const byte ActionCraftReservedAction = 16; // 2225
+    public const byte ActionCraftNonImplemented = 17;
+    public const byte ActionCraftResultsDeprecated = 18;
 
     public override int Id => (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET;
 
@@ -301,6 +302,10 @@ sealed class ItemStackRequestPacket : DataPacket
             case ActionCraftLoom:
                 stream.ReadVarString(); // pattern
                 stream.ReadByte(); // times_crafted
+                return Unsupported(type);
+            case ActionCraftReservedAction:
+                stream.ReadVarString(); // reserved_id
+                stream.ReadByte(); // num_crafts
                 return Unsupported(type);
             case ActionCraftNonImplemented:
                 return Unsupported(type); // void

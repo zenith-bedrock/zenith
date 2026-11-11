@@ -1,6 +1,6 @@
 # Protocol churn checklist
 
-**Last review:** 2026-10-12 — target is stable Bedrock 1.26.52 / protocol 2193. The Mojang 1.26.51 schema tag and Endstone protocol-docs r26_u5 (1.26.52.3) both identify stable protocol 2193. This update applies the v2193 `Hand` field to item-use transactions, reads AuthInput's required Input Data array directly, removes redundant Cereal accessor-presence bytes in InventoryTransaction and PlayerAuthInput decoding, writes the single optional-presence bytes required by ItemStackResponse, and updates `PlaySoundPacket`'s field order and optional fields. Endstone's version-aware `input.py`, `item_stack.py`, and `sound.py` schemas confirm the reviewed 2193 field gates. A follow-up login fix sends the StartGame `SpawnBiomeType::Default` enum instead of treating biome network IDs as that enum. The full solution suite passes (1407/1407); the focused StartGame wire test passes, and smoke-bot reaches `join`, `start_game`, and `spawn` against protocol 2193. The bot does not render the client UI, so the reported Bedrock error screen remains unverified in a graphical client. The 2193 changelog was checked against Zenith's implemented packet subset; unsupported packet payloads are not being claimed as implemented.
+**Last review:** 2026-11-11 — target is stable Bedrock 1.26.62 / protocol 2225 (section "2193 → 2225" below). Earlier review: 2026-10-12 — target was stable Bedrock 1.26.52 / protocol 2193. The Mojang 1.26.51 schema tag and Endstone protocol-docs r26_u5 (1.26.52.3) both identify stable protocol 2193. This update applies the v2193 `Hand` field to item-use transactions, reads AuthInput's required Input Data array directly, removes redundant Cereal accessor-presence bytes in InventoryTransaction and PlayerAuthInput decoding, writes the single optional-presence bytes required by ItemStackResponse, and updates `PlaySoundPacket`'s field order and optional fields. Endstone's version-aware `input.py`, `item_stack.py`, and `sound.py` schemas confirm the reviewed 2193 field gates. A follow-up login fix sends the StartGame `SpawnBiomeType::Default` enum instead of treating biome network IDs as that enum. The full solution suite passes (1407/1407); the focused StartGame wire test passes, and smoke-bot reaches `join`, `start_game`, and `spawn` against protocol 2193. The bot does not render the client UI, so the reported Bedrock error screen remains unverified in a graphical client. The 2193 changelog was checked against Zenith's implemented packet subset; unsupported packet payloads are not being claimed as implemented.
 
 Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Manual** — no remote schema scraper.
 
@@ -43,3 +43,24 @@ The embedded assets now come from official BDS 1.26.52.3, queried through Endsto
 Full solution: 1407 tests passed. The smoke-bot reached join/start_game/spawn using a new temporary world on UDP 19147; Zenith logged the InGame transition. A second login capture matched all item registry fields and typed NBT against BDS after sorting entries by name, and the biome body matched byte for byte. CreativeContent remains the intentional curated runtime subset. The bot does not render the graphical client; the reported error screen remains unverified there.
 
 Rollout uses fresh world and player files by operator choice. Stored numeric IDs from previous palettes are not migrated. NetherNet framing/signaling moved to the independent Zenith.NetherNet package with its own tests; its WebRTC/session adapter remains pending. Existing configs selecting NetherNet now log a warning and use RakNet to preserve Bedrock login.
+
+## 2193 → 2225 (2026-11-11)
+
+Method: structural diff of Mojang `bedrock-protocol-docs` tags `v1.26.51` (2193) and `v1.26.62` (2225), ignoring version stamps (66 changed schemas, 32 added, none removed), intersected with the packets in `src/zenith/Packets/`. `x-ordinal-index` gives field order; optional fields carry a presence bool. Cross-checked in spirit against the Cinnabar client's 2225 fixtures (reference only, PolyForm Noncommercial — no code copied).
+
+Applied (pinned by `Protocol2225WireTests` and `StartGameWireTests`):
+
+| Packet / type | Delta | Zenith |
+|---|---|---|
+| `RequestNetworkSettings` | protocol 2225 | `ServerIdentity.ProtocolVersion` |
+| `StartGame` / LevelSettings | `Editor Level Migration Version` (int8) after `Is Exported From Editor` | writes `0` (Legacy) |
+| `LevelChunk` | trailing `Is Client Biome Update` bool | writes `false` |
+| `AddActor`, `AddPlayer` | optional `Passenger Block Data` | writes absent |
+| `PlayerList` Add | `PlayFab ID` after XBL XUID; **removed from `SerializedSkin`** | empty string; skin no longer carries it |
+| `Animate` | optional `Hand` (HandSlot, uint8) after Swing Source | `byte? Hand` |
+| `InventoryTransaction` | `Hand` added to ItemUseOnActor (after Slot) and ItemRelease (after From Position) | read |
+| `ItemStackRequest` | new action `CraftReservedAction` (reserved id string + u8) before `CraftNonImplemented`; later action ids shift (+1) | constants 16/17/18; reserved action skipped |
+
+Checked, no payload change needed: `ModalFormResponse` (JSON/cancel are optional — already decoded so), `FullContainerName` dynamic id (already optional), `LevelSoundEvent` fire position (already optional), `SerializedSkin.GeometryData` (JSON value → string; same wire), enum additions (`ActorType`, `ContainerType`, `LevelSoundEvent`, `DisconnectFailReason`, new packet ids). Packets Zenith does not implement (cursor drag, matchmaking, audio content, stonecutter recipe, passenger-of-block, camera/attribute-layer changes) remain unimplemented and are quiet-ACKed.
+
+**Not done — embedded data is still BDS 1.26.52.3 / 2193.** Block states and hashed network ids, the item registry, creative content, biome definitions and the jigsaw blob must be re-extracted from BDS 1.26.60+ (`tools/bedrock-data/README.md`). `BiomeDefinitionData.chunk gen data` and `tags` became optional in 2225, so the stale biome blob must be regenerated before relying on a 2225 client. The smoke bot (`bedrock-protocol` ^3.58) does not speak 2225 yet, so `bedrock-e2e.yml` is set to 2225 but will not pass until the bot is upgraded. No retail 2225 client has joined this build.

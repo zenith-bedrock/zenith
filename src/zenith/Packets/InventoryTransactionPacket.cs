@@ -190,6 +190,7 @@ class InventoryTransactionPacket : DataPacket
         TargetActorRuntimeId = stream.ReadUnsignedVarLong();
         ActorActionType = stream.ReadVarInt();
         HotbarSlot = stream.ReadVarInt();
+        Hand = stream.ReadByte(); // 2225
         HeldItem = ReadNetworkItem(ref stream);
         FromX = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromY = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -207,6 +208,7 @@ class InventoryTransactionPacket : DataPacket
         FromX = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromY = stream.ReadFloat(BinaryStream.Endianess.Little);
         FromZ = stream.ReadFloat(BinaryStream.Endianess.Little);
+        Hand = stream.ReadByte(); // 2225
     }
 
     /// <summary>Skip a NetworkItem for AuthInput item-interaction branch.</summary>
