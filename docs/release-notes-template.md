@@ -1,6 +1,6 @@
 ## Zenith v0.0.2-alpha
 
-**Product:** `0.0.2-alpha`. Protocol **2193** / Bedrock **1.26.52** (was 1001 / 1.26.33 on 0.0.1-alpha).
+**Product:** `0.0.2-alpha`. Protocol **2225** / Bedrock **1.26.62** (was 1001 / 1.26.33 on 0.0.1-alpha).
 
 Not production-ready — LAN / private feedback only.
 

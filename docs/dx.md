@@ -164,7 +164,7 @@ The local clone supplied for this task is a **preview** snapshot, Bedrock **1.26
 
 | Source | Role for Zenith |
 |--------|-----------------|
-| `ServerIdentity.ProtocolVersion` (**2193**) / `VersionName` (**1.26.52**) | Current stable Bedrock target |
+| `ServerIdentity.ProtocolVersion` (**2225**) / `VersionName` (**1.26.62**) | Current stable Bedrock target |
 | Mojang stable schema tag `1.26.51` (**2193**) | Official stable packet schema; 1.26.52 retains the same protocol |
 | Endstone protocol-docs **r26_u5** (**1.26.52.3 / 2193**) | Independent BDS-extracted stable protocol cross-check |
 | Local Mojang docs snapshot **1.26.60-beta.30 / 2225** | Preview reference only; compare changes before using for stable implementation |

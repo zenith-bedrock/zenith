@@ -22,10 +22,10 @@ public class StartGameWireTests
     }
 
     [Fact]
-    public void Protocol_identity_matches_client_2193_layout()
+    public void Protocol_identity_matches_client_2225_layout()
     {
-        Assert.Equal(2193, ServerIdentity.ProtocolVersion);
-        Assert.Equal("1.26.52", ServerIdentity.VersionName);
+        Assert.Equal(2225, ServerIdentity.ProtocolVersion);
+        Assert.Equal("1.26.62", ServerIdentity.VersionName);
     }
 
     [Fact]
@@ -121,6 +121,7 @@ public class StartGameWireTests
         _ = stream.ReadVarInt(); // EditorWorldType
         _ = stream.ReadBool();
         _ = stream.ReadBool(); // CreatedInEditor, ExportedFromEditor
+        _ = stream.ReadByte(); // EditorLevelMigrationVersion (2225)
         _ = stream.ReadVarInt(); // DayCycleLockTime
         _ = stream.ReadUnsignedVarInt(); // EducationEditionOffer (unsigned per ADR §93)
         _ = stream.ReadBool(); // EducationFeaturesEnabled

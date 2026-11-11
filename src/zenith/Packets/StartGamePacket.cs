@@ -79,6 +79,7 @@ class StartGamePacket : DataPacket
         writer.WriteVarInt(EditorType); // EditorWorldType
         writer.WriteBool(false); // CreatedInEditor
         writer.WriteBool(false); // ExportedFromEditor
+        writer.WriteByte(0); // EditorLevelMigrationVersion::Legacy (2225)
         writer.WriteVarInt(StopTime); // DayCycleLockTime
         // EducationEditionOffer's enum underlying is uint32, so its default (cerealised) wire is
         // unsigned uvarint32, not zigzag — value is always 0 here so this was byte-identical either

@@ -47,7 +47,7 @@ jobs:
           ZENITH_DATA: ${{ runner.temp }}/zenith-e2e-data
           ZENITH_PROJECT: ${{ github.workspace }}
           # Keep the external smoke client aligned with ServerIdentity.ProtocolVersion.
-          ZENITH_BOT_PROTOCOL_VERSION: "2193"
+          ZENITH_BOT_PROTOCOL_VERSION: "2225"
         run: |
           set -euo pipefail
           mkdir -p "$ZENITH_DATA"

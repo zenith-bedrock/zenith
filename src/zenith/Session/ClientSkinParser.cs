@@ -37,7 +37,6 @@ static class ClientSkinParser
                 return false;
 
             var skinId = ReadString(root, "SkinId") ?? "";
-            var playFabId = ReadString(root, "PlayFabId") ?? "";
             var resourcePatch = TryDecodeUtf8(root, "SkinResourcePatch")
                 ?? """{"geometry":{"default":"geometry.humanoid.custom"}}""";
             var geometryData = TryDecodeUtf8(root, "SkinGeometryData")
@@ -57,7 +56,6 @@ static class ClientSkinParser
             skin = new SerializedSkin
             {
                 Id = skinId,
-                PlayFabId = playFabId,
                 ResourcePatch = resourcePatch,
                 Image = new SkinImage { Width = width, Height = height, Data = skinData },
                 Animations = animations,

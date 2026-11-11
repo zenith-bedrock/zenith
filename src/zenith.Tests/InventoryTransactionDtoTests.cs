@@ -135,6 +135,7 @@ public class InventoryTransactionDtoTests
         w.WriteUnsignedVarInt(0);
         for (var i = 0; i < 3; i++)
             w.WriteFloat(0, BinaryStream.Endianess.Little);
+        w.WriteByte(0); // Hand (2225)
 
         var stream = new BinaryStream(w.GetBufferDisposing().ToArray());
         var packet = new InventoryTransactionPacket();

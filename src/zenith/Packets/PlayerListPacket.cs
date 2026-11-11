@@ -51,6 +51,7 @@ class PlayerListPacket : DataPacket
             writer.WriteVarLong(entry.ActorUniqueId);
             writer.WriteVarString(entry.Username);
             writer.WriteVarString(entry.XboxUserId);
+            writer.WriteVarString(entry.PlayFabId);
             writer.WriteVarString(entry.PlatformChatId);
             writer.WriteInt(entry.BuildPlatform, BinaryStream.Endianess.Little);
             WriteSkin(ref writer, entry);
@@ -91,6 +92,8 @@ readonly struct PlayerListEntry
     public long ActorUniqueId { get; init; }
     public string Username { get; init; }
     public string XboxUserId { get; init; }
+    /// <summary>Server-verified PlayFab id; Zenith has no PlayFab integration, so it is always empty.</summary>
+    public string PlayFabId { get; init; }
     public string PlatformChatId { get; init; }
     public int BuildPlatform { get; init; }
     public string SkinId { get; init; }
@@ -121,6 +124,7 @@ readonly struct PlayerListEntry
         ActorUniqueId = uniqueId,
         Username = username,
         XboxUserId = xboxUserId ?? "",
+        PlayFabId = "",
         PlatformChatId = platformChatId ?? "",
         BuildPlatform = buildPlatform,
         SkinId = skin?.Id is { Length: > 0 } id ? id : $"{username}.Zenith",
@@ -137,6 +141,7 @@ readonly struct PlayerListEntry
         Uuid = uuid,
         Username = "",
         XboxUserId = "",
+        PlayFabId = "",
         PlatformChatId = "",
         SkinId = ""
     };

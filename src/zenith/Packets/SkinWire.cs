@@ -27,7 +27,6 @@ static class SkinWire
         }
 
         writer.WriteVarString(skinId);
-        writer.WriteVarString("");
         writer.WriteVarString("""{"geometry":{"default":"geometry.humanoid.custom"}}""");
         WriteImage(ref writer, width, height, rgba);
         writer.WriteUInt(0, BinaryStream.Endianess.Little);

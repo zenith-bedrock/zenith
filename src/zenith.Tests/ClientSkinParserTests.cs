@@ -53,7 +53,6 @@ public class ClientSkinParserTests
         Assert.True(ClientSkinParser.TryParse(jwt, out var skin));
         Assert.True(ClientSkinParser.IsTrusted(jwt));
         Assert.Equal("CustomSlim", skin.Id);
-        Assert.Equal("pfab", skin.PlayFabId);
         Assert.Equal(patch, skin.ResourcePatch);
         Assert.Equal(geometry, skin.GeometryData);
         Assert.Equal("1.21.0", skin.GeometryVersion);
@@ -87,6 +86,7 @@ public class ClientSkinParserTests
         Assert.Equal("Alex", reader.ReadVarString());
         _ = reader.ReadVarString();
         _ = reader.ReadVarString();
+        _ = reader.ReadVarString(); // PlayFab ID (2225)
         _ = reader.ReadInt(BinaryStream.Endianess.Little);
 
         var decoded = SerializedSkin.Read(ref reader);

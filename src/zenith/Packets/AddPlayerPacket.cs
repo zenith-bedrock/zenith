@@ -51,6 +51,7 @@ sealed class AddPlayerPacket : DataPacket
         writer.WriteUnsignedVarInt(0); // property sync floats
         AbilityData.Write(ref writer, (long)ActorRuntimeId, AbilityData.ValuesForGameMode(GameMode));
         writer.WriteUnsignedVarInt(0); // links
+        writer.WriteBool(false); // Passenger Block Data (optional, 2225) — absent
         writer.WriteVarString(DeviceId);
         writer.WriteInt(BuildPlatform, BinaryStream.Endianess.Little);
         return writer.GetBufferDisposing();

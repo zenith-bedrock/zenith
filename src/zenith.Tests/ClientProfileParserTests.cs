@@ -66,6 +66,7 @@ public class ClientProfileParserTests
         _ = reader.ReadVarLong();
         Assert.Equal("Steve", reader.ReadVarString());
         Assert.Equal("25332747913222912", reader.ReadVarString());
+        Assert.Equal("", reader.ReadVarString()); // PlayFab ID (2225)
         Assert.Equal("plat", reader.ReadVarString());
         Assert.Equal(7, reader.ReadInt(BinaryStream.Endianess.Little));
     }

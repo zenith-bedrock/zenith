@@ -3479,3 +3479,11 @@ When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
 **Config (breaking, pre-release):** `network.transport` gains `both`; `maximum-fragment-size` removed; `max-message-size` capped at 262144; new `tls-certificate`, `tls-private-key`, `reverse-proxy-header/-networks`, `lan-discovery`, `ice-udp-mux`, `advertise-addresses`, `mtu`. ICE range defaults start at `server.port + 1` when RakNet also runs.
 
 **Open:** retail-client validation over the new library; protocol bump 2193 → 2225 for 26.60+ clients; `BinaryStream` still lives in the RakNet assembly and is used by `Packets/` (candidate for a neutral shared library).
+
+## 144. Protocol 2225 (Bedrock 1.26.62): wire first, data later (nov 2026)
+
+**Context:** clients 26.60+ join third-party servers only over NetherNet (§143), and Essential/Cinnabar already serve/target 2225.
+
+**Choice:** bump `ServerIdentity` to 2225 / 1.26.62 and apply the schema deltas for the packets Zenith implements, derived from a structural diff of Mojang's `v1.26.51` and `v1.26.62` JSON schemas (details and table in `docs/protocol-churn.md`). Single-version server: no 2193 fallback. `PlayFabId` leaves `SerializedSkin` for `PlayerListEntry`; `ItemStackRequest` action ids shift after the new `CraftReservedAction`.
+
+**Deferred (blocks calling 2225 complete):** re-extracting block/item/creative/biome/jigsaw data from BDS 1.26.60+, smoke-bot support for 2225, and a retail-client join. Until the data is refreshed, only clients that tolerate 1.26.52-era palettes will behave correctly.

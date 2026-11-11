@@ -1672,6 +1672,7 @@ public class IntentContractTests
         writer.WriteUnsignedVarLong(99); // target actor runtime id
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
         writer.WriteVarInt(4); // hotbar slot
+        writer.WriteByte(0); // Hand (2225)
         WriteNetworkItemAir(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1706,6 +1707,7 @@ public class IntentContractTests
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
         writer.WriteVarInt(4);
+        writer.WriteByte(0); // Hand (2225)
         WriteNetworkItemAir(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1739,6 +1741,7 @@ public class IntentContractTests
         writer.WriteUnsignedVarLong(target.RuntimeId);
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
         writer.WriteVarInt(4);
+        writer.WriteByte(0); // Hand (2225)
         WriteNetworkItemAir(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1778,6 +1781,7 @@ public class IntentContractTests
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
         writer.WriteVarInt(InventoryTransactionPacket.ActorInteract);
         writer.WriteVarInt(0);
+        writer.WriteByte(0); // Hand (2225)
         held.WriteNetworkItemStackDescriptor(ref writer);
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1809,6 +1813,7 @@ public class IntentContractTests
         writer.WriteUnsignedVarLong(99);
         writer.WriteVarInt(InventoryTransactionPacket.ActorAttack);
         writer.WriteVarInt(4);
+        writer.WriteByte(0); // Hand (2225)
         WriteNetworkItemAir(ref writer); // contradicts the authoritative stone in slot 4
         for (var i = 0; i < 6; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
@@ -1839,6 +1844,7 @@ public class IntentContractTests
         WriteNetworkItemAir(ref writer);
         for (var i = 0; i < 3; i++)
             writer.WriteFloat(0, BinaryStream.Endianess.Little);
+        writer.WriteByte(0); // Hand (2225)
 
         var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
         Assert.True(new InGameSessionHandler().HandleDataPacket(
@@ -1890,6 +1896,7 @@ public class IntentContractTests
         actor.WriteUnsignedVarLong(99);
         actor.WriteVarInt(99); // unknown UseItemOnActor action
         actor.WriteVarInt(5);
+        actor.WriteByte(0); // Hand (2225)
         held.WriteNetworkItemStackDescriptor(ref actor);
         for (var i = 0; i < 6; i++) actor.WriteFloat(0, BinaryStream.Endianess.Little);
         Assert.True(new InGameSessionHandler().HandleDataPacket(
@@ -1906,6 +1913,7 @@ public class IntentContractTests
         release.WriteVarInt(5);
         held.WriteNetworkItemStackDescriptor(ref release);
         for (var i = 0; i < 3; i++) release.WriteFloat(0, BinaryStream.Endianess.Little);
+        release.WriteByte(0); // Hand (2225)
         Assert.True(new InGameSessionHandler().HandleDataPacket(
             player.Session,
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },

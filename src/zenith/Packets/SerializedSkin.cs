@@ -13,7 +13,6 @@ readonly struct SerializedSkin
     public const uint MaxTintColors = 8;
 
     public string Id { get; init; }
-    public string PlayFabId { get; init; }
     public string ResourcePatch { get; init; }
     public SkinImage Image { get; init; }
     public SkinAnimation[] Animations { get; init; }
@@ -36,7 +35,6 @@ readonly struct SerializedSkin
     public static SerializedSkin Read(ref BinaryStream stream)
     {
         var id = stream.ReadVarString();
-        var playFabId = stream.ReadVarString();
         var resourcePatch = stream.ReadVarString();
         var image = SkinImage.Read(ref stream);
         ValidateImageOrThrow(image, "skin", allowEmpty: true);
@@ -85,7 +83,6 @@ readonly struct SerializedSkin
         return new SerializedSkin
         {
             Id = id,
-            PlayFabId = playFabId,
             ResourcePatch = resourcePatch,
             Image = image,
             Animations = animations,
@@ -110,7 +107,6 @@ readonly struct SerializedSkin
     public void Write(ref BinaryStream writer)
     {
         writer.WriteVarString(Id);
-        writer.WriteVarString(PlayFabId);
         writer.WriteVarString(ResourcePatch);
         Image.Write(ref writer);
 
@@ -173,7 +169,6 @@ readonly struct SerializedSkin
     public static readonly SerializedSkin Default = new()
     {
         Id = "",
-        PlayFabId = "",
         ResourcePatch = "{\"geometry\":{\"default\":\"geometry.humanoid.custom\"}}",
         Image = new SkinImage
         {

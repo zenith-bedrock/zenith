@@ -15,7 +15,6 @@ public class PlayerSkinPacketTests
             Skin = new SerializedSkin
             {
                 Id = "test_skin",
-                PlayFabId = "",
                 ResourcePatch = "{\"geometry\":{\"default\":\"geometry.humanoid.custom\"}}",
                 Image = new SkinImage
                 {
@@ -81,7 +80,6 @@ public class PlayerSkinPacketTests
 
         Assert.Equal(original.Uuid, decoded.Uuid);
         Assert.Equal(original.Skin.Id, decoded.Skin.Id);
-        Assert.Equal(original.Skin.PlayFabId, decoded.Skin.PlayFabId);
         Assert.Equal(original.Skin.ResourcePatch, decoded.Skin.ResourcePatch);
 
         Assert.Equal(original.Skin.Image.Width, decoded.Skin.Image.Width);
@@ -193,7 +191,6 @@ public class PlayerSkinPacketTests
         var original = new SerializedSkin
         {
             Id = "",
-            PlayFabId = "",
             ResourcePatch = "",
             Image = default,
             Animations = [],

@@ -52,6 +52,7 @@ public class PlayerListPacketTests
         Assert.Equal(42, stream.ReadVarLong());
         Assert.Equal("Steve", stream.ReadVarString());
         Assert.Equal("xuid-1", stream.ReadVarString());
+        Assert.Equal("", stream.ReadVarString()); // PlayFab ID (2225)
         Assert.Equal("plat", stream.ReadVarString());
         Assert.Equal(7, stream.ReadInt(BinaryStream.Endianess.Little));
 
