@@ -51,6 +51,8 @@ the closest thing to "what a real client sends and expects back".
 
 - **Recipes (ADR §146).** Hand-written shapeless table replaced by the real vanilla set matched by shape/name/tag; the chest-from-any-8-planks, side-by-side-stick and extra-items-ignored bugs are gone (tests in `RecipeRegistryTests`).
 
+- **CraftingData validated live (bot, schema 1.26.60).** All 3 700+ recipes parse client-side. Found by bisecting: the shield recipe output needs the trailing `blocking_tick` (i64) in its extra blob (the reader keys it on the shield's item id); without it the whole packet mis-parsed. `NetworkItemStack.IsShield`. The inventory/`ItemV4` writers still send an empty extra blob, which would mis-parse for a shield stack (no shield is ever sent there today).
+
 ## Next
 
 - Turn each gap above into a failing test *first* (see `InGameInventoryHandlerItemStackRequestTests`,

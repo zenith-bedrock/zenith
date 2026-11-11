@@ -6,8 +6,11 @@ namespace Zenith.Packets;
 /// Wire item stack DTO (domain maps via Protocol). One type, three encode shapes —
 /// packet <c>Encode</c> picks the writer; Gameplay never calls these.
 /// </summary>
-readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0)
+readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0, bool IsShield = false)
 {
+    /// <summary>The one item whose wire extra data has the trailing blocking tick.</summary>
+    public const string ShieldName = "minecraft:shield";
+
     public static NetworkItemStack Empty => new(0, 0, 0);
 
     /// <summary>
@@ -56,7 +59,8 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
 
     /// <summary>
     /// ItemStack without stack net id (VarInt network id + block runtime + empty extra blob).
-    /// Use from: CreativeContent, CraftingData outputs.
+    /// Use from: CreativeContent, CraftingData outputs. A shield (<see cref="IsShield"/>) carries the extra
+    /// trailing <c>blocking_tick</c> (i64) that every Bedrock reader expects for that one item id.
     /// </summary>
     public void WriteItemStack(ref BinaryStream writer)
     {
@@ -74,7 +78,8 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
         }
 
         // Extra blob: int16 NBT length 0 + empty can_place / can_break uint32 lists.
-        Span<byte> extra = stackalloc byte[10];
+        Span<byte> extra = stackalloc byte[IsShield ? 18 : 10];
+        extra.Clear();
         extra[0] = 0;
         extra[1] = 0; // int16 LE length
         // uint32 LE can_place count = 0

@@ -27,7 +27,8 @@ static class CraftingDataBuilder
             {
                 var (stack, count) = recipe.Outputs[i];
                 var outName = ResolveName(stack, palette, recipe.NetId);
-                outputs[i] = new NetworkItemStack(palette.Require(outName), (ushort)count, stack.IsBlock ? stack.Value : 0);
+                outputs[i] = new NetworkItemStack(palette.Require(outName), (ushort)count, stack.IsBlock ? stack.Value : 0,
+                    IsShield: outName == NetworkItemStack.ShieldName);
             }
 
             if (recipe.Shaped)
