@@ -168,7 +168,7 @@ public class InventoryDuplicationRegressionTests
         var player = fx.AddInGamePlayer("craft-replay");
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 2)));
         var request = InventoryStackIntent.Create(805, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput()
         ]);
 

@@ -141,7 +141,7 @@ src/
     Protocol/      # *Protocol, ProtocolGate, ColumnSend — transmit
     Session/       # NetworkSession, handlers, PlayerVisibility
     Network/       # fronteira de transporte: IGameTransport*, GameSessionHost, adapters RakNet/NetherNet, GameTransportFactory (§143)
-    data/          # palettes, creative reference, recipes.nbt, biome wire body, source manifest (EmbeddedResource)
+    data/          # palettes, creative reference, recipes.json.gz, biome wire body, source manifest (EmbeddedResource)
   raknet/
   nethernet/       # Zenith.NetherNet — WebRTC, full-ICE signaling, identity + framing; sem ref a zenith (§140, §143)
   nethernet.Tests/ # testes independentes do transporte
