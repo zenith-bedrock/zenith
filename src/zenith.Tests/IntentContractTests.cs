@@ -2595,7 +2595,7 @@ public class IntentContractTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var p in players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
     }
 
     private static byte[] ConcatCaptured(IntentTestFixture fx)

@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Zenith.Raknet;
+using Zenith.Network;
 using Zenith.Raknet.Log;
 
 namespace Zenith.Server;
@@ -17,7 +17,7 @@ sealed class RuntimeTelemetry
 
     public RuntimeTelemetry(ILogger logger) => _logger = logger;
 
-    public void RecordTick(TimeSpan elapsed, int players, int actors, RakNetServer raknet)
+    public void RecordTick(TimeSpan elapsed, int players, int actors, TransportStatistics transport)
     {
         var ticks = Interlocked.Increment(ref _ticks);
         var micros = (long)(elapsed.TotalMilliseconds * 1_000d);
@@ -26,8 +26,8 @@ sealed class RuntimeTelemetry
         if (ticks % LogEveryTicks != 0) return;
 
         _logger.Info($"runtime: tick={micros / 1000d:F3}ms overBudget={Interlocked.Read(ref _overBudget)} " +
-                     $"players={players} actors={actors} raknetSessions={raknet.ConnectionCount} " +
-                     $"out={raknet.SentDatagrams}/{raknet.SentBytes}B in={raknet.ReceivedDatagrams}/{raknet.ReceivedBytes}B " +
+                     $"players={players} actors={actors} connections={transport.Connections} " +
+                     $"out={transport.SentDatagrams}/{transport.SentBytes}B in={transport.ReceivedDatagrams}/{transport.ReceivedBytes}B " +
                      $"gc={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} " +
                      $"managed={GC.GetTotalMemory(forceFullCollection: false)}B flush={Interlocked.Read(ref _lastFlushMilliseconds)}ms");
     }

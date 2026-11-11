@@ -163,27 +163,34 @@
       "properties": {
         "transport": {
           "type": "string",
-          "enum": ["raknet", "nethernet"],
+          "enum": ["raknet", "nethernet", "both"],
           "default": "raknet",
-          "description": "Explicit Bedrock transport. NetherNet uses HTTP signaling and WebRTC data channels."
+          "description": "Bedrock transport(s) that accept players. NetherNet uses HTTP signaling and WebRTC data channels; both runs RakNet and NetherNet side by side."
         },
         "nether-net": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "join-url": { "type": "string", "format": "uri", "default": "http://127.0.0.1:19132" },
-            "listen-url": { "type": "string", "default": "", "description": "Local HTTP signaling listener. Empty derives http://+:server.port." },
-            "ice-bind-address": { "type": "string", "default": "", "description": "Optional local address for the server ICE UDP sockets; empty lets the WebRTC runtime choose." },
+            "listen-url": { "type": "string", "default": "", "description": "Local signaling listener. Empty derives http://+:server.port." },
+            "tls-certificate": { "type": "string", "default": "", "description": "PEM certificate; non-empty serves signaling over HTTPS." },
+            "tls-private-key": { "type": "string", "default": "", "description": "PEM private key when it is not in the certificate file." },
+            "reverse-proxy-header": { "type": "string", "default": "", "description": "Header carrying the client address (e.g. X-Forwarded-For); requires reverse-proxy-networks." },
+            "reverse-proxy-networks": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [], "description": "IPs/CIDRs of proxies trusted to set the header." },
+            "lan-discovery": { "type": "boolean", "default": false, "description": "Answer Bedrock LAN discovery on UDP 7551." },
+            "ice-bind-address": { "type": "string", "default": "", "description": "Optional local address for the ICE UDP sockets." },
             "ice-servers": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
               "default": [],
-              "description": "Optional STUN/TURN URLs for server-reflexive or relay ICE candidates. Keep empty unless NAT requires them."
+              "description": "Optional stun:host[:port] / turn:user:pass@host[:port] servers. Keep empty unless NAT requires them."
             },
+            "ice-udp-mux": { "type": "boolean", "default": false, "description": "Serve every peer from one UDP port (ice-port-range-start). Cannot be combined with TURN." },
             "ice-port-range-start": { "type": "integer", "minimum": 0, "maximum": 65535, "default": 0 },
-            "ice-port-range-end": { "type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "description": "Both ICE port values may be 0 to derive the range from server.port and server.max-players; otherwise the inclusive range must have at least one UDP port per player." },
-            "max-message-size": { "type": "integer", "minimum": 1, "default": 1048576 },
-            "maximum-fragment-size": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 16384 }
+            "ice-port-range-end": { "type": "integer", "minimum": 0, "maximum": 65535, "default": 0, "description": "Both ICE port values may be 0 to derive the range from server.port and server.max-players; otherwise, without ice-udp-mux, the range needs one UDP port per player." },
+            "advertise-addresses": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [], "description": "Public IPs offered as ICE candidates (NAT/containers)." },
+            "mtu": { "type": "integer", "minimum": 620, "maximum": 4144, "default": 1200 },
+            "max-message-size": { "type": "integer", "minimum": 2, "maximum": 262144, "default": 262144 }
           }
         },
         "compression-threshold": {

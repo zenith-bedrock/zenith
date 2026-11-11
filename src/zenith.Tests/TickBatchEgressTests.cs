@@ -104,6 +104,6 @@ public class TickBatchEgressTests
     private static void Flush(IntentTestFixture fx)
     {
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
     }
 }

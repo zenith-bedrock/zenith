@@ -68,6 +68,6 @@ public class BlockCrackFanoutTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var p in players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
     }
 }

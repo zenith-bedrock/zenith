@@ -77,9 +77,9 @@ class LoginSessionHandler : ISessionHandler
             return;
         }
 
-        if (session.RequiresGameServerTokenBinding)
+        if (session.RequiresTransportIdentityBinding)
         {
-            var transportIdentity = session.ClientIdentity;
+            var transportIdentity = session.TransportIdentity;
             var matchesTransportIdentity = transportIdentity is not null &&
                 string.Equals(transportIdentity.GameServerToken, packet.AuthInfo.Token, StringComparison.Ordinal);
             if (transportIdentity is not null && !matchesTransportIdentity)
@@ -89,7 +89,7 @@ class LoginSessionHandler : ISessionHandler
                 return;
             }
             if (authType == LoginPacket.AuthenticationInfo.TypeFull &&
-                (!matchesTransportIdentity || transportIdentity?.TokenAuthenticated != true))
+                (!matchesTransportIdentity || transportIdentity?.Authenticated != true))
             {
                 session.Context.Logger.Warning("Rejected NetherNet FULL login: GameServerToken was not authenticated during signaling.");
                 session.Disconnect();

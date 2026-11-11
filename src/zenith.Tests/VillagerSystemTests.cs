@@ -205,7 +205,7 @@ public sealed class VillagerSystemTests
         second.Chunks.RememberMany([(0, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession.Tick();
+            p.Session.RakSession().Tick();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);

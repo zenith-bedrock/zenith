@@ -1,3 +1,4 @@
+using Zenith.Network;
 using Zenith.Packets;
 using Zenith.Session;
 using Zenith.Raknet;
@@ -20,7 +21,7 @@ sealed class LoginProtocol
     {
         // Envelope sem compressão: a negociação ocorre antes do cliente habilitar compressão.
         _session.SendDataPacket(
-            RakNetSession.Priority.Normal,
+            GameTransportPriority.Normal,
             PacketCompression.NOT_PRESENT,
             new NetworkSettingsPacket
             {
@@ -52,7 +53,7 @@ sealed class LoginProtocol
         // protocol-mismatch rejection, whenever a client's claimed protocol version didn't match
         // ServerIdentity.ProtocolVersion. Use whatever was actually negotiated, same as SendDisconnect.
         _session.SendDataPacket(
-            RakNetSession.Priority.Immediate,
+            GameTransportPriority.Immediate,
             _session.CompressionAlgorithm,
             new PlayStatusPacket { Status = playStatus });
     }
@@ -61,7 +62,7 @@ sealed class LoginProtocol
     public void SendDisconnect(string message, int reason = DisconnectPacket.ReasonUnknown)
     {
         _session.SendDataPacket(
-            RakNetSession.Priority.Immediate,
+            GameTransportPriority.Immediate,
             _session.CompressionAlgorithm,
             new DisconnectPacket
             {

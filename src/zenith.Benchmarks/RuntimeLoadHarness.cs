@@ -638,7 +638,7 @@ internal static class RuntimeLoadHarness
                     Server = Transport,
                     MTU = 1400
                 };
-                var session = new NetworkSession(rak, new InGameSessionHandler(), context);
+                var session = new NetworkSession(new Zenith.Network.RakNet.RakNetGameConnection(rak), new InGameSessionHandler(), context);
                 var player = new Player.Player($"load-{i}", session, players.AllocateRuntimeId(), Guid.NewGuid(), GameMode.Survival)
                 {
                     IsInGame = true,
@@ -668,10 +668,10 @@ internal static class RuntimeLoadHarness
             _disposed = true;
             foreach (var session in _sessions)
             {
-                if (!session.RakSession.IsClosed)
-                    session.RakSession.Disconnect(DisconnectReason.ServerDisconnect);
+                if (!session.RakSession().IsClosed)
+                    session.RakSession().Disconnect(DisconnectReason.ServerDisconnect);
 
-                session.HandleClose(DisconnectReason.ServerDisconnect);
+                session.HandleClose(Zenith.Network.GameTransportCloseReason.ServerDisconnect);
             }
 
             World.StopGenerationAsync().AsTask().GetAwaiter().GetResult();
@@ -705,7 +705,7 @@ internal static class RuntimeLoadHarness
         {
             Loop.TickOnce();
             foreach (var player in _players)
-                player.Session.RakSession.Tick();
+                player.Session.RakSession().Tick();
         }
 
         public void PrintWorldgenDiagnostics(int radius)

@@ -20,6 +20,7 @@ public sealed class NetherNetServerRunner : IDisposable
     private readonly ConcurrentQueue<Action<NetherNetServer>> _commands = new();
     private readonly ManualResetEventSlim _wake = new(false);
     private Thread? _thread;
+    private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private volatile bool _stopRequested;
 
     public NetherNetServerRunner(NetherNetServer server, INetherNetLogger logger, TimeSpan? tickInterval = null)
@@ -28,6 +29,9 @@ public sealed class NetherNetServerRunner : IDisposable
         _logger = logger;
         _tickInterval = tickInterval ?? DefaultTickInterval;
     }
+
+    /// <summary>Completes when the tick thread has finished (after <see cref="Stop"/> or a server shutdown).</summary>
+    public Task Stopped => _stopped.Task;
 
     public bool IsRunning => _thread is { IsAlive: true };
 
@@ -81,6 +85,18 @@ public sealed class NetherNetServerRunner : IDisposable
     }
 
     private void Run()
+    {
+        try
+        {
+            RunLoop();
+        }
+        finally
+        {
+            _stopped.TrySetResult();
+        }
+    }
+
+    private void RunLoop()
     {
         var deadline = (DateTime?)null;
         while (true)

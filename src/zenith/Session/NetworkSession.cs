@@ -11,7 +11,7 @@ using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Stream;
 using Zenith.World;
-using Zenith.NetherNet;
+using Zenith.Network;
 
 namespace Zenith.Session;
 
@@ -40,14 +40,12 @@ class NetworkSession
     private long _completedWorldStreamSequence;
 
     private readonly IGameTransportConnection _transport;
-    public RakNetSession RakSession => _transport is RakNetGameTransportConnection rak
-        ? rak.Session
-        : throw new InvalidOperationException("This Bedrock session is not using RakNet.");
+    internal IGameTransportConnection Transport => _transport;
     public string EndPoint => _transport.EndPoint;
     public bool IsClosed => _transport.IsClosed;
     public bool HasGameIdentity { get => _transport.HasGameIdentity; set => _transport.HasGameIdentity = value; }
-    public bool RequiresGameServerTokenBinding => _transport.RequiresGameServerTokenBinding;
-    public NetherNetClientIdentity? ClientIdentity => _transport.ClientIdentity;
+    public bool RequiresTransportIdentityBinding => _transport.RequiresTransportIdentityBinding;
+    public TransportIdentity? TransportIdentity => _transport.TransportIdentity;
     public ServerContext Context { get; }
     public BedrockProtocol Protocol { get; }
 
@@ -74,11 +72,6 @@ class NetworkSession
     public int PreSpawnLoadStarted;
 
     private ISessionHandler _handler;
-
-    public NetworkSession(RakNetSession rakSession, ISessionHandler initialHandler, ServerContext context)
-        : this(new RakNetGameTransportConnection(rakSession), initialHandler, context)
-    {
-    }
 
     public NetworkSession(IGameTransportConnection transport, ISessionHandler initialHandler, ServerContext context)
     {
@@ -204,12 +197,8 @@ class NetworkSession
     internal void SendDataPacket(byte orderChannel, params DataPacket[] packets) =>
         SendDataPacket(GameTransportPriority.Normal, CompressionAlgorithm, orderChannel, packets);
 
-    internal void SendDataPacket(RakNetSession.Priority priority, byte compression, params DataPacket[] packets) =>
-        SendDataPacket(MapPriority(priority), compression, DefaultOrderChannel, packets);
-
-    internal void SendDataPacket(
-        RakNetSession.Priority priority, byte compression, byte orderChannel, params DataPacket[] packets)
-        => SendDataPacket(MapPriority(priority), compression, orderChannel, packets);
+    internal void SendDataPacket(GameTransportPriority priority, byte compression, params DataPacket[] packets) =>
+        SendDataPacket(priority, compression, DefaultOrderChannel, packets);
 
     internal void SendDataPacket(
         GameTransportPriority priority, byte compression, byte orderChannel, params DataPacket[] packets)
@@ -230,19 +219,10 @@ class NetworkSession
             Packets = new List<DataPacket>(packets)
         };
 
-        var frame = new Frame
-        {
-            Reliability = GamePacketReliability,
-            OrderChannel = orderChannel,
-            Buffer = gamePacket.EncodeOwned(_transport.IncludesGamePacketIdentifier)
-        };
-
-        Context.Diagnostics.RecordPacketSent(packets.Length, frame.Buffer.Length);
-        _transport.SendGameBatch(frame.Buffer, priority, orderChannel);
+        var batch = gamePacket.EncodeOwned(_transport.IncludesGamePacketIdentifier);
+        Context.Diagnostics.RecordPacketSent(packets.Length, batch.Length);
+        _transport.SendGameBatch(batch, priority, orderChannel);
     }
-
-    private static GameTransportPriority MapPriority(RakNetSession.Priority priority) =>
-        priority == RakNetSession.Priority.Immediate ? GameTransportPriority.Immediate : GameTransportPriority.Normal;
 
     private static string DescribeOutboundPacket(DataPacket packet) => packet switch
     {
@@ -294,13 +274,13 @@ class NetworkSession
     }
 
     /// <summary>
-    /// Chamado pelo <see cref="ZenithSessionListener"/> quando a sessão de
+    /// Chamado pelo <see cref="GameSessionHost"/> quando a sessão de
     /// transporte é encerrada (client disconnect, kick ou timeout). Avisa o handler ativo
     /// pra ele poder limpar o que precisar, remove o Player do PlayerManager (se já tinha
     /// logado) e publica PlayerQuitEvent pra quem quiser reagir a isso sem precisar tocar
     /// aqui dentro.
     /// </summary>
-    public void HandleClose(DisconnectReason reason)
+    public void HandleClose(GameTransportCloseReason reason)
     {
         Context.Logger.Info($"Session closed ({reason}): {_transport.EndPoint}");
         StopWorldStreamWorker();
@@ -338,7 +318,7 @@ class NetworkSession
     }
 
     /// <summary>
-    /// Chamado pelo <see cref="ZenithSessionListener"/> sempre que chega um
+    /// Chamado pelo <see cref="GameSessionHost"/> sempre que chega um
     /// datagrama de game packet pra essa sessão. Cuida da descompressão e distribui cada
     /// data packet contido pro handler ativo.
     /// </summary>

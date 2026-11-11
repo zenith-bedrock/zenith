@@ -30,7 +30,7 @@ public class HealthReplicationTests
         movement.Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        Assert.Contains(ReadHealthUpdates(fx, peer.Session.RakSession.EndPoint), update =>
+        Assert.Contains(ReadHealthUpdates(fx, peer.Session.RakSession().EndPoint), update =>
             update.ActorRuntimeId == (ulong)subject.RuntimeId &&
             update.Value == subject.Health &&
             update.Maximum == subject.MaxHealth);
@@ -39,7 +39,7 @@ public class HealthReplicationTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var player in players.Online)
-            player.Session.RakSession.Tick();
+            player.Session.RakSession().Tick();
     }
 
     /// <summary>

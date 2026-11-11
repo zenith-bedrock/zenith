@@ -216,7 +216,7 @@ public class ArmorTests
         PlayerVisibility.AnnounceJoin(bob, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        var heads = ReadMobArmorHeads(fx, bob.Session.RakSession.EndPoint);
+        var heads = ReadMobArmorHeads(fx, bob.Session.RakSession().EndPoint);
         Assert.Contains(heads, h => h.ActorRuntimeId == (ulong)alice.RuntimeId && h.HeadNetworkId == IronHelmet(fx));
     }
 
@@ -234,14 +234,14 @@ public class ArmorTests
         PlayerVisibility.AnnounceJoin(bob, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        var heads = ReadMobArmorHeads(fx, alice.Session.RakSession.EndPoint);
+        var heads = ReadMobArmorHeads(fx, alice.Session.RakSession().EndPoint);
         Assert.Contains(heads, h => h.ActorRuntimeId == (ulong)bob.RuntimeId && h.HeadNetworkId == IronHelmet(fx));
     }
 
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var player in players.Online)
-            player.Session.RakSession.Tick();
+            player.Session.RakSession().Tick();
     }
 
     private static void Drain(IntentTestFixture fx)
