@@ -1,6 +1,6 @@
 using System.Threading;
 using Zenith.Player;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.World;
 

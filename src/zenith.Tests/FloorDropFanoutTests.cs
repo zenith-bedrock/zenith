@@ -1,5 +1,5 @@
 using Zenith.Player;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Entities;

@@ -1,5 +1,5 @@
 using BenchmarkDotNet.Attributes;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Benchmarks;
 

@@ -71,7 +71,7 @@ internal interface IGameTransportHost
     bool TryOpen(IGameTransportConnection connection);
 
     /// <summary>Delivers one inbound game batch. The host takes ownership of (and disposes) the stream.</summary>
-    bool Receive(IGameTransportConnection connection, ref Zenith.Raknet.Stream.BinaryStream batch);
+    bool Receive(IGameTransportConnection connection, ref Zenith.Binary.BinaryStream batch);
 
     void Close(IGameTransportConnection connection, GameTransportCloseReason reason);
 }

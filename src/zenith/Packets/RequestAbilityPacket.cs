@@ -20,6 +20,6 @@ sealed partial class RequestAbilityPacket : DataPacket
     [Wire]
     public bool BoolValue { get; set; }
 
-    [Wire(Zenith.Raknet.Stream.BinaryStream.Endianess.Little)]
+    [Wire(Zenith.Binary.BinaryStream.Endianess.Little)]
     public float FloatValue { get; set; }
 }

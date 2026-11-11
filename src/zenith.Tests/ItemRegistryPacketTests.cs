@@ -1,7 +1,7 @@
 using Xunit;
 using Zenith.Nbt;
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Tests;
 

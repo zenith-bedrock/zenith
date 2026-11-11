@@ -2,13 +2,16 @@ using System.Collections.Concurrent;
 using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Network.RakNet;
 
 /// <summary>One RakNet peer seen as a Bedrock game transport connection.</summary>
 internal sealed class RakNetGameConnection(RakNetSession session) : IGameTransportConnection
 {
+    /// <summary>Game batches are ordered per channel: StartGame must reach the client before LevelChunk.</summary>
+    internal const Reliability GameBatchReliability = Reliability.ReliableOrdered;
+
     public RakNetSession Session { get; } = session;
     public string EndPoint => Session.EndPoint.ToString();
     public bool IsClosed => Session.IsClosed;
@@ -20,7 +23,7 @@ internal sealed class RakNetGameConnection(RakNetSession session) : IGameTranspo
     public void SendGameBatch(ReadOnlyMemory<byte> batch, GameTransportPriority priority, byte orderChannel) =>
         Session.SendFrame(new Frame
         {
-            Reliability = Reliability.ReliableOrdered,
+            Reliability = GameBatchReliability,
             OrderChannel = orderChannel,
             Buffer = batch
         }, priority == GameTransportPriority.Immediate

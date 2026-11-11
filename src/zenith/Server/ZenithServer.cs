@@ -12,8 +12,7 @@ using Zenith.Log;
 using Zenith.Protocol;
 using Zenith.Session;
 using Zenith.Player;
-using Zenith.Raknet;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.Network;
 using Zenith.World;
 
@@ -352,7 +351,7 @@ class ZenithServer
         return guid;
     }
 
-    private static IChunkStorage CreateChunkStorage(ServerConfig config, Zenith.Raknet.Log.ILogger logger)
+    private static IChunkStorage CreateChunkStorage(ServerConfig config, Zenith.Logging.ILogger logger)
     {
         var configuredPath = config.World.Path?.Trim() ?? "";
         var dataRoot = ResolveWorldDataRoot(configuredPath);
@@ -429,7 +428,7 @@ class ZenithServer
     /// Ops visibility: old flat LevelDB at world.path root would be silently abandoned when
     /// opening a new empty worlds/&lt;name&gt; (ADR §20).
     /// </summary>
-    private static void WarnIfOrphanedFlatLevelDb(string root, string storageDir, Zenith.Raknet.Log.ILogger logger)
+    private static void WarnIfOrphanedFlatLevelDb(string root, string storageDir, Zenith.Logging.ILogger logger)
     {
         try
         {

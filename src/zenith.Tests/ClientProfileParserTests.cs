@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Session;
 using Xunit;
 

@@ -1,3 +1,4 @@
+using Zenith.Logging;
 using System.Text;
 using Zenith.Log;
 using Zenith.Raknet.Enumerator;

@@ -27,7 +27,7 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
 
         var body = new StringBuilder();
         body.AppendLine("using Zenith.Packets.Generation;");
-        body.AppendLine("using Zenith.Raknet.Stream;");
+        body.AppendLine("using Zenith.Binary;");
         body.AppendLine();
         body.AppendLine("namespace Zenith.Packets;");
         body.AppendLine();

@@ -17,7 +17,7 @@ public class FragmentEvictionTests
 {
     private sealed class NullListener : IRakNetSessionListener
     {
-        public bool HandleGamePacket(RakNetSession session, ref Zenith.Raknet.Stream.BinaryStream stream)
+        public bool HandleGamePacket(RakNetSession session, ref Zenith.Binary.BinaryStream stream)
         {
             stream.Dispose();
             return true;

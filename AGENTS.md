@@ -17,7 +17,7 @@
 | `Network/` | Transport boundary only — `IGameTransport*`, `GameSessionHost`, RakNet/NetherNet adapters, `GameTransportFactory` (§143) |
 | `Event/` `Log/` `data/` | Infra / embedded assets |
 
-`Network/` is the transport boundary, **not** a catch-all: sessions/handlers/gameplay never reference a concrete transport, only `IGameTransportConnection`. Leaf libs (`libs/nbt`, `libs/leveldb`, `src/raknet`, `src/nethernet`) stay separate and never reference `zenith`.
+`Network/` is the transport boundary, **not** a catch-all: sessions/handlers/gameplay never reference a concrete transport, only `IGameTransportConnection`. Leaf libs (`libs/nbt`, `libs/leveldb`, `libs/binary`, `libs/logging`, `src/raknet`, `src/nethernet`) stay separate and never reference `zenith`.
 
 **Single-writer gameplay ownership:** authoritative `Player`/`World`/inventory/combat state is
 normally written only by its owning gameplay execution context (currently the GameLoop). Network

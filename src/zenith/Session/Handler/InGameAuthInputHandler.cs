@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Player;

@@ -3487,3 +3487,11 @@ When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
 **Choice:** bump `ServerIdentity` to 2225 / 1.26.62 and apply the schema deltas for the packets Zenith implements, derived from a structural diff of Mojang's `v1.26.51` and `v1.26.62` JSON schemas (details and table in `docs/protocol-churn.md`). Single-version server: no 2193 fallback. `PlayFabId` leaves `SerializedSkin` for `PlayerListEntry`; `ItemStackRequest` action ids shift after the new `CraftReservedAction`.
 
 **Deferred (blocks calling 2225 complete):** re-extracting block/item/creative/biome/jigsaw data from BDS 1.26.60+, smoke-bot support for 2225, and a retail-client join. Until the data is refreshed, only clients that tolerate 1.26.52-era palettes will behave correctly.
+
+## 145. `BinaryStream` and `ILogger` leave the RakNet assembly (nov 2026)
+
+**Problem:** `Packets/` (67 files) and the server logger depended on `Zenith.Raknet` only for the wire primitive `BinaryStream` and for `ILogger`/`LogLevel`, so the "transport-neutral" core still compiled against a transport library (ADR §143).
+
+**Choice:** two leaf libraries, no dependency on anything else: `libs/binary` (`Zenith.Binary.BinaryStream`, with its tests) and `libs/logging` (`Zenith.Logging.ILogger`, `LogLevel`). `src/raknet` and `src/zenith` reference them; `src/nethernet` is unaffected. RakNet-only helpers that lived on the stream (`ReadMagic`/`WriteMagic`) are now extension methods in `src/raknet`. `GamePacket.GameId` is a literal `0xFE`; the "game batches are reliable-ordered" contract moved from `NetworkSession` to `RakNetGameConnection.GameBatchReliability`.
+
+**Residual:** `ChatProtocol` still uses `TokenBucketRateLimiter` from `Zenith.Raknet.Extension` (a generic utility that deserves a neutral home); `NetworkSession` comments still mention RakNet channel semantics as history.

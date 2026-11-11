@@ -1,6 +1,6 @@
 using Zenith.Network;
 using Zenith.Raknet;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.Server;
 using Xunit;
 

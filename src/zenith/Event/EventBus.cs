@@ -1,4 +1,4 @@
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.Event;
 

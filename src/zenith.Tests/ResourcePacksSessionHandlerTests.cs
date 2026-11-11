@@ -1,5 +1,5 @@
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Xunit;
 using Zenith.Session.Handler;
 

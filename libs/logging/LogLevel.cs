@@ -1,4 +1,4 @@
-namespace Zenith.Raknet.Enumerator;
+namespace Zenith.Logging;
 
 [Flags]
 public enum LogLevel

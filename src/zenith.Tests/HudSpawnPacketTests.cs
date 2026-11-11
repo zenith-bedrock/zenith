@@ -50,7 +50,7 @@ public class HudSpawnPacketTests
     [Fact]
     public void EntityMetadataWriter_visible_name_is_non_empty()
     {
-        var writer = new Zenith.Raknet.Stream.BinaryStream();
+        var writer = new Zenith.Binary.BinaryStream();
         EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, "a");
         Assert.True(writer.GetBufferDisposing().Length > 8);
     }

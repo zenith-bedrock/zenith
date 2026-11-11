@@ -3,7 +3,7 @@ using Zenith.Diagnostics;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Commands;
 using Zenith.Player;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.World;
 using Zenith.Gameplay.Inventory;
 

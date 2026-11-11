@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../libs/binary/binary.csproj" />
+    <ProjectReference Include="../../libs/logging/logging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="raknet.Tests" />
   </ItemGroup>
 

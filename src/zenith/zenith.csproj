@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\raknet\raknet.csproj" />
     <ProjectReference Include="..\nethernet\nethernet.csproj" />
+    <ProjectReference Include="../../libs/binary/binary.csproj" />
+    <ProjectReference Include="../../libs/logging/logging.csproj" />
     <ProjectReference Include="..\..\libs\nbt\nbt.csproj" />
     <ProjectReference Include="..\..\libs\leveldb\leveldb.csproj" />
     <ProjectReference Include="..\..\libs\diagnostics\diagnostics.csproj" />

@@ -1,4 +1,4 @@
-namespace Zenith.Raknet.Log;
+namespace Zenith.Logging;
 
 public interface ILogger
 {

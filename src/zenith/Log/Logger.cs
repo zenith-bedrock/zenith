@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
-using Zenith.Raknet.Enumerator;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.Log;
 

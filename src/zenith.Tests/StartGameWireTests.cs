@@ -2,7 +2,7 @@ using Zenith.Packets;
 using Zenith.Session;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Server;
 using Xunit;
 
@@ -16,8 +16,8 @@ public class StartGameWireTests
     [Fact]
     public void Game_packet_egress_uses_reliable_ordered()
     {
-        Assert.Equal(Reliability.ReliableOrdered, NetworkSession.GamePacketReliability);
-        Assert.True(Frame.IsOrdered(NetworkSession.GamePacketReliability));
+        Assert.Equal(Reliability.ReliableOrdered, Zenith.Network.RakNet.RakNetGameConnection.GameBatchReliability);
+        Assert.True(Frame.IsOrdered(Zenith.Network.RakNet.RakNetGameConnection.GameBatchReliability));
         Assert.False(Frame.IsOrdered(Reliability.Reliable));
     }
 
@@ -99,15 +99,15 @@ public class StartGameWireTests
         var bytes = packet.Encode().ToArray();
         Assert.Contains((byte)0x02, bytes);
 
-        var stream = new Zenith.Raknet.Stream.BinaryStream(bytes);
+        var stream = new Zenith.Binary.BinaryStream(bytes);
         _ = stream.ReadUnsignedVarInt(); // packet id
         _ = stream.ReadVarLong(); // EntityId
         _ = stream.ReadUnsignedVarLong(); // EntityRuntimeID
         _ = stream.ReadVarInt(); // PlayerGameMode
         for (var i = 0; i < 5; i++)
-            _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // pos xyz + pitch/yaw
-        _ = stream.ReadLong(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // Seed
-        _ = stream.ReadShort(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // BiomeType
+            _ = stream.ReadFloat(Zenith.Binary.BinaryStream.Endianess.Little); // pos xyz + pitch/yaw
+        _ = stream.ReadLong(Zenith.Binary.BinaryStream.Endianess.Little); // Seed
+        _ = stream.ReadShort(Zenith.Binary.BinaryStream.Endianess.Little); // BiomeType
         _ = stream.ReadVarString(); // BiomeName
         _ = stream.ReadVarInt(); // Dimension
         _ = stream.ReadVarInt(); // Generator
@@ -126,8 +126,8 @@ public class StartGameWireTests
         _ = stream.ReadUnsignedVarInt(); // EducationEditionOffer (unsigned per ADR §93)
         _ = stream.ReadBool(); // EducationFeaturesEnabled
         _ = stream.ReadVarString(); // EducationProductID
-        _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // RainLevel
-        _ = stream.ReadFloat(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // LightningLevel
+        _ = stream.ReadFloat(Zenith.Binary.BinaryStream.Endianess.Little); // RainLevel
+        _ = stream.ReadFloat(Zenith.Binary.BinaryStream.Endianess.Little); // LightningLevel
         _ = stream.ReadBool();
         _ = stream.ReadBool();
         _ = stream.ReadBool(); // Confirmed/MultiPlayer/LAN
@@ -136,7 +136,7 @@ public class StartGameWireTests
         _ = stream.ReadBool();
         _ = stream.ReadBool(); // CommandsEnabled, TexturePackRequired
         _ = stream.ReadUnsignedVarInt(); // GameRules length
-        _ = stream.ReadUInt(Zenith.Raknet.Stream.BinaryStream.Endianess.Little); // Experiments length
+        _ = stream.ReadUInt(Zenith.Binary.BinaryStream.Endianess.Little); // Experiments length
         _ = stream.ReadBool();
         _ = stream.ReadBool();
         _ = stream.ReadBool(); // ExperimentsToggled/BonusChest/StartWithMap

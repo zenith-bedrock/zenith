@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using Xunit;
 using Zenith.Network;
 using Zenith.Network.NetherNet;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Server;
 
 namespace Zenith.Tests;
@@ -18,7 +18,7 @@ public sealed class NetherNetTransportTests
         public void Close(IGameTransportConnection connection, GameTransportCloseReason reason) { }
     }
 
-    private sealed class NullLogger : Zenith.Raknet.Log.ILogger
+    private sealed class NullLogger : Zenith.Logging.ILogger
     {
         public void Debug(string message) { }
         public void Info(string message) { }

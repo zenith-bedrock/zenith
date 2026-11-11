@@ -15,7 +15,7 @@ namespace Zenith.PacketGenerator.Tests;
 internal static class GeneratorTestHelper
 {
     private const string Preamble = """
-        namespace Zenith.Raknet.Stream
+        namespace Zenith.Binary
         {
             public ref struct BinaryStream
             {
@@ -66,13 +66,13 @@ internal static class GeneratorTestHelper
             {
                 public abstract int Id { get; }
                 public virtual System.Span<byte> Encode() => System.Array.Empty<byte>();
-                public abstract void Decode(ref Zenith.Raknet.Stream.BinaryStream stream);
+                public abstract void Decode(ref Zenith.Binary.BinaryStream stream);
             }
         }
 
         namespace Zenith.Packets.Generation
         {
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
 
             [System.AttributeUsage(System.AttributeTargets.Class)]
             public sealed class GamePacketAttribute(int protocolId) : System.Attribute

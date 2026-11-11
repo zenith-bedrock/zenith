@@ -30,7 +30,7 @@ public class SpawnPathWireTests
             "embedded jigsaw_structures_data.nbt must contain the vanilla rule compound");
 
         var bytes = new JigsawStructureDataPacket().Encode().ToArray();
-        var stream = new Zenith.Raknet.Stream.BinaryStream(bytes);
+        var stream = new Zenith.Binary.BinaryStream(bytes);
         Assert.Equal(313, (int)stream.ReadUnsignedVarInt());
 
         var decoded = NbtCodec.Decode(

@@ -1,4 +1,4 @@
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.World;
 using Xunit;
 

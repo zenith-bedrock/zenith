@@ -1,12 +1,17 @@
 using System.Net;
 using System.Net.Sockets;
-using Zenith.Raknet.Stream;
-using static Zenith.Raknet.Stream.BinaryStream;
+using Zenith.Binary;
+using static Zenith.Binary.BinaryStream;
 
 namespace Zenith.Raknet.Extension;
 
 public static class BinaryStreamExtension
 {
+    /// <summary>The 16-byte RakNet offline-message magic.</summary>
+    public static byte[] ReadMagic(this ref BinaryStream stream) => stream.ReadSpan(16).ToArray();
+
+    public static void WriteMagic(this ref BinaryStream stream) => stream.Write(RakNetServer.MAGIC);
+
     public static IPEndPoint ReadIPEndPoint(this ref BinaryStream stream)
     {
         var version = stream.ReadByte();
