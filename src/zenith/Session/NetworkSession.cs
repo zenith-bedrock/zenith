@@ -6,10 +6,7 @@ using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Server;
 using Zenith.Session.Handler;
-using Zenith.Raknet;
-using Zenith.Raknet.Enumerator;
-using Zenith.Raknet.Network;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.World;
 using Zenith.Network;
 
@@ -18,7 +15,7 @@ namespace Zenith.Session;
 /// <summary>
 /// Sessão de protocolo Bedrock de um cliente conectado, sentada em cima de um transporte
 /// de jogo. Representa estado da conexão/rede; outbound tipado fica em
-/// <see cref="Protocol"/>. Estado de jogo (Player, etc.) vive fora e não fala com RakNetSession.
+/// <see cref="Protocol"/>. Estado de jogo (Player, etc.) vive fora e não fala com nenhum transporte concreto.
 ///
 /// Dona do <see cref="ISessionHandler"/> ativo.
 /// </summary>
@@ -163,15 +160,10 @@ class NetworkSession
     }
 
     /// <summary>
-    /// Bedrock game packets must be ordered: StartGame (hash flag) before LevelChunk,
-    /// or the client decodes FNV palette ids as legacy runtime ids → empty skybox.
-    /// </summary>
-    internal const Reliability GamePacketReliability = Reliability.ReliableOrdered;
-
-    /// <summary>
     /// Default channel: the join sequence (StartGame + PreSpawn's <c>PublishChunks</c> batch) plus
     /// every latency-sensitive gameplay packet (moves, Death/Respawn, chat, UI, …). Must stay ordered
-    /// relative to StartGame — see <see cref="GamePacketReliability"/>'s own doc comment.
+    /// relative to StartGame: <see cref="IGameTransportConnection.SendGameBatch"/> is reliable and ordered per channel,
+    /// and StartGame (hash flag) must precede LevelChunk or the client decodes FNV palette ids as legacy ids → empty skybox.
     /// </summary>
     internal const byte DefaultOrderChannel = 0;
 
@@ -248,7 +240,7 @@ class NetworkSession
     public void Disconnect() => _transport.Disconnect();
 
     /// <summary>
-    /// Bedrock DisconnectPacket + flush outbound frames, then RakNet close.
+    /// Bedrock DisconnectPacket + flush outbound frames, then transport close.
     /// Idempotent if the transport is already closed.
     /// </summary>
     public void DisconnectWithMessage(string message)

@@ -9,7 +9,7 @@ using Zenith.NetherNet.Axolotl.Signaling.Lan;
 using Zenith.NetherNet.Axolotl.Transport;
 using Zenith.NetherNet.Axolotl.Transport.WebRtc;
 using Zenith.NetherNet.Axolotl.Utils;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Network.NetherNet;
 

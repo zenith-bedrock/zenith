@@ -1,5 +1,5 @@
 using Zenith.Player;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.Diagnostics;
 using System.Diagnostics;
 

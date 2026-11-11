@@ -1,7 +1,6 @@
 using System.IO;
 using System.IO.Compression;
-using Zenith.Raknet.Enumerator;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Packets;
 
@@ -17,7 +16,8 @@ namespace Zenith.Packets;
 /// </summary>
 class GamePacket
 {
-    public const byte GameId = (byte)Zenith.Raknet.Enumerator.MessageIdentifier.Game;
+    /// <summary>RakNet game-packet identifier; only written for transports whose connection reports <c>IncludesGamePacketIdentifier</c>.</summary>
+    public const byte GameId = 0xFE;
 
     /// <summary>
     /// Wire compression algorithm preference. After NetworkSettings, typically

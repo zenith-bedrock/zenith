@@ -1,7 +1,7 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Diagnostics;
 using Zenith.Player;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Xunit;
 
 namespace Zenith.Tests;

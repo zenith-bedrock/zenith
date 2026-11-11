@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using Xunit;
 using Zenith.Raknet.Extension;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace raknet.Tests;
 

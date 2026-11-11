@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Extension;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.Raknet;
 

@@ -5,7 +5,7 @@ using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Session;
 using Zenith.World;
 using Xunit;

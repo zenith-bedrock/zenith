@@ -1,7 +1,7 @@
 using Zenith.Gameplay.Commands;
 using Zenith.Player;
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Session;
 using Xunit;
 

@@ -1,7 +1,6 @@
 using Zenith.Network;
 using Zenith.Packets;
 using Zenith.Session;
-using Zenith.Raknet;
 
 namespace Zenith.Protocol;
 

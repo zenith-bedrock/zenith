@@ -1,4 +1,4 @@
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Event;
 using Zenith.Packets;
 using Zenith.Protocol;

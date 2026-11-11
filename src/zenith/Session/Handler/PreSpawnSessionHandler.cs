@@ -1,7 +1,7 @@
 using Zenith.Protocol;
 using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.World;
 
 namespace Zenith.Session.Handler;

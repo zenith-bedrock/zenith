@@ -1,7 +1,7 @@
 using Xunit;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
-namespace raknet.Tests;
+namespace binary.Tests;
 
 public class BinaryStreamTests
 {

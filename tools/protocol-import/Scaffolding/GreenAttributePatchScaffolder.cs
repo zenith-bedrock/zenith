@@ -37,7 +37,7 @@ internal static class GreenAttributePatchScaffolder
         var initializer = field.Optional ? "" : emission.ClrType switch { "string" => " = \"\";", "byte[]" => " = [];", _ => "" };
         var sb = new StringBuilder();
         sb.AppendLine("using Zenith.Packets.Generation;");
-        sb.AppendLine("using Zenith.Raknet.Stream;");
+        sb.AppendLine("using Zenith.Binary;");
         sb.AppendLine();
         sb.AppendLine("namespace Zenith.Packets;");
         sb.AppendLine();

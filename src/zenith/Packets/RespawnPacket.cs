@@ -1,5 +1,5 @@
 using Zenith.Packets.Generation;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Packets;
 

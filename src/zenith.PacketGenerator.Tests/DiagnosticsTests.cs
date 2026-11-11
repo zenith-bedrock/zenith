@@ -47,7 +47,7 @@ public class DiagnosticsTests
     {
         const string source = """
             using Zenith.Packets.Generation;
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
             namespace Zenith.Packets;
 
             [GamePacket(1)]

@@ -64,7 +64,7 @@ internal static class GreenUpgradePatchApplier
     private static string BasicTest(string packetName, string property) => $$"""
 using Xunit;
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Tests;
 

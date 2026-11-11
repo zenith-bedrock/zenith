@@ -5,7 +5,7 @@ using Zenith.Raknet;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
 using Zenith.Raknet.Network.Protocol;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Raknet.Tests;
 

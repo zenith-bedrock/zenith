@@ -1,6 +1,6 @@
 using System.Net;
 using Zenith.Raknet.Extension;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Raknet.Network.Protocol;
 

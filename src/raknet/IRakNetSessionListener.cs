@@ -1,5 +1,5 @@
 using Zenith.Raknet.Enumerator;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Raknet;
 

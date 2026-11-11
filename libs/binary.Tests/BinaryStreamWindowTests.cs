@@ -1,7 +1,7 @@
 using Xunit;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
-namespace raknet.Tests;
+namespace binary.Tests;
 
 /// <summary>
 /// Phase XXVII — the 3-arg window constructor and <see cref="BinaryStream.ReadSubstream"/> are the

@@ -190,7 +190,7 @@ public class ChatProtocolTests
         var original = ChatProtocol.CreateChatPacket("Bob", "hi there");
         var encoded = original.Encode().ToArray();
 
-        var stream = new Zenith.Raknet.Stream.BinaryStream(encoded);
+        var stream = new Zenith.Binary.BinaryStream(encoded);
         var header = stream.ReadUnsignedVarInt();
         Assert.Equal((int)Zenith.Packets.ProtocolInfo.TEXT_PACKET, header);
 

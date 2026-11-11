@@ -1,4 +1,4 @@
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Packets;
 
 namespace Zenith.Session.Handler;

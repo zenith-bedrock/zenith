@@ -10,7 +10,7 @@ public class NestedTests
         const string source = """
             using System;
             using Zenith.Packets.Generation;
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
             namespace Zenith.Packets;
             [GamePacket(2)] sealed partial class ArrayPacket : DataPacket
             { [WireUuidArray] public Guid[] Ids { get; set; } = []; }
@@ -28,7 +28,7 @@ public class NestedTests
     {
         const string source = """
             using Zenith.Packets.Generation;
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
             namespace Zenith.Packets;
 
             readonly struct Origin
@@ -59,7 +59,7 @@ public class NestedTests
     {
         const string source = """
             using Zenith.Packets.Generation;
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
             namespace Zenith.Packets;
 
             readonly struct Broken
@@ -85,7 +85,7 @@ public class NestedTests
     {
         const string source = """
             using Zenith.Packets.Generation;
-            using Zenith.Raknet.Stream;
+            using Zenith.Binary;
             namespace Zenith.Packets;
 
             readonly struct Item

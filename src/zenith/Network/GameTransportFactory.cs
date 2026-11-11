@@ -7,7 +7,7 @@ using Zenith.NetherNet.Axolotl.Utils;
 using Zenith.Network.NetherNet;
 using Zenith.Network.RakNet;
 using Zenith.Raknet;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 using Zenith.Server;
 
 namespace Zenith.Network;

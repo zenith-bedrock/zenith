@@ -1,4 +1,5 @@
-using Zenith.Raknet.Stream;
+using Zenith.Raknet.Extension;
+using Zenith.Binary;
 
 namespace Zenith.Raknet.Network.Protocol;
 

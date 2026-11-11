@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Zenith.Raknet.Stream;
+namespace Zenith.Binary;
 
 /// <summary>
 /// ref struct de propósito duplo: leitura sobre um array existente (dispatch de pacote) e
@@ -580,10 +580,6 @@ public ref struct BinaryStream : IDisposable
     public long ReadVarLong() => ZigzagDecode(ReadUnsignedVarLong());
 
     public void WriteVarLong(long v) => WriteUnsignedVarLong(ZigzagEncode(v));
-
-    public byte[] ReadMagic() => ReadSpan(16).ToArray();
-
-    public void WriteMagic() => Write(RakNetServer.MAGIC);
 
     private static int ZigzagEncode(int value) => (value << 1) ^ (value >> 31);
 

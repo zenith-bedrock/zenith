@@ -3,7 +3,7 @@ using BenchmarkDotNet.Attributes;
 using Zenith.Packets;
 using Zenith.Raknet.Enumerator;
 using Zenith.Raknet.Network;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 
 namespace Zenith.Benchmarks;
 

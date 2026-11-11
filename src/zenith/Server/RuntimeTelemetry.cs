@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using Zenith.Network;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.Server;
 

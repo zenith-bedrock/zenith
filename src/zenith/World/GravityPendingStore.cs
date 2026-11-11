@@ -1,5 +1,5 @@
 using System.Threading;
-using Zenith.Raknet.Log;
+using Zenith.Logging;
 
 namespace Zenith.World;
 

@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using Zenith.Packets;
-using Zenith.Raknet.Stream;
+using Zenith.Binary;
 using Zenith.Session.Handler;
 using Xunit;
 
