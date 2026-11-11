@@ -41,7 +41,7 @@ public class PlayerVisibilityJoinTests
 
         PlayerVisibility.AnnounceJoin(bob, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
 
         Assert.True(fx.Transport.Captured.Count >= 1,
             "joiner must receive the PlayerList/AddPlayer bootstrap for standing peers");
@@ -60,7 +60,7 @@ public class PlayerVisibilityJoinTests
             alice.PositionX, alice.PositionY, alice.PositionZ, alice.Pitch, alice.Yaw));
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
         Assert.Empty(fx.Transport.Captured);
     }
 

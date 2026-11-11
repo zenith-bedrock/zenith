@@ -256,7 +256,7 @@ public sealed class ZombieSystemTests
         second.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var player in fx.Players.Online)
-            player.Session.RakSession().Tick();
+            player.Session.Transport.FlushOutgoing();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);
@@ -326,11 +326,11 @@ public sealed class ZombieSystemTests
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(1f, viewer.PositionY, viewer.PositionZ);
         system.Tick(fx.Clock, fx.Players.Online); // replicate spawn to the viewer before damaging
-        foreach (var player in fx.Players.Online) player.Session.RakSession().Tick();
+        foreach (var player in fx.Players.Online) player.Session.Transport.FlushOutgoing();
         var before = fx.Transport.Captured.Count;
 
         Assert.True(system.TryApplyDamage(id, DamageSource.Melee, 6f, fx.Players.Online, fx.Clock.CurrentTick));
-        foreach (var player in fx.Players.Online) player.Session.RakSession().Tick();
+        foreach (var player in fx.Players.Online) player.Session.Transport.FlushOutgoing();
 
         Assert.True(system.Stores.Entities.IsAlive(id));
         Assert.True(fx.Transport.Captured.Count > before); // health + hurt reaction reached the viewer
@@ -346,12 +346,12 @@ public sealed class ZombieSystemTests
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(1f, viewer.PositionY, viewer.PositionZ);
         system.Tick(fx.Clock, fx.Players.Online);
-        foreach (var player in fx.Players.Online) player.Session.RakSession().Tick();
+        foreach (var player in fx.Players.Online) player.Session.Transport.FlushOutgoing();
         var maxHealth = Health(system, id).Maximum;
         var before = fx.Transport.Captured.Count;
 
         Assert.True(system.TryApplyDamage(id, DamageSource.Melee, maxHealth, fx.Players.Online, fx.Clock.CurrentTick));
-        foreach (var player in fx.Players.Online) player.Session.RakSession().Tick();
+        foreach (var player in fx.Players.Online) player.Session.Transport.FlushOutgoing();
 
         Assert.False(system.Stores.Entities.IsAlive(id)); // authoritative destruction remains immediate — see EntityProtocol.SendDeath doc comment
         Assert.True(fx.Transport.Captured.Count > before); // death reaction + remove-actor reached the viewer

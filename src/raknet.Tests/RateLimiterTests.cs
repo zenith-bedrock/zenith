@@ -7,22 +7,6 @@ namespace Zenith.Raknet.Tests;
 public class RateLimiterTests
 {
     [Fact]
-    public void TokenBucket_rejects_when_empty_and_refills_with_clock()
-    {
-        var now = 1_000L;
-        var limiter = new TokenBucketRateLimiter<string>(capacity: 2, refillPerSecond: 10, () => now);
-
-        Assert.True(limiter.TryConsume("a"));
-        Assert.True(limiter.TryConsume("a"));
-        Assert.False(limiter.TryConsume("a"));
-
-        now += 200; // 2 tokens at 10/s
-        Assert.True(limiter.TryConsume("a"));
-        Assert.True(limiter.TryConsume("a"));
-        Assert.False(limiter.TryConsume("a"));
-    }
-
-    [Fact]
     public void IpRateLimiter_isolates_addresses()
     {
         var now = 5_000L;

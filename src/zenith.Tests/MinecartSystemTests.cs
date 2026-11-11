@@ -162,12 +162,12 @@ public sealed class MinecartSystemTests
 
         player.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
-        player.Session.RakSession().Tick();
+        player.Session.Transport.FlushOutgoing();
         var afterMountBytes = BytesSentTo(fx, player); // baseline: just SetActorLink(Rider)
 
         player.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
-        player.Session.RakSession().Tick();
+        player.Session.Transport.FlushOutgoing();
         var dismountTickBytes = BytesSentTo(fx, player) - afterMountBytes;
 
         Assert.Null(player.RidingEntityId);
@@ -356,7 +356,7 @@ public sealed class MinecartSystemTests
         second.Chunks.RememberMany([(0, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);
@@ -381,7 +381,7 @@ public sealed class MinecartSystemTests
         late.Chunks.RememberMany([(0, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
 
         // The late joiner's viewer-reconciliation enter path sends the mount link alongside the
         // spawn/health packets — a strictly larger capture delta than a plain unoccupied spawn.

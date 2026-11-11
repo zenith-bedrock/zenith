@@ -1,4 +1,3 @@
-using Zenith.Raknet.Extension;
 using Zenith.Packets;
 using Zenith.Session;
 

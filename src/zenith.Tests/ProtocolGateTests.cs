@@ -95,7 +95,7 @@ public class ProtocolGateTests
         player.Session.CompressionAlgorithm = PacketCompression.ZLIB; // set by HandleRequestNetworkSettings before this can ever run
 
         player.Session.Protocol.Login.SendIncompatibleProtocol(PlayStatusPacket.LoginFailedClient);
-        player.Session.RakSession().Tick();
+        player.Session.Transport.FlushOutgoing();
 
         var status = DecodeSolePlayStatus(fx.Transport.Captured);
         Assert.Equal(PlayStatusPacket.LoginFailedClient, status);

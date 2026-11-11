@@ -94,7 +94,7 @@ public sealed class PlayerDamageGameModeTests
     private static void Flush(IntentTestFixture fx)
     {
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
     }
 
     private static bool SentSetActorMotion(IntentTestFixture fx, IPEndPoint recipient)

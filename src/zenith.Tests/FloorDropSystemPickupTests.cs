@@ -84,7 +84,7 @@ public class FloorDropSystemPickupTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var p in players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
     }
 
     private static byte[] ConcatCaptured(IntentTestFixture fx)
