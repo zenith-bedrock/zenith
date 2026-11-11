@@ -3366,7 +3366,7 @@ public class IntentContractTests
     }
 
     [Fact]
-    public void InventorySystem_craft_times_clamped_by_grid()
+    public void InventorySystem_craft_times_beyond_grid_is_rejected()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("clamp");
@@ -3379,8 +3379,8 @@ public class IntentContractTests
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(4, player.CraftUi.Result.Count);
-        Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
+        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
     }
 
     [Fact]

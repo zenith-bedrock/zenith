@@ -41,6 +41,14 @@ the closest thing to "what a real client sends and expects back".
 6. **`Transfer`/`Drop` with `count == 0` means "whole stack"** in `InventorySystem.Apply`; the wire never sends 0 for a
    real move, so this is an input-validation question, not a feature.
 
+## Fixed
+
+- **Silent craft clamp (2b).** `RecipeRegistry.TryCraftFromGrid` used to reduce an over-large `crafts` to what the grid
+  afforded; it now refuses. Reproduced first (`CraftingAuditTests`), old characterization test inverted
+  (`InventorySystem_craft_times_beyond_grid_is_rejected`). Not validated against a retail client.
+- **Open, found while reading:** `RecipeRegistry` holds a tiny hand-written recipe set and matches shapeless by aggregate
+  count, so e.g. the chest (ring of 8 planks) is accepted for any arrangement of 8 planks on the table.
+
 ## Next
 
 - Turn each gap above into a failing test *first* (see `InGameInventoryHandlerItemStackRequestTests`,
