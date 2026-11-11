@@ -1,0 +1,2 @@
+# Embedded data hashed in manifest.json must stay byte-exact (no CRLF conversion)
+src/zenith/data/* -text
