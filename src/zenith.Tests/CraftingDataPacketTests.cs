@@ -9,118 +9,147 @@ namespace Zenith.Tests;
 
 public class CraftingDataPacketTests
 {
+    private static readonly ItemPalette Palette = ItemPaletteLoader.FromEmbeddedResource();
+
     public CraftingDataPacketTests()
     {
         Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
     }
 
+    private static CraftingDataPacket Build() => InventoryProtocol.BuildCraftingData(RecipeRegistry.CreateDefault(), Palette);
+
     [Fact]
-    public void BuildCraftingData_matches_registry_net_ids_and_clear_flag()
+    public void Every_registry_recipe_is_sent_once_under_its_net_id_and_the_book_is_cleared()
     {
         var registry = RecipeRegistry.CreateDefault();
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var packet = InventoryProtocol.BuildCraftingData(registry, palette);
+        var packet = Build();
 
         Assert.True(packet.ClearRecipes);
-        Assert.Equal(registry.SnapshotRecipes().Count, packet.Recipes.Length);
-        Assert.Equal(RecipeRegistry.OakLogToPlanks, packet.Recipes[0].RecipeNetworkId);
-        Assert.Equal(RecipeRegistry.OakPlanksToChest, packet.Recipes[1].RecipeNetworkId);
-    }
-
-    /// <summary>
-    /// Regression for ADR §139: every recipe used to default to "crafting_table" on the wire
-    /// (ShapelessCraftingRecipe's own field default), including ones craftable in the personal 2×2
-    /// grid. The Block field must now reflect each recipe's actual RequiresTable value.
-    /// </summary>
-    [Fact]
-    public void BuildCraftingData_sets_Block_per_recipe_RequiresTable()
-    {
-        var registry = RecipeRegistry.CreateDefault();
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var packet = InventoryProtocol.BuildCraftingData(registry, palette);
-
-        var logToPlanks = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.OakLogToPlanks);
-        Assert.NotNull(logToPlanks);
-        Assert.Equal("", logToPlanks!.Block);
-
-        var planksToChest = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.OakPlanksToChest);
-        Assert.NotNull(planksToChest);
-        Assert.Equal("crafting_table", planksToChest!.Block);
-
-        var pickaxe = Array.Find(packet.Recipes, r => r.RecipeNetworkId == RecipeRegistry.WoodenPickaxe);
-        Assert.NotNull(pickaxe);
-        Assert.Equal("crafting_table", pickaxe!.Block);
+        Assert.Equal(registry.Count, packet.ShapedRecipes.Length + packet.Recipes.Length);
+        var ids = packet.ShapedRecipes.Select(r => r.RecipeNetworkId).Concat(packet.Recipes.Select(r => r.RecipeNetworkId)).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.All(registry.Recipes, r => Assert.Contains(r.NetId, ids));
     }
 
     [Fact]
-    public void CraftingData_encode_shape_recipe_count_clear_and_net_ids()
+    public void Shaped_recipes_carry_their_dimensions_tags_and_empty_cells()
     {
-        var registry = RecipeRegistry.CreateDefault();
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var packet = InventoryProtocol.BuildCraftingData(registry, palette);
-        var bytes = packet.Encode().ToArray();
+        var chest = Array.Find(Build().ShapedRecipes, r => r.RecipeId == "minecraft:Chest_recipeId");
+        Assert.NotNull(chest);
+        Assert.Equal((3, 3), (chest!.Width, chest.Height));
+        Assert.Equal(9, chest.Inputs.Length);
+        Assert.Equal("minecraft:planks", chest.Inputs[0].Tag);
+        Assert.Equal(WireRecipeIngredient.Empty, chest.Inputs[4]); // the hole in the ring
+        Assert.Equal("crafting_table", chest.Block);
+    }
 
+    [Fact]
+    public void Recipes_get_distinct_deterministic_uuids()
+    {
+        var a = Encode(Build());
+        var b = Encode(Build());
+        Assert.True(a.SequenceEqual(b));
+    }
+
+    private static byte[] Encode(CraftingDataPacket p) => p.Encode().ToArray();
+
+    [Fact]
+    public void CraftingData_encode_starts_with_shaped_then_shapeless_counts_and_ends_with_clear()
+    {
+        var packet = Build();
+        var bytes = Encode(packet);
         var stream = new BinaryStream(bytes);
+
         Assert.Equal((int)ProtocolInfo.CRAFTING_DATA_PACKET, stream.ReadUnsignedVarInt());
-        Assert.Equal(0, stream.ReadUnsignedVarInt()); // shaped_recipes — protocol 2168+ shape (ADR §86)
-        Assert.Equal(registry.SnapshotRecipes().Count, stream.ReadUnsignedVarInt()); // shapeless_recipes
-
-        // Skip recipe payloads until the trailing empty-array run + ClearRecipes by scanning for
-        // ending: after recipes, protocol 2168+ has 9 more empty lists (was 3) + bool ClearRecipes.
-        // Validate trailing ClearRecipes=true and that net ids encode into payload.
-        var textish = System.Text.Encoding.UTF8.GetString(bytes);
-        Assert.Contains("zenith:recipe_1", textish);
-        Assert.Contains("zenith:recipe_2", textish);
-        Assert.Contains("crafting_table", textish);
-        Assert.Contains("name", textish); // ItemDescriptor kind label (Cereal map-style encoding)
-
-        Assert.True(bytes[^1] == 1); // ClearRecipes = true (WriteBool at end)
+        Assert.Equal(packet.ShapedRecipes.Length, stream.ReadUnsignedVarInt());
+        Assert.True(bytes[^1] == 1); // ClearRecipes = true
     }
 
     [Fact]
-    public void ShapelessRecipe_encode_shape_matches_protocol_2168_layout()
+    public void ShapelessRecipe_encode_shape_matches_protocol_2225_layout()
     {
-        // Byte-level decode of one recipe entry (ADR §86): descriptor variant + kind label +
-        // item name + metadata + count per input, no per-entry type tag, Optional
-        // UnlockingRequirement has-flag=false, unsigned net id.
         var recipe = new ShapelessCraftingRecipe
         {
-            RecipeId = "zenith:recipe_1",
-            Inputs = [new DefaultDescriptorInput("minecraft:oak_log", 0, 1)],
+            RecipeId = "t:shapeless",
+            Inputs = [new WireRecipeIngredient("minecraft:oak_log", null, 1), new WireRecipeIngredient(null, "minecraft:planks", 2)],
             Outputs = [new NetworkItemStack(5, 4, 0)],
             Block = "crafting_table",
-            Priority = 0,
-            RecipeNetworkId = 1
+            RecipeNetworkId = 7
         };
 
         var writer = new BinaryStream();
         recipe.Write(ref writer);
-        var bytes = writer.GetBufferDisposing().ToArray();
-        var stream = new BinaryStream(bytes);
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
 
-        Assert.Equal("zenith:recipe_1", stream.ReadVarString());
-        Assert.Equal(1, stream.ReadUnsignedVarInt()); // inputs count
+        Assert.Equal("t:shapeless", stream.ReadVarString());
+        Assert.Equal(2, stream.ReadUnsignedVarInt()); // inputs
 
-        Assert.Equal(1, stream.ReadUnsignedVarInt()); // ItemDescriptor variant = Default
-        Assert.Equal("name", stream.ReadVarString()); // descriptor-kind label
+        Assert.Equal(1, stream.ReadUnsignedVarInt()); // valid
+        Assert.Equal("name", stream.ReadVarString());
         Assert.Equal("minecraft:oak_log", stream.ReadVarString());
-        Assert.Equal(0, stream.ReadVarInt()); // metadata
-        Assert.Equal(1, stream.ReadVarInt()); // ingredient count
+        Assert.Equal(WireRecipeIngredient.AnyAux, stream.ReadVarInt());
+        Assert.Equal(1, stream.ReadVarInt());
 
-        Assert.Equal(1, stream.ReadUnsignedVarInt()); // outputs count
-        Assert.Equal(5, stream.ReadVarInt()); // ItemStack (WriteItemStack) network id — VarInt, not fixed short
+        Assert.Equal(1, stream.ReadUnsignedVarInt()); // valid
+        Assert.Equal("item_tag", stream.ReadVarString());
+        Assert.Equal("minecraft:planks", stream.ReadVarString());
+        Assert.Equal(WireRecipeIngredient.AnyAux, stream.ReadVarInt());
+        Assert.Equal(2, stream.ReadVarInt());
+
+        Assert.Equal(1, stream.ReadUnsignedVarInt()); // outputs
+        Assert.Equal(5, stream.ReadVarInt());
         Assert.Equal((ushort)4, stream.ReadUShort(BinaryStream.Endianess.Little));
         Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // meta
         Assert.Equal(0, stream.ReadVarInt()); // block_runtime_id
-        Assert.Equal(10, (int)stream.ReadUnsignedVarInt()); // extra blob length (has_nbt + can_place + can_destroy)
+        Assert.Equal(10, (int)stream.ReadUnsignedVarInt()); // extra blob length
         for (var i = 0; i < 10; i++) Assert.Equal(0, stream.ReadByte());
 
-        Assert.Equal(Guid.Empty, stream.ReadUuid());
+        Assert.NotEqual(Guid.Empty, stream.ReadUuid());
         Assert.Equal("crafting_table", stream.ReadVarString());
         Assert.Equal(0, stream.ReadVarInt()); // priority
-        Assert.False(stream.ReadBool()); // UnlockingRequirement Optional has-flag
-        Assert.Equal(1, stream.ReadUnsignedVarInt()); // recipe net id
+        Assert.False(stream.ReadBool()); // UnlockingRequirement
+        Assert.Equal(7, stream.ReadUnsignedVarInt()); // net id
+        Assert.True(stream.IsEndOfFile);
+    }
+
+    [Fact]
+    public void ShapedRecipe_encode_writes_size_ingredients_symmetry_then_net_id()
+    {
+        var recipe = new ShapedCraftingRecipe
+        {
+            RecipeId = "t:shaped", Width = 1, Height = 2, AssumeSymmetry = true,
+            Inputs = [new WireRecipeIngredient("minecraft:stick", null, 1), WireRecipeIngredient.Empty],
+            Outputs = [new NetworkItemStack(5, 1, 0)], Block = "crafting_table", RecipeNetworkId = 9
+        };
+
+        var writer = new BinaryStream();
+        recipe.Write(ref writer);
+        var stream = new BinaryStream(writer.GetBufferDisposing().ToArray());
+
+        Assert.Equal("t:shaped", stream.ReadVarString());
+        Assert.Equal(1, stream.ReadVarInt()); // width
+        Assert.Equal(2, stream.ReadVarInt()); // height
+        Assert.Equal(2, stream.ReadUnsignedVarInt()); // ingredients
+        Assert.Equal(1, stream.ReadUnsignedVarInt());
+        Assert.Equal("name", stream.ReadVarString());
+        Assert.Equal("minecraft:stick", stream.ReadVarString());
+        stream.ReadVarInt(); stream.ReadVarInt();
+        Assert.Equal(0, stream.ReadUnsignedVarInt()); // empty cell
+        Assert.Equal(WireRecipeIngredient.AnyAux, stream.ReadVarInt());
+        Assert.Equal(0, stream.ReadVarInt());
+
+        Assert.Equal(1, stream.ReadUnsignedVarInt()); // outputs
+        stream.ReadVarInt(); stream.ReadUShort(BinaryStream.Endianess.Little); stream.ReadUnsignedVarInt(); stream.ReadVarInt();
+        var extra = (int)stream.ReadUnsignedVarInt();
+        for (var i = 0; i < extra; i++) stream.ReadByte();
+
+        stream.ReadUuid();
+        Assert.Equal("crafting_table", stream.ReadVarString());
+        Assert.Equal(0, stream.ReadVarInt()); // priority
+        Assert.True(stream.ReadBool()); // assume_symmetry
+        Assert.False(stream.ReadBool()); // UnlockingRequirement
+        Assert.Equal(9, stream.ReadUnsignedVarInt());
         Assert.True(stream.IsEndOfFile);
     }
 }

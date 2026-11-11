@@ -2803,7 +2803,7 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("closed-craft");
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
-        SubmitCraftRecipeRequest(player, requestId: 501, RecipeRegistry.OakLogToPlanks);
+        SubmitCraftRecipeRequest(player, requestId: 501, TestRecipes.OakLogToPlanks);
 
         Assert.False(player.TryConsumeInventoryStack(out _));
         Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
@@ -2926,7 +2926,7 @@ public class IntentContractTests
         var session = player.OpenPlayerContainer(0, 0xff);
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
-        SubmitCraftRecipeRequest(player, requestId: 502, RecipeRegistry.OakLogToPlanks);
+        SubmitCraftRecipeRequest(player, requestId: 502, TestRecipes.OakLogToPlanks);
         Assert.True(player.TryCloseContainer(session.WindowId, session.WindowType, out _));
 
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -2943,7 +2943,7 @@ public class IntentContractTests
         player.OpenPlayerContainer(0, 0xff);
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
-        SubmitCraftRecipeRequest(player, requestId: 503, RecipeRegistry.OakLogToPlanks);
+        SubmitCraftRecipeRequest(player, requestId: 503, TestRecipes.OakLogToPlanks);
         player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
 
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -2960,7 +2960,7 @@ public class IntentContractTests
         player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
-        SubmitCraftRecipeRequest(player, requestId: 504, RecipeRegistry.OakLogToPlanks);
+        SubmitCraftRecipeRequest(player, requestId: 504, TestRecipes.OakLogToPlanks);
 
         Assert.False(player.TryConsumeInventoryStack(out _));
         Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
@@ -2997,7 +2997,7 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("mixed-ui");
         player.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
 
-        SubmitChestAndCraftRequest(player, requestId: 507, RecipeRegistry.OakLogToPlanks);
+        SubmitChestAndCraftRequest(player, requestId: 507, TestRecipes.OakLogToPlanks);
 
         Assert.False(player.TryConsumeInventoryStack(out _));
     }
@@ -3176,7 +3176,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 2)));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(9, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput()
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -3198,7 +3198,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(10, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 4,
@@ -3228,7 +3228,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.OakLog, 1));
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(20, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, 1, 4)
@@ -3241,7 +3241,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Air, 0));
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(21, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, 2, 4)
         ])));
@@ -3260,7 +3260,7 @@ public class IntentContractTests
         // the personal 2x2 grid must refuse it even though Zenith's shapeless matcher could
         // otherwise satisfy the aggregate count.
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(22, [
-            InventoryStackAction.Craft(RecipeRegistry.OakPlanksToChest),
+            InventoryStackAction.Craft(TestRecipes.Chest),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, 3, 1,
@@ -3270,18 +3270,16 @@ public class IntentContractTests
         sys.Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(player.CraftUi.Result.IsEmpty);
-        Assert.NotEqual(Blocks.Chest, player.Inventory.Get(3).Id.Value);
+        Assert.False(Blocks.IsChest(player.Inventory.Get(3).Id.Value));
         Assert.Equal(Blocks.OakPlanks, player.CraftUi.GetGrid(0).Id.Value); // rolled back, not consumed
 
         // Open a crafting table and place the same 8 planks in its 3x3 grid — now it succeeds.
         player.OpenCraftingTableContainer(1, InventoryContainerMap.WindowTypeWorkbench);
-        Assert.True(player.TableCraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
-        Assert.True(player.TableCraftUi.TrySetGrid(1, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
-        Assert.True(player.TableCraftUi.TrySetGrid(2, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
-        Assert.True(player.TableCraftUi.TrySetGrid(3, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
+        foreach (var cell in new[] { 0, 1, 2, 3, 5, 6, 7, 8 }) // the ring: a chest is NOT just eight planks
+            Assert.True(player.TableCraftUi.TrySetGrid(cell, InventorySlot.OfBlock(Blocks.OakPlanks, 1)));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(23, [
-            InventoryStackAction.Craft(RecipeRegistry.OakPlanksToChest),
+            InventoryStackAction.Craft(TestRecipes.Chest),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, 3, 1,
@@ -3291,7 +3289,7 @@ public class IntentContractTests
         sys.Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(player.CraftUi.Result.IsEmpty);
-        Assert.Equal(Blocks.Chest, player.Inventory.Get(3).Id.Value);
+        Assert.True(Blocks.IsChest(player.Inventory.Get(3).Id.Value));
         Assert.Equal(1, player.Inventory.Get(3).Count);
         Assert.True(player.TableCraftUi.GetGrid(0).IsEmpty); // consumed from the table grid, not the personal one
     }
@@ -3307,13 +3305,13 @@ public class IntentContractTests
 
         var sys = fx.CreateInventorySystem();
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(30, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks)
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks)
         ])));
         sys.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.OakPlanks, player.CraftUi.Result.Id.Value);
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(31, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks)
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks)
         ])));
         sys.Tick(fx.Clock, fx.Players.Online);
 
@@ -3333,7 +3331,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 2)));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(12, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 2),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks, craftTimes: 2),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
                 InventoryContainerMap.CraftResultFlat, 9, 8,
@@ -3356,7 +3354,7 @@ public class IntentContractTests
         Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(13, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 0),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks, craftTimes: 0),
             InventoryStackAction.CreateOutput()
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -3374,7 +3372,7 @@ public class IntentContractTests
 
         // Request 5 crafts but only 1 log → clamp to 1, not fail.
         Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(14, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, craftTimes: 5),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks, craftTimes: 5),
             InventoryStackAction.CreateOutput()
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -3884,7 +3882,7 @@ public class IntentContractTests
         writer.WriteVarInt(78);
         writer.WriteUnsignedVarInt(1);
         WriteStackActionHeader(ref writer, ItemStackRequestPacket.ActionCraftRecipe);
-        writer.WriteUnsignedVarInt(checked((int)RecipeRegistry.OakLogToPlanks));
+        writer.WriteUnsignedVarInt(checked((int)TestRecipes.OakLogToPlanks));
         writer.WriteByte(0);
         SubmitItemStackRequest(player, writer);
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);

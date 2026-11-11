@@ -15,7 +15,7 @@ public class CraftingAuditTests
 
     private static InventoryStackIntent CraftThenTake(int requestId, byte crafts) =>
         InventoryStackIntent.Create(requestId, [
-            InventoryStackAction.Craft(RecipeRegistry.OakLogToPlanks, crafts),
+            InventoryStackAction.Craft(TestRecipes.OakLogToPlanks, crafts),
             InventoryStackAction.ConsumeNoOp(),
             InventoryStackAction.Transfer(InventorySlotReference.CraftResult, InventorySlotReference.Cursor, 0),
         ], expectedOpenContainerGeneration: 0, requiresOpenContainer: false, requiredOpenContainerTarget: null);

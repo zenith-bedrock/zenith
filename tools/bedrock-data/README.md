@@ -35,3 +35,13 @@ dotnet test zenith.sln -c Release
 The importer checks the exported version, unresolved errors, duplicate item names and the set of non-empty component definitions. It writes deterministic gzip BigEndian block NBT, normalized item/creative JSON, the exact biome body, and a manifest with source and output hashes. It does not itself perform the capture roundtrip checks or validate the supplied archive file.
 
 Use a fresh `ZENITH_DATA` directory and run `smoke:join` from the sibling bot. Old persisted numeric IDs require a separate version-aware migration before reuse. No operator world is deleted by the importer.
+
+## Recipes
+
+`src/zenith/data/recipes.json.gz` is **not** built from the behaviour pack's `recipes.brarchive` (legacy names, un-expanded). Capture the `crafting_data` and `item_registry` packets a stock BDS sends at login (BDS ≥ 1.26.60 with `transport=raknet` in `server.properties`, offline, separate port; the smoke bot's codec decodes them) into `crafting_data.json` / `item_registry.json`, then:
+
+```powershell
+python tools/bedrock-data/extract_recipes.py C:/path/to/capture src/zenith/data/recipes.json.gz
+```
+
+The script prints how many recipes it dropped and why (non-grid stations, aux-valued ingredients, output NBT). Current data: BDS 1.26.63.1.

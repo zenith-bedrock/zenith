@@ -3,64 +3,116 @@ using Zenith.Binary;
 namespace Zenith.Packets;
 
 /// <summary>
-/// One shapeless recipe entry for CraftingData, protocol 2168+ shape (ADR §86). No per-entry
-/// type tag — CraftingDataPacket now carries recipes in separate per-type arrays, and the
-/// recipe's own <c>Type</c> is which array it's in, not a field on the entry.
+/// One recipe ingredient on the wire (<c>RecipeIngredient</c>): empty, a named item or an item tag. Metadata is
+/// the wildcard 32767 for every real ingredient, as a stock BDS sends it.
 /// </summary>
-sealed class ShapelessCraftingRecipe
+readonly record struct WireRecipeIngredient(string? Name, string? Tag, int Count)
 {
-    /// <summary>ItemDescriptor variant for a plain named item (not MoLang/item-tag/deferred).</summary>
-    private const int DescriptorDefault = 1;
+    public const int AnyAux = 32767;
 
-    /// <summary>Descriptor-kind label written alongside the variant number (Cereal map-style encoding).</summary>
-    private const string DescriptorKindDefault = "name";
+    public static WireRecipeIngredient Empty => new(null, null, 0);
 
+    public void Write(ref BinaryStream writer)
+    {
+        if (Name is null && Tag is null)
+        {
+            writer.WriteUnsignedVarInt(0); // invalid / empty cell
+            writer.WriteVarInt(AnyAux);
+            writer.WriteVarInt(0);
+            return;
+        }
+
+        writer.WriteUnsignedVarInt(1); // valid
+        if (Name is not null)
+        {
+            writer.WriteVarString("name");
+            writer.WriteVarString(Name);
+        }
+        else
+        {
+            writer.WriteVarString("item_tag");
+            writer.WriteVarString(Tag!);
+        }
+
+        writer.WriteVarInt(AnyAux);
+        writer.WriteVarInt(Count);
+    }
+}
+
+/// <summary>Fields shared by shaped and shapeless entries (protocol 2168+ per-type arrays, ADR §86).</summary>
+abstract class CraftingRecipeEntry
+{
     public string RecipeId { get; set; } = "";
-    public DefaultDescriptorInput[] Inputs { get; set; } = [];
+    public WireRecipeIngredient[] Inputs { get; set; } = [];
     public NetworkItemStack[] Outputs { get; set; } = [];
     public string Block { get; set; } = "crafting_table";
     public int Priority { get; set; }
     public uint RecipeNetworkId { get; set; }
 
-    public void Write(ref BinaryStream writer)
+    protected void WriteInputs(ref BinaryStream writer)
     {
-        writer.WriteVarString(RecipeId);
-
         writer.WriteUnsignedVarInt(Inputs.Length);
         foreach (var input in Inputs)
-        {
-            writer.WriteUnsignedVarInt(DescriptorDefault);
-            writer.WriteVarString(DescriptorKindDefault);
-            writer.WriteVarString(input.Name);
-            writer.WriteVarInt(input.Metadata);
-            writer.WriteVarInt(input.Count);
-        }
+            input.Write(ref writer);
+    }
 
+    protected void WriteTail(ref BinaryStream writer)
+    {
         writer.WriteUnsignedVarInt(Outputs.Length);
         foreach (var output in Outputs)
             output.WriteItemStack(ref writer);
 
-        writer.WriteUuid(Guid.Empty);
+        writer.WriteUuid(StableUuid(RecipeId));
         writer.WriteVarString(Block);
         writer.WriteVarInt(Priority);
-        writer.WriteBool(false); // UnlockingRequirement Optional — none (always craftable)
+    }
+
+    /// <summary>The client keys recipes by uuid as well as net id, so each recipe gets a deterministic, distinct one.</summary>
+    private static Guid StableUuid(string recipeId) =>
+        new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(recipeId)));
+}
+
+sealed class ShapelessCraftingRecipe : CraftingRecipeEntry
+{
+    public void Write(ref BinaryStream writer)
+    {
+        writer.WriteVarString(RecipeId);
+        WriteInputs(ref writer);
+        WriteTail(ref writer);
+        writer.WriteBool(false); // UnlockingRequirement — none (always craftable)
         writer.WriteUnsignedVarInt((int)RecipeNetworkId);
     }
 }
 
-readonly record struct DefaultDescriptorInput(string Name, int Metadata, int Count);
+sealed class ShapedCraftingRecipe : CraftingRecipeEntry
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public bool AssumeSymmetry { get; set; }
+
+    public void Write(ref BinaryStream writer)
+    {
+        writer.WriteVarString(RecipeId);
+        writer.WriteVarInt(Width);
+        writer.WriteVarInt(Height);
+        WriteInputs(ref writer); // row-major, count == Width * Height
+        WriteTail(ref writer);
+        writer.WriteBool(AssumeSymmetry);
+        writer.WriteBool(false); // UnlockingRequirement — none (always craftable)
+        writer.WriteUnsignedVarInt((int)RecipeNetworkId);
+    }
+}
 
 /// <summary>
-/// CraftingData (0x34) — remints RecipeRegistry net ids to the client (ADR §35), protocol 2168+
-/// shape (ADR §86): recipes carried in separate per-recipe-type arrays instead of one combined
-/// array with a per-entry type tag. Zenith only ever sends shapeless recipes; every other array
-/// is empty by design, not a placeholder for unimplemented recipe kinds.
-/// ClearRecipes=true replaces vanilla book with Zenith list only.
+/// CraftingData (0x34), protocol 2168+ shape (ADR §86): recipes in separate per-type arrays. Zenith sends shaped
+/// and shapeless recipes; every other array is a genuine empty list. ClearRecipes=true replaces the client's
+/// built-in book with exactly this list.
 /// </summary>
 sealed class CraftingDataPacket : DataPacket
 {
     public override int Id => (int)ProtocolInfo.CRAFTING_DATA_PACKET;
 
+    public ShapedCraftingRecipe[] ShapedRecipes { get; set; } = [];
     public ShapelessCraftingRecipe[] Recipes { get; set; } = [];
     public bool ClearRecipes { get; set; } = true;
 
@@ -69,12 +121,14 @@ sealed class CraftingDataPacket : DataPacket
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
 
-        writer.WriteUnsignedVarInt(0); // ShapedRecipes
+        writer.WriteUnsignedVarInt(ShapedRecipes.Length);
+        foreach (var recipe in ShapedRecipes)
+            recipe.Write(ref writer);
         writer.WriteUnsignedVarInt(Recipes.Length); // ShapelessRecipes
         foreach (var recipe in Recipes)
             recipe.Write(ref writer);
         writer.WriteUnsignedVarInt(0); // MultiRecipes
-        writer.WriteUnsignedVarInt(0); // UserDataShapelessRecipes
+        writer.WriteUnsignedVarInt(0); // ShulkerBoxRecipes (BDS lists them here; ours are plain shapeless)
         writer.WriteUnsignedVarInt(0); // ShapelessChemistryRecipes
         writer.WriteUnsignedVarInt(0); // ShapedChemistryRecipes
         writer.WriteUnsignedVarInt(0); // SmithingTransformRecipes

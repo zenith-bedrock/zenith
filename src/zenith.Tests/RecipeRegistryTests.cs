@@ -1,246 +1,161 @@
-using System.Linq;
-using Zenith.Player;
-using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Inventory;
+using Zenith.Player;
+using Zenith.World;
 
 namespace Zenith.Tests;
 
+/// <summary>
+/// Shape-, name- and tag-aware matching against the real vanilla recipe data. Each case is something an
+/// aggregate-count matcher gets wrong (the previous implementation).
+/// </summary>
 public class RecipeRegistryTests
 {
-    public RecipeRegistryTests() => Blocks.EnsureLoaded();
+    private static readonly RecipeRegistry Reg = TestRecipes.Default;
+    private static readonly ItemPalette Palette = ItemPaletteLoader.FromEmbeddedResource();
 
-    [Fact]
-    public void TryMatch_log_to_planks()
+    private static InventorySlot Block(int rid, int n = 1) => InventorySlot.OfBlock(rid, n);
+    private static InventorySlot Item(string name, int n = 1) => InventorySlot.OfItem(Palette.Require(name), n);
+
+    private static PlayerTableCraftUi Table(params (int cell, InventorySlot slot)[] cells)
     {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.OakLog), 1)], out var output));
-        Assert.Equal(Blocks.OakPlanks, output.Id.Value);
-        Assert.Equal(4, output.Count);
+        var grid = new PlayerTableCraftUi();
+        foreach (var (cell, slot) in cells) Assert.True(grid.TrySetGrid(cell, slot));
+        return grid;
+    }
+
+    private static PlayerCraftUi Personal(params (int cell, InventorySlot slot)[] cells)
+    {
+        var grid = new PlayerCraftUi();
+        foreach (var (cell, slot) in cells) Assert.True(grid.TrySetGrid(cell, slot));
+        return grid;
     }
 
     [Fact]
-    public void TryMatch_planks_to_chest()
+    public void Loads_the_full_vanilla_grid_recipe_set()
     {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.OakPlanks), 8)], out var output));
-        Assert.Equal(Blocks.Chest, output.Id.Value);
+        Assert.True(Reg.Count > 3000, $"only {Reg.Count} recipes loaded");
+        Assert.True(Reg.TryGetNetId("minecraft:stick", out _));
+        Assert.All(Reg.Recipes, r => Assert.NotEmpty(r.Outputs));
+    }
+
+    [Fact]
+    public void Log_to_planks_crafts_in_the_personal_grid_in_any_cell()
+    {
+        foreach (var cell in new[] { 0, 1, 2, 3 })
+        {
+            var grid = Personal((cell, Block(Blocks.OakLog)));
+            Assert.True(Reg.TryCraftFromGrid(grid, TestRecipes.OakLogToPlanks, out var output, 1, isAtCraftingTable: false));
+            Assert.Equal(StackId.FromBlock(Blocks.OakPlanks), output.Id);
+            Assert.Equal(4, output.Count);
+        }
+    }
+
+    [Fact]
+    public void Chest_needs_the_ring_of_eight_planks_on_a_table()
+    {
+        var ring = new[] { 0, 1, 2, 3, 5, 6, 7, 8 }.Select(i => (i, Block(Blocks.OakPlanks))).ToArray();
+        Assert.True(Reg.TryCraftFromGrid(Table(ring), TestRecipes.Chest, out var output, 1, isAtCraftingTable: true));
+        Assert.True(output.Id.IsBlock && Blocks.IsChest(output.Id.Value));
+    }
+
+    [Fact]
+    public void Chest_is_refused_for_eight_planks_in_the_wrong_arrangement()
+    {
+        // Same eight planks, but the hole is not in the centre: an aggregate-count matcher accepts this.
+        var wrong = new[] { 0, 1, 2, 3, 4, 5, 6, 7 }.Select(i => (i, Block(Blocks.OakPlanks))).ToArray();
+        Assert.False(Reg.TryCraftFromGrid(Table(wrong), TestRecipes.Chest, out _, 1, isAtCraftingTable: true));
+    }
+
+    [Fact]
+    public void Chest_is_refused_in_the_personal_grid()
+    {
+        var grid = Personal(Enumerable.Range(0, 4).Select(i => (i, Block(Blocks.OakPlanks, 2))).ToArray());
+        Assert.False(Reg.TryCraftFromGrid(grid, TestRecipes.Chest, out _, 1, isAtCraftingTable: false));
+    }
+
+    [Fact]
+    public void Extra_items_in_the_grid_refuse_the_craft()
+    {
+        var grid = Personal((0, Block(Blocks.OakLog)), (3, Block(Blocks.Stone)));
+        Assert.False(Reg.TryCraftFromGrid(grid, TestRecipes.OakLogToPlanks, out _, 1, isAtCraftingTable: false));
+        Assert.Equal(1, grid.GetGrid(0).Count);
+    }
+
+    [Fact]
+    public void Tag_ingredient_accepts_any_plank_and_stick_fits_the_personal_grid_anywhere()
+    {
+        var grid = Personal((1, Block(Blocks.OakPlanks)), (3, Block(Blocks.OakPlanks)));
+        Assert.True(Reg.TryCraftFromGrid(grid, TestRecipes.PlanksToStick, out var output, 1, isAtCraftingTable: false));
+        Assert.Equal(4, output.Count);
+        Assert.True(grid.GetGrid(1).IsEmpty);
+        Assert.True(grid.GetGrid(3).IsEmpty);
+    }
+
+    [Fact]
+    public void Stick_is_refused_when_the_two_planks_are_side_by_side()
+    {
+        var grid = Personal((0, Block(Blocks.OakPlanks)), (1, Block(Blocks.OakPlanks)));
+        Assert.False(Reg.TryCraftFromGrid(grid, TestRecipes.PlanksToStick, out _, 1, isAtCraftingTable: false));
+    }
+
+    [Fact]
+    public void Shaped_recipe_is_position_independent_on_the_table_but_needs_every_ingredient()
+    {
+        var stick = Item("minecraft:stick");
+        var planks = Block(Blocks.OakPlanks);
+
+        // Wooden pickaxe: planks across the top, two sticks down the middle column.
+        var missingStick = Table((0, planks), (1, planks), (2, planks), (4, stick));
+        Assert.False(Reg.TryCraftFromGrid(missingStick, TestRecipes.WoodenPickaxe, out _, 1, isAtCraftingTable: true));
+
+        var full = Table((0, planks), (1, planks), (2, planks), (4, stick), (7, stick));
+        Assert.True(Reg.TryCraftFromGrid(full, TestRecipes.WoodenPickaxe, out var output, 1, isAtCraftingTable: true));
         Assert.Equal(1, output.Count);
+        Assert.True(full.GetGrid(0).IsEmpty);
     }
 
-    /// <summary>Regression for ADR §138 — building/decoration blocks, same "no furnace needed" bar as the tool chain.</summary>
     [Fact]
-    public void TryMatch_coal_and_stick_to_torch()
+    public void Shapeless_matching_is_not_fooled_by_tag_and_name_overlap()
     {
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var reg = RecipeRegistry.CreateDefault(palette);
-        var coal = StackId.FromItem(palette.Require("minecraft:coal"));
-        var stick = StackId.FromItem(palette.Require("minecraft:stick"));
-
-        Assert.True(reg.TryMatch([(coal, 1), (stick, 1)], out var output));
-        Assert.Equal(Blocks.Torch, output.Id.Value);
+        // Two ingredients where one is a tag the other name also satisfies: assignment must backtrack.
+        var coal = Item("minecraft:coal");
+        var stick = Item("minecraft:stick");
+        Assert.True(Reg.TryGetNetId("minecraft:torch", out var torch));
+        var grid = Personal((0, coal), (2, stick));
+        Assert.True(Reg.TryCraftFromGrid(grid, torch, out var output, 1, isAtCraftingTable: false));
         Assert.Equal(4, output.Count);
     }
 
     [Fact]
-    public void TryMatch_planks_and_stick_to_fence()
+    public void Crafting_more_than_the_grid_affords_is_refused_and_leaves_the_grid_untouched()
     {
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var reg = RecipeRegistry.CreateDefault(palette);
-        var stick = StackId.FromItem(palette.Require("minecraft:stick"));
-
-        Assert.True(reg.TryMatch(
-            [(StackId.FromBlock(Blocks.OakPlanks), 4), (stick, 2)], out var output));
-        Assert.Equal(Blocks.OakFence, output.Id.Value);
-        Assert.Equal(3, output.Count);
+        var grid = Personal((0, Block(Blocks.OakLog, 2)));
+        Assert.False(Reg.TryCraftFromGrid(grid, TestRecipes.OakLogToPlanks, out _, 3, isAtCraftingTable: false));
+        Assert.Equal(2, grid.GetGrid(0).Count);
+        Assert.True(Reg.TryCraftFromGrid(grid, TestRecipes.OakLogToPlanks, out var output, 2, isAtCraftingTable: false));
+        Assert.Equal(8, output.Count);
+        Assert.True(grid.GetGrid(0).IsEmpty);
     }
 
     [Fact]
-    public void TryMatch_stone_to_stone_bricks()
+    public void Unknown_recipe_net_id_is_refused()
     {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.Stone), 4)], out var output));
-        Assert.Equal(Blocks.StoneBricks, output.Id.Value);
-        Assert.Equal(4, output.Count);
+        Assert.False(Reg.TryCraftFromGrid(Personal((0, Block(Blocks.OakLog))), 0xFFFFFF, out _, 1, isAtCraftingTable: true));
     }
 
     [Fact]
-    public void TryMatch_cobblestone_to_wall()
+    public void Tags_cover_every_tag_the_data_references()
     {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.Cobblestone), 6)], out var output));
-        Assert.Equal(Blocks.CobblestoneWall, output.Id.Value);
-        Assert.Equal(6, output.Count);
-    }
+        var used = new HashSet<string>();
+        foreach (var r in Reg.Recipes)
+            foreach (var c in r.Cells)
+                if (c?.Tag is { } t) used.Add(t);
 
-    [Fact]
-    public void TryMatch_planks_to_crafting_table()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.True(reg.TryMatch([(StackId.FromBlock(Blocks.OakPlanks), 4)], out var output));
-        Assert.Equal(Blocks.CraftingTable, output.Id.Value);
-        Assert.Equal(1, output.Count);
-    }
-
-    /// <summary>
-    /// Regression for ADR §139 — the bug report this whole feature closes: a chest's real vanilla
-    /// shape (8 planks in a 3x3 ring) cannot fit a 2x2 grid, so it must require a table even though
-    /// Zenith's shapeless matcher could otherwise satisfy the aggregate count from a personal grid.
-    /// </summary>
-    [Fact]
-    public void TryCraftFromGrid_refuses_a_table_only_recipe_without_a_table()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var craftUi = new PlayerCraftUi();
-        for (var i = 0; i < 4; i++)
-            Assert.True(craftUi.TrySetGrid(i, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
-
-        Assert.False(reg.TryCraftFromGrid(craftUi, RecipeRegistry.OakPlanksToChest, out _, 1, isAtCraftingTable: false));
-    }
-
-    [Fact]
-    public void TryCraftFromGrid_allows_a_table_only_recipe_at_a_table()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var tableUi = new PlayerTableCraftUi();
-        for (var i = 0; i < 4; i++)
-            Assert.True(tableUi.TrySetGrid(i, InventorySlot.OfBlock(Blocks.OakPlanks, 2)));
-
-        Assert.True(reg.TryCraftFromGrid(tableUi, RecipeRegistry.OakPlanksToChest, out var output, 1, isAtCraftingTable: true));
-        Assert.Equal(Blocks.Chest, output.Id.Value);
-        Assert.Equal(1, output.Count);
-    }
-
-    /// <summary>Tool recipes need a table too — the exact same gap as chest, real vanilla shapes just weren't the report's headline example.</summary>
-    [Fact]
-    public void TryCraftFromGrid_wooden_pickaxe_requires_a_table()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var craftUi = new PlayerCraftUi();
-        Assert.True(craftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 3)));
-        Assert.True(craftUi.TrySetGrid(1, InventorySlot.OfItem(StickNetworkId(), 2)));
-
-        Assert.False(reg.TryCraftFromGrid(craftUi, RecipeRegistry.WoodenPickaxe, out _, 1, isAtCraftingTable: false));
-
-        var tableUi = new PlayerTableCraftUi();
-        Assert.True(tableUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 3)));
-        Assert.True(tableUi.TrySetGrid(1, InventorySlot.OfItem(StickNetworkId(), 2)));
-        Assert.True(reg.TryCraftFromGrid(tableUi, RecipeRegistry.WoodenPickaxe, out var output, 1, isAtCraftingTable: true));
-        Assert.True(output.Id.IsItem);
-    }
-
-    [Fact]
-    public void TryCraftFromGrid_allows_a_non_table_recipe_without_a_table()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var craftUi = new PlayerCraftUi();
-        Assert.True(craftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
-
-        Assert.True(reg.TryCraftFromGrid(craftUi, RecipeRegistry.OakLogToPlanks, out var output, 1, isAtCraftingTable: false));
-        Assert.Equal(Blocks.OakPlanks, output.Id.Value);
-        Assert.Equal(4, output.Count);
-    }
-
-    private static int StickNetworkId() =>
-        ItemPaletteLoader.FromEmbeddedResource().Require("minecraft:stick");
-
-    [Fact]
-    public void TryMatch_rejects_wrong_counts()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        Assert.False(reg.TryMatch([(StackId.FromBlock(Blocks.OakLog), 2)], out _));
-        Assert.False(reg.TryMatch([(StackId.FromBlock(Blocks.OakPlanks), 7)], out _));
-    }
-
-    [Fact]
-    public void TryCraft_consumes_and_outputs()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var inv = new PlayerInventory();
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySetBlock(i, Blocks.Air, 0));
-        Assert.True(inv.TrySetBlock(3, Blocks.OakLog, 1));
-
-        Assert.True(reg.TryCraft(inv, RecipeRegistry.OakLogToPlanks));
-        Assert.True(inv.Get(3).IsEmpty);
-        Assert.Equal(Blocks.OakPlanks, inv.Get(0).Id.Value);
-        Assert.Equal(4, inv.Get(0).Count);
-    }
-
-    [Fact]
-    public void TryCraft_coal_and_stick_to_torch_consumes_and_outputs()
-    {
-        var palette = ItemPaletteLoader.FromEmbeddedResource();
-        var reg = RecipeRegistry.CreateDefault(palette);
-        var coalId = palette.Require("minecraft:coal");
-        var stickId = palette.Require("minecraft:stick");
-
-        var inv = new PlayerInventory();
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySetBlock(i, Blocks.Air, 0));
-        Assert.True(inv.TrySetItem(0, coalId, 1));
-        Assert.True(inv.TrySetItem(1, stickId, 1));
-
-        Assert.True(reg.TryCraft(inv, RecipeRegistry.CoalAndStickToTorch));
-        // Both input slots are now empty; TryAdd places the output in the first free slot (0).
-        Assert.Equal(Blocks.Torch, inv.Get(0).Id.Value);
-        Assert.Equal(4, inv.Get(0).Count);
-    }
-
-    [Fact]
-    public void TryCraft_fails_when_inputs_missing()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        var inv = new PlayerInventory();
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(inv.TrySetBlock(i, Blocks.Air, 0));
-        Assert.True(inv.TrySetBlock(0, Blocks.OakPlanks, 7));
-
-        Assert.False(reg.TryCraft(inv, RecipeRegistry.OakPlanksToChest));
-        Assert.Equal(7, inv.Get(0).Count);
-        Assert.Equal(Blocks.OakPlanks, inv.Get(0).Id.Value);
-    }
-
-    [Fact]
-    public void TryMatch_rejects_item_kind_even_with_matching_value()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-        // Same numeric value as OakLog block rid must not craft when Kind=Item.
-        var bogus = StackId.FromItem(Blocks.OakLog);
-        Assert.False(reg.TryMatch([(bogus, 1)], out _));
-    }
-
-    /// <summary>
-    /// A caller mutating the array TryGet handed back must not corrupt the registry's own stored
-    /// recipe — TryGet returns a defensive copy, not the backing array, so "frozen" actually means
-    /// existing entries can't change, not just that no new ones can be added.
-    /// </summary>
-    [Fact]
-    public void TryGet_returned_inputs_array_is_a_copy_not_the_backing_storage()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-
-        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var firstRead, out _));
-        firstRead[0] = (StackId.FromBlock(Blocks.Stone), 99);
-
-        Assert.True(reg.TryGet(RecipeRegistry.OakLogToPlanks, out _, out _, out var secondRead, out _));
-        Assert.Equal(StackId.FromBlock(Blocks.OakLog), secondRead[0].Id);
-        Assert.Equal(1, secondRead[0].Count);
-    }
-
-    /// <summary>Same guarantee as <see cref="TryGet_returned_inputs_array_is_a_copy_not_the_backing_storage"/>, via SnapshotRecipes' wire-facing path.</summary>
-    [Fact]
-    public void SnapshotRecipes_returned_inputs_array_is_a_copy_not_the_backing_storage()
-    {
-        var reg = RecipeRegistry.CreateDefault();
-
-        var firstSnapshot = reg.SnapshotRecipes();
-        var target = firstSnapshot.Single(r => r.NetId == RecipeRegistry.OakLogToPlanks);
-        target.Inputs[0] = (StackId.FromBlock(Blocks.Stone), 99);
-
-        var secondSnapshot = reg.SnapshotRecipes();
-        var reread = secondSnapshot.Single(r => r.NetId == RecipeRegistry.OakLogToPlanks);
-        Assert.Equal(StackId.FromBlock(Blocks.OakLog), reread.Inputs[0].Id);
-        Assert.Equal(1, reread.Inputs[0].Count);
+        foreach (var tag in used)
+        {
+            var anyMember = Palette.Entries.Any(e => ItemTags.Contains(tag, e.Name));
+            Assert.True(anyMember, $"tag {tag} has no member in the item palette");
+        }
     }
 }

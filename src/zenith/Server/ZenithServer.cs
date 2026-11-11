@@ -141,8 +141,7 @@ class ZenithServer
             config.World.ChunkGenerationCacheColumns);
         var recipes = RecipeRegistry.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
-        // Compose → freeze → gameplay reads only: boot composition for these two is done as of here.
-        recipes.Freeze();
+        // Compose → freeze → gameplay reads only: boot composition for the creative catalog is done as of here.
         creative.Freeze();
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities,

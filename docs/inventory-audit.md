@@ -49,6 +49,8 @@ the closest thing to "what a real client sends and expects back".
 - **Open, found while reading:** `RecipeRegistry` holds a tiny hand-written recipe set and matches shapeless by aggregate
   count, so e.g. the chest (ring of 8 planks) is accepted for any arrangement of 8 planks on the table.
 
+- **Recipes (ADR §146).** Hand-written shapeless table replaced by the real vanilla set matched by shape/name/tag; the chest-from-any-8-planks, side-by-side-stick and extra-items-ignored bugs are gone (tests in `RecipeRegistryTests`).
+
 ## Next
 
 - Turn each gap above into a failing test *first* (see `InGameInventoryHandlerItemStackRequestTests`,
