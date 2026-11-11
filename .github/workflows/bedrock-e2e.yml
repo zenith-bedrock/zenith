@@ -1,10 +1,9 @@
 name: Bedrock E2E
 
+# Manual only for now: the smoke bot is a shallow, partly flaky signal (zombie/projectile fail
+# on the pre-2225 build too). Iteration focuses on the server itself; re-enable push/PR triggers
+# when the smokes are trustworthy again.
 on:
-  push:
-    branches: [develop, main]
-  pull_request:
-    branches: [develop, main]
   workflow_dispatch:
 
 permissions:
