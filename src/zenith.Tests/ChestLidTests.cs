@@ -283,6 +283,6 @@ public class ChestLidTests
     private static void Flush(IntentTestFixture fx)
     {
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
     }
 }

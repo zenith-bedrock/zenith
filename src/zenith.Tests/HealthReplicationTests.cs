@@ -39,7 +39,7 @@ public class HealthReplicationTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var player in players.Online)
-            player.Session.RakSession().Tick();
+            player.Session.Transport.FlushOutgoing();
     }
 
     /// <summary>

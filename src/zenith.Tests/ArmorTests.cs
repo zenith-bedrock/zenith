@@ -241,7 +241,7 @@ public class ArmorTests
     private static void FlushRaknet(PlayerManager players)
     {
         foreach (var player in players.Online)
-            player.Session.RakSession().Tick();
+            player.Session.Transport.FlushOutgoing();
     }
 
     private static void Drain(IntentTestFixture fx)

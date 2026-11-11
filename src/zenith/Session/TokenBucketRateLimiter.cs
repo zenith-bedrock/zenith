@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 
-namespace Zenith.Raknet.Extension;
+namespace Zenith.Session;
 
 /// <summary>
 /// Token bucket genérico (mesmo espírito de <see cref="IpRateLimiter"/>), chaveável por qualquer T.
 /// </summary>
-public sealed class TokenBucketRateLimiter<TKey> where TKey : notnull
+internal sealed class TokenBucketRateLimiter<TKey> where TKey : notnull
 {
     private sealed class Bucket
     {

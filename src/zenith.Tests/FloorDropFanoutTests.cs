@@ -241,7 +241,7 @@ public class FloorDropFanoutTests
     private static void FlushRaknet(Zenith.Player.PlayerManager players)
     {
         foreach (var p in players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
     }
 
     private static byte[] ConcatCaptured(IntentTestFixture fx)

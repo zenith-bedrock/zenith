@@ -42,7 +42,7 @@ public class ResourcePacksSessionHandlerTests
         var batch = BuildStatusOnlyBatch(ResourcePackClientResponsePacket.STATUS_HAVE_ALL_PACKS, "have_all_packs");
         var stream = new BinaryStream(batch);
         player.Session.HandleGamePacket(ref stream);
-        player.Session.RakSession().Tick(); // flushes RakNet's queued frame(s) to the transport
+        player.Session.Transport.FlushOutgoing(); // flushes RakNet's queued frame(s) to the transport
 
         Assert.NotEmpty(fx.Transport.Captured);
     }
@@ -67,7 +67,7 @@ public class ResourcePacksSessionHandlerTests
         var batch = BuildStatusOnlyBatch(ResourcePackClientResponsePacket.STATUS_COMPLETED, "completed");
         var stream = new BinaryStream(batch);
         player.Session.HandleGamePacket(ref stream); // throws if any step in the sequence fails
-        player.Session.RakSession().Tick();
+        player.Session.Transport.FlushOutgoing();
 
         Assert.NotEmpty(fx.Transport.Captured);
     }
@@ -112,6 +112,6 @@ public class ResourcePacksSessionHandlerTests
         // (and later) recognizes it and calls session.Disconnect(). If the handler had NOT switched,
         // this packet would fall through unhandled and IsClosed would still be false.
         Assert.True(fx.Transport.Captured.Count >= sentAfterCompleted);
-        Assert.True(player.Session.RakSession().IsClosed);
+        Assert.True(player.Session.Transport.IsClosed);
     }
 }

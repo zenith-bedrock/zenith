@@ -154,7 +154,7 @@ public sealed class BatSystemTests
         second.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var player in fx.Players.Online)
-            player.Session.RakSession().Tick();
+            player.Session.Transport.FlushOutgoing();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);

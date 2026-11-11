@@ -181,7 +181,7 @@ public sealed class SpiderSystemTests
         second.Chunks.RememberMany([(0, 0), (-1, -1), (-1, 0), (0, -1)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
-            p.Session.RakSession().Tick();
+            p.Session.Transport.FlushOutgoing();
 
         Assert.True(fx.Transport.Captured.Count > before);
         Assert.True(first.IsInGame && second.IsInGame);
