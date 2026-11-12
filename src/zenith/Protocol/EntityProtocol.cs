@@ -721,6 +721,14 @@ sealed class EntityProtocol
         _session.SendDataPacket(UpdateAttributesPacket.CreateHealth(actorRuntimeId, health, maximum));
     }
 
+    /// <summary>Legacy SetHealth for the local player (BDS sends it once at join, besides the health attribute).</summary>
+    public void SendLocalHealth(float health) =>
+        _session.SendDataPacket(new SetHealthPacket { Health = (int)MathF.Ceiling(health) });
+
+    /// <summary>Tells the client which hotbar slot is selected (window 0, slot selected).</summary>
+    public void SendSelectedHotbarSlot(int slot) =>
+        _session.SendDataPacket(new PlayerHotbarPacket { SelectedSlot = slot, WindowId = 0, SelectSlot = true });
+
     /// <summary>Death screen cause (DeathInfo 0xbd).</summary>
     public void SendDeathInfo(string cause, params string[] messages)
     {

@@ -31,7 +31,9 @@ class StartGamePacket : DataPacket
     public int Dimension = DimensionId.Overworld;
     public int Generator = GeneratorInfinite;
     public int GameType = AbilityBits.WireGameModeSurvival;
-    public int Difficulty = 0;
+    public const int DefaultDifficulty = 0;
+    public const bool DefaultCommandsEnabled = true;
+    public int Difficulty = DefaultDifficulty;
     public int SpawnBlockX = 0;
     public int SpawnBlockY = 0;
     public int SpawnBlockZ = 0;
@@ -94,7 +96,7 @@ class StartGamePacket : DataPacket
         writer.WriteBool(true); // LANBroadcastEnabled
         writer.WriteVarInt(XblBroadcastModeDefault); // XBLBroadcastMode
         writer.WriteVarInt(PlatformBroadcastModeDefault); // PlatformBroadcastMode
-        writer.WriteBool(true); // CommandsEnabled
+        writer.WriteBool(DefaultCommandsEnabled); // CommandsEnabled
         writer.WriteBool(false); // TexturePackRequired
         
         // GameRules slice (length 0)

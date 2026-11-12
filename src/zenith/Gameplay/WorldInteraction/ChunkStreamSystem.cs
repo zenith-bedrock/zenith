@@ -303,6 +303,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 session.Protocol.Inventory.SendUiInventoryContent(player);
                 session.Protocol.Inventory.SendArmorContent(player.Inventory);
                 session.Protocol.Inventory.SendOffhandContent(player.Inventory);
+                session.Protocol.Entity.SendSelectedHotbarSlot(player.SelectedHotbarSlot);
                 session.Protocol.Entity.SendMovePlayerTeleport(
                     (ulong)player.RuntimeId,
                     player.PositionX, player.PositionY, player.PositionZ,
