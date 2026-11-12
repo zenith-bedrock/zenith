@@ -132,16 +132,12 @@ internal static class RecipeTables
         "minecraft:firework_star", "minecraft:firework_rocket",
     };
 
+    /// <summary>The wire's "any aux" ingredient metadata.</summary>
+    public const int WireAnyAux = 32767;
+
     /// <summary>Legacy wire ingredient names that mean "any of this tag" (a bed takes planks of any wood).</summary>
     public static readonly IReadOnlyDictionary<string, string> LegacyWildcardTags = new Dictionary<string, string>
     {
         ["minecraft:planks"] = "minecraft:planks",
-    };
-
-    /// <summary>Items whose colour/variant lives in an aux value Zenith's item model does not carry (even when it is 0).</summary>
-    public static readonly IReadOnlySet<string> AuxItems = new HashSet<string>
-    {
-        "minecraft:bed", "minecraft:banner", "minecraft:firework_star", "minecraft:arrow", "minecraft:planks",
-        "minecraft:empty_map", "minecraft:suspicious_stew",
     };
 }
