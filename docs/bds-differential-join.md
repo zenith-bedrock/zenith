@@ -93,9 +93,8 @@ or whose type changed, is dropped with a warning that names it.
 
 ## What Zenith does at join that BDS does not
 
-- It spawns a **showcase of mobs around the origin at join** (zombie, minecart, skeleton, snowball, cow, creeper, enderman, bat,
-  spider, villager, iron golem). In this capture the idle bot was killed by the zombie 3 s after spawn (`health` 20 -> 0,
-  `death_info` + `respawn` at +5.3 s). That is a development scaffold, not a protocol difference, but a vanilla server does not do it.
+- (Removed.) It used to spawn a **showcase of mobs around the first player at join**; in this capture the idle bot was killed by
+  the zombie 3 s after spawn. That development scaffold no longer exists: no mob exists until something spawns it.
 - It drops floor items (`add_item_entity`, stone and dirt stacks of 64) at the spawn point.
 
 ## Not covered

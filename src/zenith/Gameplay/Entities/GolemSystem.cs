@@ -61,16 +61,13 @@ sealed class GolemSystem : IGameSystem
     private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
     private ulong _currentTick;
 
-    public GolemSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
+    public GolemSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Golem, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -94,9 +91,6 @@ sealed class GolemSystem : IGameSystem
     {
         _currentTick = clock.CurrentTick;
         if (online.Count == 0) return;
-        if (_golems.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapGolem(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_golems.Entities);
@@ -130,14 +124,6 @@ sealed class GolemSystem : IGameSystem
         _replication.ReplicateMoves(_golems.Entities, online);
     }
 
-
-    private void EnsureBootstrapGolem(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _golems.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, SpawnDistance, SpawnDistance, out var x, out var y, out var z)) return;
-        SpawnGolem(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnGolem(float x, float y, float z)

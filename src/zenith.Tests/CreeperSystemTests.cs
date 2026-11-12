@@ -26,20 +26,6 @@ public sealed class CreeperSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_creeper_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("bootstrapper");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Creepers);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        _ = player;
-    }
-
-    [Fact]
     public void Creeper_acquires_a_target_and_starts_fusing_within_ignite_range()
     {
         var fx = new IntentTestFixture();

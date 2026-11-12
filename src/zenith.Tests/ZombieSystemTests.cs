@@ -35,25 +35,6 @@ public sealed class ZombieSystemTests
     }
 
     [Fact]
-    public void BootstrapSpawnsOneConcreteZombieAndMovesTowardPlayer()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("target");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Zombies);
-        var initialDistance = MathF.Abs(Pos(system, id).X - player.PositionX);
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.True(MathF.Abs(Pos(system, id).X - player.PositionX) < initialDistance);
-    }
-
-    [Fact]
     public void Zombie_retargets_when_retained_player_becomes_invalid()
     {
         var fx = new IntentTestFixture();
@@ -248,6 +229,7 @@ public sealed class ZombieSystemTests
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnZombie(0, Blocks.FlatSpawnY, 0);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 

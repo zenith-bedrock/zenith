@@ -37,13 +37,10 @@ sealed class FishSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public FishSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
+    public FishSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
-        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette, trackPoses: false, withVelocity: true);
@@ -65,9 +62,6 @@ sealed class FishSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_fish.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapFish(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_fish.Entities);
@@ -86,31 +80,6 @@ sealed class FishSystem : IGameSystem
         _replication.Prune(_fish.Entities, online);
     }
 
-
-    /// <summary>
-    /// Only spawns where water already exists — a fixed offset from the first online player,
-    /// checked directly rather than sampled (unlike every ground mob's <c>SampleSpawnFeetY</c>,
-    /// there is no "find the nearest suitable surface" logic here; this is deliberately the
-    /// smallest useful vertical slice, not a spawn-placement system). If that cell isn't water,
-    /// no fish spawns this tick — acceptable for a vertical slice, not a bug.
-    /// </summary>
-    private void EnsureBootstrapFish(IReadOnlyList<Player.Player> online)
-    {
-        if (!_showcase.Enabled) return;
-        if (_bootstrapSpawned || _fish.Count != 0) return;
-        var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
-        if (player is null) return;
-        var x = player.PositionX + SpawnOffsetX;
-        var y = player.PositionY;
-        var z = player.PositionZ;
-        var blockX = (int)MathF.Floor(x);
-        var blockY = (int)MathF.Floor(y);
-        var blockZ = (int)MathF.Floor(z);
-        if (_world.GetBlock(blockX, blockY, blockZ) != Blocks.Water) return;
-
-        SpawnFish(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnFish(float x, float y, float z)

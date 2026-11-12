@@ -46,15 +46,12 @@ sealed class EndermanSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
+    public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Enderman, world, players, stores, itemPalette, trackPoses: false, withVelocity: false);
         _replication = _mob.Replication;
         _endermen = new ComponentStore<EndermanState>(stores.Entities);
@@ -75,9 +72,6 @@ sealed class EndermanSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_endermen.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapEnderman(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_endermen.Entities);
@@ -111,14 +105,6 @@ sealed class EndermanSystem : IGameSystem
         _replication.Prune(_endermen.Entities, online);
     }
 
-
-    private void EnsureBootstrapEnderman(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _endermen.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, 0f, SpawnDistance, out var x, out var y, out var z)) return;
-        SpawnEnderman(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnEnderman(float x, float y, float z)

@@ -9,23 +9,6 @@ namespace Zenith.Tests;
 public sealed class BatSystemTests
 {
     [Fact]
-    public void Bootstrap_spawns_one_bat_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("spelunker");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new BatSystem(fx.World, fx.Players, new BatStore(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var bat = Assert.Single(system.Bats.Active);
-        Assert.True(bat.IsActive);
-        Assert.NotEqual(0, bat.EntityId);
-        Assert.Equal((ulong)bat.EntityId, bat.RuntimeId);
-    }
-
-    [Fact]
     public void Bat_wanders_in_three_dimensions_without_any_player_nearby()
     {
         var fx = new IntentTestFixture();
@@ -145,7 +128,9 @@ public sealed class BatSystemTests
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
-        var system = new BatSystem(fx.World, fx.Players, new BatStore(), fx.Context.ItemPalette);
+        var store = new BatStore();
+        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        Assert.True(store.TryAdd(new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 5, 0)));
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 

@@ -39,6 +39,7 @@ public sealed class SkeletonSystemTests
         var stores = new EntityRuntime();
         var projectileSystem = CreateProjectileSystem(fx, stores);
         var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        system.SpawnSkeleton(target.PositionX + 10, target.PositionY, target.PositionZ);
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
