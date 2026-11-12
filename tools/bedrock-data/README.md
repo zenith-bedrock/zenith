@@ -45,3 +45,15 @@ python tools/bedrock-data/extract_recipes.py C:/path/to/capture src/zenith/data/
 ```
 
 The script prints how many recipes it dropped and why (non-grid stations, aux-valued ingredients, output NBT). Current data: BDS 1.26.63.1.
+
+## How BDS loads its catalogs (observed)
+
+`bds_pack.py` reads them the way BDS does: `behavior_packs/vanilla` + `vanilla_<version>` packs applied in version
+order, later files replacing earlier ones of the same name, shipped as `.brarchive` containers (format documented in
+the module). Recipes, items, item catalog (creative groups), biomes, entities, loot, trading, spawn rules, structures and
+the 98 newest data-driven blocks live there as plain behaviour-pack JSON. Classic blocks and the legacy
+`(name, data)` -> flattened item table are compiled into the executable.
+
+`pack_recipe_coverage.py <bds> <capture>` measures how much of the wire CraftingData the pack JSON explains
+(1.26.63.1: 1126 of 2708 grid recipes cleanly, ~160 more need the legacy table, 1420 are generated in code - colour
+variants of dyeing, arrows, ...). Until those gaps close the shipped `recipes.json.gz` still comes from the capture.
