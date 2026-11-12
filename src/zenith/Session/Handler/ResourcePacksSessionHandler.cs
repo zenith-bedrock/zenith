@@ -35,6 +35,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                 var player = session.Player!;
                 // Current Bedrock clients require the vanilla jigsaw rule compound before StartGame.
                 session.Protocol.World.SendJigsawStructureData();
+                // BDS order: jigsaw data, voxel shapes, StartGame, entity properties, ... (see docs/bds-differential-join.md).
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.VoxelShapes);
                 // StartGame position is eye-space (feet + PlayerEyeHeight), not domain feet.
                 // SpawnBiomeType is a StartGame enum, not a Bedrock biome network ID. Zenith only
                 // uses vanilla biome definitions, so send Default and let chunks carry the biome.
@@ -53,14 +55,21 @@ class ResourcePacksSessionHandler : ISessionHandler
                     gameMode: (int)player.GameMode,
                     biomeType: StartGamePacket.SpawnBiomeTypeDefault,
                     biomeName: "");
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityProperties);
                 session.Protocol.Inventory.SendItemRegistry();
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.TrimData);
                 session.Protocol.Inventory.SendCraftingData();
                 session.Protocol.Commands.SendAvailableCommands(
                     BedrockCommandAdapter.CreateMetadata(session.Context.Commands.Catalog));
                 // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).
                 session.Protocol.World.SendBiomeDefinitionList();
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityIdentifiers);
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.PlayerFog);
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.CameraPresets);
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.CameraAimAssistPresets);
+                session.Protocol.World.SendJoinStatic(JoinStaticNames.CameraSpline);
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).
                 session.Protocol.Entity.SendLocalActorData((ulong)player.RuntimeId, player.Username);
                 session.Protocol.Entity.SendPlayerAttributes(player);

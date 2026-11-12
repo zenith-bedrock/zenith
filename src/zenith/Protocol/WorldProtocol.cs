@@ -66,6 +66,16 @@ sealed class WorldProtocol
         _session.SendDataPacket(new BiomeDefinitionListPacket());
     }
 
+    /// <summary>
+    /// Replays the packets captured from the stock BDS under <paramref name="name"/> (<see cref="JoinStaticData"/>):
+    /// data that is the same for every player, sent at the point of the join sequence where BDS sends it.
+    /// </summary>
+    public void SendJoinStatic(string name)
+    {
+        foreach (var packet in JoinStaticData.Packets(name))
+            _session.SendDataPacket(packet);
+    }
+
     /// <summary>Vanilla jigsaw rules required by protocol 2193 clients before StartGame.</summary>
     public void SendJigsawStructureData()
     {

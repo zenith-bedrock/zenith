@@ -12,6 +12,9 @@ app.Configure(config =>
     config.AddCommand<DurabilityCommand>("durability")
         .WithDescription("Build item_durability.json from a minecraft-data Bedrock items.json, cross-checked against the embedded item palette.");
 
+    config.AddCommand<JoinStaticCommand>("join-static")
+        .WithDescription("Import the static join-time packets a stock BDS sends (entity identifiers, voxel shapes, trim data, camera presets) from a raw capture.");
+
     config.AddCommand<ImportCommand>("import")
         .WithDescription("Import a verified BDS/Endstone bundle into the embedded block/item/creative/biome assets.");
 });
