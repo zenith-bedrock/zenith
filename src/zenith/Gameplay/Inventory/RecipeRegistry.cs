@@ -21,9 +21,6 @@ sealed class RecipeRegistry
 
     private RecipeRegistry(ItemPalette palette) => _palette = palette;
 
-    /// <summary>Recipes in the data that were dropped because an output item is unknown to this build's item palette.</summary>
-    public int SkippedUnknownOutputCount { get; private set; }
-
     public static RecipeRegistry CreateDefault() => CreateDefault(ItemPaletteLoader.FromEmbeddedResource());
 
     public static RecipeRegistry CreateDefault(ItemPalette itemPalette)
@@ -48,22 +45,22 @@ sealed class RecipeRegistry
 
     private void TryAdd(JsonElement e, bool shaped, ref uint next)
     {
+        var id = e.GetProperty("id").GetString()!;
+        if (_byId.ContainsKey(id)) throw new InvalidDataException($"Recipe data: duplicate id '{id}'.");
+
         var outputs = new List<RecipeOutput>();
         foreach (var o in e.GetProperty("out").EnumerateArray())
-        {
-            if (!TryResolveOutput(o, out var output)) { SkippedUnknownOutputCount++; return; }
-            outputs.Add(output);
-        }
-
-        var id = e.GetProperty("id").GetString()!;
-        if (outputs.Count == 0 || _byId.ContainsKey(id)) return;
+            outputs.Add(ResolveOutput(id, o));
+        if (outputs.Count == 0) throw new InvalidDataException($"Recipe data: '{id}' has no output.");
 
         var cells = new List<RecipeIngredient?>();
         foreach (var c in e.GetProperty("in").EnumerateArray())
         {
             if (c.ValueKind == JsonValueKind.Null) { cells.Add(null); continue; }
             var count = c.TryGetProperty("c", out var cnt) ? cnt.GetInt32() : 1;
-            var name = c.TryGetProperty("n", out var n) ? StripAux(n.GetString()!) : null;
+            var name = c.TryGetProperty("n", out var n) ? n.GetString()! : null;
+            if (name is not null && !IsKnownItem(name))
+                throw new InvalidDataException($"Recipe data: '{id}' uses unknown item '{name}'.");
             var tag = c.TryGetProperty("t", out var t) ? t.GetString() : null;
             var ingredient = new RecipeIngredient(name, tag, 1);
             // One cell holds one item per craft, so a counted shapeless ingredient is N separate cells.
@@ -72,7 +69,8 @@ sealed class RecipeRegistry
 
         var width = shaped ? e.GetProperty("w").GetInt32() : cells.Count;
         var height = shaped ? e.GetProperty("h").GetInt32() : 1;
-        if (shaped && cells.Count != width * height) return;
+        if (shaped && cells.Count != width * height)
+            throw new InvalidDataException($"Recipe data: '{id}' declares {width}x{height} but has {cells.Count} cells.");
 
         var recipe = new CraftingRecipe(
             next, id, shaped, width, height,
@@ -84,28 +82,21 @@ sealed class RecipeRegistry
         next++;
     }
 
-    /// <summary>The data writes legacy "name:aux" for a few ingredients; aux is a wildcard here, the name is what matters.</summary>
-    private static string StripAux(string name)
-    {
-        var colon = name.LastIndexOf(':');
-        return colon > "minecraft".Length && int.TryParse(name.AsSpan(colon + 1), out _) ? name[..colon] : name;
-    }
+    private bool IsKnownItem(string name) => Blocks.TryGetDefaultRuntimeId(name, out _) || _palette.TryGet(name, out _);
 
-    private bool TryResolveOutput(JsonElement o, out RecipeOutput output)
+    /// <summary>
+    /// Outputs are resolved by NAME against this build's palettes: a block becomes its default-state block stack,
+    /// anything else an item stack. An unknown name is a data/palette mismatch and fails the load loudly.
+    /// </summary>
+    private RecipeOutput ResolveOutput(string recipeId, JsonElement o)
     {
-        output = default;
-        if (o.TryGetProperty("a", out _)) return false; // aux-valued outputs (potions, dyes) are not modelled
         var name = o.GetProperty("n").GetString()!;
         var count = o.GetProperty("c").GetInt32();
-        if (o.TryGetProperty("b", out var b) && Blocks.TryGetName(b.GetInt32(), out _))
-        {
-            output = new RecipeOutput(StackId.FromBlock(b.GetInt32()), count);
-            return true;
-        }
-
-        if (!_palette.TryGet(name, out var itemId)) return false;
-        output = new RecipeOutput(StackId.FromItem(itemId), count);
-        return true;
+        if (Blocks.TryGetDefaultRuntimeId(name, out var rid))
+            return new RecipeOutput(StackId.FromBlock(rid), count);
+        if (_palette.TryGet(name, out var itemId))
+            return new RecipeOutput(StackId.FromItem(itemId), count);
+        throw new InvalidDataException($"Recipe data: '{recipeId}' makes unknown item '{name}'.");
     }
 
     public int Count => _byNetId.Count;

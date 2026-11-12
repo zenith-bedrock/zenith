@@ -53,6 +53,14 @@ the closest thing to "what a real client sends and expects back".
 
 - **CraftingData validated live (bot, schema 1.26.60).** All 3 700+ recipes parse client-side. Found by bisecting: the shield recipe output needs the trailing `blocking_tick` (i64) in its extra blob (the reader keys it on the shield's item id); without it the whole packet mis-parsed. `NetworkItemStack.IsShield`. The inventory/`ItemV4` writers still send an empty extra blob, which would mis-parse for a shield stack (no shield is ever sent there today).
 
+- **Recipe data now comes from the BDS behaviour packs, not a wire dump.** The old capture-derived file carried 1557
+  of 3780 recipes that could never match (BDS's `name:aux` strings such as `minecraft:red_wool:0`, unknown names).
+  `extract_recipes.py` rebuilds it from the pack JSON + explicit generators and `--verify` proves 0 aux-free
+  grid recipes are missing. `RecipeRegistry` no longer strips aux, skips unknown outputs silently or bakes BDS block
+  ids: names resolve against Zenith's palettes and an unknown name fails the load.
+- **Open: item aux values.** 458 wire recipes (beds, banners, firework stars, tipped arrows, suspicious stew, maps)
+  are not emitted because `StackId` has no aux/damage. They return when stacks gain one.
+
 ## Next
 
 - Turn each gap above into a failing test *first* (see `InGameInventoryHandlerItemStackRequestTests`,

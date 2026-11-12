@@ -158,4 +158,34 @@ public class RecipeRegistryTests
             Assert.True(anyMember, $"tag {tag} has no member in the item palette");
         }
     }
+
+    [Fact]
+    public void Dyeing_a_wool_block_works_with_real_flattened_names()
+    {
+        Assert.True(Reg.TryGetNetId("dye_wool_red_from_blue_wool_with_red_dye", out var id));
+        var grid = Personal((0, Item("minecraft:red_dye")), (1, Block(Blocks.TryGetDefaultRuntimeId("minecraft:blue_wool", out var blue) ? blue : -1)));
+        Assert.True(Reg.TryCraftFromGrid(grid, id, out var output, 1, isAtCraftingTable: false));
+        Assert.True(Blocks.TryGetDefaultRuntimeId("minecraft:red_wool", out var red));
+        Assert.Equal(StackId.FromBlock(red), output.Id);
+    }
+
+    [Fact]
+    public void Slab_recipe_that_bds_registers_in_code_is_present()
+    {
+        Assert.True(Reg.TryGetNetId("cobblestone_slab_from_cobblestone", out var id));
+        Assert.True(Reg.TryGet(id, out var recipe));
+        Assert.Equal((3, 1), (recipe.Width, recipe.Height));
+        Assert.Equal(6, recipe.Outputs[0].Count);
+    }
+
+    [Fact]
+    public void Recipe_data_naming_an_unknown_item_fails_the_load()
+    {
+        var json = "{\"shaped\":[],\"shapeless\":[{\"id\":\"t\",\"st\":\"crafting_table\",\"in\":[{\"n\":\"minecraft:not_an_item\"}],\"out\":[{\"n\":\"minecraft:stick\",\"c\":1}]}]}";
+        using var ms = new MemoryStream();
+        using (var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionMode.Compress, leaveOpen: true))
+            gz.Write(System.Text.Encoding.UTF8.GetBytes(json));
+        ms.Position = 0;
+        Assert.Throws<InvalidDataException>(() => RecipeRegistry.FromStream(ms, Palette));
+    }
 }
