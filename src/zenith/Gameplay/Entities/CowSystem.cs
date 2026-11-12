@@ -24,10 +24,7 @@ sealed class CowSystem : IGameSystem
     private const float MovePerTick = 0.05f;
     private const int MinWanderTicks = 40;
     private const int MaxWanderTicks = 100;
-    private const string LootItemName = "minecraft:beef";
     private const float AttackDamage = 4f;
-    /// <summary>Vanilla-parity passive-mob kill reward — lower than a hostile mob's (Phase XI.4/XIV).</summary>
-    private const int KillExperience = 1;
 
     // Phase XVI — proximity auto-breeding. Phase XVIII added a real player-feed trigger on top
     // (see TryHandleFeed) — the gap both this and Villager's trade were deferred for since Phase XVI.
@@ -42,7 +39,7 @@ sealed class CowSystem : IGameSystem
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<CowState> _cows;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly StackId _feedItem;
     private readonly Random _random;
     private readonly ActorReplication _replication;
@@ -56,9 +53,9 @@ sealed class CowSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Cow, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _cows = new ComponentStore<CowState>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
         _feedItem = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
         _random = random ?? new Random();
     }
@@ -112,12 +109,7 @@ sealed class CowSystem : IGameSystem
     /// </summary>
     internal EntityId SpawnCow(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Cow.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(10f) }); // Vanilla-parity cow health.
-        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _cows.Set(id, new CowState());
         return id;
     }
@@ -222,19 +214,7 @@ sealed class CowSystem : IGameSystem
 
     /// <summary>Concrete Cow health/removal operation — same shape as Zombie/Minecart's, one loot item, no retaliation.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Cow", currentTick,
-            destroyActor: cid =>
-            {
-                if (_stores.Identities.TryGet(cid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, cid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                if (_stores.Identities.TryGet(id, out var identity))
-                    _replication.Forget(identity.ActorUniqueId, peer);
-                _replication.RemovalCount++;
-            });
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     /// <summary>Peaceful AI: pick a random heading periodically, walk it, retry sooner if blocked.</summary>
     private void Wander(EntityId id, GameClock clock)

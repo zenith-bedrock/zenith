@@ -51,16 +51,13 @@ sealed class GolemSystem : IGameSystem
     /// villager near them.
     /// </summary>
     private const int ProvokeWindowTicks = 200; // 10s @ 20 TPS.
-    private const string LootItemName = "minecraft:iron_ingot";
-    /// <summary>Boss-tier kill reward — five times a hostile ground mob's (Phase XI.4/XIV precedent).</summary>
-    private const int KillExperience = 25;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<GolemState> _golems;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
@@ -71,9 +68,9 @@ sealed class GolemSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Golem, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _golems = new ComponentStore<GolemState>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
     internal IReadOnlyList<EntityId> Golems => _golems.Entities;
@@ -145,12 +142,7 @@ sealed class GolemSystem : IGameSystem
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnGolem(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Golem.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(100f) });
-        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _golems.Set(id, new GolemState());
         return id;
     }
@@ -175,19 +167,7 @@ sealed class GolemSystem : IGameSystem
             state.TargetPlayerRuntimeId = attackerId;
         }
 
-        return DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Golem", currentTick,
-            destroyActor: gid =>
-            {
-                if (_stores.Identities.TryGet(gid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, gid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                if (_stores.Identities.TryGet(id, out var identity))
-                    _replication.Forget(identity.ActorUniqueId, peer);
-                _replication.RemovalCount++;
-            });
+        return _mob.TryApplyDamage(id, source, amount, online, currentTick);
     }
 
     /// <summary>

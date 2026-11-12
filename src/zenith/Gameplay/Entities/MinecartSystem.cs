@@ -23,16 +23,14 @@ sealed class MinecartSystem : IGameSystem
     private const float RideForwardImpulse = 0.06f; // Constant creep while occupied — steering comes entirely from the rider's Yaw, not from analog input.
     private const float FrictionPerTick = 0.9f; // Multiplicative decay — rolls further than a mob's knockback, less abrupt stop.
     private const float VelocityNegligible = 0.001f;
-    private const string LootItemName = "minecraft:minecart";
     private const float AttackDamage = 4f;
-    private const int KillExperience = 1;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<VehicleOccupancy> _minecarts;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
@@ -42,9 +40,9 @@ sealed class MinecartSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Minecart, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _minecarts = new ComponentStore<VehicleOccupancy>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
     internal IReadOnlyList<EntityId> Minecarts => _minecarts.Entities;
@@ -108,12 +106,7 @@ sealed class MinecartSystem : IGameSystem
 
     internal EntityId SpawnMinecart(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Minecart.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(6f) }); // Vanilla-parity: minecarts are fragile.
-        _stores.Velocities.Set(id, new Velocity());
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _minecarts.Set(id, new VehicleOccupancy());
         return id;
     }
@@ -172,19 +165,10 @@ sealed class MinecartSystem : IGameSystem
         if (!_stores.Identities.TryGet(id, out var identityBeforeDamage)) return false;
         var actorUniqueId = identityBeforeDamage.ActorUniqueId;
 
-        var applied = DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Minecart", currentTick,
-            destroyActor: mid =>
+        var applied = _mob.TryApplyDamage(id, source, amount, online, currentTick, onPeerRemoved: peer =>
             {
-                if (_stores.Identities.TryGet(mid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, mid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                _replication.Forget(actorUniqueId, peer);
                 if (occupant is not null)
                     peer.Session.Protocol.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, SetActorLinkPacket.TypeRemove);
-                _replication.RemovalCount++;
             });
 
         // Gated on actual death (entity no longer alive), not just `applied` — a non-lethal hit

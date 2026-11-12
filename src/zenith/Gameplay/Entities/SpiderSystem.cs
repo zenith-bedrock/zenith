@@ -30,8 +30,6 @@ sealed class SpiderSystem : IGameSystem
     private const float MovePerTick = 0.11f; // Faster than Zombie's 0.08 — a real behavioral difference, not just renaming.
     private const float AttackDamage = 2f; // Weaker per hit than Zombie, to keep overall threat comparable to a faster mob.
     private const int AttackCooldownTicks = 20;
-    private const string LootItemName = "minecraft:string";
-    private const int KillExperience = 5;
     private const float DespawnRadius = 64f;
     private const float PoisonChance = 0.3f;
     private const int PoisonDurationTicks = 100; // 5s @ 20 TPS — same cadence EffectSystem already ticks Poison at.
@@ -40,7 +38,7 @@ sealed class SpiderSystem : IGameSystem
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<SpiderState> _spiders;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
@@ -51,9 +49,9 @@ sealed class SpiderSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Spider, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _spiders = new ComponentStore<SpiderState>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
         _random = random ?? new Random();
     }
 
@@ -115,12 +113,7 @@ sealed class SpiderSystem : IGameSystem
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnSpider(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Spider.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(16f) }); // Vanilla-parity: slightly less than Zombie's 20.
-        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _spiders.Set(id, new SpiderState());
         return id;
     }
@@ -178,19 +171,7 @@ sealed class SpiderSystem : IGameSystem
 
     /// <summary>Concrete Spider health/removal operation — same shape as every other migrated actor's.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Spider", currentTick,
-            destroyActor: sid =>
-            {
-                if (_stores.Identities.TryGet(sid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, sid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                if (_stores.Identities.TryGet(id, out var identity))
-                    _replication.Forget(identity.ActorUniqueId, peer);
-                _replication.RemovalCount++;
-            });
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
