@@ -57,6 +57,6 @@ class ServerContext
         Durability = durability;
         Creative = creative;
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
-        Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents));
+        Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules);
     }
 }

@@ -1,4 +1,5 @@
 using Zenith.Packets;
+using Zenith.Reference;
 using Zenith.Binary;
 using Zenith.Server;
 using Zenith.World;
@@ -54,7 +55,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                     useBlockNetworkIdHashes: true,
                     gameMode: (int)player.GameMode,
                     biomeType: StartGamePacket.SpawnBiomeTypeDefault,
-                    biomeName: "");
+                    biomeName: "",
+                    gameRules: session.Context.World.Rules.Snapshot);
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityProperties);
                 session.Protocol.Inventory.SendItemRegistry();
                 session.Protocol.World.SendDifficulty(StartGamePacket.DefaultDifficulty);
@@ -79,6 +81,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // Abilities / adventure seed (§37) — after §34, before PreSpawn.
                 session.Protocol.Entity.SendLocalAbilities(player.RuntimeId, (int)player.GameMode);
                 session.Protocol.Entity.SendAdventureSettings();
+                session.Protocol.World.SendGameRules(session.Context.World.Rules.Snapshot);
                 session.SetHandler(new PreSpawnSessionHandler());
                 break;
         }

@@ -139,6 +139,7 @@ class ZenithServer
             diagnostics.Worldgen,
             config.World.ChunkGenerationWorkers,
             config.World.ChunkGenerationCacheColumns);
+        world.LoadGameRules();
         var recipes = RecipeRegistry.CreateDefault(itemPalette);
         var durability = ItemDurability.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
@@ -240,6 +241,7 @@ class ZenithServer
         var gravity = new GravitySystem(world, players);
         RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial);
 
+        gameLoop.Register(new GameRuleSyncSystem(world), diagnostics.System("game-rule-sync"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
         gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
         gameLoop.Register(gravity, diagnostics.System("gravity"));

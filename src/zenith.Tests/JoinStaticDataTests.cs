@@ -1,5 +1,6 @@
 using Xunit;
 using Zenith.Packets;
+using Zenith.Reference;
 using Zenith.Server;
 
 namespace Zenith.Tests;
@@ -24,7 +25,7 @@ public class JoinStaticDataTests
     [InlineData(JoinStaticNames.TrimData, 1)]
     public void Every_name_the_join_sequence_sends_has_its_captured_packets(string name, int count)
     {
-        var packets = JoinStaticData.Packets(name).ToArray();
+        var packets = JoinStaticData.Named(name).Select(e => new StaticDataPacket(e.Id, e.Body)).ToArray();
 
         Assert.Equal(count, packets.Length);
         foreach (var packet in packets)
@@ -49,6 +50,6 @@ public class JoinStaticDataTests
     [Fact]
     public void An_unknown_name_fails_instead_of_sending_nothing()
     {
-        Assert.Throws<InvalidOperationException>(() => JoinStaticData.Packets("no_such_packet").ToArray());
+        Assert.Throws<InvalidOperationException>(() => JoinStaticData.Named("no_such_packet").ToArray());
     }
 }

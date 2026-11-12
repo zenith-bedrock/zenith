@@ -3,6 +3,7 @@ using Zenith.Diagnostics;
 using System.Globalization;
 using System.Diagnostics;
 using Zenith.Gameplay.Survival;
+using Zenith.Rulebook;
 
 namespace Zenith.Gameplay.Commands;
 
@@ -11,11 +12,13 @@ sealed class CommandRuntime
 {
     private readonly PlayerManager _players;
     private readonly DiagnosticsInvestigation? _diagnostics;
+    private readonly GameRules? _rules;
     private readonly CommandCatalog _catalog = new();
 
-    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null)
+    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null, GameRules? rules = null)
     {
         _players = players;
+        _rules = rules;
         _diagnostics = diagnostics;
         var modes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
@@ -56,6 +59,13 @@ sealed class CommandRuntime
                     new PlayerCommandArgument("target", name => _players.Get(name), Optional: true))
             ]));
 
+        if (rules is not null)
+        {
+            var names = rules.Snapshot.ToDictionary(rule => rule.Name, rule => (object)rule.Name, StringComparer.OrdinalIgnoreCase);
+            _catalog.Register(new CommandDefinition("gamerule", "Show or change a game rule", CommandPermission.Operator,
+                new CommandOverload(new EnumCommandArgument("rule", names), new StringCommandArgument("value", Optional: true))));
+        }
+
         _catalog.Freeze();
     }
 
@@ -64,7 +74,9 @@ sealed class CommandRuntime
 
     public CommandFeedback Execute(Player.Player source, string line)
     {
-        var parsed = _catalog.Parse(line, CommandPermission.Any);
+        // Zenith has no permission model yet: StartGame/abilities make every player an operator (a development default),
+        // so a command's required permission is always met. Replace this with the player's real level when one exists.
+        var parsed = _catalog.Parse(line, CommandPermission.Operator);
         if (parsed.Status == CommandParseStatus.Unknown) return new("Command", "Unknown command.");
         if (parsed.Status == CommandParseStatus.Denied) return new("Command", "You do not have permission.");
         if (parsed.Status == CommandParseStatus.Invalid) return new("Command", $"Usage: /{parsed.Definition!.Name}");
@@ -84,9 +96,22 @@ sealed class CommandRuntime
                 return ExecuteDiagnostics((string)arguments["action"]);
             case "effect":
                 return ExecuteEffect(source, arguments);
+            case "gamerule":
+                return ExecuteGameRule(arguments);
             default:
                 return new("Command", "Unknown command.");
         }
+    }
+
+    private CommandFeedback ExecuteGameRule(IReadOnlyDictionary<string, object> arguments)
+    {
+        var name = (string)arguments["rule"];
+        var current = _rules!.Get(name);
+        if (!arguments.TryGetValue("value", out var value))
+            return new("Game rule", $"{current.Name} = {current.ValueText}");
+        if (!_rules.TrySet(current.Name, (string)value, out var error))
+            return new("Game rule", error);
+        return new("Game rule", $"{current.Name} = {_rules.Get(current.Name).ValueText}");
     }
 
     private CommandFeedback ExecuteEffect(Player.Player source, IReadOnlyDictionary<string, object> arguments)

@@ -1,4 +1,6 @@
 using Zenith.Packets;
+using Zenith.Reference;
+using Zenith.Rulebook;
 using Zenith.Server;
 using Zenith.Session;
 using Zenith.World;
@@ -31,7 +33,8 @@ sealed class WorldProtocol
         bool useBlockNetworkIdHashes = true,
         int gameMode = AbilityBits.WireGameModeSurvival,
         short biomeType = StartGamePacket.SpawnBiomeTypeDefault,
-        string biomeName = "")
+        string biomeName = "",
+        IReadOnlyList<GameRule>? gameRules = null)
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -50,6 +53,7 @@ sealed class WorldProtocol
             GameType = gameMode,
             BiomeType = biomeType,
             BiomeName = biomeName,
+            GameRules = gameRules ?? [],
             BaseGameVersion = ServerIdentity.VersionName,
             GameVersion = ServerIdentity.VersionName
         });
@@ -58,6 +62,10 @@ sealed class WorldProtocol
     /// <summary>World difficulty (BDS sends it right after the item registry; same value as StartGame's field).</summary>
     public void SendDifficulty(int difficulty) =>
         _session.SendDataPacket(new SetDifficultyPacket { Difficulty = difficulty });
+
+    /// <summary>The whole rule list (BDS repeats it after StartGame, and sends it again whenever a rule changes).</summary>
+    public void SendGameRules(IReadOnlyList<GameRule> rules) =>
+        _session.SendDataPacket(new GameRulesChangedPacket { Rules = rules });
 
     public void SendCommandsEnabled(bool enabled) =>
         _session.SendDataPacket(new SetCommandsEnabledPacket { Enabled = enabled });
@@ -79,8 +87,8 @@ sealed class WorldProtocol
     /// </summary>
     public void SendJoinStatic(string name)
     {
-        foreach (var packet in JoinStaticData.Packets(name))
-            _session.SendDataPacket(packet);
+        foreach (var entry in JoinStaticData.Named(name))
+            _session.SendDataPacket(new StaticDataPacket(entry.Id, entry.Body));
     }
 
     /// <summary>Vanilla jigsaw rules required by protocol 2193 clients before StartGame.</summary>

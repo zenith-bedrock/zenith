@@ -231,7 +231,7 @@ sealed class BlockEditSystem : IGameSystem
             // A bounded floor store is part of the authoritative destination for a concrete
             // block drop. Refuse before removing the source when neither the bag nor the floor
             // can receive it; otherwise an accepted break could silently destroy its loot.
-            var shouldDrop = !creative && ShouldDropBrokenBlock(previous, player);
+            var shouldDrop = !creative && _world.Rules.DoTileDrops && ShouldDropBrokenBlock(previous, player);
             var dropId = default(StackId);
             var inventoryCanReceiveDrop = false;
             if (wasChest)

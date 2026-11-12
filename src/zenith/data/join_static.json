@@ -117,49 +117,57 @@
     },
     {
       "order": 14,
+      "name": "game_rules_changed",
+      "id": 72,
+      "file": "14_game_rules_changed.bin",
+      "bytes": 749,
+      "sha256": "3311c6e8e29e0091f0ce4a039ca62912a41c37f7b5f867d937bd6820193603b9"
+    },
+    {
+      "order": 15,
       "name": "available_entity_identifiers",
       "id": 119,
-      "file": "14_available_entity_identifiers.bin",
+      "file": "15_available_entity_identifiers.bin",
       "bytes": 8971,
       "sha256": "5f01f36caa4ea927e62a544b9e887415bdc43c3d4a7a3e994299871d589036bb"
     },
     {
-      "order": 15,
+      "order": 16,
       "name": "player_fog",
       "id": 160,
-      "file": "15_player_fog.bin",
+      "file": "16_player_fog.bin",
       "bytes": 1,
       "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
     },
     {
-      "order": 16,
+      "order": 17,
       "name": "camera_presets",
       "id": 198,
-      "file": "16_camera_presets.bin",
+      "file": "17_camera_presets.bin",
       "bytes": 337,
       "sha256": "5cea450cbd4b48de442512d6efa3889d85c538f24e101371528fa3ebc566d0df"
     },
     {
-      "order": 17,
+      "order": 18,
       "name": "camera_aim_assist_presets",
       "id": 320,
-      "file": "17_camera_aim_assist_presets.bin",
+      "file": "18_camera_aim_assist_presets.bin",
       "bytes": 1096,
       "sha256": "6e98c043f457b00a43ef28b91e018d1b43d7bd159d9de1168c833209b9c12b5a"
     },
     {
-      "order": 18,
+      "order": 19,
       "name": "camera_spline",
       "id": 338,
-      "file": "18_camera_spline.bin",
+      "file": "19_camera_spline.bin",
       "bytes": 1,
       "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
     },
     {
-      "order": 19,
+      "order": 20,
       "name": "trim_data",
       "id": 302,
-      "file": "19_trim_data.bin",
+      "file": "20_trim_data.bin",
       "bytes": 1269,
       "sha256": "db0fdab6ea1618b6fd634b7865d9f5856ad7b04c8b1959cdac2ca0ac4cbd5bed"
     }

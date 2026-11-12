@@ -22,6 +22,9 @@ static class WorldStorageKeys
     /// <summary>Single fixed key — world generator identity (Phase XXIV, see <see cref="WorldMetadata"/>).</summary>
     public const string WorldMetadataKey = "wm:";
 
+    /// <summary>Single fixed key — the world's game rules, in the wire encoding (<see cref="GameRuleCodec"/>).</summary>
+    public const string GameRulesKey = "gr:";
+
     private const byte OverlayTag = (byte)'O';
     private const byte ChestTag = (byte)'C';
 
