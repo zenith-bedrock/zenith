@@ -3,6 +3,7 @@ using Zenith.Diagnostics;
 using System.Globalization;
 using System.Diagnostics;
 using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.Entities;
 using Zenith.Rulebook;
 
 namespace Zenith.Gameplay.Commands;
@@ -13,10 +14,12 @@ sealed class CommandRuntime
     private readonly PlayerManager _players;
     private readonly DiagnosticsInvestigation? _diagnostics;
     private readonly GameRules? _rules;
+    private readonly MobSpawner? _spawner;
     private readonly CommandCatalog _catalog = new();
 
-    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null, GameRules? rules = null)
+    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null, GameRules? rules = null, MobSpawner? spawner = null)
     {
+        _spawner = spawner;
         _players = players;
         _rules = rules;
         _diagnostics = diagnostics;
@@ -66,6 +69,13 @@ sealed class CommandRuntime
                 new CommandOverload(new EnumCommandArgument("rule", names), new StringCommandArgument("value", Optional: true))));
         }
 
+        if (spawner is not null)
+        {
+            var species = spawner.Names.ToDictionary(name => name, name => (object)name, StringComparer.OrdinalIgnoreCase);
+            _catalog.Register(new CommandDefinition("summon", "Summon a mob at your position", CommandPermission.Operator,
+                new CommandOverload(new EnumCommandArgument("mob", species))));
+        }
+
         _catalog.Freeze();
     }
 
@@ -98,9 +108,19 @@ sealed class CommandRuntime
                 return ExecuteEffect(source, arguments);
             case "gamerule":
                 return ExecuteGameRule(arguments);
+            case "summon":
+                return ExecuteSummon(source, arguments);
             default:
                 return new("Command", "Unknown command.");
         }
+    }
+
+    private CommandFeedback ExecuteSummon(Player.Player source, IReadOnlyDictionary<string, object> arguments)
+    {
+        var mob = (string)arguments["mob"];
+        return _spawner!.Request(mob, source.PositionX, source.PositionY, source.PositionZ)
+            ? new("Summon", $"Summoned {mob}.")
+            : new("Summon", $"Unknown mob '{mob}'.");
     }
 
     private CommandFeedback ExecuteGameRule(IReadOnlyDictionary<string, object> arguments)

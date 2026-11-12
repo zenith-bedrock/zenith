@@ -44,6 +44,12 @@ sealed class BatSystem : IGameSystem
     }
 
     public BatStore Bats => _bats;
+
+    internal void SpawnBat(float x, float y, float z)
+    {
+        var entityId = _players.AllocateRuntimeId();
+        _bats.TryAdd(new Bat(entityId, (ulong)entityId, x, y, z));
+    }
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedRemovalCount { get; private set; }
     internal long DespawnCount { get; private set; }

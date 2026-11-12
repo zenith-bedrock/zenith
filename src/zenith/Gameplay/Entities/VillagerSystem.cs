@@ -55,6 +55,14 @@ sealed class VillagerSystem : IGameSystem
     }
 
     public VillagerStore Villagers => _villagers;
+
+    internal void SpawnVillager(float x, float y, float z)
+    {
+        var entityId = _players.AllocateRuntimeId();
+        var villager = new Villager(entityId, (ulong)entityId, x, y, z) { RequestedWare = _requestedWare };
+        villager.Wares.Add(_wareItem);
+        _villagers.TryAdd(villager);
+    }
     internal long ReplicatedSpawnCount { get; private set; }
     internal long ReplicatedMoveCount { get; private set; }
     internal long ReplicatedMoveSkippedCount { get; private set; }
