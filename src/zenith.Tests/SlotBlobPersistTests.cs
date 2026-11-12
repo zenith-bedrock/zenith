@@ -15,7 +15,7 @@ public class SlotBlobPersistTests
         slots[0] = InventorySlot.OfBlock(Blocks.Stone, 10);
         slots[5] = InventorySlot.OfBlock(Blocks.Chest, 2);
         var blob = SlotBlob.Pack(slots);
-        Assert.Equal(SlotBlob.Version3, blob[0]);
+        Assert.Equal(SlotBlob.Version4, blob[0]);
         var dest = new InventorySlot[PlayerInventory.FullInventorySize];
         Assert.True(SlotBlob.TryUnpack(blob, dest));
         Assert.Equal(Blocks.Stone, dest[0].Id.Value);

@@ -369,8 +369,14 @@ sealed class InventoryProtocol
         var palette = _session.Context.ItemPalette;
         if (slot.Id.IsItem)
         {
-            if (palette.TryGetName(slot.Id.Value, out _))
-                return new NetworkItemStack((short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, Meta: slot.Id.Aux, StackNetworkId: stackNetworkId);
+            if (palette.TryGetName(slot.Id.Value, out var itemName))
+            {
+                // A durable item always carries its Damage tag, even at 0 (as the stock BDS sends it).
+                int? damage = _session.Context.Durability.TryGetMax(slot.Id, out _) ? slot.Id.Damage : null;
+                return new NetworkItemStack(
+                    (short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, Meta: slot.Id.Aux,
+                    StackNetworkId: stackNetworkId, IsShield: itemName == NetworkItemStack.ShieldName, Damage: damage);
+            }
             WarnUnknownStackOnce(slot.Id.Value);
             var airId = palette.Require("minecraft:air");
             return new NetworkItemStack(airId, 0, Blocks.Air);

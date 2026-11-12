@@ -1,12 +1,15 @@
 using Zenith.Binary;
+using Zenith.Nbt;
 
 namespace Zenith.Packets;
 
 /// <summary>
 /// Wire item stack DTO (domain maps via Protocol). One type, three encode shapes —
-/// packet <c>Encode</c> picks the writer; Gameplay never calls these.
+/// packet <c>Encode</c> picks the writer; Gameplay never calls these. <paramref name="Damage"/> is the wear of a
+/// durable item (ADR §148): null for an item that does not wear, otherwise the <c>Damage</c> NBT tag of the extra
+/// data — written even at 0, as the stock BDS does.
 /// </summary>
-readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0, bool IsShield = false)
+readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0, bool IsShield = false, int? Damage = null)
 {
     /// <summary>The one item whose wire extra data has the trailing blocking tick.</summary>
     public const string ShieldName = "minecraft:shield";
@@ -15,7 +18,8 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
 
     /// <summary>
     /// ItemV4 (protocol 2168+, ADR §87) — i16 LE network id + count + meta + optional stack net
-    /// id + block runtime id + extra blob. Use from: InventoryContent, MobEquipment.
+    /// id + block runtime id + extra blob (<see cref="WriteExtraData"/>; empty for air). Use from:
+    /// InventoryContent, MobEquipment, MobArmorEquipment.
     /// </summary>
     public void WriteNetworkItemStackDescriptor(ref BinaryStream writer)
     {
@@ -31,7 +35,10 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
             writer.WriteVarInt(StackNetworkId);
 
         writer.WriteUnsignedVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(0); // raw_extra_data length
+        if (NetworkId == 0)
+            writer.WriteUnsignedVarInt(0); // air: no extra data
+        else
+            WriteExtraData(ref writer);
     }
 
     /// <summary>
@@ -58,7 +65,38 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     }
 
     /// <summary>
-    /// ItemStack without stack net id (VarInt network id + block runtime + empty extra blob).
+    /// The extra blob of a non-air stack, as the stock BDS writes it (captured from BDS 1.26.63.1, ADR §148): an
+    /// <c>i16</c> NBT marker — 0 for none, or -1 followed by <c>u8 1</c> and a little-endian NBT compound — then the
+    /// <c>u32</c> can-place-on and can-destroy counts (0 here: not modelled), then the <c>i64</c> blocking tick that
+    /// only the shield has. Length-prefixed, so a reader that does not know a field still skips the right bytes.
+    /// </summary>
+    private void WriteExtraData(ref BinaryStream writer)
+    {
+        var extra = new List<byte>(36);
+        if (Damage is { } damage)
+        {
+            var root = new NbtCompound();
+            root.Set("Damage", NbtTag.Int(damage));
+            extra.AddRange(new byte[] { 0xFF, 0xFF, 1 });
+            var nbt = new NbtWriter(NbtEncoding.LittleEndian);
+            nbt.WriteNamedTag(string.Empty, NbtTag.Compound(root));
+            extra.AddRange(nbt.ToArray());
+        }
+        else
+        {
+            extra.AddRange(new byte[2]); // no NBT
+        }
+
+        extra.AddRange(new byte[8]); // can_place_on and can_destroy: both empty
+        if (IsShield)
+            extra.AddRange(new byte[8]); // blocking_tick
+
+        writer.WriteUnsignedVarInt(extra.Count);
+        writer.Write(extra.ToArray());
+    }
+
+    /// <summary>
+    /// ItemStack without stack net id (VarInt network id + block runtime + extra blob).
     /// Use from: CreativeContent, CraftingData outputs. A shield (<see cref="IsShield"/>) carries the extra
     /// trailing <c>blocking_tick</c> (i64) that every Bedrock reader expects for that one item id.
     /// </summary>
@@ -77,22 +115,6 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
             return;
         }
 
-        // Extra blob: int16 NBT length 0 + empty can_place / can_break uint32 lists.
-        Span<byte> extra = stackalloc byte[IsShield ? 18 : 10];
-        extra.Clear();
-        extra[0] = 0;
-        extra[1] = 0; // int16 LE length
-        // uint32 LE can_place count = 0
-        extra[2] = 0;
-        extra[3] = 0;
-        extra[4] = 0;
-        extra[5] = 0;
-        // uint32 LE can_break count = 0
-        extra[6] = 0;
-        extra[7] = 0;
-        extra[8] = 0;
-        extra[9] = 0;
-        writer.WriteUnsignedVarInt(extra.Length);
-        writer.Write(extra);
+        WriteExtraData(ref writer);
     }
 }

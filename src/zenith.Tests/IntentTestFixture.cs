@@ -77,6 +77,7 @@ internal sealed class IntentTestFixture
             blockPalette,
             itemPalette,
             RecipeRegistry.CreateDefault(),
+            ItemDurability.CreateDefault(itemPalette),
             CreativeCatalog.CreateDefault());
     }
 
