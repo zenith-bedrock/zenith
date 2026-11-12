@@ -48,9 +48,7 @@ sealed class SkeletonSystem : IGameSystem
     private readonly ComponentStore<SkeletonState> _skeletons;
     private readonly ProjectileSystem _projectiles;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = [];
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
-    private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
 
@@ -59,6 +57,7 @@ sealed class SkeletonSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
+        _replication = new ActorReplication(stores);
         _skeletons = new ComponentStore<SkeletonState>(stores.Entities);
         _projectiles = projectiles;
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
@@ -70,7 +69,7 @@ sealed class SkeletonSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXI/XXII) — "is this ECS entity a skeleton," nothing more.</summary>
     internal bool Owns(EntityId id) => _skeletons.Has(id);
-    internal long DespawnCount { get; private set; }
+    internal long DespawnCount => _replication.DespawnCount;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -103,10 +102,8 @@ sealed class SkeletonSystem : IGameSystem
             TryRangedAttack(id, target, clock, online);
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveSkeletonId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
-        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
-            _lastProjected.Remove(key);
-        ReplicateMoves(online);
+        _replication.Prune(_skeletons.Entities, online);
+        _replication.ReplicateMoves(_skeletons.Entities, online);
     }
 
     /// <summary>
@@ -166,34 +163,6 @@ sealed class SkeletonSystem : IGameSystem
         p.Y = y;
     }
 
-    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
-    {
-        foreach (var peer in online)
-        {
-            _moveBatch.Clear();
-            foreach (var id in _skeletons.Entities)
-            {
-                if (!_stores.Identities.TryGet(id, out var identity)) continue;
-                var key = (identity.ActorUniqueId, peer.RuntimeId);
-                if (!_replicated.Contains(key)) continue;
-                if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
-                    continue;
-                _moveBatch.Add(new RawActorPose
-                {
-                    ActorRuntimeId = identity.ActorRuntimeId,
-                    X = pos.X,
-                    Y = pos.Y,
-                    Z = pos.Z,
-                    Yaw = pos.Yaw,
-                    HeadYaw = pos.Yaw
-                });
-                _lastProjected[key] = current;
-            }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
 
     /// <summary>
     /// Range/cooldown-gated shot: the same decision shape as Zombie's/Spider's <c>TryAttackPlayer</c>
@@ -235,13 +204,6 @@ sealed class SkeletonSystem : IGameSystem
         }
     }
 
-    private bool IsKnownAliveSkeletonId(long actorUniqueId)
-    {
-        foreach (var id in _skeletons.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
-    }
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnSkeleton(float x, float y, float z)
@@ -257,26 +219,8 @@ sealed class SkeletonSystem : IGameSystem
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        ref var tracking = ref _stores.Despawn.GetRef(id);
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
-        tracking.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
-
-        if (!_stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-            }
-        _stores.DestroyActor(identity.ActorRuntimeId, id);
-        DespawnCount++;
-        return true;
-    }
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private Player.Player? FindTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
@@ -286,28 +230,9 @@ sealed class SkeletonSystem : IGameSystem
             .FirstOrDefault(p => (p.PositionX - pos.X) * (p.PositionX - pos.X) + (p.PositionZ - pos.Z) * (p.PositionZ - pos.Z) <= DetectionDistance * DetectionDistance);
     }
 
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Session.Protocol.Entity.SendAddSkeleton(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-            },
-            onExit: peer =>
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-            });
-    }
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+        _replication.Reconcile(id, online,
+            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddSkeleton(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);
@@ -315,7 +240,7 @@ sealed class SkeletonSystem : IGameSystem
     /// <summary>Concrete Skeleton health/removal operation shared by the Projectile vertical slice.</summary>
     internal bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Skeleton", currentTick,
+            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Skeleton", currentTick,
             destroyActor: sid =>
             {
                 if (_stores.Identities.TryGet(sid, out var identity))
@@ -324,6 +249,6 @@ sealed class SkeletonSystem : IGameSystem
             onDeathReplicatedToPeer: peer =>
             {
                 if (_stores.Identities.TryGet(id, out var identity))
-                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+                    _replication.Forget(identity.ActorUniqueId, peer);
             });
 }

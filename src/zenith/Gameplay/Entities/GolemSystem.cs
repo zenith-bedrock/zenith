@@ -61,9 +61,7 @@ sealed class GolemSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<GolemState> _golems;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
-    private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
     private ulong _currentTick;
@@ -73,6 +71,7 @@ sealed class GolemSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
+        _replication = new ActorReplication(stores);
         _golems = new ComponentStore<GolemState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
@@ -83,11 +82,11 @@ sealed class GolemSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a golem," nothing more.</summary>
     internal bool Owns(EntityId id) => _golems.Has(id);
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedMoveCount { get; private set; }
-    internal long ReplicatedMoveSkippedCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
-    internal long DespawnCount { get; private set; }
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedMoveCount => _replication.MoveCount;
+    internal long ReplicatedMoveSkippedCount => _replication.MoveSkippedCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
+    internal long DespawnCount => _replication.DespawnCount;
     internal long SlamCount { get; private set; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
@@ -126,19 +125,10 @@ sealed class GolemSystem : IGameSystem
             ReconcileViewers(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveGolemId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
-        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
-            _lastProjected.Remove(key);
-        ReplicateMoves(online);
+        _replication.Prune(_golems.Entities, online);
+        _replication.ReplicateMoves(_golems.Entities, online);
     }
 
-    private bool IsKnownAliveGolemId(long actorUniqueId)
-    {
-        foreach (var id in _golems.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
-    }
 
     private void EnsureBootstrapGolem(IReadOnlyList<Player.Player> online)
     {
@@ -166,52 +156,12 @@ sealed class GolemSystem : IGameSystem
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        ref var tracking = ref _stores.Despawn.GetRef(id);
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
-        tracking.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _replication.TryDespawn(id, clock, online, DespawnRadius);
 
-        if (!_stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            }
-        _stores.DestroyActor(identity.ActorRuntimeId, id);
-        DespawnCount++;
-        return true;
-    }
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Session.Protocol.Entity.SendAddGolem(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            });
-    }
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+        _replication.Reconcile(id, online,
+            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddGolem(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
@@ -226,7 +176,7 @@ sealed class GolemSystem : IGameSystem
         }
 
         return DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Golem", currentTick,
+            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Golem", currentTick,
             destroyActor: gid =>
             {
                 if (_stores.Identities.TryGet(gid, out var identity))
@@ -235,8 +185,8 @@ sealed class GolemSystem : IGameSystem
             onDeathReplicatedToPeer: peer =>
             {
                 if (_stores.Identities.TryGet(id, out var identity))
-                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                ReplicatedRemovalCount++;
+                    _replication.Forget(identity.ActorUniqueId, peer);
+                _replication.RemovalCount++;
             });
     }
 
@@ -341,7 +291,7 @@ sealed class GolemSystem : IGameSystem
             ref var s = ref _golems.GetRef(id);
             s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
-                if (_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+                if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
                     peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
@@ -382,36 +332,4 @@ sealed class GolemSystem : IGameSystem
                 peer.Session.Protocol.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
     }
 
-    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
-    {
-        foreach (var peer in online)
-        {
-            _moveBatch.Clear();
-            foreach (var id in _golems.Entities)
-            {
-                if (!_stores.Identities.TryGet(id, out var identity)) continue;
-                var key = (identity.ActorUniqueId, peer.RuntimeId);
-                if (!_replicated.Contains(key)) continue;
-                if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
-                {
-                    ReplicatedMoveSkippedCount++;
-                    continue;
-                }
-                _moveBatch.Add(new RawActorPose
-                {
-                    ActorRuntimeId = identity.ActorRuntimeId,
-                    X = pos.X,
-                    Y = pos.Y,
-                    Z = pos.Z,
-                    Yaw = pos.Yaw,
-                    HeadYaw = pos.Yaw
-                });
-                _lastProjected[key] = current;
-                ReplicatedMoveCount++;
-            }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
 }

@@ -33,9 +33,7 @@ sealed class MinecartSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<VehicleOccupancy> _minecarts;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
-    private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
 
@@ -44,6 +42,7 @@ sealed class MinecartSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
+        _replication = new ActorReplication(stores);
         _minecarts = new ComponentStore<VehicleOccupancy>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
@@ -54,11 +53,11 @@ sealed class MinecartSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXI, Projectile's generalized hit query) — "is this ECS entity a minecart," nothing more.</summary>
     internal bool Owns(EntityId id) => _minecarts.Has(id);
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedMoveCount { get; private set; }
-    internal long ReplicatedMoveSkippedCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
-    internal long DespawnCount { get; private set; }
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedMoveCount => _replication.MoveCount;
+    internal long ReplicatedMoveSkippedCount => _replication.MoveSkippedCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
+    internal long DespawnCount => _replication.DespawnCount;
     internal long MountCount { get; private set; }
     internal long DismountCount { get; private set; }
 
@@ -90,19 +89,10 @@ sealed class MinecartSystem : IGameSystem
             ReconcileViewers(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveMinecartId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
-        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
-            _lastProjected.Remove(key);
-        ReplicateMoves(online);
+        _replication.Prune(_minecarts.Entities, online);
+        _replication.ReplicateMoves(_minecarts.Entities, online);
     }
 
-    private bool IsKnownAliveMinecartId(long actorUniqueId)
-    {
-        foreach (var id in _minecarts.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
-    }
 
     private void EnsureBootstrapMinecart(IReadOnlyList<Player.Player> online)
     {
@@ -147,57 +137,18 @@ sealed class MinecartSystem : IGameSystem
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. An occupied cart is dismounted first so despawn can never strand a rider.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        ref var tracking = ref _stores.Despawn.GetRef(id);
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
-        tracking.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _replication.TryDespawn(id, clock, online, DespawnRadius, beforeDestroy: id => Dismount(id, online, ResolveOccupant(id)));
 
-        Dismount(id, online, ResolveOccupant(id));
-        if (!_stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+        _replication.Reconcile(id, online,
+            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddMinecart(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw),
+            (peer, identity) =>
             {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            }
-        _stores.DestroyActor(identity.ActorRuntimeId, id);
-        DespawnCount++;
-        return true;
-    }
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
-        _minecarts.TryGet(id, out var occupancy);
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Session.Protocol.Entity.SendAddMinecart(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
                 // Late join / re-entering interest while occupied: this peer never saw the mount happen, so it must be told now.
-                if (occupancy.OccupantPlayerRuntimeId is { } riderId)
+                if (_minecarts.TryGet(id, out var occupancy) && occupancy.OccupantPlayerRuntimeId is { } riderId)
                     peer.Session.Protocol.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, SetActorLinkPacket.TypeRider);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
             });
-    }
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
@@ -222,7 +173,7 @@ sealed class MinecartSystem : IGameSystem
         var actorUniqueId = identityBeforeDamage.ActorUniqueId;
 
         var applied = DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Minecart", currentTick,
+            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Minecart", currentTick,
             destroyActor: mid =>
             {
                 if (_stores.Identities.TryGet(mid, out var identity))
@@ -230,10 +181,10 @@ sealed class MinecartSystem : IGameSystem
             },
             onDeathReplicatedToPeer: peer =>
             {
-                _lastProjected.Remove((actorUniqueId, peer.RuntimeId));
+                _replication.Forget(actorUniqueId, peer);
                 if (occupant is not null)
                     peer.Session.Protocol.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, SetActorLinkPacket.TypeRemove);
-                ReplicatedRemovalCount++;
+                _replication.RemovalCount++;
             });
 
         // Gated on actual death (entity no longer alive), not just `applied` — a non-lethal hit
@@ -338,7 +289,7 @@ sealed class MinecartSystem : IGameSystem
     {
         var actorUniqueId = GetActorUniqueId(id);
         foreach (var peer in online)
-            if (_replicated.Contains((actorUniqueId, peer.RuntimeId)))
+            if (_replication.Viewers.Contains((actorUniqueId, peer.RuntimeId)))
                 peer.Session.Protocol.Entity.SendSetActorLink(riderRuntimeId, actorUniqueId, linkType);
     }
 
@@ -399,36 +350,4 @@ sealed class MinecartSystem : IGameSystem
         rider.PositionZ = pos.Z;
     }
 
-    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
-    {
-        foreach (var peer in online)
-        {
-            _moveBatch.Clear();
-            foreach (var id in _minecarts.Entities)
-            {
-                if (!_stores.Identities.TryGet(id, out var identity)) continue;
-                var key = (identity.ActorUniqueId, peer.RuntimeId);
-                if (!_replicated.Contains(key)) continue;
-                if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
-                {
-                    ReplicatedMoveSkippedCount++;
-                    continue;
-                }
-                _moveBatch.Add(new RawActorPose
-                {
-                    ActorRuntimeId = identity.ActorRuntimeId,
-                    X = pos.X,
-                    Y = pos.Y,
-                    Z = pos.Z,
-                    Yaw = pos.Yaw,
-                    HeadYaw = pos.Yaw
-                });
-                _lastProjected[key] = current;
-                ReplicatedMoveCount++;
-            }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
 }
