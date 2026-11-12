@@ -70,7 +70,7 @@ public class InventoryConservationTests
     [InlineData(3)]
     [InlineData(4)]
     [InlineData(5)]
-    public void Random_move_requests_never_create_or_lose_items(int seed) => RunRandomMoves(seed, withChest: false);
+    public void Random_move_requests_never_create_or_lose_items(int seed) => RunRandomMoves(seed, withChest: false, withDrops: false);
 
     /// <summary>Same property with a double chest open: its 54 slots are one more place items can sit or move to.</summary>
     [Theory]
@@ -80,9 +80,22 @@ public class InventoryConservationTests
     [InlineData(14)]
     [InlineData(15)]
     public void Random_move_requests_with_a_double_chest_open_never_create_or_lose_items(int seed) =>
-        RunRandomMoves(seed, withChest: true);
+        RunRandomMoves(seed, withChest: true, withDrops: false);
 
-    private static void RunRandomMoves(int seed, bool withChest)
+    /// <summary>
+    /// Survival player who also sends Drop and Destroy: a drop must land on the floor in full (what left the player
+    /// is exactly what the floor gained), and the Creative-only Destroy must never delete anything in survival.
+    /// </summary>
+    [Theory]
+    [InlineData(21)]
+    [InlineData(22)]
+    [InlineData(23)]
+    [InlineData(24)]
+    [InlineData(25)]
+    public void Random_requests_with_drops_and_destroys_conserve_items_between_the_player_and_the_floor(int seed) =>
+        RunRandomMoves(seed, withChest: false, withDrops: true);
+
+    private static void RunRandomMoves(int seed, bool withChest, bool withDrops)
     {
         var rng = new Random(seed);
         var fx = new IntentTestFixture();
@@ -92,8 +105,10 @@ public class InventoryConservationTests
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
 
+        // Everything that is not on the player: the open chest's slots and what has been dropped on the floor.
         IEnumerable<InventorySlot> Chest()
         {
+            foreach (var drop in fx.World.FloorDrops.Snapshot()) yield return new InventorySlot(drop.Id, drop.Count);
             if (!withChest) yield break;
             for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(2, 64, 2, i);
             for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(3, 64, 2, i);
@@ -132,9 +147,14 @@ public class InventoryConservationTests
             {
                 var from = RandomReference(rng, withChest);
                 var to = RandomReference(rng, withChest);
-                actions.Add(rng.Next(3) == 0
-                    ? InventoryStackAction.Swap(from, to)
-                    : InventoryStackAction.Transfer(from, to, rng.Next(0, 65)));
+                var roll = rng.Next(withDrops ? 5 : 3);
+                actions.Add(roll switch
+                {
+                    0 => InventoryStackAction.Swap(from, to),
+                    3 => InventoryStackAction.Drop(from, rng.Next(0, 65)),
+                    4 => InventoryStackAction.Destroy(from, rng.Next(0, 65), default),
+                    _ => InventoryStackAction.Transfer(from, to, rng.Next(0, 65)),
+                });
             }
 
             var layoutBefore = Layout(player, Chest());
@@ -151,6 +171,7 @@ public class InventoryConservationTests
         }
 
         // Guards against a vacuous pass: a good share of the random requests must really have applied.
+        if (withDrops) Assert.NotEmpty(fx.World.FloorDrops.Snapshot());
         Assert.True(moved >= 20, $"seed {seed}: only {moved}/150 requests changed anything.");
     }
 }
