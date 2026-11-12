@@ -54,13 +54,15 @@ sealed class CreeperSystem : IGameSystem
     private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
+        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Creeper, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -128,11 +130,7 @@ sealed class CreeperSystem : IGameSystem
     private void EnsureBootstrapCreeper(IReadOnlyList<Player.Player> online)
     {
         if (_bootstrapSpawned || _creepers.Count != 0) return;
-        var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
-        if (player is null) return;
-        var x = player.PositionX + SpawnDistance;
-        var z = player.PositionZ;
-        var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
+        if (!_showcase.TryPlace(online, _world, SpawnDistance, 0f, out var x, out var y, out var z)) return;
         SpawnCreeper(x, y, z);
         _bootstrapSpawned = true;
     }

@@ -37,11 +37,13 @@ sealed class FishSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public FishSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+    public FishSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
     {
         _world = world;
+        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette, trackPoses: false, withVelocity: true);
@@ -94,6 +96,7 @@ sealed class FishSystem : IGameSystem
     /// </summary>
     private void EnsureBootstrapFish(IReadOnlyList<Player.Player> online)
     {
+        if (!_showcase.Enabled) return;
         if (_bootstrapSpawned || _fish.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;

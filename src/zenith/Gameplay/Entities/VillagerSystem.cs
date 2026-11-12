@@ -39,14 +39,16 @@ sealed class VillagerSystem : IGameSystem
     private readonly HashSet<(long VillagerId, long PlayerId)> _replicated = new();
     private readonly Dictionary<(long VillagerId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
     private ulong _currentTick;
 
     internal long TradeCount { get; private set; }
 
-    public VillagerSystem(World.World world, PlayerManager players, VillagerStore villagers, ItemPalette itemPalette, Random? random = null)
+    public VillagerSystem(World.World world, PlayerManager players, VillagerStore villagers, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
     {
         _world = world;
+        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _villagers = villagers;
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
@@ -92,6 +94,7 @@ sealed class VillagerSystem : IGameSystem
 
     private void EnsureBootstrapVillager(IReadOnlyList<Player.Player> online)
     {
+        if (!_showcase.Enabled) return;
         if (_bootstrapSpawned || _villagers.Active.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;

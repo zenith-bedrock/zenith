@@ -46,13 +46,15 @@ sealed class ZombieSystem : IGameSystem
     // structural mutation (despawn/death) during iteration still needs a stable list to walk, but
     // it doesn't need a new allocation to provide one.
     private readonly List<EntityId> _tickScratch = [];
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public ZombieSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+    public ZombieSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
+        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Zombie, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -105,11 +107,7 @@ sealed class ZombieSystem : IGameSystem
     private void EnsureBootstrapZombie(IReadOnlyList<Player.Player> online)
     {
         if (_bootstrapSpawned || _zombies.Count != 0) return;
-        var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
-        if (player is null) return;
-        var x = player.PositionX + SpawnDistance;
-        var z = player.PositionZ;
-        var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
+        if (!_showcase.TryPlace(online, _world, SpawnDistance, 0f, out var x, out var y, out var z)) return;
         SpawnZombie(x, y, z);
         _bootstrapSpawned = true;
     }
