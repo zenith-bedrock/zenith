@@ -34,4 +34,24 @@ public sealed class RecipeJsonTests
             """{"shaped":[{"h":2,"id":"s","in":[{"n":"minecraft:a"},null],"out":[{"c":3,"n":"minecraft:o"}],"st":"crafting_table","sym":true,"w":1}],"shapeless":[{"id":"l","in":[{"c":2,"t":"minecraft:planks"}],"out":[{"c":1,"n":"minecraft:p"}],"st":"crafting_table"}],"source":"test"}""",
             Encoding.UTF8.GetString(o.ToArray()));
     }
+
+    [Fact]
+    public void Write_emits_aux_only_where_a_recipe_has_one_and_canonical_tells_variants_apart()
+    {
+        Recipe Bed(int aux) => new()
+        {
+            Id = "b", Inputs = [Ingredient.Item("minecraft:bed", aux: 3), Ingredient.Item("minecraft:red_dye")],
+            Outputs = [new Product("minecraft:bed", 1, aux)],
+        };
+
+        using var z = new GZipStream(new MemoryStream(RecipeJson.Write([Bed(0)], "t")), CompressionMode.Decompress);
+        using var o = new MemoryStream();
+        z.CopyTo(o);
+        var json = Encoding.UTF8.GetString(o.ToArray());
+
+        Assert.Contains("""{"a":3,"n":"minecraft:bed"}""", json);
+        Assert.Contains("""{"n":"minecraft:red_dye"}""", json); // no aux key when the ingredient accepts any
+        Assert.Contains("""{"a":0,"c":1,"n":"minecraft:bed"}""", json); // a result's aux is kept even when 0
+        Assert.NotEqual(RecipeJson.Canonical(Bed(1)), RecipeJson.Canonical(Bed(2)));
+    }
 }

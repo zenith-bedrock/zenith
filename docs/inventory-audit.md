@@ -63,8 +63,10 @@ the closest thing to "what a real client sends and expects back".
   requests change nothing (`AutoCraftTests`). Verified: unit/intent level only. **Not verified:** a retail client's exact
   request shape (the Consume list is ignored, see gap 2), tag-vs-tag overlap allocation is greedy (no max-flow), and
   `extra` recipe outputs are not produced (only `Outputs[0]`, as for `CraftRecipe`).
-- **Open: item aux values.** 458 wire recipes (beds, banners, firework stars, tipped arrows, suspicious stew, maps)
-  are not emitted because `StackId` has no aux/damage. They return when stacks gain one.
+- **Item aux values (ADR §147).** `StackId` now carries aux; recipes can require/produce it. Beds (colour + dyeing),
+  banners, empty maps and suspicious stew recipes are emitted; the wire oracle now matches 4045 recipes with 0 missing.
+  Still open: tipped arrows (need a potion model), firework stars/rockets (colour lives in stack NBT, not modelled),
+  durability (`MineBlock` still echoes without mutating).
 
 ## Next
 

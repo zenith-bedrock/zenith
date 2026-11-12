@@ -356,7 +356,7 @@ sealed class InventoryProtocol
         if (slot.Id.IsItem)
         {
             if (palette.TryGetName(slot.Id.Value, out _))
-                return new NetworkItemStack((short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, StackNetworkId: stackNetworkId);
+                return new NetworkItemStack((short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, Meta: slot.Id.Aux, StackNetworkId: stackNetworkId);
             WarnUnknownStackOnce(slot.Id.Value);
             var airId = palette.Require("minecraft:air");
             return new NetworkItemStack(airId, 0, Blocks.Air);

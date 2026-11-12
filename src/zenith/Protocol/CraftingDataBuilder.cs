@@ -20,7 +20,7 @@ static class CraftingDataBuilder
         {
             var inputs = new WireRecipeIngredient[recipe.Cells.Length];
             for (var i = 0; i < inputs.Length; i++)
-                inputs[i] = recipe.Cells[i] is { } c ? new WireRecipeIngredient(c.Name, c.Tag, c.Count) : WireRecipeIngredient.Empty;
+                inputs[i] = recipe.Cells[i] is { } c ? new WireRecipeIngredient(c.Name, c.Tag, c.Count, c.Aux ?? WireRecipeIngredient.AnyAux) : WireRecipeIngredient.Empty;
 
             var outputs = new NetworkItemStack[recipe.Outputs.Length];
             for (var i = 0; i < outputs.Length; i++)
@@ -28,7 +28,7 @@ static class CraftingDataBuilder
                 var (stack, count) = recipe.Outputs[i];
                 var outName = ResolveName(stack, palette, recipe.NetId);
                 outputs[i] = new NetworkItemStack(palette.Require(outName), (ushort)count, stack.IsBlock ? stack.Value : 0,
-                    IsShield: outName == NetworkItemStack.ShieldName);
+                    Meta: stack.Aux, IsShield: outName == NetworkItemStack.ShieldName);
             }
 
             if (recipe.Shaped)

@@ -62,7 +62,12 @@ sealed class RecipeRegistry
             if (name is not null && !IsKnownItem(name))
                 throw new InvalidDataException($"Recipe data: '{id}' uses unknown item '{name}'.");
             var tag = c.TryGetProperty("t", out var t) ? t.GetString() : null;
-            var ingredient = new RecipeIngredient(name, tag, 1);
+            int? aux = c.TryGetProperty("a", out var a) ? a.GetInt32() : null;
+            if (aux is not null && name is null)
+                throw new InvalidDataException($"Recipe data: '{id}' puts an aux on a tag ingredient.");
+            if (aux is < 0 or > StackId.MaxAux)
+                throw new InvalidDataException($"Recipe data: '{id}' has aux {aux} outside 0..{StackId.MaxAux}.");
+            var ingredient = new RecipeIngredient(name, tag, 1, aux);
             // One cell holds one item per craft, so a counted shapeless ingredient is N separate cells.
             for (var i = 0; i < (shaped ? 1 : count); i++) cells.Add(ingredient);
         }
@@ -92,6 +97,18 @@ sealed class RecipeRegistry
     {
         var name = o.GetProperty("n").GetString()!;
         var count = o.GetProperty("c").GetInt32();
+        // An explicit aux marks an ITEM stack even when the name is also a block's (bed, banner: the item carries the
+        // colour in aux and no block runtime id, as on the wire); without one a block name is its default-state block.
+        if (o.TryGetProperty("a", out var auxElement))
+        {
+            var aux = auxElement.GetInt32();
+            if (aux is < 0 or > StackId.MaxAux)
+                throw new InvalidDataException($"Recipe data: '{recipeId}' has aux {aux} outside 0..{StackId.MaxAux}.");
+            if (!_palette.TryGet(name, out var auxItemId))
+                throw new InvalidDataException($"Recipe data: '{recipeId}' gives an aux to '{name}', which is not an item.");
+            return new RecipeOutput(StackId.FromItem(auxItemId, aux), count);
+        }
+
         if (Blocks.TryGetDefaultRuntimeId(name, out var rid))
             return new RecipeOutput(StackId.FromBlock(rid), count);
         if (_palette.TryGet(name, out var itemId))
@@ -119,12 +136,12 @@ sealed class RecipeRegistry
         }
     }
 
-    /// <summary>Item name of whatever sits in a grid cell (blocks and items share the namespace); null when empty.</summary>
-    private string? NameOf(InventorySlot slot)
+    /// <summary>Name and aux of whatever sits in a grid cell (blocks and items share the namespace); null when empty.</summary>
+    private GridItem? ItemOf(InventorySlot slot)
     {
         if (slot.IsEmpty) return null;
-        if (slot.Id.IsBlock) return Blocks.TryGetName(slot.Id.Value, out var b) ? b : "";
-        return _palette.TryGetName(slot.Id.Value, out var i) ? i : "";
+        if (slot.Id.IsBlock) return new GridItem(Blocks.TryGetName(slot.Id.Value, out var b) ? b : "", 0);
+        return new GridItem(_palette.TryGetName(slot.Id.Value, out var i) ? i : "", slot.Id.Aux);
     }
 
     /// <summary>
@@ -135,15 +152,15 @@ sealed class RecipeRegistry
     {
         used = [];
         var side = grid.GridSize == 4 ? 2 : 3;
-        var names = new string?[grid.GridSize];
-        for (var i = 0; i < names.Length; i++) names[i] = NameOf(grid.GetGrid(i));
+        var names = new GridItem?[grid.GridSize];
+        for (var i = 0; i < names.Length; i++) names[i] = ItemOf(grid.GetGrid(i));
 
         return recipe.Shaped
             ? MatchShaped(recipe, names, side, used)
             : MatchShapeless(recipe, names, used);
     }
 
-    private static bool MatchShaped(CraftingRecipe recipe, string?[] names, int side, List<int> used)
+    private static bool MatchShaped(CraftingRecipe recipe, GridItem?[] names, int side, List<int> used)
     {
         int minX = side, minY = side, maxX = -1, maxY = -1;
         for (var i = 0; i < names.Length; i++)
@@ -166,7 +183,7 @@ sealed class RecipeRegistry
                     var want = recipe.Cells[y * recipe.Width + (mirror ? recipe.Width - 1 - x : x)];
                     var have = names[(minY + y) * side + minX + x];
                     if (want is null) ok = have is null;
-                    else if (have is null || !want.Value.Matches(have)) ok = false;
+                    else if (have is null || !want.Value.Matches(have.Value)) ok = false;
                     else used.Add((minY + y) * side + minX + x);
                 }
 
@@ -177,7 +194,7 @@ sealed class RecipeRegistry
         return false;
     }
 
-    private static bool MatchShapeless(CraftingRecipe recipe, string?[] names, List<int> used)
+    private static bool MatchShapeless(CraftingRecipe recipe, GridItem?[] names, List<int> used)
     {
         var cells = new List<int>();
         for (var i = 0; i < names.Length; i++)
@@ -190,12 +207,12 @@ sealed class RecipeRegistry
     }
 
     /// <summary>Backtracking cell→ingredient assignment (at most 9 cells), so tag/name overlaps cannot cause a false negative.</summary>
-    private static bool Assign(CraftingRecipe recipe, string?[] names, List<int> cells, int at, bool[] taken)
+    private static bool Assign(CraftingRecipe recipe, GridItem?[] names, List<int> cells, int at, bool[] taken)
     {
         if (at == cells.Count) return true;
         for (var k = 0; k < recipe.Cells.Length; k++)
         {
-            if (taken[k] || !recipe.Cells[k]!.Value.Matches(names[cells[at]]!)) continue;
+            if (taken[k] || !recipe.Cells[k]!.Value.Matches(names[cells[at]]!.Value)) continue;
             taken[k] = true;
             if (Assign(recipe, names, cells, at + 1, taken)) return true;
             taken[k] = false;
@@ -227,15 +244,15 @@ sealed class RecipeRegistry
         var main = recipe.Outputs[0];
         if (main.Count <= 0 || times > PlayerInventory.MaxStack / main.Count) return false;
 
-        var names = new string?[sources.Count];
-        for (var i = 0; i < names.Length; i++) names[i] = NameOf(sources[i]);
+        var names = new GridItem?[sources.Count];
+        for (var i = 0; i < names.Length; i++) names[i] = ItemOf(sources[i]);
 
-        foreach (var ingredient in recipe.Cells.OfType<RecipeIngredient>().OrderBy(c => c.Name is null))
+        foreach (var ingredient in recipe.Cells.OfType<RecipeIngredient>().OrderBy(c => c.Name is null).ThenBy(c => c.Aux is null))
         {
             var need = ingredient.Count * times;
             for (var i = 0; i < names.Length && need > 0; i++)
             {
-                if (names[i] is not { Length: > 0 } name || !ingredient.Matches(name)) continue;
+                if (names[i] is not { Name.Length: > 0 } item || !ingredient.Matches(item)) continue;
                 var take = Math.Min(need, sources[i].Count - takes[i]);
                 takes[i] += take;
                 need -= take;
