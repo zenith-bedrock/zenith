@@ -62,3 +62,13 @@ the 98 newest data-driven blocks live there as plain behaviour-pack JSON. Classi
 
 BDS also *generates* recipes in code (colour dyeing, slabs, ...): the extractor reproduces those from rules and the
 `--verify` oracle proves nothing a stock BDS can craft is missing.
+
+## Durability
+
+`src/zenith/data/item_durability.json` (max durability per item) is **not** in the BDS packs: classic tools are native items. It is built from an open-source extraction, PrismarineJS/minecraft-data (MIT), `data/bedrock/<version>/items.json`:
+
+```
+dotnet run --project tools/bedrock-data -- durability <items.json> src/zenith/data/item_palette.json src/zenith/data/item_durability.json --source "PrismarineJS/minecraft-data data/bedrock/1.26.60/items.json (MIT)"
+```
+
+Items are matched to our palette by name. Items the palette lacks are reported as omitted; items whose numeric id differs from the palette's (registered in another game version, currently the 7 spears of 1.26.60) are reported and **not written**, because their value cannot be vouched for. Current data: 79 items. Values are from 1.26.60 data, not from a retail capture of this build; the classic tools (wood 59, stone 131, iron 250, diamond 1561, ...) match vanilla.
