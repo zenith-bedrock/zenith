@@ -54,9 +54,7 @@ sealed class CreeperSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<CreeperState> _creepers;
     private readonly StackId _lootItem;
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
-    private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
 
@@ -65,6 +63,7 @@ sealed class CreeperSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
+        _replication = new ActorReplication(stores);
         _creepers = new ComponentStore<CreeperState>(stores.Entities);
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
@@ -75,10 +74,10 @@ sealed class CreeperSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a creeper," nothing more.</summary>
     internal bool Owns(EntityId id) => _creepers.Has(id);
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
     internal long ExplosionCount { get; private set; }
-    internal long DespawnCount { get; private set; }
+    internal long DespawnCount => _replication.DespawnCount;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -122,19 +121,10 @@ sealed class CreeperSystem : IGameSystem
             }
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveCreeperId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
-        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
-            _lastProjected.Remove(key);
-        ReplicateMoves(online);
+        _replication.Prune(_creepers.Entities, online);
+        _replication.ReplicateMoves(_creepers.Entities, online);
     }
 
-    private bool IsKnownAliveCreeperId(long actorUniqueId)
-    {
-        foreach (var id in _creepers.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
-    }
 
     private void EnsureBootstrapCreeper(IReadOnlyList<Player.Player> online)
     {
@@ -167,52 +157,12 @@ sealed class CreeperSystem : IGameSystem
     /// which is always inside despawn range (64), so <see cref="DespawnLifecycle.EvaluateDespawn"/>
     /// naturally returns false for it without any special-casing here.
     /// </summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        ref var tracking = ref _stores.Despawn.GetRef(id);
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
-        tracking.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _replication.TryDespawn(id, clock, online, DespawnRadius);
 
-        if (!_stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            }
-        _stores.DestroyActor(identity.ActorRuntimeId, id);
-        DespawnCount++;
-        return true;
-    }
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Session.Protocol.Entity.SendAddCreeper(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            });
-    }
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+        _replication.Reconcile(id, online,
+            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddCreeper(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
@@ -220,7 +170,7 @@ sealed class CreeperSystem : IGameSystem
     /// <summary>Player kills it with a weapon before the fuse completes — ordinary shared bookkeeping.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Creeper", currentTick,
+            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Creeper", currentTick,
             destroyActor: cid =>
             {
                 if (_stores.Identities.TryGet(cid, out var identity))
@@ -229,8 +179,8 @@ sealed class CreeperSystem : IGameSystem
             onDeathReplicatedToPeer: peer =>
             {
                 if (_stores.Identities.TryGet(id, out var identity))
-                    _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                ReplicatedRemovalCount++;
+                    _replication.Forget(identity.ActorUniqueId, peer);
+                _replication.RemovalCount++;
             });
 
     /// <summary>
@@ -248,7 +198,7 @@ sealed class CreeperSystem : IGameSystem
 
         if (!_stores.Identities.TryGet(id, out var identity)) return;
         foreach (var peer in online)
-            if (_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId)))
+            if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
                 peer.Session.Protocol.Entity.SendActorIgnited(identity.ActorRuntimeId, ignited);
     }
 
@@ -285,7 +235,7 @@ sealed class CreeperSystem : IGameSystem
         var maxHealth = healthComponent.State.Maximum;
 
         if (!DamageableActorCombat.TryApplyDamage(
-                id, _stores, DamageSource.Generic, maxHealth, online, _world, _players, _replicated,
+                id, _stores, DamageSource.Generic, maxHealth, online, _world, _players, _replication.Viewers,
                 _lootItem, KillExperience, "Creeper", currentTick,
                 destroyActor: cid =>
                 {
@@ -295,8 +245,8 @@ sealed class CreeperSystem : IGameSystem
                 onDeathReplicatedToPeer: peer =>
                 {
                     if (_stores.Identities.TryGet(id, out var identity))
-                        _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                    ReplicatedRemovalCount++;
+                        _replication.Forget(identity.ActorUniqueId, peer);
+                    _replication.RemovalCount++;
                 }))
         {
             return; // Floor-drop capacity is full this tick — retry next tick, no area damage yet.
@@ -440,32 +390,4 @@ sealed class CreeperSystem : IGameSystem
         p.Y = y;
     }
 
-    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
-    {
-        foreach (var peer in online)
-        {
-            _moveBatch.Clear();
-            foreach (var id in _creepers.Entities)
-            {
-                if (!_stores.Identities.TryGet(id, out var identity)) continue;
-                var key = (identity.ActorUniqueId, peer.RuntimeId);
-                if (!_replicated.Contains(key)) continue;
-                if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
-                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
-                    continue;
-                _moveBatch.Add(new RawActorPose
-                {
-                    ActorRuntimeId = identity.ActorRuntimeId,
-                    X = pos.X,
-                    Y = pos.Y,
-                    Z = pos.Z,
-                    Yaw = pos.Yaw,
-                    HeadYaw = pos.Yaw
-                });
-                _lastProjected[key] = current;
-            }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
 }
