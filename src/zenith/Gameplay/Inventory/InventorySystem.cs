@@ -305,6 +305,11 @@ sealed class InventorySystem : IGameSystem
                     break;
                 }
 
+                case InventoryStackActionKind.CraftAuto:
+                    if (!TryAutoCraft(player, action, wireTouches))
+                        ok = false;
+                    break;
+
                 case InventoryStackActionKind.CraftCreative:
                     // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
                     // CreatedOutput is authoritative pending state: never overwrite a prior result.
@@ -494,6 +499,48 @@ sealed class InventorySystem : IGameSystem
             }
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Recipe-book craft: drains the open grid and then the inventory (hotbar first) per
+    /// <see cref="RecipeRegistry.TryPlanAutoCraft"/> and leaves the result in CreatedOutput for the same request's
+    /// Take/Place. The caller rolls every store back when this returns false after partially writing.
+    /// </summary>
+    private bool TryAutoCraft(
+        global::Zenith.Player.Player player,
+        in InventoryStackAction action,
+        List<WireTouch> wireTouches)
+    {
+        if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty) return false;
+
+        var isAtTable = player.IsAtCraftingTable;
+        ICraftGrid grid = isAtTable ? player.TableCraftUi : player.CraftUi;
+
+        var references = new List<InventorySlotReference>(grid.GridSize + PlayerInventory.FullInventorySize);
+        for (var g = 0; g < grid.GridSize; g++)
+            references.Add(isAtTable ? InventorySlotReference.TableCraftGrid(g) : InventorySlotReference.CraftGrid(g));
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
+            references.Add(InventorySlotReference.Player(i)); // slots 0..8 are the hotbar, so it drains first
+
+        var sources = references.Select(r => GetSlot(player, r)).ToArray();
+        if (!_recipes.TryPlanAutoCraft(action.RecipeNetId, action.CraftTimes, sources, isAtTable, out var recipe, out var takes))
+            return false;
+
+        for (var i = 0; i < references.Count; i++)
+        {
+            if (takes[i] == 0) continue;
+            var left = sources[i].Count - takes[i];
+            if (!TrySetSlot(player, references[i], left == 0 ? InventorySlot.Empty : sources[i] with { Count = left }))
+                return false;
+            AddWireTouch(wireTouches, references[i], default);
+        }
+
+        var main = recipe.Outputs[0];
+        if (!TrySetSlot(player, InventorySlotReference.CraftResult, new InventorySlot(main.Stack, main.Count * action.CraftTimes)))
+            return false;
+        AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
+            InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot);
         return true;
     }
 

@@ -271,12 +271,20 @@ sealed class ItemStackRequestPacket : DataPacket
             }
             case ActionCraftRecipeAuto:
             {
-                stream.ReadUnsignedVarInt(); // recipe_network_id
-                stream.ReadByte(); // times_crafted
+                // The client's ingredient list is only its own plan; the server allocates from the grid and
+                // inventory itself, so the descriptors are read past and not trusted.
+                var recipeNetId = (uint)stream.ReadUnsignedVarInt();
+                var times = stream.ReadByte();
                 var ing = stream.ReadUnsignedVarInt();
                 for (var i = 0; i < ing; i++)
                     SkipRecipeIngredient(ref stream);
-                return Unsupported(type);
+                return new DecodedStackRequestAction
+                {
+                    ActionType = type,
+                    RecipeNetId = recipeNetId,
+                    CraftTimes = times,
+                    Supported = true
+                };
             }
             case ActionCraftCreative:
             {

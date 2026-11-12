@@ -27,12 +27,10 @@ the closest thing to "what a real client sends and expects back".
 
 ## Known gaps (from reading; **not yet reproduced with a failing test**)
 
-1. **`CraftRecipeAuto` is decoded then always rejected** (`ItemStackRequestPacket`: returns `Unsupported`). The recipe
-   book therefore cannot craft. Needs ingredient allocation over grid + inventory shared between the "can craft?"
-   check and the actual request, as Cinnabar does.
-2. **`Consume` and `CraftResultsDeprecated` are mapped to no-ops.** Consumption is recomputed server-side from the grid,
-   so a client whose `Consume` list disagrees with the server's view is never detected. Likely benign for vanilla
-   clients; worth a test with a mismatching request.
+1. ~~`CraftRecipeAuto` always rejected~~ — **fixed, see below.**
+2. **`Consume` and `CraftResultsDeprecated` are mapped to no-ops.** Consumption is recomputed server-side (from the
+   grid for `CraftRecipe`, from grid + inventory for `CraftRecipeAuto`), so a client whose `Consume` list disagrees
+   with the server's view is never detected. Likely benign for vanilla clients; worth a test with a mismatching request.
 3. **No offhand container (34).** `InventoryContainerMap.TryMap` has no entry, so any request touching the offhand is
    rejected (and `Hand != Mainhand` use is dropped).
 4. **Only chest / personal / crafting-table windows exist.** Furnace, anvil, grindstone, loom, barrel, shulker,
@@ -58,6 +56,13 @@ the closest thing to "what a real client sends and expects back".
   `bedrock-data recipes` rebuilds it from the pack JSON + explicit generators and `--verify` proves 0 aux-free
   grid recipes are missing. `RecipeRegistry` no longer strips aux, skips unknown outputs silently or bakes BDS block
   ids: names resolve against Zenith's palettes and an unknown name fails the load.
+- **Recipe-book craft (`CraftRecipeAuto`).** The request is decoded (recipe id + craft count; the client's ingredient
+  descriptors are read past, not trusted) and `RecipeRegistry.TryPlanAutoCraft` allocates ingredients from the open grid
+  and then the inventory, hotbar first, naming ingredients before tag ingredients. The result lands in CreatedOutput for the
+  request's own Place/Take; unaffordable, over-large, table-only-in-the-2×2, unknown-recipe and result-still-occupied
+  requests change nothing (`AutoCraftTests`). Verified: unit/intent level only. **Not verified:** a retail client's exact
+  request shape (the Consume list is ignored, see gap 2), tag-vs-tag overlap allocation is greedy (no max-flow), and
+  `extra` recipe outputs are not produced (only `Outputs[0]`, as for `CraftRecipe`).
 - **Open: item aux values.** 458 wire recipes (beds, banners, firework stars, tipped arrows, suspicious stew, maps)
   are not emitted because `StackId` has no aux/damage. They return when stacks gain one.
 
