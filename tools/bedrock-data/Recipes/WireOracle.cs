@@ -8,23 +8,25 @@ namespace Zenith.BedrockData.Recipes;
 /// </summary>
 internal static class WireOracle
 {
-    public sealed record Report(int PlainWire, int Missing, int NeedAux, List<Recipe> MissingRecipes, List<string> Extra);
+    public sealed record Report(int PlainWire, int Missing, int NeedAux, int NeedNbt, List<Recipe> MissingRecipes, List<string> Extra, IReadOnlyList<(string Output, int Count)> AuxByOutput);
 
     public static Report Verify(string captureDir, IReadOnlyList<Recipe> emitted, IReadOnlyDictionary<int, string> itemNames)
     {
-        var (plain, aux) = Read(Path.Combine(captureDir, "crafting_data.json"), itemNames);
-        var ours = emitted.Select(RecipeJson.Canonical).ToHashSet(StringComparer.Ordinal);
+        var (plain, aux, nbt) = Read(Path.Combine(captureDir, "crafting_data.json"), itemNames);
+        var ours = emitted.Select(r => RecipeJson.Canonical(r)).ToHashSet(StringComparer.Ordinal);
         var missing = plain.Where(r => !ours.Contains(RecipeJson.Canonical(r))).ToList();
-        var wire = plain.Select(RecipeJson.Canonical).ToHashSet(StringComparer.Ordinal);
+        var wire = plain.Select(r => RecipeJson.Canonical(r)).ToHashSet(StringComparer.Ordinal);
         var extra = emitted.Where(r => !wire.Contains(RecipeJson.Canonical(r))).Select(r => r.Id).ToList();
-        return new Report(plain.Count, missing.Count, aux.Count, missing, extra);
+        var auxByOutput = aux.GroupBy(r => r.Outputs[0].Name).OrderByDescending(g => g.Count())
+            .Select(g => (g.Key, g.Count())).ToList();
+        return new Report(plain.Count, missing.Count, aux.Count, nbt.Count, missing, extra, auxByOutput);
     }
 
     /// <summary>Wire grid recipes in emitter shape; ones needing an item aux value are returned separately.</summary>
-    private static (List<Recipe> Plain, List<Recipe> Aux) Read(string path, IReadOnlyDictionary<int, string> names)
+    private static (List<Recipe> Plain, List<Recipe> Aux, List<Recipe> Nbt) Read(string path, IReadOnlyDictionary<int, string> names)
     {
         var wire = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        List<Recipe> plain = [], aux = [];
+        List<Recipe> plain = [], aux = [], nbt = [];
         foreach (var kind in new[] { "shaped_recipes", "shapeless_recipes", "shulker_box_recipes" })
         {
             foreach (var node in wire[kind]!.AsArray())
@@ -45,14 +47,22 @@ internal static class WireOracle
                         var name = (string)i["name"]!;
                         var cut = name.LastIndexOf(':');
                         var (head, tail) = cut < 0 ? ("", name) : (name[..cut], name[(cut + 1)..]);
+                        int? suffixAux = null;
                         if (tail.Length > 0 && tail.All(char.IsAsciiDigit) && head.Contains(':')) // BDS writes "name:aux" for some ingredients
                         {
-                            needsAux |= tail != "0";
+                            suffixAux = int.Parse(tail);
                             name = head;
                         }
                         var metadata = (int)i["metadata"]!;
-                        needsAux |= metadata is not (0 or 32767) && !name.EndsWith(":0", StringComparison.Ordinal);
-                        cell = Ingredient.Item(name, count);
+                        if (metadata == Recipe.AnyAux && RecipeTables.LegacyWildcardTags.TryGetValue(name, out var wildcardTag))
+                            cell = Ingredient.OfTag(wildcardTag, count);
+                        else if (RecipeTables.AuxCarriers.Contains(name)) // a real aux (ADR §147); 32767 is the wildcard
+                            cell = Ingredient.Item(name, count, suffixAux ?? (metadata == Recipe.AnyAux ? null : metadata));
+                        else
+                        {
+                            needsAux |= suffixAux is > 0 || (metadata is not (0 or 32767) && !name.EndsWith(":0", StringComparison.Ordinal));
+                            cell = Ingredient.Item(name, count);
+                        }
                     }
                     cells.Add(cell);
                 }
@@ -60,11 +70,18 @@ internal static class WireOracle
                 var outs = new List<Product>();
                 foreach (var o in r["output"]!.AsArray())
                 {
-                    needsAux |= (int)o!["metadata"]! != 0;
-                    outs.Add(new Product(names[(int)o["network_id"]!], (int)o["count"]!));
+                    var outName = names[(int)o!["network_id"]!];
+                    var outMeta = (int)o["metadata"]!;
+                    if (RecipeTables.AuxCarriers.Contains(outName))
+                        outs.Add(new Product(outName, (int)o["count"]!, outMeta));
+                    else
+                    {
+                        needsAux |= outMeta != 0;
+                        outs.Add(new Product(outName, (int)o["count"]!));
+                    }
                 }
-                needsAux |= cells.Any(c => c?.Name is { } n && RecipeTables.AuxItems.Contains(n))
-                            || outs.Any(o => RecipeTables.AuxItems.Contains(o.Name));
+                needsAux |= cells.Any(c => c?.Name is { } n && RecipeTables.AuxItems.Contains(n) && !RecipeTables.AuxCarriers.Contains(n))
+                            || outs.Any(o => RecipeTables.AuxItems.Contains(o.Name) && !RecipeTables.AuxCarriers.Contains(o.Name));
 
                 var shaped = r.ContainsKey("width");
                 var recipe = new Recipe
@@ -75,9 +92,11 @@ internal static class WireOracle
                     Inputs = shaped ? cells : cells.Where(c => c is not null).ToList(),
                     Outputs = outs,
                 };
-                (needsAux ? aux : plain).Add(recipe);
+                var needsNbt = cells.Any(c => c?.Name is { } n && RecipeTables.NbtItems.Contains(n))
+                               || outs.Any(o => RecipeTables.NbtItems.Contains(o.Name));
+                (needsNbt ? nbt : needsAux ? aux : plain).Add(recipe);
             }
         }
-        return (plain, aux);
+        return (plain, aux, nbt);
     }
 }

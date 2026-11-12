@@ -4,9 +4,9 @@ namespace Zenith.Packets;
 
 /// <summary>
 /// One recipe ingredient on the wire (<c>RecipeIngredient</c>): empty, a named item or an item tag. Metadata is
-/// the wildcard 32767 for every real ingredient, as a stock BDS sends it.
+/// the wildcard 32767 unless the ingredient requires one aux (ADR §147), as a stock BDS sends it.
 /// </summary>
-readonly record struct WireRecipeIngredient(string? Name, string? Tag, int Count)
+readonly record struct WireRecipeIngredient(string? Name, string? Tag, int Count, int Aux = WireRecipeIngredient.AnyAux)
 {
     public const int AnyAux = 32767;
 
@@ -34,7 +34,7 @@ readonly record struct WireRecipeIngredient(string? Name, string? Tag, int Count
             writer.WriteVarString(Tag!);
         }
 
-        writer.WriteVarInt(AnyAux);
+        writer.WriteVarInt(Aux);
         writer.WriteVarInt(Count);
     }
 }

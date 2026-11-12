@@ -38,7 +38,11 @@ internal static class PackRecipes
                 try
                 {
                     var results = body["result"] is JsonArray arr ? arr.Select(n => n!.AsObject()).ToList() : [body["result"]!.AsObject()];
-                    var outs = results.Select(r => new Product(Resolve(r, registry), (int?)r["count"] ?? 1)).ToList();
+                    var outs = results.Select(r =>
+                    {
+                        var (name, aux) = Resolve(r, registry, isResult: true);
+                        return new Product(name, (int?)r["count"] ?? 1, aux);
+                    }).ToList();
                     recipes[id] = kind.EndsWith("shaped", StringComparison.Ordinal)
                         ? Shaped(id, body, outs, registry)
                         : new Recipe
@@ -74,24 +78,29 @@ internal static class PackRecipes
     private static Ingredient Ingredient(JsonObject entry, IReadOnlySet<string> registry)
     {
         var count = (int?)entry["count"] ?? 1;
-        return entry["tag"] is { } tag ? Recipes.Ingredient.OfTag((string)tag!, count) : Recipes.Ingredient.Item(Resolve(entry, registry), count);
+        if (entry["tag"] is { } tag) return Recipes.Ingredient.OfTag((string)tag!, count);
+        var (name, aux) = Resolve(entry, registry, isResult: false);
+        return Recipes.Ingredient.Item(name, count, aux);
     }
 
-    private static string Resolve(JsonObject entry, IReadOnlySet<string> registry)
+    private static (string Name, int? Aux) Resolve(JsonObject entry, IReadOnlySet<string> registry, bool isResult)
     {
         var name = (string)entry["item"]!;
         var data = (int?)entry["data"] ?? 0;
         if (RecipeTables.Aliases.TryGetValue(name, out var alias)) name = alias;
         if (!name.StartsWith("minecraft:", StringComparison.Ordinal)) name = "minecraft:" + name;
+        int? aux = null;
         if (RecipeTables.DataNames.TryGetValue(name, out var table))
         {
             if (data >= table.Length) throw new UnresolvedItem("data", $"{name} data {data}");
             name = table[data];
         }
+        else if (RecipeTables.AuxCarriers.Contains(name))
+            aux = isResult || entry.ContainsKey("data") ? data : null; // an explicit data pins the variant, even 0
         else if (data != 0 && !RecipeTables.IgnoredData.Contains(name))
             throw new UnresolvedItem("aux", $"aux:{name}");
         if (!registry.Contains(name)) throw new UnresolvedItem("unknown", $"unknown:{name}");
-        return name;
+        return (name, aux);
     }
 
     private static void Bump(Dictionary<string, int> counts, string key) => counts[key] = counts.GetValueOrDefault(key) + 1;

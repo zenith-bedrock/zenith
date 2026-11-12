@@ -113,6 +113,31 @@ internal static class RecipeTables
             .Select(w => ($"{w}_button", $"{w}_pressure_plate", $"{w}_trapdoor", $"{w}_planks")),
     ];
 
+    /// <summary>
+    /// Items whose pack <c>data</c> is a real aux/variant value on the stack (ADR §147), not a legacy facing hint. A
+    /// result of one of these is always an ITEM stack with that aux, even when 0 (a black banner); an ingredient
+    /// requires the aux exactly when the pack states a data value (even 0: an empty map is not an enhanced one).
+    /// </summary>
+    public static readonly IReadOnlySet<string> AuxCarriers = new HashSet<string>
+    {
+        "minecraft:bed", "minecraft:banner", "minecraft:arrow", "minecraft:empty_map", "minecraft:suspicious_stew",
+    };
+
+    /// <summary>
+    /// Items whose variant is stack NBT (firework colours/effects), which Zenith's stack model does not carry. Their
+    /// recipes are counted and not emitted rather than emitted with the colour silently lost.
+    /// </summary>
+    public static readonly IReadOnlySet<string> NbtItems = new HashSet<string>
+    {
+        "minecraft:firework_star", "minecraft:firework_rocket",
+    };
+
+    /// <summary>Legacy wire ingredient names that mean "any of this tag" (a bed takes planks of any wood).</summary>
+    public static readonly IReadOnlyDictionary<string, string> LegacyWildcardTags = new Dictionary<string, string>
+    {
+        ["minecraft:planks"] = "minecraft:planks",
+    };
+
     /// <summary>Items whose colour/variant lives in an aux value Zenith's item model does not carry (even when it is 0).</summary>
     public static readonly IReadOnlySet<string> AuxItems = new HashSet<string>
     {

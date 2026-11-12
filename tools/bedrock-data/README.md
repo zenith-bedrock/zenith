@@ -47,10 +47,10 @@ dotnet run --project tools/bedrock-data -- recipes <bds root> <item_registry.jso
 It emits the pack's `crafting_table` shaped/shapeless recipes (legacy spellings and `data` values resolved through
 the explicit tables in `Recipes/RecipeTables.cs`), the colour-dyeing families BDS builds in code (wool, wool slab/stairs, shulker box,
 bundle, cushion, harness) and the few vanilla recipes BDS registers in code (slabs, small wood parts, ...), all keyed
-by real item names. Recipes that need an item aux value (banner/bed/firework-star colour, ...) are counted and not
-emitted until stacks carry one. `--verify` takes a CraftingData capture as an ORACLE only: it fails if any aux-free
-grid recipe a real BDS sends has no equivalent here. Current data: BDS 1.26.63.1 (3454 recipes, 0 missing, 458 wire
-recipes need an aux model).
+by real item names. Items with a variant (bed/banner colour, ...) carry an aux (ADR §147). Recipes whose variant lives in stack NBT
+(firework stars/rockets) or needs a potion model (tipped arrows) are counted and not emitted. `--verify` takes a CraftingData capture as an ORACLE only: it fails if any aux-free
+grid recipe a real BDS sends has no equivalent here. Current data: BDS 1.26.63.1 (3819 recipes, 4045 wire grid recipes matched, 0 missing; 44 tipped-arrow and 41 stack-NBT wire
+recipes not emitted).
 
 ## How BDS loads its catalogs (observed)
 

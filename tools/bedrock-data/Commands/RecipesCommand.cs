@@ -58,9 +58,11 @@ internal sealed class RecipesCommand : Command<RecipesCommand.Settings>
         var names = states.ToDictionary(s => (int)s!["runtime_id"]!, s => (string)s!["name"]!);
         var report = WireOracle.Verify(settings.Verify, recipes, names);
         AnsiConsole.MarkupLineInterpolated(
-            $"verify: {report.PlainWire} aux-free wire grid recipes; {report.Missing} have no equivalent here; {report.NeedAux} need an aux model (skipped by design)");
+            $"verify: {report.PlainWire} aux-free wire grid recipes; {report.Missing} have no equivalent here; {report.NeedAux} need an aux model not modelled yet, {report.NeedNbt} need stack NBT (skipped by design)");
         AnsiConsole.MarkupLineInterpolated(
             $"verify: {report.Extra.Count} emitted recipes have no aux-free equivalent on the wire{(report.Extra.Count > 0 ? ", e.g. " + string.Join(", ", report.Extra.Take(8)) : "")}");
+        foreach (var (output, count) in report.AuxByOutput)
+            AnsiConsole.MarkupLineInterpolated($"   aux not modelled: {count} x {output}");
         foreach (var r in report.MissingRecipes.Take(settings.MaxMissing))
             AnsiConsole.MarkupLineInterpolated($"   missing: {r.Id} {string.Join(",", r.Inputs.Select(c => c?.Name ?? c?.Tag ?? "_"))} -> {string.Join(",", r.Outputs.Select(o => $"{o.Name}x{o.Count}"))}");
         return report.Missing == 0 ? 0 : 1;
