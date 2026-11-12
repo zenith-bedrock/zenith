@@ -67,6 +67,10 @@ interface IChunkStorage
     ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default);
     ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default);
 
+    /// <summary>The world's game rules in <see cref="GameRuleCodec"/> bytes; null until a rule is first changed.</summary>
+    ValueTask<byte[]?> GetGameRulesAsync(CancellationToken cancellationToken = default);
+    ValueTask PutGameRulesAsync(byte[] blob, CancellationToken cancellationToken = default);
+
     /// <summary>Await in-flight persistence (chest/inv/pd/overlay). Shutdown only — never GameLoop (ADR §41).</summary>
     ValueTask FlushAsync(CancellationToken cancellationToken = default);
 
@@ -93,6 +97,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _offhand = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
     private WorldMetadata? _worldMetadata;
+    private byte[]? _gameRules;
 
     /// <summary>Column Put count — tests for ADR §45 sparse flat.</summary>
     public int PutCount { get; private set; }
@@ -216,6 +221,15 @@ sealed class InMemoryChunkStorage : IChunkStorage
     {
         _playerData.TryGetValue(uuid, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
+    }
+
+    public ValueTask<byte[]?> GetGameRulesAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(_gameRules);
+
+    public ValueTask PutGameRulesAsync(byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _gameRules = blob;
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask FlushAsync(CancellationToken cancellationToken = default) =>

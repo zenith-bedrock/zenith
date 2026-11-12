@@ -245,7 +245,8 @@ sealed class MovementSystem : IGameSystem
             var fallDistance = player.FallPeakY - player.PositionY;
             player.FallPeakY = player.PositionY;
 
-            if (fallDistance <= SafeFallDistance || player.GameMode == GameMode.Creative)
+            if (fallDistance <= SafeFallDistance || player.GameMode == GameMode.Creative ||
+                !player.Session.Context.World.Rules.FallDamage)
                 return;
 
             var damage = MathF.Floor(fallDistance - SafeFallDistance);

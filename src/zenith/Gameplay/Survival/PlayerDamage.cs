@@ -47,7 +47,9 @@ internal readonly record struct PlayerDamageResult(
         PlayerVisibility.RelayDeath(Player, online);
         var world = Player.Session.Context.World;
         if (Player.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, Player);
-        if (Player.GameMode != GameMode.Creative) _ = FloorDropFanout.TryDropDeathLoot(world, Players, online, Player);
+        // keepInventory: the player dies but the items stay where they are (Creative already keeps everything).
+        if (Player.GameMode != GameMode.Creative && !world.Rules.KeepInventory)
+            _ = FloorDropFanout.TryDropDeathLoot(world, Players, online, Player);
     }
 }
 

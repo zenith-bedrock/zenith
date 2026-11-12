@@ -79,6 +79,7 @@ sealed class HungerSystem : IGameSystem
             }
 
             if (player.Hunger >= RegenHungerThreshold && player.Health < player.MaxHealth &&
+                player.Session.Context.World.Rules.NaturalRegeneration &&
                 clock.CurrentTick % RegenIntervalTicks == 0)
             {
                 player.Heal(1f);

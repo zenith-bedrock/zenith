@@ -68,6 +68,7 @@ sealed class ServerRuntimeDiagnostics
         Tick = builder.Timing("tick");
         Systems = new Dictionary<string, TimingMetric>(StringComparer.Ordinal)
         {
+            ["game-rule-sync"] = builder.Timing("tick.system.game-rule-sync", "tick"),
             ["time-sync"] = builder.Timing("tick.system.time-sync", "tick"),
             ["movement"] = builder.Timing("tick.system.movement", "tick"),
             ["player-spatial-index"] = builder.Timing("tick.system.player-spatial-index", "tick"),

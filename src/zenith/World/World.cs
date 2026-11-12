@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Zenith.Logging;
+using Zenith.Rulebook;
 
 namespace Zenith.World;
 
@@ -42,6 +43,9 @@ sealed class World
     private readonly ILogger? _logger;
     private readonly WorldGenerationDiagnostics? _generationDiagnostics;
     private int _softCapWarned;
+
+    /// <summary>Game rules of this world (defaults from the stock BDS capture, restored from storage at boot).</summary>
+    public GameRules Rules { get; } = GameRuleDefaults.Create();
 
     public FloorDropStore FloorDrops { get; }
     public ChestStore Chests { get; }
@@ -84,6 +88,32 @@ sealed class World
         GravityPending = new GravityPendingStore(logger);
         FallingBlocks = new FallingBlockStore(logger);
     }
+
+    /// <summary>
+    /// Applies the stored game rules (if any) on top of the defaults. Boot only. A stored list that does not decode
+    /// is reported and ignored (the defaults stay), never half-applied; rules this build does not know are named.
+    /// </summary>
+    public void LoadGameRules()
+    {
+        var blob = _storage.GetGameRulesAsync().AsTask().GetAwaiter().GetResult();
+        if (blob is null) return;
+        List<GameRule> stored;
+        try
+        {
+            stored = GameRuleCodec.FromBytes(blob);
+        }
+        catch (Exception e) when (e is InvalidDataException or EndOfStreamException or ArgumentException)
+        {
+            _logger?.Warning($"Stored game rules are unreadable ({e.Message}); using the defaults.");
+            return;
+        }
+
+        Rules.Restore(stored, out var ignored);
+        if (ignored.Count > 0)
+            _logger?.Warning($"Stored game rules ignored (unknown name or changed type): {string.Join(", ", ignored)}.");
+    }
+
+    public void PersistGameRules() => _ = _storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot));
 
     public void PersistChest(int x, int y, int z)
     {

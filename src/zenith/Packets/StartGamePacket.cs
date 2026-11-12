@@ -34,6 +34,7 @@ class StartGamePacket : DataPacket
     public const int DefaultDifficulty = 0;
     public const bool DefaultCommandsEnabled = true;
     public int Difficulty = DefaultDifficulty;
+    public IReadOnlyList<Zenith.Rulebook.GameRule> GameRules = [];
     public int SpawnBlockX = 0;
     public int SpawnBlockY = 0;
     public int SpawnBlockZ = 0;
@@ -99,8 +100,7 @@ class StartGamePacket : DataPacket
         writer.WriteBool(DefaultCommandsEnabled); // CommandsEnabled
         writer.WriteBool(false); // TexturePackRequired
         
-        // GameRules slice (length 0)
-        writer.WriteUnsignedVarInt(0);
+        Zenith.Rulebook.GameRuleCodec.Write(ref writer, GameRules); // GameRules
         // Experiments slice (length 0)
         writer.WriteUInt(0, BinaryStream.Endianess.Little); // SliceUint32Length
         writer.WriteBool(false); // ExperimentsPreviouslyToggled

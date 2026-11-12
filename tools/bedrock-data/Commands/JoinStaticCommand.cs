@@ -10,7 +10,7 @@ namespace Zenith.BedrockData.Commands;
 
 /// <summary>
 /// Copies the join-time packets a stock BDS sends that are pure static data (entity identifiers, voxel shapes, trim data,
-/// camera presets, ...) from a raw capture (<c>bds-reference/capture</c> index.json + one payload file per packet) into
+/// camera presets, the default game rules, ...) from a raw capture (<c>bds-reference/capture</c> index.json + one payload file per packet) into
 /// the embedded assets, with a manifest that records the BDS version they came from. Nothing dynamic is imported: what
 /// depends on the player or the world (player list, chunks, inventories, recipes unlocked) is not in the allow-list.
 /// </summary>
@@ -27,6 +27,7 @@ internal sealed class JoinStaticCommand : Command<JoinStaticCommand.Settings>
         "camera_aim_assist_presets",
         "camera_spline",
         "trim_data",
+        "game_rules_changed",
     ];
 
     public sealed class Settings : CommandSettings
