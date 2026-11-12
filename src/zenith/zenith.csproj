@@ -41,6 +41,9 @@
     <EmbeddedResource Include="data\join_static\*.bin">
       <LogicalName>join_static/%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\mobs.json">
+      <LogicalName>mobs.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\recipes.json.gz">
       <LogicalName>recipes.json.gz</LogicalName>
     </EmbeddedResource>

@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Text.Json;
+
 namespace Zenith.Gameplay.Entities;
 
 /// <summary>
@@ -7,14 +10,59 @@ namespace Zenith.Gameplay.Entities;
 /// </summary>
 sealed record MobDefinition(string Name, float MaxHealth, string LootItemName, int KillExperience);
 
-/// <summary>The species definitions, in one place so a balance change is one line. Values are vanilla parity as the original systems documented them.</summary>
+/// <summary>
+/// The species definitions, loaded from the embedded <c>data/mobs.json</c> so a balance change is an edit to a data file
+/// and not to a system. The file is hand-authored (vanilla parity as the original systems documented it), not generated
+/// from a BDS capture. Loading validates every entry and fails loudly, so a typo cannot become a silent zero.
+/// </summary>
 static class MobDefinitions
 {
-    public static readonly MobDefinition Zombie = new("Zombie", 20f, "minecraft:rotten_flesh", 5);
-    public static readonly MobDefinition Cow = new("Cow", 10f, "minecraft:beef", 1);
-    public static readonly MobDefinition Creeper = new("Creeper", 20f, "minecraft:gunpowder", 5);
-    public static readonly MobDefinition Spider = new("Spider", 16f, "minecraft:string", 5);
-    public static readonly MobDefinition Skeleton = new("Skeleton", 20f, "minecraft:bone", 5);
-    public static readonly MobDefinition Golem = new("Golem", 100f, "minecraft:iron_ingot", 25);
-    public static readonly MobDefinition Minecart = new("Minecart", 6f, "minecraft:minecart", 1);
+    public const string ResourceName = "mobs.json";
+
+    private static readonly Lazy<IReadOnlyDictionary<string, MobDefinition>> Loaded = new(Load);
+
+    public static IReadOnlyCollection<MobDefinition> All => Loaded.Value.Values.ToArray();
+
+    public static MobDefinition Get(string name) =>
+        Loaded.Value.TryGetValue(name, out var definition)
+            ? definition
+            : throw new KeyNotFoundException($"No mob definition named '{name}' in {ResourceName}.");
+
+    public static MobDefinition Zombie => Get("Zombie");
+    public static MobDefinition Cow => Get("Cow");
+    public static MobDefinition Creeper => Get("Creeper");
+    public static MobDefinition Spider => Get("Spider");
+    public static MobDefinition Skeleton => Get("Skeleton");
+    public static MobDefinition Golem => Get("Golem");
+    public static MobDefinition Enderman => Get("Enderman");
+    public static MobDefinition Fish => Get("Fish");
+    public static MobDefinition Minecart => Get("Minecart");
+
+    internal static IReadOnlyDictionary<string, MobDefinition> Parse(Stream json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var byName = new Dictionary<string, MobDefinition>(StringComparer.Ordinal);
+        foreach (var entry in doc.RootElement.GetProperty("mobs").EnumerateArray())
+        {
+            var name = entry.GetProperty("name").GetString();
+            if (string.IsNullOrWhiteSpace(name)) throw new InvalidDataException($"{ResourceName}: a mob has no name.");
+            var health = entry.GetProperty("maxHealth").GetSingle();
+            if (!float.IsFinite(health) || health <= 0f) throw new InvalidDataException($"{ResourceName}: '{name}' has maxHealth {health}; it must be positive.");
+            var loot = entry.GetProperty("lootItem").GetString();
+            if (string.IsNullOrWhiteSpace(loot)) throw new InvalidDataException($"{ResourceName}: '{name}' has no lootItem.");
+            var xp = entry.GetProperty("killExperience").GetInt32();
+            if (xp < 0) throw new InvalidDataException($"{ResourceName}: '{name}' has negative killExperience {xp}.");
+            if (!byName.TryAdd(name, new MobDefinition(name, health, loot, xp)))
+                throw new InvalidDataException($"{ResourceName}: '{name}' is defined twice.");
+        }
+
+        return byName;
+    }
+
+    private static IReadOnlyDictionary<string, MobDefinition> Load()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException($"Embedded resource '{ResourceName}' not found.");
+        return Parse(stream);
+    }
 }

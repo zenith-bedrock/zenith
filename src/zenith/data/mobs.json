@@ -1,0 +1,14 @@
+{
+  "note": "Hand-authored species data (vanilla parity as the original systems documented it); not generated from a BDS capture.",
+  "mobs": [
+    { "name": "Zombie",   "maxHealth": 20,  "lootItem": "minecraft:rotten_flesh", "killExperience": 5 },
+    { "name": "Cow",      "maxHealth": 10,  "lootItem": "minecraft:beef",         "killExperience": 1 },
+    { "name": "Creeper",  "maxHealth": 20,  "lootItem": "minecraft:gunpowder",    "killExperience": 5 },
+    { "name": "Spider",   "maxHealth": 16,  "lootItem": "minecraft:string",       "killExperience": 5 },
+    { "name": "Skeleton", "maxHealth": 20,  "lootItem": "minecraft:bone",         "killExperience": 5 },
+    { "name": "Golem",    "maxHealth": 100, "lootItem": "minecraft:iron_ingot",   "killExperience": 25 },
+    { "name": "Enderman", "maxHealth": 20,  "lootItem": "minecraft:ender_pearl",  "killExperience": 5 },
+    { "name": "Fish",     "maxHealth": 3,   "lootItem": "minecraft:cod",          "killExperience": 1 },
+    { "name": "Minecart", "maxHealth": 6,   "lootItem": "minecraft:minecart",     "killExperience": 1 }
+  ]
+}

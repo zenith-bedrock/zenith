@@ -27,17 +27,15 @@ sealed class FishSystem : IGameSystem
     private const float MovePerTick = 0.06f;
     private const int MinWanderTicks = 30;
     private const int MaxWanderTicks = 80;
-    private const string LootItemName = "minecraft:cod";
-    private const int KillExperience = 1;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<FishState> _fish;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly Random _random;
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = new();
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
 
@@ -46,8 +44,9 @@ sealed class FishSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
+        _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette, trackPoses: false, withVelocity: true);
+        _replication = _mob.Replication;
         _fish = new ComponentStore<FishState>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
         _random = random ?? new Random();
     }
 
@@ -57,9 +56,9 @@ sealed class FishSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a fish," nothing more.</summary>
     internal bool Owns(EntityId id) => _fish.Has(id);
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
-    internal long DespawnCount { get; private set; }
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
+    internal long DespawnCount => _replication.DespawnCount;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -82,16 +81,9 @@ sealed class FishSystem : IGameSystem
             ReconcileViewers(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveFishId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
+        _replication.Prune(_fish.Entities, online);
     }
 
-    private bool IsKnownAliveFishId(long actorUniqueId)
-    {
-        foreach (var id in _fish.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
-    }
 
     /// <summary>
     /// Only spawns where water already exists — a fixed offset from the first online player,
@@ -120,57 +112,18 @@ sealed class FishSystem : IGameSystem
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnFish(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Fish.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(3f) }); // Vanilla-parity: fish are fragile.
-        _stores.Velocities.Set(id, new Velocity());
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _fish.Set(id, new FishState());
         return id;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. Same shape as every other migrated actor's despawn — position/visibility-based, not water-based.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        ref var tracking = ref _stores.Despawn.GetRef(id);
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            pos.X, pos.Z, online, DespawnRadius, clock.CurrentTick, tracking.LastSeenNearPlayerTick);
-        tracking.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
+    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _replication.TryDespawn(id, clock, online, DespawnRadius);
 
-        if (!_stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-        _stores.DestroyActor(identity.ActorRuntimeId, id);
-        DespawnCount++;
-        return true;
-    }
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Session.Protocol.Entity.SendAddFish(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            });
-    }
+    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+        _replication.Reconcile(id, online,
+            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddFish(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
@@ -180,14 +133,7 @@ sealed class FishSystem : IGameSystem
 
     /// <summary>Concrete Fish health/removal operation — same shape as every other migrated actor's, one loot item, no retaliation.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Fish", currentTick,
-            destroyActor: fid =>
-            {
-                if (_stores.Identities.TryGet(fid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, fid);
-            },
-            onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     /// <summary>3D wander, structurally identical to Bat's — the difference is entirely in <see cref="TrySwim"/>'s validity rule, not in how a heading is picked or walked.</summary>
     private void Wander(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
@@ -216,7 +162,7 @@ sealed class FishSystem : IGameSystem
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         foreach (var peer in online)
         {
-            if (!_replicated.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
+            if (!_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
             peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, yaw: pos.Yaw, headYaw: pos.Yaw);
         }
     }
