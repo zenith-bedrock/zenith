@@ -24,8 +24,10 @@ public class DeathLootAtomicityTests
         // ADR §139 — a crafting table's 3x3 grid is a real material source too; must conserve the
         // same as the personal grid right above.
         Assert.True(player.TableCraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.Cobblestone, 5)));
+        // The offhand is player-owned storage like armor: death must move it too, not wipe it with Clear().
+        Assert.True(player.Inventory.TrySetOffhand(StackId.FromBlock(Blocks.Sand), 6));
 
-        const int expectedQuantity = 15;
+        const int expectedQuantity = 21;
         SubmitVoidMove(player);
         new MovementSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
 
@@ -37,6 +39,7 @@ public class DeathLootAtomicityTests
         Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
         Assert.True(player.CraftUi.Result.IsEmpty);
         Assert.True(player.TableCraftUi.GetGrid(0).IsEmpty);
+        Assert.True(player.Inventory.Offhand.IsEmpty);
         Assert.Equal(expectedQuantity, fx.World.FloorDrops.Snapshot().Sum(drop => drop.Count));
     }
 
