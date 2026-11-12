@@ -43,15 +43,12 @@ sealed class SpiderSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public SpiderSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
+    public SpiderSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Spider, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -75,9 +72,6 @@ sealed class SpiderSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_spiders.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapSpider(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_spiders.Entities);
@@ -101,14 +95,6 @@ sealed class SpiderSystem : IGameSystem
         _replication.ReplicateMoves(_spiders.Entities, online);
     }
 
-
-    private void EnsureBootstrapSpider(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _spiders.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, -SpawnDistance, -SpawnDistance, out var x, out var y, out var z)) return;
-        SpawnSpider(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnSpider(float x, float y, float z)

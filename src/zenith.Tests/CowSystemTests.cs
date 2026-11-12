@@ -29,21 +29,6 @@ public sealed class CowSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_cow_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("farmer");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new CowSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Cows);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-    }
-
-    [Fact]
     public void Cow_wanders_without_any_player_nearby()
     {
         var fx = new IntentTestFixture();

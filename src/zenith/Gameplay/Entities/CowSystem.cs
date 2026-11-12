@@ -45,17 +45,14 @@ sealed class CowSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
     internal long FeedCount { get; private set; }
 
-    public CowSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
+    public CowSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Cow, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -80,9 +77,6 @@ sealed class CowSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_cows.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapCow(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_cows.Entities);
@@ -109,7 +103,7 @@ sealed class CowSystem : IGameSystem
 
     /// <summary>
     /// The feature-specific composition step every migrated actor needs on top of
-    /// <see cref="EntityRuntime.CreateActor"/> — used by both bootstrap spawn and <see cref="SpawnCalf"/>.
+    /// <see cref="EntityRuntime.CreateActor"/> — used by <see cref="SpawnCalf"/>.
     /// </summary>
     internal EntityId SpawnCow(float x, float y, float z)
     {
@@ -191,14 +185,6 @@ sealed class CowSystem : IGameSystem
             }
             return; // At most one interact resolved per tick — the intent itself is already one-shot.
         }
-    }
-
-    private void EnsureBootstrapCow(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _cows.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, -SpawnDistance, 0f, out var x, out var y, out var z)) return;
-        SpawnCow(x, y, z);
-        _bootstrapSpawned = true;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>

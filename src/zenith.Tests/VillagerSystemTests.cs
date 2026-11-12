@@ -15,24 +15,6 @@ namespace Zenith.Tests;
 public sealed class VillagerSystemTests
 {
     [Fact]
-    public void Bootstrap_spawns_one_villager_with_seeded_wares_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("townsfolk");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new VillagerSystem(fx.World, fx.Players, new VillagerStore(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var villager = Assert.Single(system.Villagers.Active);
-        Assert.True(villager.IsActive);
-        Assert.NotEqual(0, villager.EntityId);
-        Assert.Equal((ulong)villager.EntityId, villager.RuntimeId);
-        Assert.Single(villager.Wares);
-    }
-
-    [Fact]
     public void Villager_wanders_without_any_player_nearby()
     {
         var fx = new IntentTestFixture();
@@ -193,16 +175,16 @@ public sealed class VillagerSystemTests
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = 1;
-        // Villager's bootstrap spawn is negative-Z of the player, unlike Zombie/Cow's positive
-        // offset — remember every chunk the spawn could land in.
-        first.Chunks.RememberMany([(0, 0), (0, -1)]);
-        var system = new VillagerSystem(fx.World, fx.Players, new VillagerStore(), fx.Context.ItemPalette);
+        first.Chunks.RememberMany([(0, 0)]);
+        var store = new VillagerStore();
+        var system = new VillagerSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        Assert.True(store.TryAdd(new Villager(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY, 0)));
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 
         var second = fx.AddInGamePlayer("second");
         second.Chunks.Radius = 1;
-        second.Chunks.RememberMany([(0, 0), (0, -1)]);
+        second.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)
             p.Session.Transport.FlushOutgoing();

@@ -35,25 +35,6 @@ public sealed class GolemSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_golem_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("challenger");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new GolemSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Golems);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.False(IsEnraged(system, id));
-        Assert.True(system.Stores.Identities.TryGet(id, out var identity));
-        Assert.NotEqual(0, identity.ActorUniqueId);
-        Assert.Equal((ulong)identity.ActorUniqueId, identity.ActorRuntimeId);
-    }
-
-    [Fact]
     public void Golem_ignores_a_nearby_player_who_never_provoked_it()
     {
         // Phase XXIII-B — vanilla parity: a naturally-spawned Iron Golem is passive by default.
@@ -205,6 +186,7 @@ public sealed class GolemSystemTests
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
         var system = new GolemSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnGolem(0, Blocks.FlatSpawnY, 0);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 

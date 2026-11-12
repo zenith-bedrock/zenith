@@ -7,8 +7,8 @@ for the full brief this responds to.
 
 **Tooling limitation up front:** Zenith currently has no in-game `/teleport` or `/spawn <mob>` command
 — only `/gamemode`, `/effect`, `/diagnostics`, `/help`, `/sample`. Every mob you encounter is one of
-each species' single auto-bootstrap spawn (near wherever the first player was when that system first
-ticked), not something you can place on demand. The flows below work around that with Creative-mode
+(historical note: the per-species auto-bootstrap spawn this brief relied on has since been removed, so mobs now need a
+spawn command or natural spawning before there is anything to test). The flows below work around that with Creative-mode
 flight for positioning and patience for re-encountering a species after it despawns/respawns. If this
 turns out to be too limiting, say so and a debug-only spawn/teleport command (Part 25 of the brief
 explicitly allows a dev-only diagnostic command) is a reasonable small addition.

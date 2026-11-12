@@ -28,41 +28,6 @@ public sealed class FishSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_fish_where_water_exists_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("angler");
-        player.PositionX = 0;
-        player.PositionY = Blocks.FlatSpawnY;
-        player.PositionZ = 0;
-        fx.World.SetBlock(4, (int)player.PositionY, 0, Blocks.Water);
-        var system = new FishSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Fish);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.True(system.Stores.Identities.TryGet(id, out var identity));
-        Assert.NotEqual(0, identity.ActorUniqueId);
-        Assert.Equal((ulong)identity.ActorUniqueId, identity.ActorRuntimeId);
-    }
-
-    [Fact]
-    public void Bootstrap_does_not_spawn_a_fish_when_no_water_exists()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("dry-angler");
-        player.PositionX = 0;
-        player.PositionY = Blocks.FlatSpawnY;
-        player.PositionZ = 0;
-        var system = new FishSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        Assert.Empty(system.Fish);
-    }
-
-    [Fact]
     public void Fish_wanders_within_water_but_never_leaves_it()
     {
         var fx = new IntentTestFixture();

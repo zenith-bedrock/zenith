@@ -33,13 +33,10 @@ sealed class BatSystem : IGameSystem
     private readonly StackId _lootItem;
     private readonly Random _random;
     private readonly HashSet<(long BatId, long PlayerId)> _replicated = new();
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public BatSystem(World.World world, PlayerManager players, BatStore bats, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
+    public BatSystem(World.World world, PlayerManager players, BatStore bats, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
-        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _bats = bats;
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
@@ -54,9 +51,6 @@ sealed class BatSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_bats.Active.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapBat(online);
 
         foreach (var bat in _bats.Active.ToArray())
         {
@@ -71,20 +65,6 @@ sealed class BatSystem : IGameSystem
 
         _replicated.RemoveWhere(pair => !_bats.Active.Any(b => b.EntityId == pair.BatId) ||
                                         !online.Any(p => p.RuntimeId == pair.PlayerId));
-    }
-
-    private void EnsureBootstrapBat(IReadOnlyList<Player.Player> online)
-    {
-        if (!_showcase.Enabled) return;
-        if (_bootstrapSpawned || _bats.Active.Count != 0) return;
-        var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
-        if (player is null) return;
-        var x = player.PositionX;
-        var z = player.PositionZ + SpawnDistance;
-        var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z)) + SpawnHeightOffset;
-        var entityId = _players.AllocateRuntimeId();
-        if (_bats.TryAdd(new Bat(entityId, (ulong)entityId, x, y, z)))
-            _bootstrapSpawned = true;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. Same shape as every other ground mob's despawn — the despawn rule turned out position-mode-agnostic too.</summary>

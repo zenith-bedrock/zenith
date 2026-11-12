@@ -33,15 +33,12 @@ sealed class MinecartSystem : IGameSystem
     private readonly MobCore _mob;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public MinecartSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
+    public MinecartSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Minecart, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _minecarts = new ComponentStore<VehicleOccupancy>(stores.Entities);
@@ -64,9 +61,6 @@ sealed class MinecartSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_minecarts.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapMinecart(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_minecarts.Entities);
@@ -93,14 +87,6 @@ sealed class MinecartSystem : IGameSystem
         _replication.ReplicateMoves(_minecarts.Entities, online);
     }
 
-
-    private void EnsureBootstrapMinecart(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _minecarts.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, SpawnDistance, -SpawnDistance, out var x, out var y, out var z)) return;
-        SpawnMinecart(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     internal EntityId SpawnMinecart(float x, float y, float z)
     {

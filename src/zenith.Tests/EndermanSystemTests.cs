@@ -26,19 +26,6 @@ public sealed class EndermanSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_enderman_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        _ = fx.AddInGamePlayer("bootstrapper");
-        var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Endermen);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-    }
-
-    [Fact]
     public void Passive_enderman_eventually_teleports_without_ever_being_hit()
     {
         var fx = new IntentTestFixture();

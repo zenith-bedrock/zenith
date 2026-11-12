@@ -35,32 +35,6 @@ public sealed class SpiderSystemTests
     }
 
     [Fact]
-    public void BootstrapSpawnsOneConcreteSpiderAndMovesTowardPlayer()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("target");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Spiders);
-        var initial = Pos(system, id);
-        var initialDistanceSquared =
-            (initial.X - player.PositionX) * (initial.X - player.PositionX) +
-            (initial.Z - player.PositionZ) * (initial.Z - player.PositionZ);
-        system.Tick(fx.Clock, fx.Players.Online);
-        var later = Pos(system, id);
-        var laterDistanceSquared =
-            (later.X - player.PositionX) * (later.X - player.PositionX) +
-            (later.Z - player.PositionZ) * (later.Z - player.PositionZ);
-
-        Assert.True(system.Stores.Entities.IsAlive(id));
-        Assert.True(laterDistanceSquared < initialDistanceSquared);
-    }
-
-    [Fact]
     public void Spider_retargets_when_retained_player_becomes_invalid()
     {
         var fx = new IntentTestFixture();
@@ -173,6 +147,7 @@ public sealed class SpiderSystemTests
         // positive offset — remember every chunk the spawn could land in.
         first.Chunks.RememberMany([(0, 0), (-1, -1), (-1, 0), (0, -1)]);
         var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnSpider(0, Blocks.FlatSpawnY, 0);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 

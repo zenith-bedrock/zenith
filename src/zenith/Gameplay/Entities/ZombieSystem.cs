@@ -46,15 +46,12 @@ sealed class ZombieSystem : IGameSystem
     // structural mutation (despawn/death) during iteration still needs a stable list to walk, but
     // it doesn't need a new allocation to provide one.
     private readonly List<EntityId> _tickScratch = [];
-    private readonly ShowcaseMobs _showcase;
-    private bool _bootstrapSpawned;
 
-    public ZombieSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
+    public ZombieSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Zombie, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
@@ -76,9 +73,6 @@ sealed class ZombieSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         if (online.Count == 0) return;
-        if (_zombies.Count != 0)
-            _bootstrapSpawned = true;
-        EnsureBootstrapZombie(online);
 
         _tickScratch.Clear();
         _tickScratch.AddRange(_zombies.Entities);
@@ -103,14 +97,6 @@ sealed class ZombieSystem : IGameSystem
         _replication.ReplicateMoves(_zombies.Entities, online);
     }
 
-
-    private void EnsureBootstrapZombie(IReadOnlyList<Player.Player> online)
-    {
-        if (_bootstrapSpawned || _zombies.Count != 0) return;
-        if (!_showcase.TryPlace(online, _world, SpawnDistance, 0f, out var x, out var y, out var z)) return;
-        SpawnZombie(x, y, z);
-        _bootstrapSpawned = true;
-    }
 
     /// <summary>
     /// The feature-specific composition step every migrated actor needs on top of

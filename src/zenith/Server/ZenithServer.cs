@@ -148,8 +148,7 @@ class ZenithServer
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities,
             bats, villagers, itemPalette, recipes, creative, playerSpatial,
-            config.World.ChunkResidencySweepIntervalTicks,
-            new ShowcaseMobs(config.World.ShowcaseMobs));
+            config.World.ChunkResidencySweepIntervalTicks);
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics);
@@ -237,11 +236,10 @@ class ZenithServer
         RecipeRegistry recipes,
         CreativeCatalog creative,
         PlayerSpatialIndex playerSpatial,
-        int chunkResidencySweepIntervalTicks,
-        ShowcaseMobs showcase)
+        int chunkResidencySweepIntervalTicks)
     {
         var gravity = new GravitySystem(world, players);
-        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial, showcase);
+        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial);
 
         gameLoop.Register(new GameRuleSyncSystem(world), diagnostics.System("game-rule-sync"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
@@ -284,28 +282,27 @@ class ZenithServer
         BatStore batStore,
         VillagerStore villagerStore,
         ItemPalette itemPalette,
-        PlayerSpatialIndex playerSpatial,
-        ShowcaseMobs showcase)
+        PlayerSpatialIndex playerSpatial)
     {
         var damage = new DamageDispatch();
-        var zombieSystem = new ZombieSystem(world, players, entities, itemPalette, showcase: showcase);
+        var zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
         damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
-        var minecartSystem = new MinecartSystem(world, players, entities, itemPalette, showcase: showcase);
+        var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
         damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
-        var cowSystem = new CowSystem(world, players, entities, itemPalette, showcase: showcase);
+        var cowSystem = new CowSystem(world, players, entities, itemPalette);
         damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
-        var spiderSystem = new SpiderSystem(world, players, entities, itemPalette, showcase: showcase);
+        var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
         damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
-        var fishSystem = new FishSystem(world, players, entities, itemPalette, showcase: showcase);
+        var fishSystem = new FishSystem(world, players, entities, itemPalette);
         damage.Register(fishSystem.Owns, fishSystem.TryApplyDamage);
-        var creeperSystem = new CreeperSystem(world, players, entities, itemPalette, showcase: showcase);
+        var creeperSystem = new CreeperSystem(world, players, entities, itemPalette);
         damage.Register(creeperSystem.Owns, creeperSystem.TryApplyDamage);
-        var endermanSystem = new EndermanSystem(world, players, entities, itemPalette, showcase: showcase);
+        var endermanSystem = new EndermanSystem(world, players, entities, itemPalette);
         damage.Register(endermanSystem.Owns, endermanSystem.TryApplyDamage);
-        var golemSystem = new GolemSystem(world, players, entities, itemPalette, showcase: showcase);
+        var golemSystem = new GolemSystem(world, players, entities, itemPalette);
         damage.Register(golemSystem.Owns, golemSystem.TryApplyDamage);
         var projectileSystem = new ProjectileSystem(world, players, entities, damage, playerSpatial);
-        var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette, showcase);
+        var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette);
         damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
 
         gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
@@ -315,9 +312,9 @@ class ZenithServer
         gameLoop.Register(cowSystem, diagnostics.System("cow"));
         gameLoop.Register(creeperSystem, diagnostics.System("creeper"));
         gameLoop.Register(endermanSystem, diagnostics.System("enderman"));
-        gameLoop.Register(new BatSystem(world, players, batStore, itemPalette, showcase: showcase), diagnostics.System("bat"));
+        gameLoop.Register(new BatSystem(world, players, batStore, itemPalette), diagnostics.System("bat"));
         gameLoop.Register(spiderSystem, diagnostics.System("spider"));
-        gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette, showcase: showcase), diagnostics.System("villager"));
+        gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette), diagnostics.System("villager"));
         gameLoop.Register(golemSystem, diagnostics.System("golem"));
         gameLoop.Register(fishSystem, diagnostics.System("fish"));
     }

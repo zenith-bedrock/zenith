@@ -35,21 +35,6 @@ public sealed class MinecartSystemTests
     }
 
     [Fact]
-    public void Bootstrap_spawns_one_minecart_near_the_first_online_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("engineer");
-        player.PositionX = 0;
-        player.PositionZ = 0;
-        var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        var id = Assert.Single(system.Minecarts);
-        Assert.True(system.Stores.Entities.IsAlive(id));
-    }
-
-    [Fact]
     public void A_minecart_never_moves_on_its_own_without_being_ridden()
     {
         var fx = new IntentTestFixture();
@@ -348,6 +333,7 @@ public sealed class MinecartSystemTests
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0), (0, -1)]);
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnMinecart(0, Blocks.FlatSpawnY, 0);
         system.Tick(fx.Clock, fx.Players.Online);
         var before = fx.Transport.Captured.Count;
 
