@@ -37,9 +37,6 @@ sealed class SkeletonSystem : IGameSystem
     private const float AttackDamage = 4f;
     private const float ShotSpeed = 0.45f;
     private const int ShotCooldownTicks = 30;
-    private const string LootItemName = "minecraft:bone";
-    /// <summary>Vanilla-parity hostile-mob kill reward (Phase XI.4).</summary>
-    private const int KillExperience = 5;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
@@ -47,7 +44,7 @@ sealed class SkeletonSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<SkeletonState> _skeletons;
     private readonly ProjectileSystem _projectiles;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
@@ -57,10 +54,10 @@ sealed class SkeletonSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Skeleton, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _skeletons = new ComponentStore<SkeletonState>(stores.Entities);
         _projectiles = projectiles;
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
     internal IReadOnlyList<EntityId> Skeletons => _skeletons.Entities;
@@ -208,12 +205,7 @@ sealed class SkeletonSystem : IGameSystem
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
     internal EntityId SpawnSkeleton(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Skeleton.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) });
-        _stores.Velocities.Set(id, new Velocity()); // Phase XXIX: Y reused as gravity fall-speed.
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _skeletons.Set(id, new SkeletonState());
         return id;
     }
@@ -239,16 +231,5 @@ sealed class SkeletonSystem : IGameSystem
 
     /// <summary>Concrete Skeleton health/removal operation shared by the Projectile vertical slice.</summary>
     internal bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Skeleton", currentTick,
-            destroyActor: sid =>
-            {
-                if (_stores.Identities.TryGet(sid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, sid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                if (_stores.Identities.TryGet(id, out var identity))
-                    _replication.Forget(identity.ActorUniqueId, peer);
-            });
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 }

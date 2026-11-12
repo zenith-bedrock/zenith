@@ -25,9 +25,6 @@ sealed class ZombieSystem : IGameSystem
     private const float MovePerTick = 0.08f;
     private const float AttackDamage = 4f;
     private const int AttackCooldownTicks = 20;
-    private const string LootItemName = "minecraft:rotten_flesh";
-    /// <summary>Vanilla-parity hostile-mob kill reward (Phase XI.4).</summary>
-    private const int KillExperience = 5;
     // Phase XVI — knockback: a movement consequence of combat, deliberately not part of
     // GroundMobCombat/DamageableActorCombat (which never touch position) or a shared primitive
     // (single mob so far).
@@ -42,7 +39,7 @@ sealed class ZombieSystem : IGameSystem
     private readonly PlayerManager _players;
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<ZombieState> _zombies;
-    private readonly StackId _lootItem;
+    private readonly MobCore _mob;
     private readonly ActorReplication _replication;
     // Phase XXI addendum 2: reused every tick instead of a fresh `new EntityId[]` snapshot —
     // structural mutation (despawn/death) during iteration still needs a stable list to walk, but
@@ -55,9 +52,9 @@ sealed class ZombieSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _replication = new ActorReplication(stores);
+        _mob = new MobCore(MobDefinitions.Zombie, world, players, stores, itemPalette);
+        _replication = _mob.Replication;
         _zombies = new ComponentStore<ZombieState>(stores.Entities);
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
     }
 
     internal IReadOnlyList<EntityId> Zombies => _zombies.Entities;
@@ -123,15 +120,7 @@ sealed class ZombieSystem : IGameSystem
     /// </summary>
     internal EntityId SpawnZombie(float x, float y, float z)
     {
-        var actorUniqueId = _players.AllocateRuntimeId();
-        // CreateActor only returns null if AllocateRuntimeId ever produced a runtime id already in
-        // use, which it never does by construction — see EntityRuntimeTests for the rollback path
-        // this guards, proven in isolation rather than trusted here.
-        var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
-                 ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Zombie.");
-        _stores.Health.Set(id, new HealthComponent { State = new HealthState(20f) });
-        _stores.Velocities.Set(id, new Velocity());
-        _stores.Despawn.Set(id, new DespawnTracking());
+        var id = _mob.Spawn(x, y, z);
         _zombies.Set(id, new ZombieState());
         return id;
     }
@@ -234,19 +223,7 @@ sealed class ZombieSystem : IGameSystem
 
     /// <summary>Concrete Zombie health/removal operation shared by the Projectile vertical slice.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, _replication.Viewers, _lootItem, KillExperience, "Zombie", currentTick,
-            destroyActor: zid =>
-            {
-                if (_stores.Identities.TryGet(zid, out var identity))
-                    _stores.DestroyActor(identity.ActorRuntimeId, zid);
-            },
-            onDeathReplicatedToPeer: peer =>
-            {
-                if (_stores.Identities.TryGet(id, out var identity))
-                    _replication.Forget(identity.ActorUniqueId, peer);
-                _replication.RemovalCount++;
-            });
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
