@@ -25,7 +25,7 @@ public class InventoryConservationTests
     private const int BusySlots = 5;
 
     /// <summary>Every stack the player holds, as item-kind → total count.</summary>
-    private static Dictionary<StackId, int> Census(Player.Player p)
+    private static Dictionary<StackId, int> Census(Player.Player p, IEnumerable<InventorySlot>? extra = null)
     {
         var census = new Dictionary<StackId, int>();
         void Add(InventorySlot s)
@@ -38,12 +38,14 @@ public class InventoryConservationTests
         for (var i = 0; i < PlayerCraftUi.GridSize; i++) Add(p.CraftUi.GetGrid(i));
         Add(p.Inventory.Cursor);
         Add(p.Inventory.Offhand);
+        foreach (var slot in extra ?? []) Add(slot);
         return census;
     }
 
     /// <summary>Mostly bag/cursor/offhand/craft grid (where moves succeed); armor now and then (where most are refused).</summary>
-    private static InventorySlotReference RandomReference(Random rng) => rng.Next(10) switch
+    private static InventorySlotReference RandomReference(Random rng, bool withChest = false) => rng.Next(withChest ? 14 : 10) switch
     {
+        >= 10 => InventorySlotReference.OpenContainer(rng.Next(ChestStore.DoubleSize)),
         < 4 => InventorySlotReference.Player(rng.Next(BusySlots)),
         4 or 5 => InventorySlotReference.Cursor,
         6 or 7 => InventorySlotReference.Offhand,
@@ -52,12 +54,13 @@ public class InventoryConservationTests
     };
 
     /// <summary>Where every stack sits, so a test can tell a request that moved something from one that was refused.</summary>
-    private static string Layout(Player.Player p)
+    private static string Layout(Player.Player p, IEnumerable<InventorySlot>? extra = null)
     {
         var sb = new System.Text.StringBuilder();
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++) sb.Append(p.Inventory.Get(i)).Append(';');
         for (var i = 0; i < PlayerInventory.ArmorSize; i++) sb.Append(p.Inventory.GetArmor(i)).Append(';');
         for (var i = 0; i < PlayerCraftUi.GridSize; i++) sb.Append(p.CraftUi.GetGrid(i)).Append(';');
+        foreach (var slot in extra ?? []) sb.Append(slot).Append(';');
         return sb.Append(p.Inventory.Cursor).Append(';').Append(p.Inventory.Offhand).ToString();
     }
 
@@ -67,14 +70,52 @@ public class InventoryConservationTests
     [InlineData(3)]
     [InlineData(4)]
     [InlineData(5)]
-    public void Random_move_requests_never_create_or_lose_items(int seed)
+    public void Random_move_requests_never_create_or_lose_items(int seed) => RunRandomMoves(seed, withChest: false);
+
+    /// <summary>Same property with a double chest open: its 54 slots are one more place items can sit or move to.</summary>
+    [Theory]
+    [InlineData(11)]
+    [InlineData(12)]
+    [InlineData(13)]
+    [InlineData(14)]
+    [InlineData(15)]
+    public void Random_move_requests_with_a_double_chest_open_never_create_or_lose_items(int seed) =>
+        RunRandomMoves(seed, withChest: true);
+
+    private static void RunRandomMoves(int seed, bool withChest)
     {
         var rng = new Random(seed);
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer($"conserve-{seed}");
+        var system = fx.CreateInventorySystem();
         player.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
+
+        IEnumerable<InventorySlot> Chest()
+        {
+            if (!withChest) yield break;
+            for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(2, 64, 2, i);
+            for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(3, 64, 2, i);
+        }
+
+        if (withChest)
+        {
+            var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
+            fx.World.SetBlock(2, 64, 2, south);
+            fx.World.SetBlock(3, 64, 2, south);
+            fx.World.Chests.Ensure(2, 64, 2);
+            fx.World.Chests.Ensure(3, 64, 2);
+            player.PositionX = 2.5f;
+            player.PositionY = 64;
+            player.PositionZ = 2.5f;
+            Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
+            system.Tick(fx.Clock, fx.Players.Online);
+            Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
+            // A few stacks already in the chest, in both halves.
+            Assert.True(fx.World.Chests.TrySet(2, 64, 2, 0, new InventorySlot(Kinds[0], 20)));
+            Assert.True(fx.World.Chests.TrySet(3, 64, 2, 1, new InventorySlot(Kinds[3], 7)));
+        }
 
         // Seed a handful of mixed stacks across the bag, the cursor and the offhand.
         for (var i = 0; i < 12; i++)
@@ -82,27 +123,26 @@ public class InventoryConservationTests
         Assert.True(player.Inventory.TrySet(PlayerInventory.CursorSlot, Kinds[rng.Next(Kinds.Length)], 1 + rng.Next(40)));
         Assert.True(player.Inventory.TrySetOffhand(Kinds[rng.Next(Kinds.Length)], 1 + rng.Next(40)));
 
-        var system = fx.CreateInventorySystem();
-        var expected = Census(player);
+        var expected = Census(player, Chest());
         var moved = 0;
         for (var request = 0; request < 150; request++)
         {
             var actions = new List<InventoryStackAction>();
             for (var a = rng.Next(4) == 0 ? 2 : 1; a > 0; a--)
             {
-                var from = RandomReference(rng);
-                var to = RandomReference(rng);
+                var from = RandomReference(rng, withChest);
+                var to = RandomReference(rng, withChest);
                 actions.Add(rng.Next(3) == 0
                     ? InventoryStackAction.Swap(from, to)
                     : InventoryStackAction.Transfer(from, to, rng.Next(0, 65)));
             }
 
-            var layoutBefore = Layout(player);
+            var layoutBefore = Layout(player, Chest());
             Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1000 + request, actions.ToArray())));
             system.Tick(fx.Clock, fx.Players.Online);
 
-            if (Layout(player) != layoutBefore) moved++;
-            var actual = Census(player);
+            if (Layout(player, Chest()) != layoutBefore) moved++;
+            var actual = Census(player, Chest());
             Assert.True(
                 expected.Count == actual.Count && expected.All(kv => actual.GetValueOrDefault(kv.Key) == kv.Value),
                 $"seed {seed}, request {request}: items were created or lost.");
