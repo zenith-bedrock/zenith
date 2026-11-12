@@ -377,6 +377,14 @@ static class Blocks
         return runtimeId;
     }
 
+    /// <summary>Preferred (default-state) runtime id of a named block; false when the name is not a block.</summary>
+    public static bool TryGetDefaultRuntimeId(string name, out int runtimeId)
+    {
+        EnsureLoaded();
+        runtimeId = 0;
+        return _palette is not null && _palette.TryGet(name, out runtimeId);
+    }
+
     public static bool TryGetName(int runtimeId, out string name)
     {
         EnsureLoaded();

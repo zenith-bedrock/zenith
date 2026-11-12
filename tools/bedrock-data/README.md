@@ -38,13 +38,19 @@ Use a fresh `ZENITH_DATA` directory and run `smoke:join` from the sibling bot. O
 
 ## Recipes
 
-`src/zenith/data/recipes.json.gz` is **not** built from the behaviour pack's `recipes.brarchive` (legacy names, un-expanded). Capture the `crafting_data` and `item_registry` packets a stock BDS sends at login (BDS ≥ 1.26.60 with `transport=raknet` in `server.properties`, offline, separate port; the smoke bot's codec decodes them) into `crafting_data.json` / `item_registry.json`, then:
+`src/zenith/data/recipes.json.gz` is built from the behaviour packs a stock BDS loads (see below), never from a wire capture:
 
 ```powershell
-python tools/bedrock-data/extract_recipes.py C:/path/to/capture src/zenith/data/recipes.json.gz
+python tools/bedrock-data/extract_recipes.py <bds root> <item_registry.json> src/zenith/data/recipes.json.gz --verify <capture dir>
 ```
 
-The script prints how many recipes it dropped and why (non-grid stations, aux-valued ingredients, output NBT). Current data: BDS 1.26.63.1.
+It emits the pack's `crafting_table` shaped/shapeless recipes (legacy spellings and `data` values resolved through
+explicit tables in the script), the colour-dyeing families BDS builds in code (wool, wool slab/stairs, shulker box,
+bundle, cushion, harness) and the few vanilla recipes BDS registers in code (slabs, small wood parts, ...), all keyed
+by real item names. Recipes that need an item aux value (banner/bed/firework-star colour, ...) are counted and not
+emitted until stacks carry one. `--verify` takes a CraftingData capture as an ORACLE only: it fails if any aux-free
+grid recipe a real BDS sends has no equivalent here. Current data: BDS 1.26.63.1 (3454 recipes, 0 missing, 458 wire
+recipes need an aux model).
 
 ## How BDS loads its catalogs (observed)
 
@@ -54,6 +60,5 @@ the module). Recipes, items, item catalog (creative groups), biomes, entities, l
 the 98 newest data-driven blocks live there as plain behaviour-pack JSON. Classic blocks and the legacy
 `(name, data)` -> flattened item table are compiled into the executable.
 
-`pack_recipe_coverage.py <bds> <capture>` measures how much of the wire CraftingData the pack JSON explains
-(1.26.63.1: 1126 of 2708 grid recipes cleanly, ~160 more need the legacy table, 1420 are generated in code - colour
-variants of dyeing, arrows, ...). Until those gaps close the shipped `recipes.json.gz` still comes from the capture.
+BDS also *generates* recipes in code (colour dyeing, slabs, ...): the extractor reproduces those from rules and the
+`--verify` oracle proves nothing a stock BDS can craft is missing.
