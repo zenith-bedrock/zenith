@@ -67,6 +67,13 @@ sealed class WorldProtocol
     public void SendGameRules(IReadOnlyList<GameRule> rules) =>
         _session.SendDataPacket(new GameRulesChangedPacket { Rules = rules });
 
+    /// <summary>1.26 world clock: BDS sends the running state before StartGame and announces the registry after the item registry.</summary>
+    public void SendWorldClockState(int worldTime) =>
+        _session.SendDataPacket(WorldClockRegistry.StatePacket(worldTime));
+
+    public void SendWorldClockRegistry(int worldTime) =>
+        _session.SendDataPacket(WorldClockRegistry.RegistryPacket(worldTime));
+
     public void SendCommandsEnabled(bool enabled) =>
         _session.SendDataPacket(new SetCommandsEnabledPacket { Enabled = enabled });
 

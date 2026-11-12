@@ -81,6 +81,12 @@ static class JoinStaticNames
     public const string CameraSpline = "camera_spline";
     public const string TrimData = "trim_data";
 
+    /// <summary>Source of the overworld clock registry (<see cref="Zenith.Packets.WorldClockRegistry"/>); never replayed as is, its time is stale.</summary>
+    public const string WorldClocks = "sync_world_clocks";
+
+    /// <summary>The recipe ids BDS unlocks for a new player; filtered to the recipes this server has before it is sent.</summary>
+    public const string InitialRecipes = "unlocked_recipes";
+
     /// <summary>Source of the default game rules (<see cref="Zenith.World.GameRuleDefaults"/>); never replayed as a packet.</summary>
     public const string GameRules = "game_rules_changed";
 }

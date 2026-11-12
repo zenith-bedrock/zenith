@@ -35,6 +35,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // esse status só depois de publicar chunks.
                 var player = session.Player!;
                 // Current Bedrock clients require the vanilla jigsaw rule compound before StartGame.
+                session.Protocol.World.SendWorldClockState(session.Context.Clock.WorldTime);
                 session.Protocol.World.SendJigsawStructureData();
                 // BDS order: jigsaw data, voxel shapes, StartGame, entity properties, ... (see docs/bds-differential-join.md).
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.VoxelShapes);
@@ -59,12 +60,14 @@ class ResourcePacksSessionHandler : ISessionHandler
                     gameRules: session.Context.World.Rules.Snapshot);
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityProperties);
                 session.Protocol.Inventory.SendItemRegistry();
+                session.Protocol.World.SendWorldClockRegistry(session.Context.Clock.WorldTime);
                 session.Protocol.World.SendDifficulty(StartGamePacket.DefaultDifficulty);
                 session.Protocol.World.SendCommandsEnabled(StartGamePacket.DefaultCommandsEnabled);
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.TrimData);
                 session.Protocol.Inventory.SendCraftingData();
+                session.Protocol.Inventory.SendInitiallyUnlockedRecipes();
                 session.Protocol.Commands.SendAvailableCommands(
                     BedrockCommandAdapter.CreateMetadata(session.Context.Commands.Catalog));
                 // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).
