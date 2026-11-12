@@ -26,9 +26,6 @@ internal sealed class Recipe
     public required List<Product> Outputs { get; init; }
     public string Station { get; init; } = RecipeTables.Station;
 
-    /// <summary>The wire's "any aux" ingredient metadata.</summary>
-    public const int AnyAux = 32767;
-
     public bool IsShaped => Width is not null;
 }
 
