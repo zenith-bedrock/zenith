@@ -40,6 +40,7 @@ sealed class ZombieSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<ZombieState> _zombies;
     private readonly MobCore _mob;
+    private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     // Phase XXI addendum 2: reused every tick instead of a fresh `new EntityId[]` snapshot —
     // structural mutation (despawn/death) during iteration still needs a stable list to walk, but
@@ -54,6 +55,7 @@ sealed class ZombieSystem : IGameSystem
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Zombie, world, players, stores, itemPalette);
         _replication = _mob.Replication;
+        _body = new GroundMobBody(world, stores, players);
         _zombies = new ComponentStore<ZombieState>(stores.Entities);
     }
 
@@ -87,11 +89,11 @@ sealed class ZombieSystem : IGameSystem
             ApplyPlayerAttacks(id, online, clock.CurrentTick);
             if (!_stores.Entities.IsAlive(id)) continue;
             ApplyKnockbackMotion(id);
-            var target = FindOrAcquireTarget(id, online);
+            var target = _body.FindOrAcquireTarget(id, online, ref _zombies.GetRef(id).TargetPlayerRuntimeId, DetectionDistance);
             if (target is not null)
-                AdvanceTowardTarget(id, target);
+                _body.ChaseTarget(id, target, DetectionDistance, AttackDistance, MovePerTick);
             TryAttackPlayer(id, target, clock, online);
-            ApplyGravity(id);
+            _body.ApplyGravity(id);
             ReconcileViewers(id, online);
         }
 
@@ -206,7 +208,7 @@ sealed class ZombieSystem : IGameSystem
         if (state.NextAttackTick > clock.CurrentTick) return;
         if (target is null) return;
         if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!IsTargetValid(pos, target, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
+        if (!GroundMobBody.IsTargetValid(pos, target, DetectionDistance, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
             return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
         var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
@@ -225,95 +227,9 @@ sealed class ZombieSystem : IGameSystem
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
-    private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        ref var state = ref _zombies.GetRef(id);
-        if (!_stores.Positions.TryGet(id, out var pos)) return null;
 
-        if (state.TargetPlayerRuntimeId is { } retainedId)
-        {
-            var retained = _players.GetByRuntimeId(retainedId);
-            if (retained is not null && IsTargetValid(pos, retained, out _))
-                return retained;
-            state.TargetPlayerRuntimeId = null;
-        }
 
-        Player.Player? target = null;
-        var best = DetectionDistance * DetectionDistance;
-        foreach (var player in online)
-        {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = player.PositionX - pos.X;
-            var dz = player.PositionZ - pos.Z;
-            var distance = dx * dx + dz * dz;
-            if (distance >= best) continue;
-            best = distance;
-            target = player;
-        }
 
-        state.TargetPlayerRuntimeId = target?.RuntimeId;
-        return target;
-    }
 
-    private static bool IsTargetValid(Position pos, Player.Player target, out float distanceSquared)
-    {
-        var dx = target.PositionX - pos.X;
-        var dz = target.PositionZ - pos.Z;
-        distanceSquared = dx * dx + dz * dz;
-        return target.IsInGame && !target.IsDead && distanceSquared <= DetectionDistance * DetectionDistance;
-    }
-
-    private void AdvanceTowardTarget(EntityId id, Player.Player target)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!IsTargetValid(pos, target, out var best) ||
-            best <= AttackDistance * AttackDistance || best <= 0.0001f)
-            return;
-
-        var length = MathF.Sqrt(best);
-        var dxn = (target.PositionX - pos.X) / length;
-        var dzn = (target.PositionZ - pos.Z) / length;
-        var distance = MathF.Min(MovePerTick, length - AttackDistance);
-        var desiredX = pos.X + dxn * distance;
-        var desiredZ = pos.Z + dzn * distance;
-        var sideX = -dzn * distance;
-        var sideZ = dxn * distance;
-
-        if (TryMove(id, desiredX, desiredZ) ||
-            TryMove(id, desiredX + sideX, desiredZ + sideZ) ||
-            TryMove(id, desiredX - sideX, desiredZ - sideZ) ||
-            TryMove(id, pos.X + sideX, pos.Z + sideZ) ||
-            TryMove(id, pos.X - sideX, pos.Z - sideZ))
-        {
-            ref var p = ref _stores.Positions.GetRef(id);
-            p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
-        }
-    }
-
-    /// <summary>Concrete Zombie rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>, Phase XV).</summary>
-    private bool TryMove(EntityId id, float x, float z)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.X = x;
-        p.Y = resolvedY;
-        p.Z = z;
-        return true;
-    }
-
-    /// <summary>
-    /// Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a
-    /// downward fall-speed magnitude (same field Zombie's own knockback already writes X/Z of).
-    /// </summary>
-    private void ApplyGravity(EntityId id)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        ref var vel = ref _stores.Velocities.GetRef(id);
-        var y = pos.Y;
-        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.Y = y;
-    }
 
 }

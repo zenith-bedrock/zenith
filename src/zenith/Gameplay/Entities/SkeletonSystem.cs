@@ -45,6 +45,7 @@ sealed class SkeletonSystem : IGameSystem
     private readonly ComponentStore<SkeletonState> _skeletons;
     private readonly ProjectileSystem _projectiles;
     private readonly MobCore _mob;
+    private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
     private bool _bootstrapSpawned;
@@ -56,6 +57,7 @@ sealed class SkeletonSystem : IGameSystem
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Skeleton, world, players, stores, itemPalette);
         _replication = _mob.Replication;
+        _body = new GroundMobBody(world, stores, players);
         _skeletons = new ComponentStore<SkeletonState>(stores.Entities);
         _projectiles = projectiles;
     }
@@ -94,7 +96,7 @@ sealed class SkeletonSystem : IGameSystem
 
             var target = FindTarget(id, online);
             MaintainRange(id, target);
-            ApplyGravity(id);
+            _body.ApplyGravity(id);
             ReconcileViewers(id, online);
             TryRangedAttack(id, target, clock, online);
         }
@@ -128,37 +130,16 @@ sealed class SkeletonSystem : IGameSystem
         if (distance < RetreatBelowRange)
         {
             var step = MathF.Min(MovePerTick, RetreatBelowRange - distance);
-            TryMove(id, pos.X - dx / distance * step, pos.Z - dz / distance * step);
+            _body.TryMove(id, pos.X - dx / distance * step, pos.Z - dz / distance * step);
         }
         else if (distance > ApproachAboveRange)
         {
             var step = MathF.Min(MovePerTick, distance - ApproachAboveRange);
-            TryMove(id, pos.X + dx / distance * step, pos.Z + dz / distance * step);
+            _body.TryMove(id, pos.X + dx / distance * step, pos.Z + dz / distance * step);
         }
     }
 
-    /// <summary>Concrete Skeleton rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
-    private bool TryMove(EntityId id, float x, float z)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.X = x;
-        p.Y = resolvedY;
-        p.Z = z;
-        return true;
-    }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
-    private void ApplyGravity(EntityId id)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        ref var vel = ref _stores.Velocities.GetRef(id);
-        var y = pos.Y;
-        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.Y = y;
-    }
 
 
     /// <summary>
