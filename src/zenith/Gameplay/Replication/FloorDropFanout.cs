@@ -212,14 +212,16 @@ static class FloorDropFanout
         player.Inventory.Clear();
         world.PersistInventory(player);
         world.PersistArmor(player);
+        world.PersistOffhand(player);
         ArmorFanout.Broadcast(player, online);
+        ArmorFanout.BroadcastOffhand(player, online);
         return true;
     }
 
     private static List<DepositRequest> CollectDeathLoot(Player.Player player)
     {
         var requests = new List<DepositRequest>(
-            PlayerCraftUi.GridSize + PlayerTableCraftUi.GridSize + PlayerInventory.FullInventorySize + PlayerInventory.ArmorSize + 2);
+            PlayerCraftUi.GridSize + PlayerTableCraftUi.GridSize + PlayerInventory.FullInventorySize + PlayerInventory.ArmorSize + 3);
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
             var slot = player.CraftUi.GetGrid(g);
@@ -257,6 +259,10 @@ static class FloorDropFanout
             if (!armor.IsEmpty)
                 requests.Add(new DepositRequest(armor.Id, armor.Count));
         }
+
+        var offhand = player.Inventory.Offhand;
+        if (!offhand.IsEmpty)
+            requests.Add(new DepositRequest(offhand.Id, offhand.Count));
 
         return requests;
     }

@@ -53,6 +53,8 @@ interface IChunkStorage
 
     ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default);
+    ValueTask PutOffhandAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
+    ValueTask<byte[]?> GetOffhandAsync(Guid uuid, CancellationToken cancellationToken = default);
 
     ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
     ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default);
@@ -88,6 +90,7 @@ sealed class InMemoryChunkStorage : IChunkStorage
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int X, int Y, int Z), byte[]> _chests = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _armor = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _offhand = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
     private WorldMetadata? _worldMetadata;
 
@@ -188,6 +191,18 @@ sealed class InMemoryChunkStorage : IChunkStorage
     public ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default)
     {
         _armor.TryGetValue(uuid, out var blob);
+        return ValueTask.FromResult<byte[]?>(blob);
+    }
+
+    public ValueTask PutOffhandAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        _offhand[uuid] = blob;
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]?> GetOffhandAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        _offhand.TryGetValue(uuid, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
     }
 

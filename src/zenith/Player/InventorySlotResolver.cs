@@ -49,6 +49,9 @@ static class InventorySlotResolver
             case InventorySlotArea.Armor:
                 return player.Inventory.GetArmor(reference.Index);
 
+            case InventorySlotArea.Offhand:
+                return reference.Index == 0 ? player.Inventory.Offhand : InventorySlot.Empty;
+
             default:
                 return InventorySlot.Empty;
         }
@@ -91,6 +94,11 @@ static class InventorySlotResolver
             case InventorySlotArea.Armor:
                 return player.Inventory.TrySetArmor(
                     reference.Index,
+                    value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id,
+                    value.IsEmpty ? 0 : value.Count);
+
+            case InventorySlotArea.Offhand:
+                return reference.Index == 0 && player.Inventory.TrySetOffhand(
                     value.IsEmpty ? StackId.FromBlock(Blocks.Air) : value.Id,
                     value.IsEmpty ? 0 : value.Count);
 

@@ -166,6 +166,7 @@ class LoginSessionHandler : ISessionHandler
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
                 : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
         session.Context.World.TryLoadArmor(player.Uuid, player.Inventory);
+        session.Context.World.TryLoadOffhand(player.Uuid, player.Inventory);
 
         if (session.Context.World.TryLoadPlayerData(
                 player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode,

@@ -25,4 +25,16 @@ static class ArmorFanout
             peer.Session.Protocol.Entity.SendMobArmorEquipment(rid, head, torso, legs, feet);
         }
     }
+
+    /// <summary>Peer-visible offhand: the same fan-out shape as <see cref="Broadcast"/>, for the one offhand slot.</summary>
+    public static void BroadcastOffhand(Player.Player subject, IReadOnlyList<Player.Player> online)
+    {
+        var item = subject.Session.Protocol.Inventory.DescribeOffhand(subject.Inventory);
+        var rid = (ulong)subject.RuntimeId;
+        foreach (var peer in online)
+        {
+            if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
+            peer.Session.Protocol.Entity.SendMobOffhandEquipment(rid, item);
+        }
+    }
 }

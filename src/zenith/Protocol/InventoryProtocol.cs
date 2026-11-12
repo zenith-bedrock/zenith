@@ -81,6 +81,20 @@ sealed class InventoryProtocol
         });
     }
 
+    /// <summary>Window 119 — the single offhand slot (slot 0 of that legacy window).</summary>
+    public void SendOffhandContent(PlayerInventory inventory)
+    {
+        _session.SendDataPacket(new InventoryContentPacket
+        {
+            WindowId = InventoryContainerMap.WindowOffhand,
+            Slots = [DescribeForWire(InventorySlotReference.Offhand, inventory.Offhand)]
+        });
+    }
+
+    /// <summary>Peer display of the offhand (MobEquipment window 119) — no stack net id allocation.</summary>
+    public NetworkItemStack DescribeOffhand(PlayerInventory inventory) =>
+        ToNetworkStack(inventory.Offhand, stackNetworkId: 0);
+
     /// <summary>Peer display (MobArmorEquipment fan-out) — no stack net id allocation.</summary>
     public NetworkItemStack DescribeArmor(PlayerInventory inventory, int slot) =>
         ToNetworkStack(inventory.GetArmor(slot), stackNetworkId: 0);
