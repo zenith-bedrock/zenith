@@ -3,6 +3,7 @@ using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Session;
 using Zenith.World;
+using Zenith.Gameplay.Inventory;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Survival;
 
@@ -300,7 +301,10 @@ sealed class BlockEditSystem : IGameSystem
             // Creative skip). Small per-block value: mining alone barely dents hunger in vanilla
             // either, sprinting dominates.
             if (!creative)
+            {
                 player.Exhaustion += HungerSystem.MiningExhaustionPerBlock;
+                WearHeldTool(player);
+            }
 
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
             BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);
@@ -437,6 +441,26 @@ sealed class BlockEditSystem : IGameSystem
         if (player.IsBreakTarget(x, y, z))
             player.AbortBreak();
         ResyncCellToBreaker(player, x, y, z);
+    }
+
+    /// <summary>
+    /// A durable held item (ADR §148) takes one point of wear per block it breaks, and is gone when it reaches its
+    /// maximum. Approximation, not yet checked against BDS: vanilla charges swords 2 and spares blocks that break
+    /// instantly; here every dig-profiled block costs 1 and non-tools never reach this (they are not durable).
+    /// </summary>
+    private void WearHeldTool(global::Zenith.Player.Player player)
+    {
+        var slot = player.SelectedHotbarSlot;
+        if (!PlayerInventory.IsValidHotbarSlot(slot)) return;
+
+        var outcome = ItemWear.Apply(player.Session.Context.Durability, player.Inventory.Get(slot), 1, out var after);
+        if (outcome == ItemWear.Outcome.NotDurable) return;
+
+        if (!player.Inventory.TrySet(slot, after.IsEmpty ? StackId.FromBlock(Blocks.Air) : after.Id, after.IsEmpty ? 0 : after.Count))
+            return;
+        // The client predicts its own wear, but only the server's stack is authoritative: resend it, and persist.
+        player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+        _world.PersistInventory(player);
     }
 
     /// <summary>
