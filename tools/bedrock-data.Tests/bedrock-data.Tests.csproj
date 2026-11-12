@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\bedrock-data\bedrock-data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The shipped assets are the fixtures: the writers must reproduce them. -->
+    <Content Include="..\..\src\zenith\data\block_palette.nbt" Link="data\block_palette.nbt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\zenith\data\recipes.json.gz" Link="data\recipes.json.gz" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

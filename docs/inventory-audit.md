@@ -55,7 +55,7 @@ the closest thing to "what a real client sends and expects back".
 
 - **Recipe data now comes from the BDS behaviour packs, not a wire dump.** The old capture-derived file carried 1557
   of 3780 recipes that could never match (BDS's `name:aux` strings such as `minecraft:red_wool:0`, unknown names).
-  `extract_recipes.py` rebuilds it from the pack JSON + explicit generators and `--verify` proves 0 aux-free
+  `bedrock-data recipes` rebuilds it from the pack JSON + explicit generators and `--verify` proves 0 aux-free
   grid recipes are missing. `RecipeRegistry` no longer strips aux, skips unknown outputs silently or bakes BDS block
   ids: names resolve against Zenith's palettes and an unknown name fails the load.
 - **Open: item aux values.** 458 wire recipes (beds, banners, firework stars, tipped arrows, suspicious stew, maps)
