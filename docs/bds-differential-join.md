@@ -37,6 +37,12 @@ retail client, and the re-capture below shows what the bot sees, not what the ga
 | `unlocked_recipes` | BDS's initially-unlocked list kept to recipes this server has (2 of 20: the other 18 are furnace recipes Zenith lacks) | capture |
 | `set_difficulty`, `set_commands_enabled`, `player_hotbar`, `set_health` | sent | bodies equal the captured ones |
 
+**Re-capture after the fixes** (same bot, 547 packets from Zenith, 0 decode errors): of the 58 packets BDS sends at join, the only
+ones Zenith still never sends are the four left out on purpose below (`server_to_client_handshake`, `level_event_generic`,
+`player_list` for self, `current_structure_feature`); the others are present with the same counts, except `update_abilities`
+(1 vs 2) and `respawn` (1 vs 3), and `inventory_content` (more than BDS). This compares packet names and counts, plus the byte
+checks in the golden tests; it does not compare every field.
+
 ### What the game rules do (honestly)
 
 All 39 rules are replicated, so the client sees BDS's defaults and reads the ones it handles itself (`showCoordinates`, ...).
