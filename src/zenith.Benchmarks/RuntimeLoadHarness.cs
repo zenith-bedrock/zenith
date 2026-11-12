@@ -519,7 +519,7 @@ internal static class RuntimeLoadHarness
             var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
             var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
             var context = new ServerContext(logger, players, new EventBus(logger), clock, world,
-                config, blockPalette, itemPalette, RecipeRegistry.CreateDefault(), CreativeCatalog.CreateDefault(),
+                config, blockPalette, itemPalette, RecipeRegistry.CreateDefault(), ItemDurability.CreateDefault(itemPalette), CreativeCatalog.CreateDefault(),
                 RuntimeDiagnostics);
 
             Loop = new GameLoop(

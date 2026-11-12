@@ -25,6 +25,7 @@ class ServerContext
     public IBlockRegistry BlockRegistry { get; }
     public ItemPalette ItemPalette { get; }
     public RecipeRegistry Recipes { get; }
+    public ItemDurability Durability { get; }
     public CreativeCatalog Creative { get; }
     public CommandRuntime Commands { get; }
     public ServerRuntimeDiagnostics Diagnostics { get; }
@@ -39,6 +40,7 @@ class ServerContext
         BlockPalette blockPalette,
         ItemPalette itemPalette,
         RecipeRegistry recipes,
+        ItemDurability durability,
         CreativeCatalog creative,
         ServerRuntimeDiagnostics? diagnostics = null)
     {
@@ -52,6 +54,7 @@ class ServerContext
         BlockRegistry = new BlockRegistry();
         ItemPalette = itemPalette;
         Recipes = recipes;
+        Durability = durability;
         Creative = creative;
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
         Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents));

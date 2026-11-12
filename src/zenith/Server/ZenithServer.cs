@@ -140,6 +140,7 @@ class ZenithServer
             config.World.ChunkGenerationWorkers,
             config.World.ChunkGenerationCacheColumns);
         var recipes = RecipeRegistry.CreateDefault(itemPalette);
+        var durability = ItemDurability.CreateDefault(itemPalette);
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         // Compose → freeze → gameplay reads only: boot composition for the creative catalog is done as of here.
         creative.Freeze();
@@ -149,7 +150,7 @@ class ZenithServer
             config.World.ChunkResidencySweepIntervalTicks);
 
         var eventBus = new EventBus(serverLogger);
-        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, creative, diagnostics);
+        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics);
         GameLoop = gameLoop;
         _gravity = gravity;
 

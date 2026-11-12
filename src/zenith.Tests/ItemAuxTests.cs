@@ -5,7 +5,7 @@ using Zenith.World;
 namespace Zenith.Tests;
 
 /// <summary>
-/// ADR §147: an item stack's identity includes its aux (damage/variant) value, so stacks that differ only in aux
+/// ADR §147: an item stack's identity includes its aux (variant) value, so stacks that differ only in aux
 /// are different stacks everywhere they are compared, stored or sent.
 /// </summary>
 public class ItemAuxTests
@@ -40,7 +40,7 @@ public class ItemAuxTests
         slots[4] = new InventorySlot(StackId.FromItem(300), 1);
 
         var blob = SlotBlob.Pack(slots);
-        Assert.Equal(SlotBlob.Version3, blob[0]);
+        Assert.Equal(SlotBlob.Version4, blob[0]);
         var dest = new InventorySlot[PlayerInventory.FullInventorySize];
         Assert.True(SlotBlob.TryUnpack(blob, dest));
 

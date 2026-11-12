@@ -47,7 +47,8 @@ public class NetworkItemStackDescriptorTests
         Assert.True(stream.ReadBool()); // has_stack_id
         Assert.Equal(3, stream.ReadVarInt()); // stack_id — no tag byte in between
         Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // block_runtime_id
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // extra blob length
+        Assert.Equal(10, (int)stream.ReadUnsignedVarInt()); // extra blob length: no NBT, no can-place/can-destroy (as BDS)
+        Assert.Equal(new byte[10], stream.ReadSpan(10).ToArray());
         Assert.True(stream.IsEndOfFile);
     }
 
@@ -65,7 +66,8 @@ public class NetworkItemStackDescriptorTests
         _ = stream.ReadUnsignedVarInt();
         Assert.False(stream.ReadBool()); // has_stack_id
         Assert.Equal(7, (int)stream.ReadUnsignedVarInt()); // block_runtime_id right after the bool
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(10, (int)stream.ReadUnsignedVarInt());
+        Assert.Equal(new byte[10], stream.ReadSpan(10).ToArray());
         Assert.True(stream.IsEndOfFile);
     }
 }
