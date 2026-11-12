@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Entities;
 using Zenith.Event;
 using Zenith.Diagnostics;
 using Zenith.Gameplay.Runtime;
@@ -42,7 +43,8 @@ class ServerContext
         RecipeRegistry recipes,
         ItemDurability durability,
         CreativeCatalog creative,
-        ServerRuntimeDiagnostics? diagnostics = null)
+        ServerRuntimeDiagnostics? diagnostics = null,
+        MobSpawner? spawner = null)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -57,6 +59,6 @@ class ServerContext
         Durability = durability;
         Creative = creative;
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
-        Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules);
+        Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner);
     }
 }

@@ -145,13 +145,14 @@ class ZenithServer
         var creative = CreativeCatalog.CreateDefault(itemPalette);
         // Compose → freeze → gameplay reads only: boot composition for the creative catalog is done as of here.
         creative.Freeze();
+        var spawner = new MobSpawner();
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities,
             bats, villagers, itemPalette, recipes, creative, playerSpatial,
-            config.World.ChunkResidencySweepIntervalTicks);
+            config.World.ChunkResidencySweepIntervalTicks, spawner);
 
         var eventBus = new EventBus(serverLogger);
-        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics);
+        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner);
         GameLoop = gameLoop;
         _gravity = gravity;
 
@@ -236,10 +237,11 @@ class ZenithServer
         RecipeRegistry recipes,
         CreativeCatalog creative,
         PlayerSpatialIndex playerSpatial,
-        int chunkResidencySweepIntervalTicks)
+        int chunkResidencySweepIntervalTicks,
+        MobSpawner spawner)
     {
         var gravity = new GravitySystem(world, players);
-        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial);
+        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial, spawner);
 
         gameLoop.Register(new GameRuleSyncSystem(world), diagnostics.System("game-rule-sync"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
@@ -282,7 +284,8 @@ class ZenithServer
         BatStore batStore,
         VillagerStore villagerStore,
         ItemPalette itemPalette,
-        PlayerSpatialIndex playerSpatial)
+        PlayerSpatialIndex playerSpatial,
+        MobSpawner spawner)
     {
         var damage = new DamageDispatch();
         var zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
@@ -312,11 +315,26 @@ class ZenithServer
         gameLoop.Register(cowSystem, diagnostics.System("cow"));
         gameLoop.Register(creeperSystem, diagnostics.System("creeper"));
         gameLoop.Register(endermanSystem, diagnostics.System("enderman"));
-        gameLoop.Register(new BatSystem(world, players, batStore, itemPalette), diagnostics.System("bat"));
+        var batSystem = new BatSystem(world, players, batStore, itemPalette);
+        gameLoop.Register(batSystem, diagnostics.System("bat"));
         gameLoop.Register(spiderSystem, diagnostics.System("spider"));
-        gameLoop.Register(new VillagerSystem(world, players, villagerStore, itemPalette), diagnostics.System("villager"));
+        var villagerSystem = new VillagerSystem(world, players, villagerStore, itemPalette);
+        gameLoop.Register(villagerSystem, diagnostics.System("villager"));
         gameLoop.Register(golemSystem, diagnostics.System("golem"));
         gameLoop.Register(fishSystem, diagnostics.System("fish"));
+
+        spawner.Register("zombie", (x, y, z) => zombieSystem.SpawnZombie(x, y, z));
+        spawner.Register("cow", (x, y, z) => cowSystem.SpawnCow(x, y, z));
+        spawner.Register("creeper", (x, y, z) => creeperSystem.SpawnCreeper(x, y, z));
+        spawner.Register("spider", (x, y, z) => spiderSystem.SpawnSpider(x, y, z));
+        spawner.Register("skeleton", (x, y, z) => skeletonSystem.SpawnSkeleton(x, y, z));
+        spawner.Register("iron_golem", (x, y, z) => golemSystem.SpawnGolem(x, y, z));
+        spawner.Register("enderman", (x, y, z) => endermanSystem.SpawnEnderman(x, y, z));
+        spawner.Register("fish", (x, y, z) => fishSystem.SpawnFish(x, y, z));
+        spawner.Register("minecart", (x, y, z) => minecartSystem.SpawnMinecart(x, y, z));
+        spawner.Register("bat", batSystem.SpawnBat);
+        spawner.Register("villager", villagerSystem.SpawnVillager);
+        gameLoop.Register(spawner, diagnostics.System("summon"));
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>
