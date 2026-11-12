@@ -46,13 +46,15 @@ sealed class EndermanSystem : IGameSystem
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+    public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
+        _showcase = showcase ?? new ShowcaseMobs();
         _mob = new MobCore(MobDefinitions.Enderman, world, players, stores, itemPalette, trackPoses: false, withVelocity: false);
         _replication = _mob.Replication;
         _endermen = new ComponentStore<EndermanState>(stores.Entities);
@@ -113,11 +115,7 @@ sealed class EndermanSystem : IGameSystem
     private void EnsureBootstrapEnderman(IReadOnlyList<Player.Player> online)
     {
         if (_bootstrapSpawned || _endermen.Count != 0) return;
-        var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
-        if (player is null) return;
-        var x = player.PositionX;
-        var z = player.PositionZ + SpawnDistance;
-        var y = _world.SampleSpawnFeetY((int)MathF.Floor(x), (int)MathF.Floor(z));
+        if (!_showcase.TryPlace(online, _world, 0f, SpawnDistance, out var x, out var y, out var z)) return;
         SpawnEnderman(x, y, z);
         _bootstrapSpawned = true;
     }

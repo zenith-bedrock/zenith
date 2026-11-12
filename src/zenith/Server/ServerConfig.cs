@@ -47,6 +47,12 @@ sealed class ServerConfig
         /// </summary>
         public int SpawnReadyRadius { get; set; } = 2;
 
+        /// <summary>
+        /// Development showcase: every species spawns one actor next to the first player who joins (<c>world.showcase-mobs</c>).
+        /// Default on, to keep current behaviour; a vanilla-like server turns it off.
+        /// </summary>
+        public bool ShowcaseMobs { get; set; } = true;
+
         /// <summary>Base terrain generator: <c>flat</c> (default) or <c>noise</c> (ADR §63).</summary>
         public string Terrain { get; set; } = "flat";
 

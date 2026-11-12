@@ -48,11 +48,13 @@ sealed class SkeletonSystem : IGameSystem
     private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public SkeletonSystem(World.World world, PlayerManager players, EntityRuntime stores, ProjectileSystem projectiles, ItemPalette itemPalette)
+    public SkeletonSystem(World.World world, PlayerManager players, EntityRuntime stores, ProjectileSystem projectiles, ItemPalette itemPalette, ShowcaseMobs? showcase = null)
     {
         _world = world;
+        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Skeleton, world, players, stores, itemPalette);
@@ -74,7 +76,7 @@ sealed class SkeletonSystem : IGameSystem
     {
         if (_skeletons.Count != 0)
             _bootstrapSpawned = true;
-        if (!_bootstrapSpawned)
+        if (!_bootstrapSpawned && _showcase.Enabled)
         {
             var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
             if (player is not null)

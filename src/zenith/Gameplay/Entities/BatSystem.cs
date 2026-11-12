@@ -33,11 +33,13 @@ sealed class BatSystem : IGameSystem
     private readonly StackId _lootItem;
     private readonly Random _random;
     private readonly HashSet<(long BatId, long PlayerId)> _replicated = new();
+    private readonly ShowcaseMobs _showcase;
     private bool _bootstrapSpawned;
 
-    public BatSystem(World.World world, PlayerManager players, BatStore bats, ItemPalette itemPalette, Random? random = null)
+    public BatSystem(World.World world, PlayerManager players, BatStore bats, ItemPalette itemPalette, Random? random = null, ShowcaseMobs? showcase = null)
     {
         _world = world;
+        _showcase = showcase ?? new ShowcaseMobs();
         _players = players;
         _bats = bats;
         _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
@@ -73,6 +75,7 @@ sealed class BatSystem : IGameSystem
 
     private void EnsureBootstrapBat(IReadOnlyList<Player.Player> online)
     {
+        if (!_showcase.Enabled) return;
         if (_bootstrapSpawned || _bats.Active.Count != 0) return;
         var player = online.FirstOrDefault(p => p.IsInGame && !p.IsDead);
         if (player is null) return;
