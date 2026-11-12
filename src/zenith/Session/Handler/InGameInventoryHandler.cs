@@ -97,7 +97,7 @@ partial class InGameSessionHandler
             foreach (var a in baked)
             {
                 if (a.Kind == InventoryStackActionKind.CraftCreative) hasCreative = true;
-                else if (a.Kind == InventoryStackActionKind.CraftRecipe) hasRecipe = true;
+                else if (a.Kind is InventoryStackActionKind.CraftRecipe or InventoryStackActionKind.CraftAuto) hasRecipe = true;
             }
 
             if (hasCreative)
@@ -191,6 +191,18 @@ partial class InGameSessionHandler
             }
 
             baked = InventoryStackAction.Craft(action.RecipeNetId, action.CraftTimes);
+            return true;
+        }
+
+        if (action.ActionType == ItemStackRequestPacket.ActionCraftRecipeAuto)
+        {
+            if (action.CraftTimes == 0)
+            {
+                baked = default;
+                return false;
+            }
+
+            baked = InventoryStackAction.CraftAuto(action.RecipeNetId, action.CraftTimes);
             return true;
         }
 
@@ -316,6 +328,7 @@ partial class InGameSessionHandler
         foreach (var action in actions)
         {
             if (action.Kind is InventoryStackActionKind.CraftRecipe or
+                InventoryStackActionKind.CraftAuto or
                 InventoryStackActionKind.CraftCreative or
                 InventoryStackActionKind.Create or
                 InventoryStackActionKind.Destroy)

@@ -10,7 +10,8 @@ enum InventoryStackActionKind : byte
     NoOp = 5,
     CraftCreative = 6,
     Destroy = 7,
-    Mine = 8
+    Mine = 8,
+    CraftAuto = 9
 }
 
 /// <summary>Wire container + slot from client ISR — echoed in ItemStackResponse.</summary>
@@ -114,6 +115,17 @@ readonly struct InventoryStackAction
     public static InventoryStackAction Craft(uint recipeNetId, byte craftTimes = 1) => new()
     {
         Kind = InventoryStackActionKind.CraftRecipe,
+        RecipeNetId = recipeNetId,
+        CraftTimes = craftTimes == 0 ? (byte)1 : craftTimes
+    };
+
+    /// <summary>
+    /// Recipe-book craft: ingredients come from the open grid and then the inventory (hotbar first), chosen by the
+    /// server — the client's own ingredient list and Consume actions are not trusted.
+    /// </summary>
+    public static InventoryStackAction CraftAuto(uint recipeNetId, byte craftTimes = 1) => new()
+    {
+        Kind = InventoryStackActionKind.CraftAuto,
         RecipeNetId = recipeNetId,
         CraftTimes = craftTimes == 0 ? (byte)1 : craftTimes
     };

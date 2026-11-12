@@ -6,8 +6,8 @@ using Zenith.World;
 namespace Zenith.Gameplay.Inventory;
 
 /// <summary>
-/// Every grid-craftable vanilla recipe, loaded from the embedded <c>recipes.json.gz</c> (extracted from a real
-/// BDS CraftingData by tools/bedrock-data/extract_recipes.py). Matching is by shape (with optional mirror),
+/// Every grid-craftable vanilla recipe, loaded from the embedded <c>recipes.json.gz</c> (built from the BDS behaviour
+/// packs by <c>tools/bedrock-data</c>, <c>bedrock-data recipes</c>). Matching is by shape (with optional mirror),
 /// item name and item tag — never by aggregate counts — and a grid must contain exactly the recipe's items.
 /// Net ids are assigned in data order, so they are stable for a given data file.
 /// </summary>
@@ -202,6 +202,49 @@ sealed class RecipeRegistry
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Recipe-book crafting: how much of each of <paramref name="sources"/> (the open grid's cells, then the player's
+    /// slots, in the order the caller wants them drained) <paramref name="times"/> crafts take. Position does not matter;
+    /// every ingredient needs <c>Count × times</c> matching items. Ingredients that name an item are served before tag
+    /// ingredients so a tag cell cannot eat the only exact item a later cell needs. Like <see cref="TryCraftFromGrid"/>
+    /// an unaffordable or over-large request is refused, never reduced. Nothing is mutated.
+    /// </summary>
+    public bool TryPlanAutoCraft(
+        uint netId,
+        int times,
+        IReadOnlyList<InventorySlot> sources,
+        bool isAtCraftingTable,
+        out CraftingRecipe recipe,
+        out int[] takes)
+    {
+        takes = new int[sources.Count];
+        if (!_byNetId.TryGetValue(netId, out recipe!) || recipe.Outputs.Length == 0) return false;
+        if (recipe.RequiresTable && !isAtCraftingTable) return false;
+        if (times <= 0) return false;
+
+        var main = recipe.Outputs[0];
+        if (main.Count <= 0 || times > PlayerInventory.MaxStack / main.Count) return false;
+
+        var names = new string?[sources.Count];
+        for (var i = 0; i < names.Length; i++) names[i] = NameOf(sources[i]);
+
+        foreach (var ingredient in recipe.Cells.OfType<RecipeIngredient>().OrderBy(c => c.Name is null))
+        {
+            var need = ingredient.Count * times;
+            for (var i = 0; i < names.Length && need > 0; i++)
+            {
+                if (names[i] is not { Length: > 0 } name || !ingredient.Matches(name)) continue;
+                var take = Math.Min(need, sources[i].Count - takes[i]);
+                takes[i] += take;
+                need -= take;
+            }
+
+            if (need > 0) { takes = new int[sources.Count]; return false; }
+        }
+
+        return true;
     }
 
     /// <summary>
