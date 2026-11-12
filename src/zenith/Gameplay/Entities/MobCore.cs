@@ -16,15 +16,19 @@ sealed class MobCore
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly StackId _lootItem;
+    private readonly bool _withVelocity;
 
-    public MobCore(MobDefinition definition, World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+    public MobCore(
+        MobDefinition definition, World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette,
+        bool trackPoses = true, bool withVelocity = true)
     {
         Definition = definition;
         _world = world;
         _players = players;
         _stores = stores;
         _lootItem = StackId.FromItem(itemPalette.Require(definition.LootItemName));
-        Replication = new ActorReplication(stores);
+        _withVelocity = withVelocity;
+        Replication = new ActorReplication(stores, trackPoses);
     }
 
     public MobDefinition Definition { get; }
@@ -40,7 +44,7 @@ sealed class MobCore
         var id = _stores.CreateActor(actorUniqueId, (ulong)actorUniqueId, x, y, z)
                  ?? throw new InvalidOperationException($"Duplicate actor runtime id allocated for a new {Definition.Name}.");
         _stores.Health.Set(id, new HealthComponent { State = new HealthState(Definition.MaxHealth) });
-        _stores.Velocities.Set(id, new Velocity()); // Y doubles as the gravity fall speed.
+        if (_withVelocity) _stores.Velocities.Set(id, new Velocity()); // Y doubles as the gravity fall speed.
         _stores.Despawn.Set(id, new DespawnTracking());
         return id;
     }

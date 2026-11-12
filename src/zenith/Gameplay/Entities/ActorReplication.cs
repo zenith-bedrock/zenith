@@ -11,9 +11,12 @@ namespace Zenith.Gameplay.Entities;
 /// byte-identical copy of this (they differed only in which <c>SendAddX</c> packet announces the actor); a species now
 /// owns one of these and supplies just that packet.
 ///
+/// <paramref name="trackPoses"/> is false for a species whose position is never replicated by move packets (an enderman only
+/// teleports), so it keeps no pose cache.
+///
 /// It owns replication bookkeeping and the despawn lifecycle, nothing about what a species does: no AI, damage or loot.
 /// </summary>
-sealed class ActorReplication(EntityRuntime stores)
+sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
 {
     private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
@@ -52,7 +55,7 @@ sealed class ActorReplication(EntityRuntime stores)
                 sendSpawn(peer, identity, pos);
                 peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
                 afterSpawn?.Invoke(peer, identity);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
+                if (trackPoses) _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 SpawnCount++;
             },
             onExit: peer =>
