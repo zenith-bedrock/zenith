@@ -2,7 +2,7 @@ namespace Zenith.Gameplay.Inventory;
 
 /// <summary>
 /// Membership of the item tags that crafting recipes reference (a real BDS CraftingData uses exactly
-/// these twelve, see tools/bedrock-data/extract_recipes.py). Membership is by item name, so it needs no
+/// these twelve, see tools/bedrock-data `recipes`). Membership is by item name, so it needs no
 /// numeric ids and survives palette refreshes. An unknown tag matches nothing — a recipe that references
 /// it simply never crafts, instead of crafting with the wrong ingredients.
 /// </summary>

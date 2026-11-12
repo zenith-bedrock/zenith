@@ -32,6 +32,9 @@
     <EmbeddedResource Include="data\biome_definitions.bin">
       <LogicalName>biome_definitions.bin</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\item_durability.json">
+      <LogicalName>item_durability.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\recipes.json.gz">
       <LogicalName>recipes.json.gz</LogicalName>
     </EmbeddedResource>
