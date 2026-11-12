@@ -57,6 +57,8 @@ class ResourcePacksSessionHandler : ISessionHandler
                     biomeName: "");
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityProperties);
                 session.Protocol.Inventory.SendItemRegistry();
+                session.Protocol.World.SendDifficulty(StartGamePacket.DefaultDifficulty);
+                session.Protocol.World.SendCommandsEnabled(StartGamePacket.DefaultCommandsEnabled);
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.TrimData);
@@ -73,6 +75,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 // Local HUD seed (§34): Breathing metadata + frozen attributes (before PreSpawn chunks).
                 session.Protocol.Entity.SendLocalActorData((ulong)player.RuntimeId, player.Username);
                 session.Protocol.Entity.SendPlayerAttributes(player);
+                session.Protocol.Entity.SendLocalHealth(player.Health);
                 // Abilities / adventure seed (§37) — after §34, before PreSpawn.
                 session.Protocol.Entity.SendLocalAbilities(player.RuntimeId, (int)player.GameMode);
                 session.Protocol.Entity.SendAdventureSettings();

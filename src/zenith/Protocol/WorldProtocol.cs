@@ -55,6 +55,13 @@ sealed class WorldProtocol
         });
     }
 
+    /// <summary>World difficulty (BDS sends it right after the item registry; same value as StartGame's field).</summary>
+    public void SendDifficulty(int difficulty) =>
+        _session.SendDataPacket(new SetDifficultyPacket { Difficulty = difficulty });
+
+    public void SendCommandsEnabled(bool enabled) =>
+        _session.SendDataPacket(new SetCommandsEnabledPacket { Enabled = enabled });
+
     public void SendChunkRadiusUpdated(int radius)
     {
         _session.SendDataPacket(new ChunkRadiusUpdatedPacket { Radius = radius });
