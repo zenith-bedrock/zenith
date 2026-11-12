@@ -3507,7 +3507,7 @@ When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
 **Not done / limits:** recipes needing an item aux value (beds, banners, firework stars, tipped arrows, suspicious stew, maps: 458 on the wire — Zenith's `StackId` has no aux), output NBT, furnace/stonecutter/brewing/smithing stations are dropped by the extractor and counted; `CraftRecipeAuto` (recipe book) is still unsupported. Item tag membership is by name rules, verified only against the data's own references. Not validated with a retail client.
 
 
-### 147. Item stacks carry an aux (damage/variant) value; recipes can require and produce it
+### 147. Item stacks carry an aux (variant) value; recipes can require and produce it
 
 **Problem:** `StackId` was `(kind, value)`. Bedrock items that differ only in damage/variant (bed and banner colour, tipped-arrow potion, suspicious-stew effect, map kind) were unrepresentable, so 458 vanilla grid recipes could not be emitted (ADR §146) and nothing could later carry durability. Observed on a stock BDS 1.26.63.1 `CraftingData`: ~399 recipes have a non-zero output `metadata` (a bed is item `bed` with `metadata` = colour index and `block_runtime_id` 0 although `bed` is also a block name); the `name:aux` ingredient descriptors are real aux values for these items (`bed:0` is a white bed).
 
@@ -3516,3 +3516,17 @@ When a non-goal becomes a goal, update this file **and** `ARCHITECTURE.md`.
 **Verified:** 4045 aux-free-or-aux-carrier wire grid recipes of the stock BDS (was 3672) have an equivalent here, 0 missing; recipes now 1149 shaped + 2670 shapeless; round-trip/identity/persistence/matching/wire tests (`ItemAuxTests`, `RecipeAuxTests`, `bedrock-data.Tests`). **Not verified:** a retail client; that a banner without its `Type` NBT (the wire sends `Type: 0`, the default) displays identically.
 
 **Not done / limits:** stack **NBT** is not modelled, so firework stars/rockets (41 wire recipes, colours live in NBT) are counted and not emitted, and the earlier hand-written `firework_rocket_from_paper` was removed for the same reason; tipped arrows (44) need a potion model; durability still needs a damage mutation path (`MineBlock` still echoes); the creative catalog only exposes curated tools/blocks, all aux 0, and ignores `damage`; `ItemV4` writers still send an empty extra blob.
+
+
+### 148. Item damage is stack user data, not aux (evidence from a stock BDS 1.26.63.1)
+
+**Problem:** durability needs a per-stack wear value. ADR 147 had called aux "damage/variant", which would have put wear in `StackId` and made two pickaxes with different wear different *kinds* of item.
+
+**Evidence (captured from the stock BDS, `bds-reference/capture-damage.ts`, console `give <player> <item> 1 <data>`; raw packets in `out/damage/raw.jsonl`):**
+- `give iron_pickaxe 1 100` and `give bow 1 50` send the stack with **`meta` (aux) = 0** and, in the extra data, an NBT compound `{Damage: int 100}` / `{Damage: int 50}`; `give iron_pickaxe 1 0` still sends `{Damage: 0}`. So the give command's `data` is stored as the `Damage` tag for a damageable item.
+- The same `data` on non-damageable items is a variant: `bed 1 5` goes out with `meta` = 5 (lime bed), `white_wool 1 5` and `stone 1 3` are turned into the block state's runtime id (lime wool, diorite) with `meta` 0. That is the ADR 147 aux and it stays as is.
+- Item extra data on the wire is never empty. Plain items carry 10 bytes (`i16 0` = no NBT, `i32 0` can-place-on, `i32 0` can-destroy); a damaged tool carries `i16 -1, u8 1, <little-endian NBT compound>, i32 0, i32 0`; a shield carries 8 more bytes (blocking ticks), 36 in all. Zenith's writers send a zero-length blob, which this build of BDS never does.
+
+**Choice:** a stack is `StackId` (identity: kind, value, aux) plus an optional **`ItemUserData`** (today only `Damage`; item NBT later: enchantments, custom name, firework colours). Stacks merge, swap and compare only when both identity and user data are equal, as BDS's own stack matching does. `ItemDurability` (max damage per item name, from the open-source `item_durability.json`) says which items wear; a stack that is not durable cannot carry damage. Persistence and the wire encode user data as the NBT the client expects; `MineBlock` (and later melee, bows, shields) mutate it server-side, and a tool at max damage breaks.
+
+**Not verified:** how BDS converts a pre-NBT saved aux into `Damage` when loading old worlds, and wear amounts per action (read from vanilla behaviour, not captured). A retail client was not used.
