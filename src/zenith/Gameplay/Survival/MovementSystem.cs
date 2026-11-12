@@ -293,5 +293,6 @@ sealed class MovementSystem : IGameSystem
         player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
         player.Session.Protocol.Inventory.SendUiInventoryContent(player);
         player.Session.Protocol.Inventory.SendArmorContent(player.Inventory);
+        player.Session.Protocol.Inventory.SendOffhandContent(player.Inventory);
     }
 }

@@ -126,6 +126,7 @@ sealed class ChunkStreamSystem : IGameSystem
         player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
         player.Session.Protocol.Inventory.SendUiInventoryContent(player);
         player.Session.Protocol.Inventory.SendArmorContent(player.Inventory);
+        player.Session.Protocol.Inventory.SendOffhandContent(player.Inventory);
         player.Session.SetHandler(new InGameSessionHandler());
     }
 
@@ -301,6 +302,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 session.Protocol.Inventory.SendInventoryContent(player.Inventory);
                 session.Protocol.Inventory.SendUiInventoryContent(player);
                 session.Protocol.Inventory.SendArmorContent(player.Inventory);
+                session.Protocol.Inventory.SendOffhandContent(player.Inventory);
                 session.Protocol.Entity.SendMovePlayerTeleport(
                     (ulong)player.RuntimeId,
                     player.PositionX, player.PositionY, player.PositionZ,

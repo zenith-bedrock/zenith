@@ -451,11 +451,11 @@ sealed class InventorySystem : IGameSystem
         _world.PersistInventory(player);
 
         var armorTouched = false;
+        var offhandTouched = false;
         foreach (var touch in wireTouches)
         {
-            if (touch.Reference.Area != InventorySlotArea.Armor) continue;
-            armorTouched = true;
-            break;
+            armorTouched |= touch.Reference.Area == InventorySlotArea.Armor;
+            offhandTouched |= touch.Reference.Area == InventorySlotArea.Offhand;
         }
 
         if (armorTouched)
@@ -463,6 +463,13 @@ sealed class InventorySystem : IGameSystem
             protocol.SendArmorContent(inventory);
             _world.PersistArmor(player);
             ArmorFanout.Broadcast(player, online);
+        }
+
+        if (offhandTouched)
+        {
+            protocol.SendOffhandContent(inventory);
+            _world.PersistOffhand(player);
+            ArmorFanout.BroadcastOffhand(player, online);
         }
 
         if (chestView is { } openChest)
@@ -647,6 +654,7 @@ sealed class InventorySystem : IGameSystem
             InventorySlotArea.Cursor => reference.Index == 0,
             InventorySlotArea.PlayerInventory => PlayerInventory.IsValidInventorySlot(reference.Index),
             InventorySlotArea.Armor => PlayerInventory.IsValidArmorSlot(reference.Index),
+            InventorySlotArea.Offhand => reference.Index == 0,
             _ => false
         };
     }

@@ -402,8 +402,9 @@ partial class InGameSessionHandler
             return;
         }
 
-        // Bedrock sends this while moving an item to offhand too. Zenith does not own an
-        // offhand domain slice yet, so acknowledge the packet without changing main hand.
+        // Bedrock sends this while moving an item to offhand too. The offhand is owned and moved by
+        // the ISR path (container 34), so this is only an echo of that move: it must not change the
+        // main hand and is not a second way to write the offhand.
         if (packet.WindowId == MobEquipmentPacket.WindowOffhand)
             return;
 

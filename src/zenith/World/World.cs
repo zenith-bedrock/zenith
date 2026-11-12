@@ -123,6 +123,18 @@ sealed class World
         return blob is not null && inventory.TryLoadArmorFromBlob(blob);
     }
 
+    public void PersistOffhand(Player.Player player)
+    {
+        if (!player.IdentityStable) return;
+        _ = _storage.PutOffhandAsync(player.Uuid, player.Inventory.PackOffhandBlob());
+    }
+
+    public bool TryLoadOffhand(Guid uuid, Player.PlayerInventory inventory)
+    {
+        var blob = _storage.GetOffhandAsync(uuid).AsTask().GetAwaiter().GetResult();
+        return blob is not null && inventory.TryLoadOffhandFromBlob(blob);
+    }
+
     /// <summary>Quit / gamemode Persist — skips unstable identity (ADR §60).</summary>
     public void PersistPlayerData(Player.Player player)
     {

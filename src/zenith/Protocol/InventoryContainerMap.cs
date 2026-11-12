@@ -22,6 +22,9 @@ static class InventoryContainerMap
     public const byte Chest = 7;
     /// <summary>Bedrock FullContainerName container id for the 4 armor slots (Phase XI.2).</summary>
     public const byte Armor = 6;
+    /// <summary>Bedrock FullContainerName container id of the offhand; its only slot is <see cref="OffhandWireSlot"/> (1, not 0).</summary>
+    public const byte Offhand = 34;
+    public const byte OffhandWireSlot = 1;
 
     /// <summary>Wire window ids — Gameplay must not reference <c>InventoryContentPacket</c> (ADR §56 hygiene).</summary>
     public const int WindowInventory = 0;
@@ -31,6 +34,8 @@ static class InventoryContainerMap
     public const int WindowUI = 124;
     /// <summary>Legacy fixed window id for the armor InventoryContentPacket (Phase XI.2).</summary>
     public const int WindowArmor = 120;
+    /// <summary>Legacy fixed window id for the offhand InventoryContentPacket (slot 0 of that window).</summary>
+    public const int WindowOffhand = 119;
     public const byte WindowTypeChest = 0;
     /// <summary>gophertunnel <c>ContainerTypeWorkbench</c> = 1 (ADR §139).</summary>
     public const byte WindowTypeWorkbench = 1;
@@ -126,6 +131,16 @@ static class InventoryContainerMap
                 reference = InventorySlotReference.Armor(slot);
                 return true;
 
+            case Offhand:
+                if (slot != OffhandWireSlot)
+                {
+                    reference = default;
+                    return false;
+                }
+
+                reference = InventorySlotReference.Offhand;
+                return true;
+
             case CraftingInput:
                 // Both grids share container id 13 on the wire (real Bedrock protocol) — decode
                 // structurally maps either range; InventorySlotResolver gates the table range on
@@ -177,6 +192,10 @@ static class InventoryContainerMap
             case InventorySlotArea.Armor when reference.Index is >= 0 and < PlayerInventory.ArmorSize:
                 containerId = Armor;
                 wireSlot = (byte)reference.Index;
+                return true;
+            case InventorySlotArea.Offhand when reference.Index == 0:
+                containerId = Offhand;
+                wireSlot = OffhandWireSlot;
                 return true;
             case InventorySlotArea.CraftGrid when reference.Index is >= 0 and < PlayerCraftUi.GridSize:
                 containerId = CraftingInput;

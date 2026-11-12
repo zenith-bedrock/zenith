@@ -265,6 +265,19 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(WorldStorageKeys.Armor(uuid), cancellationToken));
     }
 
+    public ValueTask PutOffhandAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        EnqueueWrite(WorldStorageKeys.Offhand(uuid), blob, delete: false);
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<byte[]?> GetOffhandAsync(Guid uuid, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(WorldStorageKeys.Offhand(uuid), cancellationToken));
+    }
+
     public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -223,5 +223,12 @@ static class PlayerVisibility
                 inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorLeggingsSlot),
                 inventoryProtocol.DescribeArmor(subjectInventory, PlayerInventory.ArmorBootsSlot));
         }
+
+        if (!subjectInventory.Offhand.IsEmpty)
+        {
+            recipient.Session.Protocol.Entity.SendMobOffhandEquipment(
+                (ulong)subject.RuntimeId,
+                subject.Session.Protocol.Inventory.DescribeOffhand(subjectInventory));
+        }
     }
 }

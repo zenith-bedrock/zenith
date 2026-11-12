@@ -41,6 +41,7 @@ sealed class PlayerInventory
     private readonly InventorySlot[] _slots = new InventorySlot[FullInventorySize];
     private readonly InventorySlot[] _armor = new InventorySlot[ArmorSize];
     private InventorySlot _cursor = InventorySlot.Empty;
+    private InventorySlot _offhand = InventorySlot.Empty;
 
     /// <param name="seedStarterHotbar">
     /// Survival default seed. Creative joins use empty hotbar (client UI supplies items) — ADR §31.
@@ -73,6 +74,7 @@ sealed class PlayerInventory
         Array.Fill(_slots, InventorySlot.Empty);
         Array.Fill(_armor, InventorySlot.Empty);
         _cursor = InventorySlot.Empty;
+        _offhand = InventorySlot.Empty;
     }
 
     public static bool IsValidHotbarSlot(int slot) => slot is >= 0 and < HotbarSize;
@@ -111,6 +113,29 @@ sealed class PlayerInventory
     }
 
     public byte[] PackArmorBlob() => SlotBlob.Pack(_armor);
+
+    /// <summary>The offhand stack (ISR container 34 slot 1; InventoryContent window 119).</summary>
+    public InventorySlot Offhand => _offhand;
+
+    public bool TrySetOffhand(StackId id, int count)
+    {
+        if (!IsValidStackCount(count)) return false;
+        _offhand = count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air)
+            ? InventorySlot.Empty
+            : new InventorySlot(id, count);
+        return true;
+    }
+
+    public bool TryLoadOffhandFromBlob(ReadOnlySpan<byte> data)
+    {
+        Span<InventorySlot> slots = stackalloc InventorySlot[1];
+        if (!SlotBlob.TryUnpack(data, slots))
+            return false;
+        _offhand = slots[0];
+        return true;
+    }
+
+    public byte[] PackOffhandBlob() => SlotBlob.Pack([_offhand]);
 
     public static bool IsValidLocation(int slot) =>
         slot == CursorSlot || IsValidInventorySlot(slot);
@@ -323,13 +348,14 @@ sealed class PlayerInventory
     {
         var slots = new InventorySlot[FullInventorySize];
         Array.Copy(_slots, slots, FullInventorySize);
-        return new InventorySnapshot(slots, _cursor);
+        return new InventorySnapshot(slots, _cursor, _offhand);
     }
 
     public void RestoreSnapshot(in InventorySnapshot snapshot)
     {
         Array.Copy(snapshot.Slots, _slots, FullInventorySize);
         _cursor = snapshot.Cursor;
+        _offhand = snapshot.Offhand;
     }
 
     public InventorySlot[] SnapshotMainInventory()
@@ -360,8 +386,9 @@ sealed class PlayerInventory
     }
 }
 
-readonly struct InventorySnapshot(InventorySlot[] slots, InventorySlot cursor)
+readonly struct InventorySnapshot(InventorySlot[] slots, InventorySlot cursor, InventorySlot offhand)
 {
     public InventorySlot[] Slots { get; } = slots;
     public InventorySlot Cursor { get; } = cursor;
+    public InventorySlot Offhand { get; } = offhand;
 }

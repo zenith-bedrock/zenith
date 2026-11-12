@@ -16,6 +16,7 @@ static class WorldStorageKeys
     public const string ColumnPrefix = "c:";
     public const string InventoryPrefix = "inv:";
     public const string ArmorPrefix = "ar:";
+    public const string OffhandPrefix = "oh:";
     public const string PlayerDataPrefix = "pd:";
 
     /// <summary>Single fixed key — world generator identity (Phase XXIV, see <see cref="WorldMetadata"/>).</summary>
@@ -84,6 +85,9 @@ static class WorldStorageKeys
 
     public static byte[] Armor(Guid uuid) =>
         Encoding.UTF8.GetBytes($"{ArmorPrefix}{uuid.ToString("D").ToLowerInvariant()}");
+
+    public static byte[] Offhand(Guid uuid) =>
+        Encoding.UTF8.GetBytes($"{OffhandPrefix}{uuid.ToString("D").ToLowerInvariant()}");
 
     public static byte[] PlayerData(Guid uuid) =>
         Encoding.UTF8.GetBytes($"{PlayerDataPrefix}{uuid.ToString("D").ToLowerInvariant()}");

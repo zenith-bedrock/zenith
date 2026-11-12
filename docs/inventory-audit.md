@@ -31,8 +31,7 @@ the closest thing to "what a real client sends and expects back".
 2. **`Consume` and `CraftResultsDeprecated` are mapped to no-ops.** Consumption is recomputed server-side (from the
    grid for `CraftRecipe`, from grid + inventory for `CraftRecipeAuto`), so a client whose `Consume` list disagrees
    with the server's view is never detected. Likely benign for vanilla clients; worth a test with a mismatching request.
-3. **No offhand container (34).** `InventoryContainerMap.TryMap` has no entry, so any request touching the offhand is
-   rejected (and `Hand != Mainhand` use is dropped).
+3. ~~No offhand container (34)~~ — **implemented, see Fixed.**
 4. **Only chest / personal / crafting-table windows exist.** Furnace, anvil, grindstone, loom, barrel, shulker,
    brewing, trading … are all unmapped (every request touching them is rejected, which is at least safe).
 5. **`MineBlock` echoes the held stack without mutating** (no durability).
@@ -77,3 +76,5 @@ the closest thing to "what a real client sends and expects back".
   reading code.
 - Add item-conservation property tests across every store (player, cursor, craft grids, created output, chest) for
   randomised ISR sequences, per the single-writer/conservation rule in `AGENTS.md`.
+
+- **Offhand (gap 3).** `InventorySlotArea.Offhand` / `PlayerInventory.Offhand`: ISR container 34 slot 1, InventoryContent window 119, persisted under its own storage key (`oh:`), restored on login, resent on spawn/respawn/dimension change, fanned out to peers via MobEquipment window 119 (also on join announce), dropped as death loot, rolled back with the rest of a failed request. Tests in `OffhandTests`. **Not verified with a retail client.** Known limits: no per-item "allowed in offhand" check (the data is not in the BDS packs for legacy items, so any stack is accepted); the client's own MobEquipment window-119 packet is only acknowledged, the ISR move is the single writer; no use/swap (`Hand != Mainhand`) behaviour; a death-loot test for the offhand is missing.

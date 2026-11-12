@@ -239,6 +239,19 @@ sealed class EntityProtocol
         });
     }
 
+    /// <summary>Peer-visible offhand: MobEquipment on the legacy offhand window (slot 0 of it).</summary>
+    public void SendMobOffhandEquipment(ulong actorRuntimeId, NetworkItemStack item)
+    {
+        _session.SendDataPacket(new MobEquipmentPacket
+        {
+            ActorRuntimeId = (long)actorRuntimeId,
+            Item = item,
+            InventorySlot = 0,
+            HotbarSlot = 0,
+            WindowId = MobEquipmentPacket.WindowOffhand
+        });
+    }
+
     /// <summary>Peer-visible armor (Phase XI.2) — head/torso/legs/feet; body slot unused by players.</summary>
     public void SendMobArmorEquipment(
         ulong actorRuntimeId, NetworkItemStack head, NetworkItemStack torso, NetworkItemStack legs, NetworkItemStack feet)
