@@ -28,6 +28,8 @@ internal sealed class JoinStaticCommand : Command<JoinStaticCommand.Settings>
         "camera_spline",
         "trim_data",
         "game_rules_changed",
+        "sync_world_clocks",
+        "unlocked_recipes",
     ];
 
     public sealed class Settings : CommandSettings

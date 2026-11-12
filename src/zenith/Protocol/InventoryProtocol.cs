@@ -40,6 +40,20 @@ sealed class InventoryProtocol
     public void SendCraftingData() =>
         _session.SendDataPacket(CraftingDataBuilder.Build(_session.Context.Recipes, _session.Context.ItemPalette));
 
+    /// <summary>
+    /// The recipe book a new player starts with: what stock BDS unlocks, kept only where this server has the recipe (an id the
+    /// client has no definition for would be an inert entry). Progressive unlocking is not modelled, so this is all a player ever has.
+    /// </summary>
+    public void SendInitiallyUnlockedRecipes()
+    {
+        var recipes = _session.Context.Recipes;
+        _session.SendDataPacket(new UnlockedRecipesPacket
+        {
+            UnlockType = UnlockedRecipesPacket.InitiallyUnlocked,
+            RecipeIds = UnlockedRecipesPacket.InitialRecipeIdsOfBds.Where(id => recipes.TryGetNetId(id, out _)).ToArray(),
+        });
+    }
+
 
     /// <summary>Façade — see <see cref="CreativeContentBuilder"/>.</summary>
     internal static CreativeContentPacket BuildCreativeContent(CreativeCatalog catalog, ItemPalette palette) =>
