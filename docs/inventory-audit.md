@@ -34,7 +34,7 @@ the closest thing to "what a real client sends and expects back".
 3. ~~No offhand container (34)~~ — **implemented, see Fixed.**
 4. **Only chest / personal / crafting-table windows exist.** Furnace, anvil, grindstone, loom, barrel, shulker,
    brewing, trading … are all unmapped (every request touching them is rejected, which is at least safe).
-5. **`MineBlock` echoes the held stack without mutating** (no durability).
+5. **Durability (ADR 148).** Stacks carry `Damage`, survival block breaking wears the held tool and breaks it at the maximum. Still open: wear from other actions, and the ISR `MineBlock` / `durability_correction` semantics (echo only).
 6. **`Transfer`/`Drop` with `count == 0` means "whole stack"** in `InventorySystem.Apply`; the wire never sends 0 for a
    real move, so this is an input-validation question, not a feature.
 
