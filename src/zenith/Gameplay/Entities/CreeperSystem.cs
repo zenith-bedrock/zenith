@@ -51,6 +51,7 @@ sealed class CreeperSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<CreeperState> _creepers;
     private readonly MobCore _mob;
+    private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
@@ -62,6 +63,7 @@ sealed class CreeperSystem : IGameSystem
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Creeper, world, players, stores, itemPalette);
         _replication = _mob.Replication;
+        _body = new GroundMobBody(world, stores, players);
         _creepers = new ComponentStore<CreeperState>(stores.Entities);
     }
 
@@ -113,7 +115,7 @@ sealed class CreeperSystem : IGameSystem
 
             if (_stores.Entities.IsAlive(id))
             {
-                ApplyGravity(id);
+                _body.ApplyGravity(id);
                 ReconcileViewers(id, online);
             }
         }
@@ -346,15 +348,5 @@ sealed class CreeperSystem : IGameSystem
         p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dx, dz), LookMath.DefaultMaxTurnDegreesPerTick);
     }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
-    private void ApplyGravity(EntityId id)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        ref var vel = ref _stores.Velocities.GetRef(id);
-        var y = pos.Y;
-        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.Y = y;
-    }
 
 }

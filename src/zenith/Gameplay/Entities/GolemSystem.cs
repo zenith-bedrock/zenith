@@ -58,6 +58,7 @@ sealed class GolemSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<GolemState> _golems;
     private readonly MobCore _mob;
+    private readonly GroundMobBody _body;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = [];
     private bool _bootstrapSpawned;
@@ -70,6 +71,7 @@ sealed class GolemSystem : IGameSystem
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Golem, world, players, stores, itemPalette);
         _replication = _mob.Replication;
+        _body = new GroundMobBody(world, stores, players);
         _golems = new ComponentStore<GolemState>(stores.Entities);
     }
 
@@ -118,7 +120,7 @@ sealed class GolemSystem : IGameSystem
             if (state.IsEnraged)
                 TrySlam(id, online, clock);
 
-            ApplyGravity(id);
+            _body.ApplyGravity(id);
             ReconcileViewers(id, online);
         }
 
@@ -225,35 +227,14 @@ sealed class GolemSystem : IGameSystem
         var dxn = dx / length;
         var dzn = dz / length;
         var distance = MathF.Min(MovePerTick, length - AttackDistance);
-        if (TryMove(id, pos.X + dxn * distance, pos.Z + dzn * distance))
+        if (_body.TryMove(id, pos.X + dxn * distance, pos.Z + dzn * distance))
         {
             ref var p = ref _stores.Positions.GetRef(id);
             p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(dxn, dzn), LookMath.DefaultMaxTurnDegreesPerTick);
         }
     }
 
-    /// <summary>Concrete Golem rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>).</summary>
-    private bool TryMove(EntityId id, float x, float z)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.X = x;
-        p.Y = resolvedY;
-        p.Z = z;
-        return true;
-    }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
-    private void ApplyGravity(EntityId id)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        ref var vel = ref _stores.Velocities.GetRef(id);
-        var y = pos.Y;
-        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.Y = y;
-    }
 
     private void TryAttackPlayer(EntityId id, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online)
     {

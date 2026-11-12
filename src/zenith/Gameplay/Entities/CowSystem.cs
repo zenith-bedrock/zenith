@@ -40,6 +40,7 @@ sealed class CowSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<CowState> _cows;
     private readonly MobCore _mob;
+    private readonly GroundMobBody _body;
     private readonly StackId _feedItem;
     private readonly Random _random;
     private readonly ActorReplication _replication;
@@ -55,6 +56,7 @@ sealed class CowSystem : IGameSystem
         _stores = stores;
         _mob = new MobCore(MobDefinitions.Cow, world, players, stores, itemPalette);
         _replication = _mob.Replication;
+        _body = new GroundMobBody(world, stores, players);
         _cows = new ComponentStore<CowState>(stores.Entities);
         _feedItem = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
         _random = random ?? new Random();
@@ -92,7 +94,7 @@ sealed class CowSystem : IGameSystem
             if (!_stores.Entities.IsAlive(id)) continue;
             TryHandleFeed(id, online, clock);
             Wander(id, clock);
-            ApplyGravity(id);
+            _body.ApplyGravity(id);
             ReconcileViewers(id, online);
         }
 
@@ -227,7 +229,7 @@ sealed class CowSystem : IGameSystem
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         var desiredX = pos.X + state.WanderDirectionX * MovePerTick;
         var desiredZ = pos.Z + state.WanderDirectionZ * MovePerTick;
-        if (!TryMove(id, desiredX, desiredZ))
+        if (!_body.TryMove(id, desiredX, desiredZ))
         {
             ref var retryState = ref _cows.GetRef(id);
             retryState.WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
@@ -251,27 +253,6 @@ sealed class CowSystem : IGameSystem
 
     }
 
-    /// <summary>Concrete Cow rule: where to step. Validity itself is shared (<see cref="GroundMobMovement"/>, Phase XV).</summary>
-    private bool TryMove(EntityId id, float x, float z)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return false;
-        if (!GroundMobMovement.TryMoveHorizontal(_world, pos.X, pos.Y, pos.Z, x, z, out var resolvedY)) return false;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.X = x;
-        p.Y = resolvedY;
-        p.Z = z;
-        return true;
-    }
 
-    /// <summary>Phase XXIX: one tick of gravity/falling/landing, reusing <see cref="Velocity.Y"/> as a downward fall-speed magnitude.</summary>
-    private void ApplyGravity(EntityId id)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        ref var vel = ref _stores.Velocities.GetRef(id);
-        var y = pos.Y;
-        if (!GroundMobMovement.ResolveVertical(_world, pos.X, pos.Z, ref y, ref vel.Y, out _)) return;
-        ref var p = ref _stores.Positions.GetRef(id);
-        p.Y = y;
-    }
 
 }
