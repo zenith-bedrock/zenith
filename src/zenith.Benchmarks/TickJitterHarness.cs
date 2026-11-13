@@ -19,7 +19,12 @@ static class TickJitterHarness
 
         Report("Task.Delay + TickCount64 (previous)", MeasureTaskDelay(ticks));
         using var waiter = new PreciseWaiter();
-        Report($"PreciseWaiter [{waiter.Mode}, spin margin {waiter.SpinMargin.TotalMilliseconds} ms] (current)", MeasurePrecise(ticks, waiter));
+        // Same thread priority as the real loop: measured on a normal-priority thread the tail is OS preemption, not the pacing.
+        (double[] LatenessMs, double CpuMs, double WallMs) precise = default;
+        var loopLike = new Thread(() => precise = MeasurePrecise(ticks, waiter)) { Priority = GameLoop.LoopThreadPriority, IsBackground = true };
+        loopLike.Start();
+        loopLike.Join();
+        Report($"PreciseWaiter [{waiter.Mode}, spin margin {waiter.SpinMargin.TotalMilliseconds} ms, {GameLoop.LoopThreadPriority} thread] (current)", precise);
         return 0;
     }
 

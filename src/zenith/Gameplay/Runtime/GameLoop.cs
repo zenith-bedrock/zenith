@@ -25,6 +25,13 @@ sealed class GameLoop
     /// <summary>How far behind schedule the loop may fall and still catch up by running ticks back to back; beyond it the time is given up.</summary>
     public const int MaxCatchUpTicks = 5;
 
+    /// <summary>
+    /// Above normal: at normal priority the loop thread is preempted by ordinary desktop/background work for 2-6 ms at a time even while
+    /// it spins (measured: 2-6 ms stalls at Normal, none above 0.3 ms at AboveNormal, 20 s each). Not Highest: that bought nothing more
+    /// and competes with the OS's own threads.
+    /// </summary>
+    internal const ThreadPriority LoopThreadPriority = ThreadPriority.AboveNormal;
+
     public GameClock Clock => _clock;
 
     public GameLoop(GameClock clock, PlayerManager players, ILogger logger, DiagnosticsRuntime? diagnostics = null, TimingMetric tickTiming = default, TickPacingMetrics pacing = default)
@@ -85,7 +92,7 @@ sealed class GameLoop
         {
             Name = "zenith-game-loop",
             IsBackground = true,
-            Priority = ThreadPriority.AboveNormal
+            Priority = LoopThreadPriority
         };
         thread.Start();
         return completion.Task;
