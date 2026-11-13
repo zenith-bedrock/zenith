@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Zenith.Tests;
 
+[Collection(ExclusiveCollection.Name)]
 public sealed class ZenithServerLifecycleTests
 {
     [Fact]

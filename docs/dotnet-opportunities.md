@@ -24,7 +24,7 @@ Scope and limits: only Debug has a handler, because it is the only level meant t
 14 `private readonly object _x` lock fields, 0 uses of `Lock`. Mechanical swap; slightly cheaper and the compiler/analyzers reject misuse (locking on the wrong type). Fits the rule that locks live only at network handoff boundaries.
 
 ## 5. `FrozenDictionary` / `FrozenSet` for read-only catalogs — open, profile first
-Item, block, recipe, mob and spawn catalogs are built at boot and only read. Use only where a profile shows hot lookups; one file uses it today.
+Item, block, recipe, mob and spawn catalogs are built at boot and only read. Use only where a profile shows hot lookups. `Tools` and `BlockLoot` now use `FrozenDictionary` as their immutable published generation (done for race-safety, not speed); the other catalogs are still open.
 
 ## 6. Warnings as errors — DONE (analysis level still default)
 `TreatWarningsAsErrors` is on in `Directory.Build.props` (Release and Debug both verified with `--no-incremental`). NuGet audit advisories (`NU1901`-`NU1904`) are excluded via `WarningsNotAsErrors`: they come from an external feed and would otherwise break unrelated builds. Still open from this item: a higher `AnalysisMode` and `EnforceCodeStyleInBuild`, which would first need their existing findings fixed. Original note: A clean build has 0 warnings (11 were fixed on 2026-11-13: xUnit analyzer findings in tests, and a dead `length > MaxLength` check in `nethernet` `Der.Length`), so `TreatWarningsAsErrors` costs nothing now and stops regressions. Also consider `AnalysisMode` above default and `EnforceCodeStyleInBuild`. No third-party analyzers are used beyond the Microsoft ones.

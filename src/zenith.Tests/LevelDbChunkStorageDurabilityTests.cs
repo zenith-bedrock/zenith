@@ -48,8 +48,8 @@ public sealed class LevelDbChunkStorageDurabilityTests
 
             // No FlushAsync, no Get* call (which would force-drain itself) — only the periodic
             // worker can be responsible for this landing. Bound is generous vs. the 50ms poll to
-            // avoid CI flakiness, not because the guarantee itself is looser.
-            await WaitForEntryCountAsync(storage, expected: 1, TimeSpan.FromSeconds(2));
+            // avoid flakiness when the whole suite saturates the thread pool, not because the guarantee itself is looser; the wait returns as soon as the entry lands, so a large bound costs nothing.
+            await WaitForEntryCountAsync(storage, expected: 1, TimeSpan.FromSeconds(20));
         }
         finally
         {
@@ -69,7 +69,7 @@ public sealed class LevelDbChunkStorageDurabilityTests
             await storage.PutArmorAsync(uuid, [2]);
             await storage.PutPlayerDataAsync(uuid, [3]);
 
-            await WaitForEntryCountAsync(storage, expected: 3, TimeSpan.FromSeconds(2));
+            await WaitForEntryCountAsync(storage, expected: 3, TimeSpan.FromSeconds(20));
         }
         finally
         {

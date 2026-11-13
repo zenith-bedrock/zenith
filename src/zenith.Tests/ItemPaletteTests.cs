@@ -45,7 +45,6 @@ public class ItemPaletteTests
     [Fact]
     public void Blocks_TryGetName_round_trips_loaded_ids()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         Assert.True(Blocks.TryGetName(Blocks.Stone, out var stoneName));
         Assert.Equal("minecraft:stone", stoneName);
@@ -55,7 +54,6 @@ public class ItemPaletteTests
     [Fact]
     public void Block_to_item_ids_align_for_starter_blocks()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var items = ItemPaletteLoader.FromEmbeddedResource();
 

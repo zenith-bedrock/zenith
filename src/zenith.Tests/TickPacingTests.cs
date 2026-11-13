@@ -9,7 +9,7 @@ namespace Zenith.Tests;
 /// Wall-clock timing assertions: they run alone (never alongside the CPU-heavy tests xunit runs in parallel), because a loaded machine
 /// delays any thread by tens of milliseconds and would fail them for reasons unrelated to the pacing.
 /// </summary>
-[Collection(TimingCollection.Name)]
+[Collection(ExclusiveCollection.Name)]
 public sealed class TickPacingTests
 {
     private const long Interval = 50;
@@ -166,8 +166,3 @@ public sealed class TickPacingTests
     }
 }
 
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class TimingCollection
-{
-    public const string Name = "Wall-clock timing";
-}

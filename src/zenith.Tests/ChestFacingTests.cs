@@ -7,7 +7,6 @@ public class ChestFacingTests
 {
     public ChestFacingTests()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
     }
 

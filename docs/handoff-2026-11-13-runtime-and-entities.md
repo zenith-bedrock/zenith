@@ -38,8 +38,8 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 
 ## Open work (the user's weakness list, minus what is done)
 1. ~~`Player` split~~ done: `Intents`/`Dig`/`Windows`/`Effects`/`Replicated` components (`docs/architecture.md` "Player").
-2. 252 "ADR §" references / 148+ ADRs and a ~2-minute test suite (item 6): consolidate, make the suite faster.
+2. 252 "ADR §" references / 148+ ADRs (item 6): consolidate. The test suite now runs in parallel (~1m20).
 3. Item 7: nothing validated with a retail client; night spawns never run live; `Consume`/`CraftResultsDeprecated` are no-ops; only chest/personal/crafting-table windows; `count==0` means whole stack; item/creative/biome/loot/trading catalogs not yet from the pack source (see the 2026-11-12 handoff, "Open work").
 4. Per-system tick-cost benchmark exists (`--runtime-load --mixed-roster`); extend it to bat/villager/fish/creeper/enderman/golem (it covers zombie, minecart, cow, spider, skeleton, projectile).
-5. Audit findings (`docs/audit-2026-11-13-architecture-and-dx.md`; items 1 and 4 done): enable test parallelism, split `IntentContractTests`, clean stale §149 text, tighten `Player` setters, consolidate ADRs.
+5. Audit findings (`docs/audit-2026-11-13-architecture-and-dx.md`; items 1-4 done: parallel tests, `IntentContractTests` split, stale §149 text): tighten `Player` setters (item 5), consolidate ADRs (item 6).
 6. .NET opportunities (`docs/dotnet-opportunities.md`; item 1, allocation-free Debug logging in both `ILogger` and `INetherNetLogger`, is done): ReadyToRun + GC pause measurement, `TimeProvider` in tests, `System.Threading.Lock`. `TreatWarningsAsErrors` is on (NuGet audit excluded). Check warnings with `--no-incremental`.

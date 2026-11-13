@@ -223,7 +223,6 @@ public class TerrainProviderTests
     [Fact]
     public async Task Noise_spawn_radius_4_loads_81_columns()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var world = new World.World(new InMemoryChunkStorage(), terrain: new NoiseTerrainProvider(42));
         // Warm up JIT/codegen so this correctness test exercises the same path as a join.
@@ -259,7 +258,6 @@ public class TerrainProviderTests
     [Fact]
     public void Noise_classic_flat_Y_is_solid_spawn_feet_is_surface()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var n = new NoiseTerrainProvider(1);
         var t = n.GetBaseColumn(0, 0);
@@ -275,7 +273,6 @@ public class TerrainProviderTests
     [Fact]
     public void World_TryHealSpawnFeet_lifts_buried_flat_pose_on_noise()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var world = new World.World(new InMemoryChunkStorage(), terrain: new NoiseTerrainProvider(1));
         var player = new Player.Player("healee", null!, runtimeId: 1, Guid.NewGuid())

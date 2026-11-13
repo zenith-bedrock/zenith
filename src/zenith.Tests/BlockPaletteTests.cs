@@ -35,7 +35,6 @@ public class BlockPaletteTests
     [Fact]
     public void Blocks_Load_from_embedded_matches_expected_hashes()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         Assert.Equal(ExpectedAir, Blocks.Air);
         Assert.Equal(ExpectedStone, Blocks.Stone);
@@ -45,7 +44,6 @@ public class BlockPaletteTests
     [Fact]
     public void Chest_Require_name_is_south_and_cardinals_resolve()
     {
-        Blocks.ResetForTests();
         var palette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(palette);
 
@@ -73,7 +71,6 @@ public class BlockPaletteTests
     [Fact]
     public void Reverse_map_covers_dump_entries_outside_curated_facade()
     {
-        Blocks.ResetForTests();
         var palette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(palette);
 
@@ -97,7 +94,6 @@ public class BlockPaletteTests
     [Fact]
     public void IsPlaceable_allowlists_starter_set_not_arbitrary_palette_rids()
     {
-        Blocks.ResetForTests();
         var palette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(palette);
 
