@@ -1104,6 +1104,11 @@ internal static class RuntimeLoadHarness
         }
     }
 
+    /// <summary>
+    /// Counts what the RakNet sessions hand to the socket. The peers never acknowledge, so the totals include the sessions' own
+    /// resends and keep-alives, which depend on wall-clock time: a slower run reports MORE datagrams (the same mixed roster measured
+    /// 2.5k at 15 ms ticks, 14.5k with 10 ms added per tick, 39.6k with 40 ms). Compare egress only between runs with the same pacing.
+    /// </summary>
     private sealed class RecordingRakNetServer : RakNetServer
     {
         private long _bytes;

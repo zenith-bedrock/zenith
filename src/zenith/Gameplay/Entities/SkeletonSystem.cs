@@ -68,6 +68,9 @@ sealed class SkeletonSystem : IGameSystem
 
     /// <summary>Cross-species dispatch seam (Phase XXI/XXII) — "is this ECS entity a skeleton," nothing more.</summary>
     internal bool Owns(EntityId id) => _skeletons.Has(id);
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedMoveCount => _replication.MoveCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
     internal long DespawnCount => _replication.DespawnCount;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
