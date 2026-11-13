@@ -55,6 +55,15 @@ Three distinct replication-gating mechanisms exist: `ActorInterest` (ground mob,
 Projectile), chunk-knowledge (Floor Drop), and unconditional broadcast (Falling Block). These are
 recorded as **confirmed differences**, not gaps to close.
 
+**Viewer re-derivation cost.** An ECS species (`ActorReplication`) does not re-check every online player for every actor
+every tick. `ViewerInterestTracker` snapshots, once per species tick (`BeginTick`, first thing in `Tick`), which players'
+interest-relevant state changed (known-column version via `PlayerChunkTracker.Version`, view radius, in-game/alive). An actor
+that stayed in its chunk since last tick is reconciled only against those players; one that moved, is new, or skipped a tick
+is reconciled against everyone. Contract: a change made later in the same tick (a player dying to a mob attack) is applied one
+tick later. Measured with `--runtime-load --mixed-roster --actor-players 100 --actors 1000`: mean tick ~21-24 ms before,
+~13-16 ms after, per-species system time down ~40%. Bat, Villager and Projectile still use the older per-pair
+`ViewerReconciliation.Sync` over all players (they are not ECS species yet).
+
 **Phase XVII note:** "Flying Mob" is listed as its own row for readability, but `Bat` is not a
 separate runtime type from `IDamageableActor`'s perspective — it implements the same interface as
 every ground mob and reuses `GroundMobCombat`/`GroundMobLifecycle` unmodified. Only its movement

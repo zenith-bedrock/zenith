@@ -15,6 +15,13 @@ sealed class PlayerChunkTracker
     private PreSpawnRequest? _pendingPreSpawn;
     private readonly List<(int X, int Z)> _scratch = new();
     private int _nextEpoch = 1;
+    private int _version;
+
+    /// <summary>
+    /// Bumped on every change to the set of known columns (add or remove). Lets a reader that derived something from <see cref="Knows"/>
+    /// (which actors this player can see) tell cheaply whether that derivation is stale, without comparing the set.
+    /// </summary>
+    public int Version => Volatile.Read(ref _version);
 
     /// <summary>Raio de view em chunks (confirmado ao cliente).</summary>
     public int Radius { get; set; }
@@ -93,6 +100,7 @@ sealed class PlayerChunkTracker
             if (!_known.Add(key)) return false;
             epoch = _nextEpoch++;
             _epoch[key] = epoch;
+            _version++;
             return true;
         }
     }
@@ -109,7 +117,7 @@ sealed class PlayerChunkTracker
         lock (_gate)
         {
             var key = (chunkX, chunkZ);
-            _known.Remove(key);
+            if (_known.Remove(key)) _version++;
             _epoch.Remove(key);
         }
     }
@@ -121,7 +129,7 @@ sealed class PlayerChunkTracker
         {
             var key = (chunkX, chunkZ);
             if (!_epoch.TryGetValue(key, out var e) || e != epoch) return false;
-            _known.Remove(key);
+            if (_known.Remove(key)) _version++;
             _epoch.Remove(key);
             return true;
         }
@@ -183,6 +191,8 @@ sealed class PlayerChunkTracker
                 _epoch.Remove(c);
             }
 
+            if (_scratch.Count > 0) _version++;
+
             return _scratch;
         }
     }
@@ -201,6 +211,8 @@ sealed class PlayerChunkTracker
                 _epoch[c] = _nextEpoch++;
                 added.Add(c);
             }
+
+            if (added.Count > 0) _version++;
         }
 
         return added;

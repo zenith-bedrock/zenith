@@ -90,6 +90,7 @@ sealed class GolemSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _replication.BeginTick(online);
         _currentTick = clock.CurrentTick;
         if (online.Count == 0) return;
 

@@ -72,6 +72,7 @@ sealed class SkeletonSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _replication.BeginTick(online);
         _tickScratch.Clear();
         _tickScratch.AddRange(_skeletons.Entities);
 
@@ -186,9 +187,21 @@ sealed class SkeletonSystem : IGameSystem
     private Player.Player? FindTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
         if (!_stores.Positions.TryGet(id, out var pos)) return null;
-        return online.Where(p => p.IsInGame && !p.IsDead)
-            .OrderBy(p => (p.PositionX - pos.X) * (p.PositionX - pos.X) + (p.PositionZ - pos.Z) * (p.PositionZ - pos.Z))
-            .FirstOrDefault(p => (p.PositionX - pos.X) * (p.PositionX - pos.X) + (p.PositionZ - pos.Z) * (p.PositionZ - pos.Z) <= DetectionDistance * DetectionDistance);
+        Player.Player? nearest = null;
+        var best = float.PositiveInfinity;
+        var reach = DetectionDistance * DetectionDistance;
+        foreach (var player in online)
+        {
+            if (!player.IsInGame || player.IsDead) continue;
+            var dx = player.PositionX - pos.X;
+            var dz = player.PositionZ - pos.Z;
+            var distance = dx * dx + dz * dz;
+            if (distance > reach || distance >= best) continue;
+            best = distance;
+            nearest = player;
+        }
+
+        return nearest;
     }
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
