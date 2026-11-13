@@ -42,6 +42,8 @@ static class MobDefinitions
     public static MobDefinition Enderman => Get("Enderman");
     public static MobDefinition Fish => Get("Fish");
     public static MobDefinition Minecart => Get("Minecart");
+    public static MobDefinition Bat => Get("Bat");
+    public static MobDefinition Villager => Get("Villager");
 
     internal static IReadOnlyDictionary<string, MobDefinition> Parse(Stream json)
     {

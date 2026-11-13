@@ -6,8 +6,8 @@ namespace Zenith.Gameplay.Entities;
 /// stronger evidence than the "third instance" bar <see cref="GroundMobMovement"/> used. Deliberately
 /// a pure decision function, not a store or a mob type: it reads a position/tick pair and returns a
 /// decision plus the updated "last seen" tick: the caller still owns the field, the actual removal,
-/// and any replication cleanup — the same ownership split <see cref="GroundMobCombat"/> uses for
-/// store removal. This is the third small orthogonal primitive (combat, movement, lifecycle) rather
+/// and any replication cleanup — the same ownership split <see cref="DamageableActorCombat"/> uses for
+/// removal. This is the third small orthogonal primitive (combat, movement, lifecycle) rather
 /// than one primitive growing three responsibilities — see
 /// docs/history/phases/phase-xvi-entity-runtime-findings.md for why that distinction matters.
 /// </summary>

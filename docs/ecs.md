@@ -21,25 +21,16 @@ narrative.
 
 ## Scope
 
-**Migrated (ECS is the sole authoritative store):** Zombie, Minecart, Projectile (Phase XXI); Cow,
-Skeleton, Spider (Phase XXII); Fish, Creeper, Enderman, Golem (Creeper/Enderman/Golem/Fish
-migration, docs/decisions.md ADR after §131). Ten species total.
-
-**Not migrated (still the pre-existing OOP `IDamageableActor` + per-species `*Store` pattern):**
-Bat, Villager — two species, still correctly served by
-`GroundMobCombat`/`GroundMobMovement`/`DespawnLifecycle` and `IDamageableActor`. Each has a genuine
-structural blocker, not just distinct behavior — see
-[Retirement gate](#retirement-gate-groundmobcombat-vs-damageableactorcombat).
+**Migrated (ECS is the sole authoritative store):** every actor species: Zombie, Minecart, Projectile (Phase XXI);
+Cow, Skeleton, Spider (Phase XXII); Fish, Creeper, Enderman, Golem; Bat and Villager (ADR §149, the last two; the
+"schema blockers" recorded earlier for them did not exist). Twelve species, no pre-ECS roster left.
 
 **Never in scope:** Player, sessions, inventory, world storage, packets, transport. This is a
 world-actor runtime, not a general application data model. See `ARCHITECTURE.md`'s "ECS decision
 boundary" for the standing rule this phase operationalized for one concrete slice.
 
-There is exactly one ECS-native combat helper, `DamageableActorCombat`
-(`src/zenith/Gameplay/DamageableActorCombat.cs`), structurally parallel to the OOP `GroundMobCombat`
-but reading components instead of an `IDamageableActor` object. Both exist simultaneously and will
-continue to until the migrated slice covers enough of the roster that duplicating the pattern
-outweighs maintaining two combat helpers — see [Retirement gate](#retirement-gate-groundmobcombat-vs-damageableactorcombat).
+There is exactly one combat helper, `DamageableActorCombat` (over the shared `DamageableActorCombatCore`), reading
+components. The older object-based `GroundMobCombat` was deleted with the last species that used it (ADR §149).
 
 ---
 
@@ -352,74 +343,18 @@ has needed them yet:
 
 ---
 
-## Retirement gate: `GroundMobCombat` vs. `DamageableActorCombat`
+## Retirement gate: closed (ADR §149)
 
-Both combat helpers are real and both stay, but the gate is now substantially closed.
-`GroundMobCombat<TMob>` (generic over `IDamageableActor`) serves only the 2 remaining unmigrated
-species: Bat, Villager. `DamageableActorCombat` (entity-id + `EntityRuntime`) serves the 10
-ECS-authoritative species: Zombie, Minecart, Cow, Skeleton, Spider, Fish, Creeper, Enderman, Golem,
-Projectile (Projectile deals damage, never receives it, so it never calls either helper as a
-target — it calls `DamageableActorCombat.TryApplyDamage` on whatever it hits, via `DamageDispatch`).
+`GroundMobCombat<TMob>` and `IDamageableActor` served the species not yet on the ECS; the last two (Bat, Villager) migrated
+in ADR §149 and both were deleted. History, kept short because the code no longer has the split:
 
-**Update (ADR §131, `docs/decisions.md`):** the storage split documented in this section is correct
-and stays — but the *combat sequence itself* (damage/loot/XP/replication/destruction) had been
-duplicated byte-for-byte between the two helpers since Phase XXI, differing only in how a mob's
-state was read (object properties vs. ECS component lookups). That duplication is now closed:
-`GroundMobCombat` and `DamageableActorCombat` are both thin adapters over one shared
-`DamageableActorCombatCore`, built from a small `DamageableActorView` snapshot either backend can
-produce cheaply. No storage migrated, no public signature changed, no call site touched — see ADR
-§131 for what shipped.
+- ADR §131 had already collapsed the duplicated combat sequence into `DamageableActorCombatCore`; only the storage differed.
+- Creeper, Enderman, Golem and Fish proved that "distinct per-tick behaviour" is not "needs new ECS infrastructure".
+- Bat and Villager were listed as blocked by a missing pitch on `Position` and a missing inventory-shaped component. Neither was
+  true: Bat replicates only yaw (like Fish) and Villager's offer is two `StackId` fields in `VillagerState`.
 
-**Update (Creeper/Enderman/Golem/Fish migration, ADR after §131):** Phase XXII's table below listed
-6 species as non-mechanical to migrate, on the grounds that each had a lifecycle/damage/targeting/
-movement shape neither combat helper modeled. Re-reading the actual per-species logic (not just the
-one-line summary) showed that framing conflated "has distinct per-tick behavior" with "requires new
-ECS infrastructure" for 4 of the 6:
-
-- **Creeper's area explosion** and **Golem's area slam** already looped `PlayerDamage.ApplyCore`
-  over `online` players using world-space coordinates — neither ever touched the mob's own storage
-  except its own position. Area damage was never a missing ECS primitive; it was a plain loop that
-  worked identically regardless of what backed the mob's state.
-- **Enderman's aggro/teleport** and **Golem's enrage/target-retention** were exactly the shape
-  `SpiderState`/`ZombieState` already solved: a handful of extra fields with no cross-species query
-  need — the designed-for case for a feature-specific `ComponentStore<T>`, not an edge case.
-- **Fish's `TrySwim`** was a movement-validity predicate, structurally identical in role to
-  `GroundMobMovement.TryMoveHorizontal` — it never cared whether the position it read/wrote lived
-  on a C# object or in a `ComponentStore<Position>`.
-
-All 4 migrated onto `CreeperState`/`EndermanState`/`GolemState`/`FishState` (mirroring
-`SpiderState`'s shape) with no new ECS primitive and no behavioral change — see the "Adding a new
-ECS actor" template below, which each followed directly. A confirmed side benefit: `DamageDispatch`
-registration means arrows can now hit all 4, which the old `IDamageableActor`/`*Store` pattern never
-allowed (`ProjectileSystem.FindHitDamageableActor` only ever queried ECS component stores).
-
-**Bat and Villager remain genuinely non-mechanical** — the trigger below has not fired for either:
-
-| Species | What makes it non-mechanical to migrate |
-|---|---|
-| Bat | 3D wander (the only flight movement model — `Position.Yaw` alone doesn't carry pitch) |
-| Villager | Real trade interaction (`Wares`, a `List<StackId>` with no ECS analog yet — the first and only non-player inventory-shaped data) |
-
-Both blockers require a schema change (a pitch field on `Position`, or a new inventory-shaped
-component) that the migrated species never needed — this is the real dividing line the corrected
-assessment above draws, not species count or behavioral complexity.
-
-### Per-species re-evaluation tracker
-
-| Species | Re-evaluate when |
-|---|---|
-| Bat | any species needs a flight/3D-wander movement model |
-| Villager | a trade UI / NPC shop needs non-player inventory-shaped data |
-
-No migration is proposed or scheduled by this table — it is evidence bookkeeping only, so the
-retirement trigger stays evaluable without re-reading git history each time.
-
-**Updated retirement trigger, going forward:** migrate a remaining species *when gameplay work
-already needs to touch it* (a bug fix, a feature request, a new pressure test) — not on a schedule,
-and not to close this gate for its own sake. With the legacy roster now at 2 (Bat, Villager), both
-with a real schema blocker rather than "just distinct behavior," the dual-helper period is expected
-to persist until one of those specific blockers is addressed by unrelated gameplay work — not a
-to-do in its own right.
+The lesson kept for the next species is in the "Adding a new ECS actor" template below: a species is a state struct, a
+`MobDefinition` row in `data/mobs.json`, a system built on `MobCore` and `ActorReplication`, and a `DamageDispatch` registration.
 
 ---
 

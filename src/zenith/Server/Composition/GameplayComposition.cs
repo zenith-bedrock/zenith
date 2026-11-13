@@ -24,8 +24,6 @@ sealed record ServerServices(
     ItemDurability Durability,
     CreativeCatalog Creative,
     EntityRuntime Entities,
-    BatStore Bats,
-    VillagerStore Villagers,
     PlayerSpatialIndex PlayerSpatial,
     MobSpawner Spawner,
     int ChunkResidencySweepIntervalTicks)

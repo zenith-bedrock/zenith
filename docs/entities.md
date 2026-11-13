@@ -6,6 +6,8 @@ the pre-ECS runtime as of Phase XX; §11–§12 record the real ECS adopted in P
 should be revisited as gameplay grows, and specific claims should be re-verified against the code
 rather than trusted indefinitely.
 
+**Status (ADR §149): every species is now an ECS actor; `IDamageableActor`, `GroundMobCombat` and the `*Store` classes named below no longer exist** — the text that follows is the historical record of how the split was reached.
+
 **Phase XX renamed `IGroundMob` to `IDamageableActor`** (see §10) — sections below dated Phase XIX
 and earlier use `IGroundMob` because that was its name at the time and this document preserves the
 historical narrative; every such reference means the same type now called `IDamageableActor`.
@@ -41,7 +43,7 @@ categories that only *look* similar — records why they were kept separate.
 |---|---|---|---|---|---|
 | Player | Human-controlled player | Connection-driven (`IsInGame`/`IsSpawning`); never despawns | Yes — `pd:{uuid}`, `inv:{uuid}`, `ar:{uuid}` LevelDB keys (`WorldStorageKeys`, `PlayerDataBlob`, `World.PersistInventory`/`PersistPlayerData`) | Event-driven fan-out on join/leave/state-change (`PlayerVisibility.AnnounceJoin/AnnounceLeave/RelayHealth/RefreshPeerView`) | `PlayerManager`, `Session/*Handler` |
 | Ground Mob | Zombie, Skeleton, Cow, Creeper, Enderman, Spider, Villager, Golem | `GroundMobLifecycle.EvaluateDespawn` — resets on player proximity, expires after `DefaultDespawnTicks = 6000` unseen | No — RAM only, per-species `List<T>` store (`ZombieStore`, `CowStore`, etc.) | Per-tick `ActorInterest.Includes(peer, x, z)` viewer reconciliation | Per-species `*System.cs` (`ZombieSystem`, `CowSystem`, ...) |
-| Flying Mob | Bat | Same `GroundMobLifecycle.EvaluateDespawn` as ground mobs — despawn turned out to be position/visibility-based, not movement-mode-based | No — RAM only, `BatStore` (same `List<T>` shape) | Same `ActorInterest.Includes` mechanism as ground mobs | `BatSystem` |
+| Flying Mob | Bat | Same `GroundMobLifecycle.EvaluateDespawn` as ground mobs — despawn turned out to be position/visibility-based, not movement-mode-based | No — RAM only, ECS components (`BatState`; was `BatStore`) | Same `ActorInterest.Includes` mechanism as ground mobs | `BatSystem` |
 | Swimming Mob | Fish | Same `GroundMobLifecycle.EvaluateDespawn` as every other category — third confirmation this is movement-mode-agnostic | No — RAM only, `FishStore` (same `List<T>` shape) | Same `ActorInterest.Includes` mechanism | `FishSystem` |
 | Vehicle | Minecart | Same `GroundMobLifecycle.EvaluateDespawn` as every other `IDamageableActor` | No — RAM only, `MinecartStore` (same `List<T>` shape) | Same `ActorInterest.Includes` mechanism | `MinecartSystem` |
 | Projectile | Arrow (via `ProjectileSystem`) | Pure age: `AgeTicks >= MaximumLifetimeTicks (80)`, independent of visibility; also removed on world/entity hit | No — RAM only, `ProjectileStore` (`SoftCap 2048`) | Per-tick `ActorInterest.Includes` viewer reconciliation (same mechanism as ground mobs) | `ProjectileSystem` |
@@ -61,8 +63,7 @@ interest-relevant state changed (known-column version via `PlayerChunkTracker.Ve
 that stayed in its chunk since last tick is reconciled only against those players; one that moved, is new, or skipped a tick
 is reconciled against everyone. Contract: a change made later in the same tick (a player dying to a mob attack) is applied one
 tick later. Measured with `--runtime-load --mixed-roster --actor-players 100 --actors 1000`: mean tick ~21-24 ms before,
-~13-16 ms after, per-species system time down ~40%. Bat, Villager and Projectile still use the older per-pair
-`ViewerReconciliation.Sync` over all players (they are not ECS species yet).
+~13-16 ms after, per-species system time down ~40%. Bat, Villager and Projectile use the same `ActorReplication` since ADR §149.
 
 **Phase XVII note:** "Flying Mob" is listed as its own row for readability, but `Bat` is not a
 separate runtime type from `IDamageableActor`'s perspective — it implements the same interface as

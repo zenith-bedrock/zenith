@@ -1,13 +1,21 @@
+using Zenith.Ecs;
 using Zenith.Player;
 using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Entities;
+using Zenith.Gameplay.Survival;
 
 namespace Zenith.Tests;
 
-/// <summary>Phase XVII, Priority 1 — first flying mob: 3D wander, no supporting-block requirement, no retaliation.</summary>
+/// <summary>The flying mob: 3D wander, no supporting-block requirement, no retaliation. An ECS species like every other.</summary>
 public sealed class BatSystemTests
 {
+    private static Position Pos(BatSystem system, EntityId id)
+    {
+        Assert.True(system.Stores.Positions.TryGet(id, out var pos));
+        return pos;
+    }
+
     [Fact]
     public void Bat_wanders_in_three_dimensions_without_any_player_nearby()
     {
@@ -15,27 +23,19 @@ public sealed class BatSystemTests
         var player = fx.AddInGamePlayer("distant-spelunker");
         player.PositionX = 1000;
         player.PositionZ = 1000;
-        var store = new BatStore();
-        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 5, 0);
-        Assert.True(store.TryAdd(bat));
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(1));
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(1));
+        var id = system.SpawnBat(0, Blocks.FlatSpawnY + 5, 0);
 
-        var startX = bat.PositionX;
-        var startY = bat.PositionY;
-        var startZ = bat.PositionZ;
+        var start = Pos(system, id);
         for (var i = 0; i < 200; i++)
             system.Tick(fx.Clock, fx.Players.Online);
 
-        // A ground mob's wander never moves the Y axis; a flying mob's does — the concrete
-        // behavioral difference this priority exists to surface.
-        Assert.True(bat.PositionX != startX || bat.PositionZ != startZ || bat.PositionY != startY);
+        // A ground mob's wander never moves the Y axis; a flying mob's does.
+        var end = Pos(system, id);
+        Assert.True(end.X != start.X || end.Z != start.Z || end.Y != start.Y);
     }
 
-    /// <summary>
-    /// Phase XXIX regression: BatSystem never calls <see cref="GroundMobMovement"/> — flight uses its
-    /// own bespoke clearance check, no gravity, no fall-speed field — so the new ground-locomotion
-    /// resolver and gravity model must have zero effect on a bat suspended mid-air.
-    /// </summary>
+    /// <summary>BatSystem never calls <see cref="GroundMobMovement"/>: no gravity and no fall-speed, so a bat suspended mid-air stays there.</summary>
     [Fact]
     public void Bat_flight_is_not_affected_by_ground_gravity()
     {
@@ -43,17 +43,15 @@ public sealed class BatSystemTests
         var player = fx.AddInGamePlayer("distant-spelunker");
         player.PositionX = 1000;
         player.PositionZ = 1000;
-        var store = new BatStore();
-        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 20, 0);
-        Assert.True(store.TryAdd(bat));
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(4));
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(4));
+        var id = system.SpawnBat(0, Blocks.FlatSpawnY + 20, 0);
 
         for (var i = 0; i < 100; i++)
             system.Tick(fx.Clock, fx.Players.Online);
 
-        // A ground actor left this high with no support would fall ~4 blocks/tick and hit terrain
-        // long before 100 ticks. A bat has no fall-speed state and no gravity, so it stays airborne.
-        Assert.True(bat.PositionY > Blocks.FlatSpawnY);
+        // A ground actor left this high with no support would fall ~4 blocks/tick and hit terrain long before 100 ticks.
+        Assert.True(Pos(system, id).Y > Blocks.FlatSpawnY);
+        Assert.False(system.Stores.Velocities.Has(id));
     }
 
     [Fact]
@@ -61,10 +59,8 @@ public sealed class BatSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bystander");
-        var store = new BatStore();
-        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 0.5f, player.PositionY + 2, player.PositionZ);
-        Assert.True(store.TryAdd(bat));
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(2));
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(2));
+        system.SpawnBat(player.PositionX + 0.5f, player.PositionY + 2, player.PositionZ);
 
         for (var i = 0; i < 100; i++)
             system.Tick(fx.Clock, fx.Players.Online);
@@ -78,10 +74,8 @@ public sealed class BatSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("hunter");
-        var store = new BatStore();
-        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, player.PositionX + 1, player.PositionY, player.PositionZ);
-        Assert.True(store.TryAdd(bat));
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnBat(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         for (var i = 0; i < 2; i++)
         {
@@ -90,9 +84,8 @@ public sealed class BatSystemTests
             fx.Clock.AdvanceBy(11);
         }
 
-        Assert.Empty(store.Active);
-        Assert.False(bat.IsActive);
-        Assert.True(bat.Health.IsDead);
+        Assert.Empty(system.Bats);
+        Assert.False(system.Stores.Entities.IsAlive(id));
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:feather"), loot.Id.Value);
         Assert.Equal(1, player.ExperiencePoints);
@@ -105,10 +98,8 @@ public sealed class BatSystemTests
         var player = fx.AddInGamePlayer("distant-spelunker");
         player.PositionX = 1000;
         player.PositionZ = 1000;
-        var store = new BatStore();
-        var bat = new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 5, 0);
-        Assert.True(store.TryAdd(bat));
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette, new Random(1));
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(1));
+        var id = system.SpawnBat(0, Blocks.FlatSpawnY + 5, 0);
 
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(0, system.DespawnCount);
@@ -117,8 +108,8 @@ public sealed class BatSystemTests
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.DespawnCount);
-        Assert.False(bat.IsActive);
-        Assert.Empty(system.Bats.Active);
+        Assert.False(system.Stores.Entities.IsAlive(id));
+        Assert.Empty(system.Bats);
     }
 
     [Fact]
@@ -128,20 +119,32 @@ public sealed class BatSystemTests
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = 1;
         first.Chunks.RememberMany([(0, 0)]);
-        var store = new BatStore();
-        var system = new BatSystem(fx.World, fx.Players, store, fx.Context.ItemPalette);
-        Assert.True(store.TryAdd(new Bat(fx.Players.AllocateRuntimeId(), 99, 0, Blocks.FlatSpawnY + 5, 0)));
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        system.SpawnBat(8, Blocks.FlatSpawnY + 5, 8); // mid-column, so a wander step cannot leave the known column
         system.Tick(fx.Clock, fx.Players.Online);
-        var before = fx.Transport.Captured.Count;
+        Assert.Equal(1, system.ReplicatedSpawnCount);
 
         var second = fx.AddInGamePlayer("second");
         second.Chunks.Radius = 1;
         second.Chunks.RememberMany([(0, 0)]);
         system.Tick(fx.Clock, fx.Players.Online);
-        foreach (var player in fx.Players.Online)
-            player.Session.Transport.FlushOutgoing();
 
-        Assert.True(fx.Transport.Captured.Count > before);
+        Assert.Equal(2, system.ReplicatedSpawnCount);
         Assert.True(first.IsInGame && second.IsInGame);
+    }
+
+    [Fact]
+    public void A_bat_can_be_damaged_through_the_shared_dispatch_like_any_other_species()
+    {
+        var fx = new IntentTestFixture();
+        var shooter = fx.AddInGamePlayer("archer");
+        var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnBat(shooter.PositionX + 1, shooter.PositionY, shooter.PositionZ);
+        var dispatch = new DamageDispatch();
+        dispatch.Register(system.Owns, system.TryApplyDamage);
+
+        Assert.True(dispatch.TryApplyDamage(id, DamageSource.Projectile(shooter.RuntimeId), 100f, fx.Players.Online, fx.Clock.CurrentTick));
+
+        Assert.False(system.Stores.Entities.IsAlive(id));
     }
 }

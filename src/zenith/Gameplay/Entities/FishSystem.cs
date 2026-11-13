@@ -44,7 +44,7 @@ sealed class FishSystem : IGameSystem
         _world = world;
         _players = players;
         _stores = stores;
-        _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette, trackPoses: false, withVelocity: true);
+        _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette);
         _replication = _mob.Replication;
         _fish = new ComponentStore<FishState>(stores.Entities);
         _random = random ?? new Random();
@@ -80,6 +80,7 @@ sealed class FishSystem : IGameSystem
         }
 
         _replication.Prune(_fish.Entities, online);
+        _replication.ReplicateMoves(_fish.Entities, online);
     }
 
 
@@ -123,21 +124,9 @@ sealed class FishSystem : IGameSystem
         {
             ref var p = ref _stores.Positions.GetRef(id);
             p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(state.WanderDirectionX, state.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
-            BroadcastMove(id, online);
         }
         else
             state.WanderChangeAtTick = clock.CurrentTick; // out of water — choose a fresh heading next tick
-    }
-
-    private void BroadcastMove(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        foreach (var peer in online)
-        {
-            if (!_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
-            peer.Client.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, yaw: pos.Yaw, headYaw: pos.Yaw);
-        }
     }
 
     private void PickNewHeading(EntityId id, GameClock clock)
