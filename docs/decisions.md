@@ -2350,6 +2350,13 @@ green across repeated runs.
    ~2m for the full suite, still well inside the CI timeout) over a much larger, riskier product
    change to fix a test-only symptom.
 
+   **Superseded 2026-11-13:** parallelism is back on (`parallelizeTestCollections: true`). The cause
+   was a real publication race, not just a test artifact: `Tools`/`BlockLoot` cleared and refilled
+   plain dictionaries in place on `Load`, and `Blocks` assigned its fields one by one. All three now
+   build an immutable generation off to the side and publish it with one `volatile` reference, so the
+   `ResetForTests` hooks were deleted. Tests that mutate process-wide env/ports or assert wall-clock
+   timing opt out with `[Collection(ExclusiveCollection.Name)]`.
+
 **Why now, not before:** direct continuation of §115-118 at the user's request to keep going
 deeper — benchmarks and concurrency stress tests are the natural next step after §118 shipped a
 locking change that turned out, once measured, not to be the right one.

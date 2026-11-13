@@ -13,7 +13,6 @@ public class CraftingDataPacketTests
 
     public CraftingDataPacketTests()
     {
-        Blocks.ResetForTests();
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
     }
 

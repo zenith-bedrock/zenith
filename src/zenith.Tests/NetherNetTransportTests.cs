@@ -62,7 +62,7 @@ public sealed class NetherNetTransportTests
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
             HttpResponseMessage? response = null;
-            for (var attempt = 0; attempt < 50 && response is null; attempt++)
+            for (var attempt = 0; attempt < 300 && response is null; attempt++)
             {
                 try { response = await http.GetAsync($"http://127.0.0.1:{signalingPort}/"); }
                 catch (HttpRequestException) { await Task.Delay(100); }
@@ -72,8 +72,8 @@ public sealed class NetherNetTransportTests
             Assert.True(File.Exists(Path.Combine(root, GameTransportFactory.NetherNetKeyFile)));
             Assert.Equal(0, host.Opened);
 
-            await transport.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(15));
-            await run.WaitAsync(TimeSpan.FromSeconds(15));
+            await transport.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(30));
+            await run.WaitAsync(TimeSpan.FromSeconds(30));
         }
         finally
         {

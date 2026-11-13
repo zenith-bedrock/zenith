@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 namespace Zenith.World;
 
 /// <summary>
@@ -11,58 +12,52 @@ namespace Zenith.World;
 static class BlockLoot
 {
     private static readonly object LoadGate = new();
-    private static readonly Dictionary<int, StackId> OreDropByBlockRuntimeId = new();
-    private static bool _loaded;
 
-    public static void EnsureLoaded()
+    /// <summary>Immutable table published by one reference write (see <c>Tools</c>): a reload never exposes a half-filled map.</summary>
+    private static volatile FrozenDictionary<int, StackId>? _oreDrops;
+
+    public static void EnsureLoaded() => _ = OreDrops;
+
+    private static FrozenDictionary<int, StackId> OreDrops
     {
-        if (_loaded) return;
-        lock (LoadGate)
+        get
         {
-            if (_loaded) return;
-            LoadUnlocked(ItemPaletteLoader.FromEmbeddedResource());
+            if (_oreDrops is { } table) return table;
+            lock (LoadGate)
+                return _oreDrops ??= Build(ItemPaletteLoader.FromEmbeddedResource());
         }
     }
 
     public static void Load(ItemPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
+        var table = Build(palette);
         lock (LoadGate)
-            LoadUnlocked(palette);
+            _oreDrops = table;
     }
 
-    internal static void ResetForTests()
+    private static FrozenDictionary<int, StackId> Build(ItemPalette palette)
     {
-        lock (LoadGate)
-        {
-            _loaded = false;
-            OreDropByBlockRuntimeId.Clear();
-        }
+        var drops = new Dictionary<int, StackId>();
+        RegisterOreDrop(drops, Blocks.CoalOre, palette.Require("minecraft:coal"));
+        RegisterOreDrop(drops, Blocks.DeepslateCoalOre, palette.Require("minecraft:coal"));
+        RegisterOreDrop(drops, Blocks.DiamondOre, palette.Require("minecraft:diamond"));
+        RegisterOreDrop(drops, Blocks.DeepslateDiamondOre, palette.Require("minecraft:diamond"));
+        RegisterOreDrop(drops, Blocks.RedstoneOre, palette.Require("minecraft:redstone"));
+        RegisterOreDrop(drops, Blocks.DeepslateRedstoneOre, palette.Require("minecraft:redstone"));
+        RegisterOreDrop(drops, Blocks.LapisOre, palette.Require("minecraft:lapis_lazuli"));
+        RegisterOreDrop(drops, Blocks.DeepslateLapisOre, palette.Require("minecraft:lapis_lazuli"));
+        return drops.ToFrozenDictionary();
     }
 
-    private static void LoadUnlocked(ItemPalette palette)
-    {
-        OreDropByBlockRuntimeId.Clear();
-        RegisterOreDrop(Blocks.CoalOre, palette.Require("minecraft:coal"));
-        RegisterOreDrop(Blocks.DeepslateCoalOre, palette.Require("minecraft:coal"));
-        RegisterOreDrop(Blocks.DiamondOre, palette.Require("minecraft:diamond"));
-        RegisterOreDrop(Blocks.DeepslateDiamondOre, palette.Require("minecraft:diamond"));
-        RegisterOreDrop(Blocks.RedstoneOre, palette.Require("minecraft:redstone"));
-        RegisterOreDrop(Blocks.DeepslateRedstoneOre, palette.Require("minecraft:redstone"));
-        RegisterOreDrop(Blocks.LapisOre, palette.Require("minecraft:lapis_lazuli"));
-        RegisterOreDrop(Blocks.DeepslateLapisOre, palette.Require("minecraft:lapis_lazuli"));
-        _loaded = true;
-    }
-
-    private static void RegisterOreDrop(int blockRuntimeId, int itemNetworkId) =>
-        OreDropByBlockRuntimeId[blockRuntimeId] = StackId.FromItem(itemNetworkId);
+    private static void RegisterOreDrop(Dictionary<int, StackId> drops, int blockRuntimeId, int itemNetworkId) =>
+        drops[blockRuntimeId] = StackId.FromItem(itemNetworkId);
 
     /// <summary>Drop for breaking <paramref name="blockRuntimeId"/> — the mapped item for the
     /// no-smelt ores above, otherwise the block itself (existing default behavior).</summary>
     public static StackId DropFor(int blockRuntimeId)
     {
-        EnsureLoaded();
-        return OreDropByBlockRuntimeId.TryGetValue(blockRuntimeId, out var item)
+        return OreDrops.TryGetValue(blockRuntimeId, out var item)
             ? item
             : StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId));
     }

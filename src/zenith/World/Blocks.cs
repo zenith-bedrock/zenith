@@ -20,102 +20,110 @@ static class Blocks
     public const string CardinalWest = "west";
     public const string CardinalDirectionKey = "minecraft:cardinal_direction";
 
-    private static int _air;
-    private static int _stone;
-    private static int _grassBlock;
-    private static int _dirt;
-    private static int _oakPlanks;
-    private static int _oakLog;
-    private static int _oakLeaves;
-    private static int _sand;
-    private static int _gravel;
-    private static int _bedrock;
-    private static int _water;
-    private static int _cobblestone;
-    private static int _deepslate;
-    private static int _coalOre;
-    private static int _ironOre;
-    private static int _copperOre;
-    private static int _goldOre;
-    private static int _diamondOre;
-    private static int _lapisOre;
-    private static int _redstoneOre;
-    private static int _deepslateCoalOre;
-    private static int _deepslateIronOre;
-    private static int _deepslateCopperOre;
-    private static int _deepslateGoldOre;
-    private static int _deepslateDiamondOre;
-    private static int _deepslateLapisOre;
-    private static int _deepslateRedstoneOre;
-    private static int _chest;
-    private static int _chestNorth;
-    private static int _chestSouth;
-    private static int _chestEast;
-    private static int _chestWest;
-    private static int _shortGrass;
-    private static int _dandelion;
-    private static int _poppy;
-    private static int _torch;
-    private static int _oakFence;
-    private static int _stoneBricks;
-    private static int _cobblestoneWall;
-    private static int _craftingTable;
-    private static HashSet<int>? _chestIds;
-    private static HashSet<int>? _placeableIds;
-    private static HashSet<int>? _gravityIds;
-    private static HashSet<int>? _fluidIds;
-    private static HashSet<int>? _passableIds;
-    private static Dictionary<int, string>? _nameByRuntime;
-    private static BlockPalette? _palette;
-    private static bool _loaded;
+    /// <summary>
+    /// One immutable-after-build generation of every id and set derived from a palette. A (re)load builds a new <see cref="Loaded"/> off to the
+    /// side and publishes it with one reference write, so a reader on another thread sees either the old generation or the new one, never a
+    /// half-assigned mix.
+    /// </summary>
+    private sealed class Loaded
+    {
+        public int Air { get; set; }
+        public int Stone { get; set; }
+        public int GrassBlock { get; set; }
+        public int Dirt { get; set; }
+        public int OakPlanks { get; set; }
+        public int OakLog { get; set; }
+        public int OakLeaves { get; set; }
+        public int Sand { get; set; }
+        public int Gravel { get; set; }
+        public int Bedrock { get; set; }
+        public int Water { get; set; }
+        public int Cobblestone { get; set; }
+        public int Deepslate { get; set; }
+        public int CoalOre { get; set; }
+        public int IronOre { get; set; }
+        public int CopperOre { get; set; }
+        public int GoldOre { get; set; }
+        public int DiamondOre { get; set; }
+        public int LapisOre { get; set; }
+        public int RedstoneOre { get; set; }
+        public int DeepslateCoalOre { get; set; }
+        public int DeepslateIronOre { get; set; }
+        public int DeepslateCopperOre { get; set; }
+        public int DeepslateGoldOre { get; set; }
+        public int DeepslateDiamondOre { get; set; }
+        public int DeepslateLapisOre { get; set; }
+        public int DeepslateRedstoneOre { get; set; }
+        public int Chest { get; set; }
+        public int ChestNorth { get; set; }
+        public int ChestSouth { get; set; }
+        public int ChestEast { get; set; }
+        public int ChestWest { get; set; }
+        public int ShortGrass { get; set; }
+        public int Dandelion { get; set; }
+        public int Poppy { get; set; }
+        public int Torch { get; set; }
+        public int OakFence { get; set; }
+        public int StoneBricks { get; set; }
+        public int CobblestoneWall { get; set; }
+        public int CraftingTable { get; set; }
+        public HashSet<int> ChestIds { get; set; } = [];
+        public HashSet<int> PlaceableIds { get; set; } = [];
+        public HashSet<int> GravityIds { get; set; } = [];
+        public HashSet<int> FluidIds { get; set; } = [];
+        public HashSet<int> PassableIds { get; set; } = [];
+        public Dictionary<int, string> NameByRuntime { get; set; } = [];
+        public BlockPalette Palette { get; set; } = null!;
+    }
 
-    public static int Air { get { EnsureLoaded(); return _air; } }
-    public static int Stone { get { EnsureLoaded(); return _stone; } }
-    public static int GrassBlock { get { EnsureLoaded(); return _grassBlock; } }
-    public static int Dirt { get { EnsureLoaded(); return _dirt; } }
-    public static int OakPlanks { get { EnsureLoaded(); return _oakPlanks; } }
-    public static int OakLog { get { EnsureLoaded(); return _oakLog; } }
-    public static int OakLeaves { get { EnsureLoaded(); return _oakLeaves; } }
-    public static int Sand { get { EnsureLoaded(); return _sand; } }
-    public static int Gravel { get { EnsureLoaded(); return _gravel; } }
-    public static int Bedrock { get { EnsureLoaded(); return _bedrock; } }
-    public static int Water { get { EnsureLoaded(); return _water; } }
-    public static int Cobblestone { get { EnsureLoaded(); return _cobblestone; } }
-    public static int Deepslate { get { EnsureLoaded(); return _deepslate; } }
-    public static int CoalOre { get { EnsureLoaded(); return _coalOre; } }
-    public static int IronOre { get { EnsureLoaded(); return _ironOre; } }
-    public static int CopperOre { get { EnsureLoaded(); return _copperOre; } }
-    public static int GoldOre { get { EnsureLoaded(); return _goldOre; } }
-    public static int DiamondOre { get { EnsureLoaded(); return _diamondOre; } }
-    public static int LapisOre { get { EnsureLoaded(); return _lapisOre; } }
-    public static int RedstoneOre { get { EnsureLoaded(); return _redstoneOre; } }
-    public static int DeepslateCoalOre { get { EnsureLoaded(); return _deepslateCoalOre; } }
-    public static int DeepslateIronOre { get { EnsureLoaded(); return _deepslateIronOre; } }
-    public static int DeepslateCopperOre { get { EnsureLoaded(); return _deepslateCopperOre; } }
-    public static int DeepslateGoldOre { get { EnsureLoaded(); return _deepslateGoldOre; } }
-    public static int DeepslateDiamondOre { get { EnsureLoaded(); return _deepslateDiamondOre; } }
-    public static int DeepslateLapisOre { get { EnsureLoaded(); return _deepslateLapisOre; } }
-    public static int DeepslateRedstoneOre { get { EnsureLoaded(); return _deepslateRedstoneOre; } }
+    private static volatile Loaded? _loaded;
+
+    public static int Air => Current.Air;
+    public static int Stone => Current.Stone;
+    public static int GrassBlock => Current.GrassBlock;
+    public static int Dirt => Current.Dirt;
+    public static int OakPlanks => Current.OakPlanks;
+    public static int OakLog => Current.OakLog;
+    public static int OakLeaves => Current.OakLeaves;
+    public static int Sand => Current.Sand;
+    public static int Gravel => Current.Gravel;
+    public static int Bedrock => Current.Bedrock;
+    public static int Water => Current.Water;
+    public static int Cobblestone => Current.Cobblestone;
+    public static int Deepslate => Current.Deepslate;
+    public static int CoalOre => Current.CoalOre;
+    public static int IronOre => Current.IronOre;
+    public static int CopperOre => Current.CopperOre;
+    public static int GoldOre => Current.GoldOre;
+    public static int DiamondOre => Current.DiamondOre;
+    public static int LapisOre => Current.LapisOre;
+    public static int RedstoneOre => Current.RedstoneOre;
+    public static int DeepslateCoalOre => Current.DeepslateCoalOre;
+    public static int DeepslateIronOre => Current.DeepslateIronOre;
+    public static int DeepslateCopperOre => Current.DeepslateCopperOre;
+    public static int DeepslateGoldOre => Current.DeepslateGoldOre;
+    public static int DeepslateDiamondOre => Current.DeepslateDiamondOre;
+    public static int DeepslateLapisOre => Current.DeepslateLapisOre;
+    public static int DeepslateRedstoneOre => Current.DeepslateRedstoneOre;
 
     /// <summary>Item / recipe / default place form — south palette entry.</summary>
-    public static int Chest { get { EnsureLoaded(); return _chest; } }
+    public static int Chest => Current.Chest;
 
     /// <summary>Ground-cover decoration (world-gen vegetation, ADR §137) — see <see cref="IsPassableDecoration"/>.</summary>
-    public static int ShortGrass { get { EnsureLoaded(); return _shortGrass; } }
-    public static int Dandelion { get { EnsureLoaded(); return _dandelion; } }
-    public static int Poppy { get { EnsureLoaded(); return _poppy; } }
+    public static int ShortGrass => Current.ShortGrass;
+    public static int Dandelion => Current.Dandelion;
+    public static int Poppy => Current.Poppy;
 
     /// <summary>Craftable decoration/building blocks (ADR §138). Torch is passable; the rest are full solid.</summary>
-    public static int Torch { get { EnsureLoaded(); return _torch; } }
-    public static int OakFence { get { EnsureLoaded(); return _oakFence; } }
-    public static int StoneBricks { get { EnsureLoaded(); return _stoneBricks; } }
-    public static int CobblestoneWall { get { EnsureLoaded(); return _cobblestoneWall; } }
-    public static int CraftingTable { get { EnsureLoaded(); return _craftingTable; } }
+    public static int Torch => Current.Torch;
+    public static int OakFence => Current.OakFence;
+    public static int StoneBricks => Current.StoneBricks;
+    public static int CobblestoneWall => Current.CobblestoneWall;
+    public static int CraftingTable => Current.CraftingTable;
 
     public static bool IsCraftingTable(int runtimeId)
     {
-        EnsureLoaded();
-        return runtimeId == _craftingTable;
+        return runtimeId == Current.CraftingTable;
     }
 
     /// <summary>Overworld min Y (Bedrock). Flat + noise share this floor.</summary>
@@ -128,148 +136,146 @@ static class Blocks
     public static void Load(BlockPalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        lock (TestLoadGate)
-        {
-            LoadCore(palette);
-        }
+        var loaded = Build(palette);
+        lock (LoadGate)
+            _loaded = loaded;
     }
 
-    private static void LoadCore(BlockPalette palette)
+    private static Loaded Build(BlockPalette palette)
     {
-        _palette = palette;
-        _air = palette.Require("minecraft:air");
-        _stone = palette.Require("minecraft:stone");
-        _grassBlock = palette.Require("minecraft:grass_block");
-        _dirt = palette.Require("minecraft:dirt");
-        _oakPlanks = palette.Require("minecraft:oak_planks");
-        _oakLog = palette.Require("minecraft:oak_log");
-        _oakLeaves = palette.Require("minecraft:oak_leaves");
-        _sand = palette.Require("minecraft:sand");
-        _gravel = palette.Require("minecraft:gravel");
-        _bedrock = palette.Require("minecraft:bedrock");
-        _water = palette.Require("minecraft:water");
-        _cobblestone = palette.Require("minecraft:cobblestone");
-        _deepslate = palette.Require("minecraft:deepslate");
-        _coalOre = palette.Require("minecraft:coal_ore");
-        _ironOre = palette.Require("minecraft:iron_ore");
-        _copperOre = palette.Require("minecraft:copper_ore");
-        _goldOre = palette.Require("minecraft:gold_ore");
-        _diamondOre = palette.Require("minecraft:diamond_ore");
-        _lapisOre = palette.Require("minecraft:lapis_ore");
-        _redstoneOre = palette.Require("minecraft:redstone_ore");
-        _deepslateCoalOre = palette.Require("minecraft:deepslate_coal_ore");
-        _deepslateIronOre = palette.Require("minecraft:deepslate_iron_ore");
-        _deepslateCopperOre = palette.Require("minecraft:deepslate_copper_ore");
-        _deepslateGoldOre = palette.Require("minecraft:deepslate_gold_ore");
-        _deepslateDiamondOre = palette.Require("minecraft:deepslate_diamond_ore");
-        _deepslateLapisOre = palette.Require("minecraft:deepslate_lapis_ore");
-        _deepslateRedstoneOre = palette.Require("minecraft:deepslate_redstone_ore");
-        _shortGrass = palette.Require("minecraft:short_grass");
-        _dandelion = palette.Require("minecraft:dandelion");
-        _poppy = palette.Require("minecraft:poppy");
-        _torch = palette.Require("minecraft:torch");
-        _oakFence = palette.Require("minecraft:oak_fence");
-        _stoneBricks = palette.Require("minecraft:stone_bricks");
-        _cobblestoneWall = palette.Require("minecraft:cobblestone_wall");
-        _craftingTable = palette.Require("minecraft:crafting_table");
-        _chest = palette.Require("minecraft:chest");
-        _chestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
-        _chestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
-        _chestNorth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalNorth);
-        _chestEast = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalEast);
-        _chestIds = [_chestSouth, _chestWest, _chestNorth, _chestEast];
+        var b = new Loaded();
+        b.Palette = palette;
+        b.Air = palette.Require("minecraft:air");
+        b.Stone = palette.Require("minecraft:stone");
+        b.GrassBlock = palette.Require("minecraft:grass_block");
+        b.Dirt = palette.Require("minecraft:dirt");
+        b.OakPlanks = palette.Require("minecraft:oak_planks");
+        b.OakLog = palette.Require("minecraft:oak_log");
+        b.OakLeaves = palette.Require("minecraft:oak_leaves");
+        b.Sand = palette.Require("minecraft:sand");
+        b.Gravel = palette.Require("minecraft:gravel");
+        b.Bedrock = palette.Require("minecraft:bedrock");
+        b.Water = palette.Require("minecraft:water");
+        b.Cobblestone = palette.Require("minecraft:cobblestone");
+        b.Deepslate = palette.Require("minecraft:deepslate");
+        b.CoalOre = palette.Require("minecraft:coal_ore");
+        b.IronOre = palette.Require("minecraft:iron_ore");
+        b.CopperOre = palette.Require("minecraft:copper_ore");
+        b.GoldOre = palette.Require("minecraft:gold_ore");
+        b.DiamondOre = palette.Require("minecraft:diamond_ore");
+        b.LapisOre = palette.Require("minecraft:lapis_ore");
+        b.RedstoneOre = palette.Require("minecraft:redstone_ore");
+        b.DeepslateCoalOre = palette.Require("minecraft:deepslate_coal_ore");
+        b.DeepslateIronOre = palette.Require("minecraft:deepslate_iron_ore");
+        b.DeepslateCopperOre = palette.Require("minecraft:deepslate_copper_ore");
+        b.DeepslateGoldOre = palette.Require("minecraft:deepslate_gold_ore");
+        b.DeepslateDiamondOre = palette.Require("minecraft:deepslate_diamond_ore");
+        b.DeepslateLapisOre = palette.Require("minecraft:deepslate_lapis_ore");
+        b.DeepslateRedstoneOre = palette.Require("minecraft:deepslate_redstone_ore");
+        b.ShortGrass = palette.Require("minecraft:short_grass");
+        b.Dandelion = palette.Require("minecraft:dandelion");
+        b.Poppy = palette.Require("minecraft:poppy");
+        b.Torch = palette.Require("minecraft:torch");
+        b.OakFence = palette.Require("minecraft:oak_fence");
+        b.StoneBricks = palette.Require("minecraft:stone_bricks");
+        b.CobblestoneWall = palette.Require("minecraft:cobblestone_wall");
+        b.CraftingTable = palette.Require("minecraft:crafting_table");
+        b.Chest = palette.Require("minecraft:chest");
+        b.ChestSouth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalSouth);
+        b.ChestWest = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalWest);
+        b.ChestNorth = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalNorth);
+        b.ChestEast = palette.Require("minecraft:chest", CardinalDirectionKey, CardinalEast);
+        b.ChestIds = [b.ChestSouth, b.ChestWest, b.ChestNorth, b.ChestEast];
         // Require(name) may equal south — keep one set entry.
-        _chestIds.Add(_chest);
-        _placeableIds =
+        b.ChestIds.Add(b.Chest);
+        b.PlaceableIds =
         [
-            _stone,
-            _grassBlock,
-            _dirt,
-            _oakPlanks,
-            _oakLog,
-            _oakLeaves,
-            _sand,
-            _gravel,
-            _cobblestone,
-            _deepslate,
-            _chest,
-            _chestSouth,
-            _chestWest,
-            _chestNorth,
-            _chestEast,
-            _torch,
-            _oakFence,
-            _stoneBricks,
-            _cobblestoneWall,
-            _craftingTable
+            b.Stone,
+            b.GrassBlock,
+            b.Dirt,
+            b.OakPlanks,
+            b.OakLog,
+            b.OakLeaves,
+            b.Sand,
+            b.Gravel,
+            b.Cobblestone,
+            b.Deepslate,
+            b.Chest,
+            b.ChestSouth,
+            b.ChestWest,
+            b.ChestNorth,
+            b.ChestEast,
+            b.Torch,
+            b.OakFence,
+            b.StoneBricks,
+            b.CobblestoneWall,
+            b.CraftingTable
         ];
-        _gravityIds = [_sand, _gravel];
+        b.GravityIds = [b.Sand, b.Gravel];
         // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
         // Extend this set, not a scattered `== Blocks.Water` check, the day a second fluid lands.
-        _fluidIds = [_water];
-        _passableIds = [_shortGrass, _dandelion, _poppy, _torch];
-        _nameByRuntime = new Dictionary<int, string>
+        b.FluidIds = [b.Water];
+        b.PassableIds = [b.ShortGrass, b.Dandelion, b.Poppy, b.Torch];
+        b.NameByRuntime = new Dictionary<int, string>
         {
-            [_shortGrass] = "minecraft:short_grass",
-            [_dandelion] = "minecraft:dandelion",
-            [_poppy] = "minecraft:poppy",
-            [_torch] = "minecraft:torch",
-            [_oakFence] = "minecraft:oak_fence",
-            [_stoneBricks] = "minecraft:stone_bricks",
-            [_cobblestoneWall] = "minecraft:cobblestone_wall",
-            [_craftingTable] = "minecraft:crafting_table",
-            [_air] = "minecraft:air",
-            [_stone] = "minecraft:stone",
-            [_grassBlock] = "minecraft:grass_block",
-            [_dirt] = "minecraft:dirt",
-            [_oakPlanks] = "minecraft:oak_planks",
-            [_oakLog] = "minecraft:oak_log",
-            [_oakLeaves] = "minecraft:oak_leaves",
-            [_sand] = "minecraft:sand",
-            [_gravel] = "minecraft:gravel",
-            [_bedrock] = "minecraft:bedrock",
-            [_water] = "minecraft:water",
-            [_cobblestone] = "minecraft:cobblestone",
-            [_deepslate] = "minecraft:deepslate",
-            [_coalOre] = "minecraft:coal_ore",
-            [_ironOre] = "minecraft:iron_ore",
-            [_copperOre] = "minecraft:copper_ore",
-            [_goldOre] = "minecraft:gold_ore",
-            [_diamondOre] = "minecraft:diamond_ore",
-            [_lapisOre] = "minecraft:lapis_ore",
-            [_redstoneOre] = "minecraft:redstone_ore",
-            [_deepslateCoalOre] = "minecraft:deepslate_coal_ore",
-            [_deepslateIronOre] = "minecraft:deepslate_iron_ore",
-            [_deepslateCopperOre] = "minecraft:deepslate_copper_ore",
-            [_deepslateGoldOre] = "minecraft:deepslate_gold_ore",
-            [_deepslateDiamondOre] = "minecraft:deepslate_diamond_ore",
-            [_deepslateLapisOre] = "minecraft:deepslate_lapis_ore",
-            [_deepslateRedstoneOre] = "minecraft:deepslate_redstone_ore",
-            [_chestSouth] = "minecraft:chest",
-            [_chestWest] = "minecraft:chest",
-            [_chestNorth] = "minecraft:chest",
-            [_chestEast] = "minecraft:chest",
+            [b.ShortGrass] = "minecraft:short_grass",
+            [b.Dandelion] = "minecraft:dandelion",
+            [b.Poppy] = "minecraft:poppy",
+            [b.Torch] = "minecraft:torch",
+            [b.OakFence] = "minecraft:oak_fence",
+            [b.StoneBricks] = "minecraft:stone_bricks",
+            [b.CobblestoneWall] = "minecraft:cobblestone_wall",
+            [b.CraftingTable] = "minecraft:crafting_table",
+            [b.Air] = "minecraft:air",
+            [b.Stone] = "minecraft:stone",
+            [b.GrassBlock] = "minecraft:grass_block",
+            [b.Dirt] = "minecraft:dirt",
+            [b.OakPlanks] = "minecraft:oak_planks",
+            [b.OakLog] = "minecraft:oak_log",
+            [b.OakLeaves] = "minecraft:oak_leaves",
+            [b.Sand] = "minecraft:sand",
+            [b.Gravel] = "minecraft:gravel",
+            [b.Bedrock] = "minecraft:bedrock",
+            [b.Water] = "minecraft:water",
+            [b.Cobblestone] = "minecraft:cobblestone",
+            [b.Deepslate] = "minecraft:deepslate",
+            [b.CoalOre] = "minecraft:coal_ore",
+            [b.IronOre] = "minecraft:iron_ore",
+            [b.CopperOre] = "minecraft:copper_ore",
+            [b.GoldOre] = "minecraft:gold_ore",
+            [b.DiamondOre] = "minecraft:diamond_ore",
+            [b.LapisOre] = "minecraft:lapis_ore",
+            [b.RedstoneOre] = "minecraft:redstone_ore",
+            [b.DeepslateCoalOre] = "minecraft:deepslate_coal_ore",
+            [b.DeepslateIronOre] = "minecraft:deepslate_iron_ore",
+            [b.DeepslateCopperOre] = "minecraft:deepslate_copper_ore",
+            [b.DeepslateGoldOre] = "minecraft:deepslate_gold_ore",
+            [b.DeepslateDiamondOre] = "minecraft:deepslate_diamond_ore",
+            [b.DeepslateLapisOre] = "minecraft:deepslate_lapis_ore",
+            [b.DeepslateRedstoneOre] = "minecraft:deepslate_redstone_ore",
+            [b.ChestSouth] = "minecraft:chest",
+            [b.ChestWest] = "minecraft:chest",
+            [b.ChestNorth] = "minecraft:chest",
+            [b.ChestEast] = "minecraft:chest",
         };
-        if (!_nameByRuntime.ContainsKey(_chest))
-            _nameByRuntime[_chest] = "minecraft:chest";
-        _loaded = true;
+        if (!b.NameByRuntime.ContainsKey(b.Chest))
+            b.NameByRuntime[b.Chest] = "minecraft:chest";
+        return b;
     }
 
     public static bool IsChest(int runtimeId)
     {
-        EnsureLoaded();
-        return _chestIds is not null && _chestIds.Contains(runtimeId);
+        return Current.ChestIds.Contains(runtimeId);
     }
 
     /// <summary>Cardinal facing for a chest rid; false if not a chest.</summary>
     public static bool TryGetChestCardinal(int runtimeId, out string cardinal)
     {
-        EnsureLoaded();
-        if (runtimeId == _chestNorth) { cardinal = CardinalNorth; return true; }
-        if (runtimeId == _chestSouth) { cardinal = CardinalSouth; return true; }
-        if (runtimeId == _chestEast) { cardinal = CardinalEast; return true; }
-        if (runtimeId == _chestWest) { cardinal = CardinalWest; return true; }
-        if (runtimeId == _chest) { cardinal = CardinalSouth; return true; }
+        if (runtimeId == Current.ChestNorth) { cardinal = CardinalNorth; return true; }
+        if (runtimeId == Current.ChestSouth) { cardinal = CardinalSouth; return true; }
+        if (runtimeId == Current.ChestEast) { cardinal = CardinalEast; return true; }
+        if (runtimeId == Current.ChestWest) { cardinal = CardinalWest; return true; }
+        if (runtimeId == Current.Chest) { cardinal = CardinalSouth; return true; }
         cardinal = CardinalSouth;
         return false;
     }
@@ -280,22 +286,19 @@ static class Blocks
     /// </summary>
     public static bool IsPlaceable(int runtimeId)
     {
-        EnsureLoaded();
-        return _placeableIds is not null && _placeableIds.Contains(runtimeId);
+        return Current.PlaceableIds.Contains(runtimeId);
     }
 
     /// <summary>Sand / gravel — cell-tick gravity set (ADR §57). Not on DigProfiles.</summary>
     public static bool IsGravity(int runtimeId)
     {
-        EnsureLoaded();
-        return _gravityIds is not null && _gravityIds.Contains(runtimeId);
+        return Current.GravityIds.Contains(runtimeId);
     }
 
     /// <summary>Literal empty air. Never occupies, never supports (Phase XXIX).</summary>
     public static bool IsAir(int runtimeId)
     {
-        EnsureLoaded();
-        return runtimeId == _air;
+        return runtimeId == Current.Air;
     }
 
     /// <summary>
@@ -308,8 +311,7 @@ static class Blocks
     /// </summary>
     public static bool IsFluid(int runtimeId)
     {
-        EnsureLoaded();
-        return _fluidIds is not null && _fluidIds.Contains(runtimeId);
+        return Current.FluidIds.Contains(runtimeId);
     }
 
     /// <summary>
@@ -321,8 +323,7 @@ static class Blocks
     /// </summary>
     public static bool IsPassableDecoration(int runtimeId)
     {
-        EnsureLoaded();
-        return _passableIds is not null && _passableIds.Contains(runtimeId);
+        return Current.PassableIds.Contains(runtimeId);
     }
 
     /// <summary>
@@ -346,13 +347,12 @@ static class Blocks
     /// <summary>World block rid for a cardinal facing; unknown → south item form.</summary>
     public static int ChestForFacing(string cardinalDirection)
     {
-        EnsureLoaded();
         return cardinalDirection switch
         {
-            CardinalNorth => _chestNorth,
-            CardinalEast => _chestEast,
-            CardinalWest => _chestWest,
-            _ => _chestSouth
+            CardinalNorth => Current.ChestNorth,
+            CardinalEast => Current.ChestEast,
+            CardinalWest => Current.ChestWest,
+            _ => Current.ChestSouth
         };
     }
 
@@ -370,9 +370,8 @@ static class Blocks
     /// <summary>Canonical rid for stacking (chest facings → item form; named blocks → preferred palette entry).</summary>
     public static int NormalizeMergeRuntimeId(int runtimeId)
     {
-        EnsureLoaded();
-        if (IsChest(runtimeId)) return _chest;
-        if (TryGetName(runtimeId, out var name) && _palette!.TryGet(name, out var canonical))
+        if (IsChest(runtimeId)) return Current.Chest;
+        if (TryGetName(runtimeId, out var name) && Current.Palette.TryGet(name, out var canonical))
             return canonical;
         return runtimeId;
     }
@@ -380,17 +379,15 @@ static class Blocks
     /// <summary>Preferred (default-state) runtime id of a named block; false when the name is not a block.</summary>
     public static bool TryGetDefaultRuntimeId(string name, out int runtimeId)
     {
-        EnsureLoaded();
         runtimeId = 0;
-        return _palette is not null && _palette.TryGet(name, out runtimeId);
+        return Current.Palette.TryGet(name, out runtimeId);
     }
 
     public static bool TryGetName(int runtimeId, out string name)
     {
-        EnsureLoaded();
-        if (_nameByRuntime is not null && _nameByRuntime.TryGetValue(runtimeId, out name!))
+        if (Current.NameByRuntime.TryGetValue(runtimeId, out name!))
             return true;
-        if (_palette is not null && _palette.TryGetName(runtimeId, out name!))
+        if (Current.Palette.TryGetName(runtimeId, out name!))
             return true;
         name = "";
         return false;
@@ -425,35 +422,18 @@ static class Blocks
         return data;
     }
 
-    public static void EnsureLoaded()
-    {
-        if (_loaded) return;
-        Load(BlockPaletteLoader.FromEmbeddedResource());
-    }
+    public static void EnsureLoaded() => _ = Current;
 
-    private static readonly object TestLoadGate = new();
-
-    internal static void ResetForTests()
+    /// <summary>The loaded generation; the first access loads the embedded palette.</summary>
+    private static Loaded Current
     {
-        lock (TestLoadGate)
+        get
         {
-            _loaded = false;
-            _air = _stone = _grassBlock = _dirt = _oakPlanks = _oakLog = _oakLeaves = _sand = _gravel = 0;
-            _bedrock = _water = _cobblestone = _deepslate = _chest = 0;
-            _coalOre = _ironOre = _copperOre = _goldOre = _diamondOre = _lapisOre = _redstoneOre = 0;
-            _deepslateCoalOre = _deepslateIronOre = _deepslateCopperOre = _deepslateGoldOre = 0;
-            _deepslateDiamondOre = _deepslateLapisOre = _deepslateRedstoneOre = 0;
-            _chestNorth = _chestSouth = _chestEast = _chestWest = 0;
-            _shortGrass = _dandelion = _poppy = 0;
-            _torch = _oakFence = _stoneBricks = _cobblestoneWall = 0;
-            _craftingTable = 0;
-            _chestIds = null;
-            _placeableIds = null;
-            _gravityIds = null;
-            _fluidIds = null;
-            _passableIds = null;
-            _nameByRuntime = null;
-            _palette = null;
+            if (_loaded is { } loaded) return loaded;
+            lock (LoadGate)
+                return _loaded ??= Build(BlockPaletteLoader.FromEmbeddedResource());
         }
     }
+
+    private static readonly object LoadGate = new();
 }

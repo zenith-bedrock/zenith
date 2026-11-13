@@ -5,6 +5,7 @@ using Zenith.Server;
 
 namespace Zenith.Tests;
 
+[Collection(ExclusiveCollection.Name)]
 public class ServerConfigLoaderTests
 {
     [Fact]
