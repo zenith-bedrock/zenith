@@ -79,6 +79,18 @@ RakNet thread
 
 The network thread **must not** mutate authoritative gameplay state (final position, inventory, world). It publishes input; the gameplay owner validates and applies it. Async I/O follows the same rule: it returns a result to the owner, which revalidates it before applying it.
 
+## Composition
+
+`ZenithServer` builds the shared objects (world, palettes, stores, the spatial index, the mob spawner) once into a `ServerServices`, then
+`GameplayComposition.Register` runs three modules in order: `PlayerInputModule`, `EntityModule`, `WorldModule` (`Server/Composition/`).
+A module constructs its systems and registers them with `services.Register(system, "diagnostics-name")`, which pairs the loop and the
+timing metric in one place. Registration order is execution order, so each ordering constraint is written next to the module that has it,
+and `GameplayCompositionTests` pins the full system order: reordering is a visible change in that list.
+
+Adding a system means adding it to its module (or a new `IGameplayModule` in `GameplayComposition.Modules()`), not threading a new
+parameter through static helpers. Things several modules share live on `ServerServices` and exist before any module runs, so no module
+depends on another having run first for an object to exist. (`RuntimeLoadHarness` in the benchmarks still composes its own subset.)
+
 ## GameLoop
 
 - Target **20 TPS**; advances `GameClock`; invokes `IGameSystem` in **registration order**.

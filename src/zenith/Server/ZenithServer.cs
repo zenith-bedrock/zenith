@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Server.Composition;
 using Zenith.Diagnostics;
 using System.Diagnostics;
 using Zenith.Ecs;
@@ -102,7 +103,6 @@ class ZenithServer
         var villagers = new VillagerStore();
         var diagnostics = new ServerRuntimeDiagnostics();
         var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
-        var playerSpatial = RegisterEarlySystems(gameLoop, players, diagnostics);
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
@@ -146,15 +146,16 @@ class ZenithServer
         // Compose → freeze → gameplay reads only: boot composition for the creative catalog is done as of here.
         creative.Freeze();
         var spawner = new MobSpawner();
-        var gravity = RegisterWorldSystems(
-            gameLoop, diagnostics, world, players, entities,
-            bats, villagers, itemPalette, recipes, durability, creative, playerSpatial,
-            config.World.ChunkResidencySweepIntervalTicks, spawner);
+        var services = new ServerServices(
+            gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
+            entities, bats, villagers, new PlayerSpatialIndex(), spawner,
+            config.World.ChunkResidencySweepIntervalTicks);
+        var worldModule = GameplayComposition.Register(services);
 
         var eventBus = new EventBus(serverLogger);
         Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner);
         GameLoop = gameLoop;
-        _gravity = gravity;
+        _gravity = worldModule.Gravity;
 
         // First real EventBus domain consumers (ADR §78) — join/leave system chat.
         eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
@@ -198,146 +199,6 @@ class ZenithServer
 
     private TransportStatistics TransportStatistics() =>
         _transports.Aggregate(default(TransportStatistics), (total, transport) => total + transport.Statistics);
-
-    /// <summary>
-    /// Phase XIII.2: the systems that need only <see cref="PlayerManager"/> — registered before
-    /// palettes/world exist. Grouped here so the constructor reads as one sequence of named steps
-    /// instead of interleaving registration with palette/world bootstrap.
-    /// </summary>
-    private static PlayerSpatialIndex RegisterEarlySystems(GameLoop gameLoop, PlayerManager players, ServerRuntimeDiagnostics diagnostics)
-    {
-        gameLoop.Register(new TimeSyncSystem(), diagnostics.System("time-sync"));
-        // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
-        gameLoop.Register(new MovementSystem(players), diagnostics.System("movement"));
-        // Phase XXVIII — rebuilds from this tick's just-applied pose, so every later system (this
-        // tick) queries current, not stale, player positions. See PlayerSpatialIndexSystem.
-        var playerSpatial = new PlayerSpatialIndex();
-        gameLoop.Register(new PlayerSpatialIndexSystem(playerSpatial), diagnostics.System("player-spatial-index"));
-        // ItemUseOnActor player targets are resolved after movement established this tick's pose.
-        gameLoop.Register(new PlayerMeleeSystem(players), diagnostics.System("player-melee"));
-        gameLoop.Register(new ChatSystem(), diagnostics.System("chat"));
-        gameLoop.Register(new GameModeSystem(), diagnostics.System("game-mode"));
-        return playerSpatial;
-    }
-
-    /// <summary>
-    /// Phase XIII.2: every system that needs the world/palettes/recipes, registered in the exact
-    /// order the inline comments below require. Returns only <see cref="GravitySystem"/> — the sole
-    /// system the constructor still needs a handle to after registration (graceful-shutdown flush).
-    /// </summary>
-    private static GravitySystem RegisterWorldSystems(
-        GameLoop gameLoop,
-        ServerRuntimeDiagnostics diagnostics,
-        World.World world,
-        PlayerManager players,
-        EntityRuntime entities,
-        BatStore batStore,
-        VillagerStore villagerStore,
-        ItemPalette itemPalette,
-        RecipeRegistry recipes,
-        ItemDurability durability,
-        CreativeCatalog creative,
-        PlayerSpatialIndex playerSpatial,
-        int chunkResidencySweepIntervalTicks,
-        MobSpawner spawner)
-    {
-        var gravity = new GravitySystem(world, players);
-        RegisterEntityGameplay(gameLoop, diagnostics, world, players, entities, batStore, villagerStore, itemPalette, playerSpatial, spawner);
-
-        gameLoop.Register(new GameRuleSyncSystem(world), diagnostics.System("game-rule-sync"));
-        gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
-        gameLoop.Register(new BlockEditSystem(players, world, durability), diagnostics.System("block-edit"));
-        gameLoop.Register(gravity, diagnostics.System("gravity"));
-        gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
-        gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));
-        // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
-        gameLoop.Register(new HungerSystem(itemPalette, players), diagnostics.System("hunger"));
-        gameLoop.Register(new EffectSystem(players), diagnostics.System("effect"));
-        // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
-        gameLoop.Register(new EquipmentSystem(), diagnostics.System("equipment"));
-        gameLoop.Register(new ChunkStreamSystem(world, diagnostics.Worldgen), diagnostics.System("chunk-stream"));
-        gameLoop.Register(
-            new ChunkResidencySystem(world, chunkResidencySweepIntervalTicks),
-            diagnostics.System("chunk-residency"));
-
-        return gravity;
-    }
-
-    /// <summary>
-    /// The entity-gameplay slice of <see cref="RegisterWorldSystems"/>, split out purely for
-    /// readability as the entity roster grew (12 species today) — no new type, no behavior change,
-    /// no registry. Every construction/registration call here is byte-identical to what used to be
-    /// inline in <see cref="RegisterWorldSystems"/>; only its location moved.
-    ///
-    /// DamageDispatch (Phase XXII) is one shared mutable instance, threaded through every species and
-    /// consulted at Tick time — not snapshotted at construction — so <c>.Register</c> calls only need
-    /// to land before GameLoop starts ticking, not before any particular species' construction.
-    /// SkeletonSystem is the one real ordering dependency: its constructor takes the already-built
-    /// ProjectileSystem (it fires arrows through it), which is why it's constructed after Projectile
-    /// specifically, not because every species must register into DamageDispatch first.
-    /// </summary>
-    private static void RegisterEntityGameplay(
-        GameLoop gameLoop,
-        ServerRuntimeDiagnostics diagnostics,
-        World.World world,
-        PlayerManager players,
-        EntityRuntime entities,
-        BatStore batStore,
-        VillagerStore villagerStore,
-        ItemPalette itemPalette,
-        PlayerSpatialIndex playerSpatial,
-        MobSpawner spawner)
-    {
-        var damage = new DamageDispatch();
-        var zombieSystem = new ZombieSystem(world, players, entities, itemPalette);
-        damage.Register(zombieSystem.Owns, zombieSystem.TryApplyDamage);
-        var minecartSystem = new MinecartSystem(world, players, entities, itemPalette);
-        damage.Register(minecartSystem.Owns, minecartSystem.TryApplyDamage);
-        var cowSystem = new CowSystem(world, players, entities, itemPalette);
-        damage.Register(cowSystem.Owns, cowSystem.TryApplyDamage);
-        var spiderSystem = new SpiderSystem(world, players, entities, itemPalette);
-        damage.Register(spiderSystem.Owns, spiderSystem.TryApplyDamage);
-        var fishSystem = new FishSystem(world, players, entities, itemPalette);
-        damage.Register(fishSystem.Owns, fishSystem.TryApplyDamage);
-        var creeperSystem = new CreeperSystem(world, players, entities, itemPalette);
-        damage.Register(creeperSystem.Owns, creeperSystem.TryApplyDamage);
-        var endermanSystem = new EndermanSystem(world, players, entities, itemPalette);
-        damage.Register(endermanSystem.Owns, endermanSystem.TryApplyDamage);
-        var golemSystem = new GolemSystem(world, players, entities, itemPalette);
-        damage.Register(golemSystem.Owns, golemSystem.TryApplyDamage);
-        var projectileSystem = new ProjectileSystem(world, players, entities, damage, playerSpatial);
-        var skeletonSystem = new SkeletonSystem(world, players, entities, projectileSystem, itemPalette);
-        damage.Register(skeletonSystem.Owns, skeletonSystem.TryApplyDamage);
-
-        gameLoop.Register(zombieSystem, diagnostics.System("zombie"));
-        gameLoop.Register(minecartSystem, diagnostics.System("minecart"));
-        gameLoop.Register(projectileSystem, diagnostics.System("projectile"));
-        gameLoop.Register(skeletonSystem, diagnostics.System("skeleton"));
-        gameLoop.Register(cowSystem, diagnostics.System("cow"));
-        gameLoop.Register(creeperSystem, diagnostics.System("creeper"));
-        gameLoop.Register(endermanSystem, diagnostics.System("enderman"));
-        var batSystem = new BatSystem(world, players, batStore, itemPalette);
-        gameLoop.Register(batSystem, diagnostics.System("bat"));
-        gameLoop.Register(spiderSystem, diagnostics.System("spider"));
-        var villagerSystem = new VillagerSystem(world, players, villagerStore, itemPalette);
-        gameLoop.Register(villagerSystem, diagnostics.System("villager"));
-        gameLoop.Register(golemSystem, diagnostics.System("golem"));
-        gameLoop.Register(fishSystem, diagnostics.System("fish"));
-
-        spawner.Register("zombie", (x, y, z) => zombieSystem.SpawnZombie(x, y, z), () => zombieSystem.Zombies.Count);
-        spawner.Register("cow", (x, y, z) => cowSystem.SpawnCow(x, y, z), () => cowSystem.Cows.Count);
-        spawner.Register("creeper", (x, y, z) => creeperSystem.SpawnCreeper(x, y, z), () => creeperSystem.Creepers.Count);
-        spawner.Register("spider", (x, y, z) => spiderSystem.SpawnSpider(x, y, z), () => spiderSystem.Spiders.Count);
-        spawner.Register("skeleton", (x, y, z) => skeletonSystem.SpawnSkeleton(x, y, z), () => skeletonSystem.Skeletons.Count);
-        spawner.Register("iron_golem", (x, y, z) => golemSystem.SpawnGolem(x, y, z));
-        spawner.Register("enderman", (x, y, z) => endermanSystem.SpawnEnderman(x, y, z), () => endermanSystem.Endermen.Count);
-        spawner.Register("fish", (x, y, z) => fishSystem.SpawnFish(x, y, z));
-        spawner.Register("minecart", (x, y, z) => minecartSystem.SpawnMinecart(x, y, z));
-        spawner.Register("bat", batSystem.SpawnBat);
-        spawner.Register("villager", villagerSystem.SpawnVillager);
-        gameLoop.Register(spawner, diagnostics.System("summon"));
-        gameLoop.Register(new NaturalSpawnSystem(world, spawner, SpawnTable.Default), diagnostics.System("natural-spawn"));
-    }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>
     private static ulong LoadOrCreateServerGuid(string dataDir, ILogger logger)

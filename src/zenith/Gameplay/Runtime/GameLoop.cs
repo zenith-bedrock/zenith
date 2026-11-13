@@ -32,6 +32,9 @@ sealed class GameLoop
         _tickTiming = tickTiming;
     }
 
+    /// <summary>The registered systems in execution order (composition tests pin it).</summary>
+    internal IReadOnlyList<IGameSystem> Systems => _systems;
+
     /// <summary>Ordem de registro = ordem de execução.</summary>
     public void Register(IGameSystem system)
     {
