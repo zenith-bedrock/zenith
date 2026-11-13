@@ -21,7 +21,7 @@ static class MobKillReward
         {
             if (candidate.RuntimeId != ownerRuntimeId) continue;
             candidate.AddExperience(amount);
-            candidate.Session.Protocol.Entity.SendPlayerAttributes(candidate);
+            candidate.Client.Entity.SendPlayerAttributes(candidate);
             break;
         }
     }

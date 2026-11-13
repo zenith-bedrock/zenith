@@ -1,4 +1,4 @@
-using Zenith.Session;
+using Zenith.Gameplay.Ports;
 
 namespace Zenith.Gameplay.Replication;
 
@@ -16,7 +16,7 @@ static class BlockSoundFanout
 
     public static void Place(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ,
@@ -25,7 +25,7 @@ static class BlockSoundFanout
 
     public static void Break(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ,
@@ -34,7 +34,7 @@ static class BlockSoundFanout
 
     public static void Hit(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ,
@@ -43,7 +43,7 @@ static class BlockSoundFanout
 
     private static void Emit(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         string sound,
         int blockX,
         int blockY,
@@ -54,12 +54,12 @@ static class BlockSoundFanout
         var y = blockY + 0.5f;
         var z = blockZ + 0.5f;
 
-        subject.Protocol.World.SendLevelSoundEvent(sound, x, y, z, blockRuntimeId);
+        subject.World.SendLevelSoundEvent(sound, x, y, z, blockRuntimeId);
 
         foreach (var peer in online)
         {
-            if (ReferenceEquals(peer.Session, subject) || !peer.IsInGame) continue;
-            peer.Session.Protocol.World.SendLevelSoundEvent(sound, x, y, z, blockRuntimeId);
+            if (ReferenceEquals(peer.Client, subject) || !peer.IsInGame) continue;
+            peer.Client.World.SendLevelSoundEvent(sound, x, y, z, blockRuntimeId);
         }
     }
 }

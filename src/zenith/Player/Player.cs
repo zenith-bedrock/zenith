@@ -62,6 +62,15 @@ class Player
     public string Username { get; }
     public NetworkSession Session { get; }
 
+    /// <summary>This player's connection as gameplay sees it: ports only, no session, packet or protocol type.</summary>
+    public Zenith.Gameplay.Ports.IClientChannel Client => Session;
+
+    /// <summary>The world this player lives in; gameplay resolves positions, rules and storage against it.</summary>
+    public World.World Level { get; }
+
+    /// <summary>The item registry this player's stacks resolve against.</summary>
+    public ItemPalette ItemPalette { get; }
+
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
     public long RuntimeId { get; }
 
@@ -634,6 +643,9 @@ class Player
     {
         Username = username;
         Session = session;
+        // Headless players (unit tests) have no session and so no server context; nothing that needs a world or a palette runs for them.
+        Level = session?.Context.World!;
+        ItemPalette = session?.Context.ItemPalette!;
         RuntimeId = runtimeId;
         Uuid = uuid;
         IdentityStable = identityStable;

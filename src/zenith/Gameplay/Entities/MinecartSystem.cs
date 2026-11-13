@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Packets;
@@ -119,12 +120,11 @@ sealed class MinecartSystem : IGameSystem
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
         _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddMinecart(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw),
             (peer, identity) =>
             {
                 // Late join / re-entering interest while occupied: this peer never saw the mount happen, so it must be told now.
                 if (_minecarts.TryGet(id, out var occupancy) && occupancy.OccupantPlayerRuntimeId is { } riderId)
-                    peer.Session.Protocol.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, SetActorLinkPacket.TypeRider);
+                    peer.Client.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, SetActorLinkPacket.TypeRider);
             });
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
@@ -152,7 +152,7 @@ sealed class MinecartSystem : IGameSystem
         var applied = _mob.TryApplyDamage(id, source, amount, online, currentTick, onPeerRemoved: peer =>
             {
                 if (occupant is not null)
-                    peer.Session.Protocol.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, SetActorLinkPacket.TypeRemove);
+                    peer.Client.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, SetActorLinkPacket.TypeRemove);
             });
 
         // Gated on actual death (entity no longer alive), not just `applied` — a non-lethal hit
@@ -241,7 +241,7 @@ sealed class MinecartSystem : IGameSystem
     private static void SendDismountTeleport(Player.Player? occupant)
     {
         if (occupant is null || !occupant.IsInGame || occupant.IsDead) return;
-        occupant.Session.Protocol.Entity.SendMovePlayerTeleport(
+        occupant.Client.Entity.SendMovePlayerTeleport(
             entityRuntimeId: (ulong)occupant.RuntimeId,
             x: occupant.PositionX,
             y: occupant.PositionY,
@@ -258,7 +258,7 @@ sealed class MinecartSystem : IGameSystem
         var actorUniqueId = GetActorUniqueId(id);
         foreach (var peer in online)
             if (_replication.Viewers.Contains((actorUniqueId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendSetActorLink(riderRuntimeId, actorUniqueId, linkType);
+                peer.Client.Entity.SendSetActorLink(riderRuntimeId, actorUniqueId, linkType);
     }
 
     /// <summary>Steering: a constant forward creep along the rider's current look direction — no analog input is trusted while mounted (see MovementSystem's Phase XX carve-out).</summary>

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Xunit;
 using Zenith.Player;
 using Zenith.Protocol;

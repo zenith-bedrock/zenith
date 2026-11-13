@@ -30,7 +30,7 @@ static class PlayerPresenceAnnouncer
         foreach (var peer in context.PlayerManager.SnapshotOnline())
         {
             if (peer == subject || !peer.IsInGame) continue;
-            peer.Session.Protocol.Chat.SendSystem(message);
+            peer.Client.Chat.SendSystem(message);
         }
     }
 }

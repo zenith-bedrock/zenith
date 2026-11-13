@@ -4,7 +4,7 @@ using Zenith.Session;
 namespace Zenith.Protocol;
 
 /// <summary>Transmite chat. Comandos `/` não passam aqui — ver §52 / GameModeSystem.</summary>
-sealed class ChatProtocol
+sealed class ChatProtocol : Zenith.Gameplay.Ports.IChatChannel
 {
     private readonly NetworkSession _session;
     private readonly TokenBucketRateLimiter<Guid> _rateLimiter;

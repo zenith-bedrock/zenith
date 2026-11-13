@@ -37,7 +37,7 @@ public class MiningProgressionTests
         if (need > 0)
             fx.Clock.AdvanceBy(need);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, z, player.BreakStartedTick, player.BreakRequiredTicks)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(x, y, z));
         return player;

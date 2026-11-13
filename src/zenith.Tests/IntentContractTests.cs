@@ -434,7 +434,7 @@ public class IntentContractTests
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        PlayerVisibility.RelayEmote(
+        PeerRelay.RelayEmote(
             a,
             emoteId: "4c8cc107-7341-4d95-91eb-5386cc311b25",
             tickLength: 40,
@@ -477,7 +477,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 0, Blocks.Stone, hotbarSlot: 0)));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(3, 64, 0, Blocks.Stone, hotbarSlot: 0)));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.False(player.TryConsumeBlockEdit(out _));
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(1, 64, 0));
@@ -498,7 +498,7 @@ public class IntentContractTests
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 70, 5, Blocks.GrassBlock, hotbarSlot: 2)));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.GrassBlock, fx.World.GetBlock(5, 70, 5));
         Assert.Equal(5, player.Inventory.Get(0).Count); // slot 0 untouched
@@ -518,7 +518,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(
             5, 70, 6, Blocks.Stone, hotbarSlot: 0, expectedPlacementStackId: StackId.FromBlock(Blocks.Stone))));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 70, 6));
         Assert.Equal(Blocks.Dirt, player.Inventory.Get(0).Id.Value);
@@ -534,7 +534,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(6, 64, 6, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(6, 64, 6));
         Assert.Equal(5, player.Inventory.Get(0).Count);
@@ -549,7 +549,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 3));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(7, 64, 7, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(7, 64, 7));
         Assert.Equal(2, player.Inventory.Get(0).Count);
@@ -566,7 +566,7 @@ public class IntentContractTests
         Assert.True(b.Inventory.TrySetBlock(0, Blocks.Stone, 4));
 
         Assert.True(b.SubmitBlockEdit(BlockEditIntent.Set(10, 64, 10, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
         Assert.Equal(4, b.Inventory.Get(0).Count);
@@ -581,7 +581,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 1));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(11, 64, 11, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(11, 64, 11));
     }
@@ -595,7 +595,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Stone, hotbarSlot: -1)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         // Place without valid slot must not mutate world or inventory.
         Assert.NotEqual(Blocks.Stone, fx.World.GetBlock(1, 64, 1));
@@ -614,7 +614,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, goldRid, 3));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, goldRid, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.NotEqual(goldRid, fx.World.GetBlock(4, 64, 4));
         Assert.Equal(3, player.Inventory.Get(0).Count); // not consumed
@@ -630,7 +630,7 @@ public class IntentContractTests
         fx.World.SetBlock(4, 80, 4, Blocks.GrassBlock);
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 80, 4, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.GrassBlock, fx.World.GetBlock(4, 80, 4));
         Assert.Equal(5, player.Inventory.Get(0).Count);
@@ -645,7 +645,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 1));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 100, 0, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 100, 0));
         Assert.Equal(1, player.Inventory.Get(0).Count);
@@ -663,7 +663,7 @@ public class IntentContractTests
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(Blocks.Stone, player.Inventory.Get(9).Id.Value);
@@ -682,7 +682,7 @@ public class IntentContractTests
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(1, fx.World.FloorDrops.Count);
@@ -709,7 +709,7 @@ public class IntentContractTests
 
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(FloorDropStore.SoftCap, fx.World.FloorDrops.Count);
@@ -738,7 +738,7 @@ public class IntentContractTests
         Assert.True(fx.World.Chests.TryEnsure(1, 90, 0));
         Assert.True(fx.World.Chests.TrySet(1, 90, 0, 0, InventorySlot.OfBlock(Blocks.Stone, 1)));
         QueueReadyBreak(fx.Clock, fx.World, player, 1, 90, 0);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Chest, fx.World.GetBlock(1, 90, 0));
         Assert.Equal(Blocks.Stone, fx.World.Chests.Get(1, 90, 0, 0).Id.Value);
@@ -758,7 +758,7 @@ public class IntentContractTests
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         var beforeFloor = fx.World.FloorDrops.Count;
         QueueReadyBreak(fx.Clock, fx.World, player, 0, 90, 0);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(beforeFloor, fx.World.FloorDrops.Count);
@@ -776,7 +776,7 @@ public class IntentContractTests
         Assert.True(fx.World.Chests.TrySet(5, 64, 5, 0, InventorySlot.OfBlock(Blocks.Dirt, 7)));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
         Assert.False(fx.World.Chests.TryGetSlots(5, 64, 5, out _));
@@ -905,7 +905,7 @@ public class IntentContractTests
         StandNear(player, 0, 90, 0);
         fx.World.SetBlock(0, 90, 0, Blocks.Stone);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(0, 90, 0));
     }
 
@@ -924,7 +924,7 @@ public class IntentContractTests
         fx.Clock.AdvanceBy(need - 1);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
             0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
     }
 
@@ -949,7 +949,7 @@ public class IntentContractTests
         fx.Clock.AdvanceBy(need - 2);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
             0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
@@ -975,7 +975,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, start, need)));
         player.CancelPendingDigStart(0, 90, 0);
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
         Assert.False(player.HasBreakTarget);
     }
@@ -997,7 +997,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, authStart, authNeed)));
         player.CancelPendingDigStart(0, 90, 0);
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.False(player.HasBreakTarget);
     }
@@ -1021,7 +1021,7 @@ public class IntentContractTests
         player.BeginBreak(1, 90, 0, fx.Clock.CurrentTick, need);
         Assert.True(player.IsBreakTarget(1, 90, 0));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(1, 90, 0));
@@ -1045,7 +1045,7 @@ public class IntentContractTests
 
         // Stale Predict after Abort (no dig auth) — first "retry" that used to feel broken.
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
 
         // Proper redig: Start then DigAuthorized Predict.
@@ -1053,7 +1053,7 @@ public class IntentContractTests
         fx.Clock.AdvanceBy(need);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
             0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
     }
 
@@ -1095,7 +1095,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(0, 90, 0, Blocks.Air)));
         new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
         Assert.False(player.HasBreakTarget);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(0, 90, 0));
     }
 
@@ -1119,7 +1119,7 @@ public class IntentContractTests
         var beforeA = CountRuntime(a.Inventory, Blocks.Dirt);
         var beforeB = CountRuntime(b.Inventory, Blocks.Dirt);
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         var gainedA = CountRuntime(a.Inventory, Blocks.Dirt) - beforeA;
@@ -1183,7 +1183,7 @@ public class IntentContractTests
         fx.Clock.AdvanceBy(need - 1 - (int)Player.Player.DigIdleAbortTicks);
         Assert.True(miner.SubmitBlockEdit(BlockEditIntent.BreakWithDig(
             0, 90, 0, miner.BreakStartedTick, miner.BreakRequiredTicks)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.Equal(0, fx.World.FloorDrops.Count);
         Assert.Equal(0, CountRuntime(miner.Inventory, Blocks.Stone));
@@ -1244,7 +1244,7 @@ public class IntentContractTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         Assert.True(placer.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(2, 64, 2));
@@ -1546,7 +1546,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Stone, 5));
 
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Stone, hotbarSlot: 9)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.NotEqual(Blocks.Stone, fx.World.GetBlock(1, 64, 1));
         Assert.Equal(5, player.Inventory.Get(9).Count);
@@ -1564,7 +1564,7 @@ public class IntentContractTests
 
         // ~20 blocks away horizontally — outside MaxBlockReach
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(20, 64, 0, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.NotEqual(Blocks.Stone, fx.World.GetBlock(20, 64, 0));
         Assert.Equal(5, player.Inventory.Get(0).Count);
@@ -1990,7 +1990,7 @@ public class IntentContractTests
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
             ref stream));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
         Assert.Equal(2, player.Inventory.Get(0).Count);
@@ -2030,7 +2030,7 @@ public class IntentContractTests
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
             ref stream));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(10, 64, 10));
         Assert.Equal(1, player.Inventory.Get(0).Count);
@@ -2071,7 +2071,7 @@ public class IntentContractTests
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
             ref stream));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(4, player.SelectedHotbarSlot);
         Assert.Equal(Blocks.Air, fx.World.GetBlock(10, 64, 10));
@@ -2682,7 +2682,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 3));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(9, 64, 9, Blocks.Stone, hotbarSlot: 0)));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(9, 64, 9));
     }
 
@@ -2694,7 +2694,7 @@ public class IntentContractTests
         StandForPlace(player, 4, 64, 4);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Chest, 2));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(4, 64, 4, Blocks.Chest, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.Chest, fx.World.GetBlock(4, 64, 4));
         Assert.True(fx.World.Chests.TryGetSlots(4, 64, 4, out _));
     }
@@ -2714,7 +2714,7 @@ public class IntentContractTests
         var before = player.Inventory.Get(5).Count;
 
         QueueReadyBreak(fx.Clock, fx.World, player, 5, 64, 5);
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
         Assert.False(fx.World.Chests.TryGetSlots(5, 64, 5, out _));
@@ -3044,7 +3044,7 @@ public class IntentContractTests
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 1, Blocks.Dirt)));
 
         player.IsInGame = false;
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(1, 64, 1));
     }
@@ -3440,7 +3440,7 @@ public class IntentContractTests
         StandForPlace(player, 2, 64, 2);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 2, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(2, 64, 2));
         Assert.Equal(5, player.Inventory.Get(0).Count);
@@ -3457,7 +3457,7 @@ public class IntentContractTests
 
         fx.World.SetBlock(3, 64, 3, Blocks.Stone);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(3, 64, 3, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(3, 64, 3));
         Assert.True(player.Inventory.Get(0).IsEmpty);

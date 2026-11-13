@@ -38,11 +38,12 @@ public class MobDefinitionTests
     }
 
     [Theory]
-    [InlineData("""{"mobs":[{"name":"A","maxHealth":0,"lootItem":"x","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"A","maxHealth":5,"lootItem":"","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"A","maxHealth":5,"lootItem":"x","killExperience":-1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":0,"lootItem":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"x","killExperience":-1}]}""")]
     [InlineData("""{"mobs":[{"name":"","maxHealth":5,"lootItem":"x","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"A","maxHealth":5,"lootItem":"x","killExperience":1},{"name":"A","maxHealth":6,"lootItem":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"x","killExperience":1},{"name":"Zombie","maxHealth":6,"lootItem":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Dragon","maxHealth":5,"lootItem":"x","killExperience":1}]}""")]
     public void A_bad_entry_fails_to_load(string json)
     {
         Assert.Throws<InvalidDataException>(() => MobDefinitions.Parse(Json(json)));

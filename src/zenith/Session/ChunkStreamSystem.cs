@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Replication;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -5,11 +6,10 @@ using System.Threading.Channels;
 using Zenith.Gameplay.Runtime;
 using Zenith.Protocol;
 using Zenith.Player;
-using Zenith.Session;
 using Zenith.Session.Handler;
 using Zenith.World;
 
-namespace Zenith.Gameplay.WorldInteraction;
+namespace Zenith.Session;
 
 /// <summary>
 /// Emite colunas flat novas quando o jogador muda de chunk / tem buracos no disco de view.
@@ -17,6 +17,8 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// são validadas/transmitidas no tick.
 /// Colunas fora do raio são esquecidas quando o centro muda para o cliente poder
 /// revalidar overlays após unload (smoke 6) — não é VisibilitySystem.
+/// It lives in the Session layer, not in Gameplay: it is the transport-side pipeline that gets a client from "joining" to "in
+/// game" (wire order channels, the spawn-ready barrier, session handlers) and keeps streaming columns to it afterwards.
 /// </summary>
 sealed class ChunkStreamSystem : IGameSystem
 {

@@ -41,6 +41,9 @@ sealed class World
     /// </summary>
     private readonly ConcurrentDictionary<(int Cx, int Cz), byte> _hydratedChunks = new();
     private readonly ILogger? _logger;
+
+    /// <summary>The server logger this world was built with (null in headless tests), for gameplay that reports about the world.</summary>
+    public ILogger? Logger => _logger;
     private readonly WorldGenerationDiagnostics? _generationDiagnostics;
     private int _softCapWarned;
 

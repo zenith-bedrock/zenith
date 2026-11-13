@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -177,8 +178,8 @@ sealed class CowSystem : IGameSystem
 
             if (player.Inventory.TryConsume(_feedItem, 1))
             {
-                player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-                player.Session.Context.World.PersistInventory(player);
+                player.Client.Inventory.SendInventoryContent(player.Inventory);
+                player.Level.PersistInventory(player);
                 ref var state = ref _cows.GetRef(id);
                 state.BreedCooldownUntilTick = clock.CurrentTick;
                 FeedCount++;
@@ -192,8 +193,7 @@ sealed class CowSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddCow(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, 2.25f, AttackDamage, currentTick, TryApplyDamage);

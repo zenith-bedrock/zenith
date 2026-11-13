@@ -1,11 +1,12 @@
 using Zenith.Player;
 using Zenith.World;
 
-namespace Zenith.Protocol;
+namespace Zenith.Gameplay.Inventory;
 
 /// <summary>
 /// Wire map inventário: container IDs Bedrock → domain slot references.
-/// Sem lógica de gameplay — só boundary (SSOT; ADR §54 Phase 5).
+/// Sem lógica de gameplay — só o vocabulário compartilhado entre o inventário e os ids de janela do cliente (SSOT; ADR §54 Phase 5).
+/// Lives with the inventory domain (not in Protocol) because the inventory system names wire containers when it records which slots a request touched.
 /// </summary>
 static class InventoryContainerMap
 {

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Gameplay.Survival;
 using Zenith.Packets;
 using Zenith.Session;
@@ -5,40 +6,8 @@ using Zenith.World;
 
 namespace Zenith.Protocol;
 
-/// <summary>Pose for batched MoveActorAbsolute (Gameplay fills; Protocol serializes).</summary>
-readonly struct AbsoluteActorPose
-{
-    public ulong ActorRuntimeId { get; init; }
-    public float X { get; init; }
-    public float Y { get; init; }
-    public float Z { get; init; }
-    public float Pitch { get; init; }
-    public float Yaw { get; init; }
-    public float HeadYaw { get; init; }
-    public bool OnGround { get; init; }
-}
-
-/// <summary>
-/// Raw non-player actor pose; the domain Y is already the actor base position. Yaw/HeadYaw default
-/// to 0 for callers that genuinely have no orientation (falling blocks, projectiles) — every mob
-/// system must pass its actual current yaw or every post-spawn movement update silently resets the
-/// actor to face +Z (Phase XXIII finding: this was happening for every migrated species before this
-/// struct grew rotation fields).
-/// </summary>
-readonly struct RawActorPose
-{
-    public ulong ActorRuntimeId { get; init; }
-    public float X { get; init; }
-    public float Y { get; init; }
-    public float Z { get; init; }
-    public float Pitch { get; init; }
-    public float Yaw { get; init; }
-    public float HeadYaw { get; init; }
-    public byte Flags { get; init; }
-}
-
 /// <summary>Transmite intenções de entidade. Sem lógica de gameplay.</summary>
-sealed class EntityProtocol
+sealed partial class EntityProtocol : IEntityChannel
 {
     private readonly NetworkSession _session;
 

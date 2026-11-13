@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Packets;
@@ -109,8 +110,7 @@ sealed class SpiderSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddSpider(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);
@@ -133,7 +133,7 @@ sealed class SpiderSystem : IGameSystem
             TryApplyPoison(target, clock);
             foreach (var peer in online)
                 if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                    peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
+                    peer.Client.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
 
@@ -150,7 +150,7 @@ sealed class SpiderSystem : IGameSystem
 
         var expiresAtTick = clock.CurrentTick + PoisonDurationTicks;
         if (!target.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
-        target.Session.Protocol.Entity.SendMobEffect(
+        target.Client.Entity.SendMobEffect(
             (ulong)target.RuntimeId, MobEffectPacket.EventAdd, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
         PoisonInflictedCount++;
     }

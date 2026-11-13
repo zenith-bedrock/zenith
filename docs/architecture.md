@@ -44,8 +44,27 @@ Folders under `src/zenith/` match roles: `Gameplay/`, `World/`, `Player/`, `Serv
 ### Outbound
 
 ```
-Gameplay → Protocol → Packets → (compression) → RakNet
+Gameplay → IClientChannel (ports) ⇢ Protocol → Packets → (compression) → RakNet
 ```
+
+Gameplay never names a session, protocol class or packet. It talks to a client through the ports in `Gameplay/Ports/ClientPorts.cs`
+(`IClientChannel` and its `IEntityChannel`, `IInventoryChannel`, `IWorldChannel`, `IChatChannel`, `IUiChannel`): `player.Client.Entity.SendAddMob(MobKind.Zombie, ...)`.
+The ports belong to gameplay; the `*Protocol` classes implement them (dependency inversion), and `NetworkSession` is the `IClientChannel`.
+`ArchitectureBoundaryTests.Gameplay_reaches_the_client_only_through_ports_not_session_or_protocol` enforces it on the compiled IL
+(no `Zenith.Session` or `Zenith.Protocol` reference from any `Zenith.Gameplay` type), so it cannot rot.
+
+What follows from that rule:
+
+- Anything that is really transport orchestration lives in the Session layer, not in Gameplay: `ChunkStreamSystem` (spawn-ready
+  barrier, wire order channels, handler transitions) and `PeerRelay` (skin and emote relays that read the session's profile).
+- Gameplay gets what it needs from its owner, not from the session: `player.Level` (the world), `player.ItemPalette`,
+  `World.Logger`, and constructor-injected services such as `BlockEditSystem`'s `ItemDurability`. `player.Session.Context.*` is gone.
+- Port methods say what happened ("this mob appeared", "this container opened"), not how the wire says it: one `SendAddMob(MobKind, ...)`
+  replaces eleven per-species wrappers, and `SendMobEquipment(id, inventory, slot)` takes the inventory, not a wire item.
+
+Not done (yet): `Player.Client` returns the real session, so a test still needs the session fixture; a recording fake would need an injection
+point on `Player`. The ports also still mirror protocol modules one to one; replacing them with events plus one central replication system
+is the next step if more decoupling is wanted.
 
 ### Inbound (gameplay-affecting)
 

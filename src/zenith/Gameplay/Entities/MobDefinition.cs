@@ -1,14 +1,17 @@
 using System.Reflection;
 using System.Text.Json;
 
+using Zenith.Gameplay.Ports;
+
 namespace Zenith.Gameplay.Entities;
 
 /// <summary>
-/// What distinguishes one ECS actor species from another as plain data: its name (used in logs and loot messages), its
+/// What distinguishes one ECS actor species from another as plain data: its name (used in logs and loot messages; also the
+/// <see cref="MobKind"/> clients are told it is), its
 /// health, the item it drops and the experience a kill gives. Behaviour (movement, targeting, attacks) is not data and
 /// stays in each species' system.
 /// </summary>
-sealed record MobDefinition(string Name, float MaxHealth, string LootItemName, int KillExperience);
+sealed record MobDefinition(string Name, MobKind Kind, float MaxHealth, string LootItemName, int KillExperience);
 
 /// <summary>
 /// The species definitions, loaded from the embedded <c>data/mobs.json</c> so a balance change is an edit to a data file
@@ -18,6 +21,8 @@ sealed record MobDefinition(string Name, float MaxHealth, string LootItemName, i
 static class MobDefinitions
 {
     public const string ResourceName = "mobs.json";
+
+    private static readonly string KnownKinds = string.Join(", ", Enum.GetNames<MobKind>());
 
     private static readonly Lazy<IReadOnlyDictionary<string, MobDefinition>> Loaded = new(Load);
 
@@ -46,13 +51,15 @@ static class MobDefinitions
         {
             var name = entry.GetProperty("name").GetString();
             if (string.IsNullOrWhiteSpace(name)) throw new InvalidDataException($"{ResourceName}: a mob has no name.");
+            // The species name is also its wire kind: a name with no MobKind cannot be announced to clients, so it is a data error now.
+            if (!Enum.TryParse<MobKind>(name, out var kind)) throw new InvalidDataException($"{ResourceName}: '{name}' is not a known mob kind ({KnownKinds}).");
             var health = entry.GetProperty("maxHealth").GetSingle();
             if (!float.IsFinite(health) || health <= 0f) throw new InvalidDataException($"{ResourceName}: '{name}' has maxHealth {health}; it must be positive.");
             var loot = entry.GetProperty("lootItem").GetString();
             if (string.IsNullOrWhiteSpace(loot)) throw new InvalidDataException($"{ResourceName}: '{name}' has no lootItem.");
             var xp = entry.GetProperty("killExperience").GetInt32();
             if (xp < 0) throw new InvalidDataException($"{ResourceName}: '{name}' has negative killExperience {xp}.");
-            if (!byName.TryAdd(name, new MobDefinition(name, health, loot, xp)))
+            if (!byName.TryAdd(name, new MobDefinition(name, kind, health, loot, xp)))
                 throw new InvalidDataException($"{ResourceName}: '{name}' is defined twice.");
         }
 

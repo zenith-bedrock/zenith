@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Replication;
 using System.Buffers;
 using System.IO.Compression;
 using System.Threading.Channels;
@@ -19,7 +20,7 @@ namespace Zenith.Session;
 ///
 /// Dona do <see cref="ISessionHandler"/> ativo.
 /// </summary>
-class NetworkSession
+class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
 {
     private const int WorldStreamQueueCapacity = 64;
     private readonly Channel<WorldStreamWork> _worldStreamQueue =
@@ -45,6 +46,14 @@ class NetworkSession
     public TransportIdentity? TransportIdentity => _transport.TransportIdentity;
     public ServerContext Context { get; }
     public BedrockProtocol Protocol { get; }
+
+    // The gameplay-facing view of this connection (see IClientChannel): the protocol modules, behind ports.
+    string Zenith.Gameplay.Ports.IClientChannel.Xuid => Profile.Xuid;
+    Zenith.Gameplay.Ports.IEntityChannel Zenith.Gameplay.Ports.IClientChannel.Entity => Protocol.Entity;
+    Zenith.Gameplay.Ports.IInventoryChannel Zenith.Gameplay.Ports.IClientChannel.Inventory => Protocol.Inventory;
+    Zenith.Gameplay.Ports.IWorldChannel Zenith.Gameplay.Ports.IClientChannel.World => Protocol.World;
+    Zenith.Gameplay.Ports.IChatChannel Zenith.Gameplay.Ports.IClientChannel.Chat => Protocol.Chat;
+    Zenith.Gameplay.Ports.IUiChannel Zenith.Gameplay.Ports.IClientChannel.Ui => Protocol.Ui;
 
     /// <summary>Só deixa de ser null depois que o LoginSessionHandler valida a identidade.</summary>
     public Player.Player? Player { get; set; }

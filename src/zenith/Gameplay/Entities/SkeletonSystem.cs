@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -191,8 +192,7 @@ sealed class SkeletonSystem : IGameSystem
     }
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddSkeleton(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);

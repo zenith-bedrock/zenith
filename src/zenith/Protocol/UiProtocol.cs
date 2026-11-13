@@ -4,7 +4,7 @@ using Zenith.Session;
 namespace Zenith.Protocol;
 
 /// <summary>Transmite UI já decidida (toast / forms / title). Sem FormId allocator nem estado.</summary>
-sealed class UiProtocol
+sealed class UiProtocol : Zenith.Gameplay.Ports.IUiChannel
 {
     private readonly NetworkSession _session;
 

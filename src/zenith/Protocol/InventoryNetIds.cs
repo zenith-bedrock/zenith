@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.Player;
 using Zenith.World;
 

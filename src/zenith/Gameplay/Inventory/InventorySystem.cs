@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Protocol;
@@ -90,7 +91,7 @@ sealed class InventorySystem : IGameSystem
         in InventoryWindowIntent intent,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        var inv = player.Session.Protocol.Inventory;
+        var inv = player.Client.Inventory;
         switch (intent.Action)
         {
             case InventoryWindowIntent.Kind.OpenInventory:
@@ -138,14 +139,14 @@ sealed class InventorySystem : IGameSystem
                     partnerFirst = _world.Chests.TryAddOpener(partnerX, partnerY, partnerZ, player.RuntimeId);
 
                 if (primaryFirst)
-                    ChestLidFanout.Open(online, player.Session, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+                    ChestLidFanout.Open(online, player.Client, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
                 if (partnerFirst)
-                    ChestLidFanout.Open(online, player.Session, partnerX, partnerY, partnerZ);
+                    ChestLidFanout.Open(online, player.Client, partnerX, partnerY, partnerZ);
 
                 inv.SendChestOpen(intent.X, intent.Y, intent.Z);
                 inv.SendChestContent(_world.Chests, view);
                 inv.SendInventoryContent(player.Inventory);
-                player.Session.Context.Logger.Debug(
+                player.Level.Logger?.Debug(
                     $"Chest open for {player.Username} @ {intent.X},{intent.Y},{intent.Z} slots={view.SlotCount}");
                 break;
 
@@ -176,7 +177,7 @@ sealed class InventorySystem : IGameSystem
                 // currently open", the same workaround PocketMine uses.
                 if (player.OpenContainer is not { } active)
                 {
-                    player.Session.Context.Logger.Debug(
+                    player.Level.Logger?.Debug(
                         $"Ignored stale container close from {player.Username}: {intent.WindowId}/{intent.WindowType}.");
                     return;
                 }
@@ -193,7 +194,7 @@ sealed class InventorySystem : IGameSystem
                 // not something the server should validate on an incoming client-initiated close.
                 if (intent.WindowId != InventoryWindowIntent.UnknownWindowId && active.WindowId != intent.WindowId)
                 {
-                    player.Session.Context.Logger.Debug(
+                    player.Level.Logger?.Debug(
                         $"Ignored mismatched container close from {player.Username}: {intent.WindowId}/{intent.WindowType} (active {active.WindowId}/{active.WindowType}).");
                     return;
                 }
@@ -213,7 +214,7 @@ sealed class InventorySystem : IGameSystem
         in InventoryStackIntent intent,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        var protocol = player.Session.Protocol.Inventory;
+        var protocol = player.Client.Inventory;
         var inventory = player.Inventory;
 
         if (!player.TryClaimInventoryRequest(intent.RequestId))
@@ -223,7 +224,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendUiInventoryContent(player);
             if (player.OpenChest is { } openReplay)
                 protocol.SendChestContent(_world.Chests, openReplay);
-            player.Session.Context.Logger.Debug(
+            player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: duplicate request {intent.RequestId}.");
             return;
         }
@@ -239,7 +240,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendUiInventoryContent(player);
             if (player.OpenChest is { } openStale)
                 protocol.SendChestContent(_world.Chests, openStale);
-            player.Session.Context.Logger.Debug(
+            player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: stale open-container session (request {intent.RequestId}).");
             return;
         }
@@ -251,7 +252,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendUiInventoryContent(player);
             if (player.OpenChest is { } openMismatch)
                 protocol.SendChestContent(_world.Chests, openMismatch);
-            player.Session.Context.Logger.Debug(
+            player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: stack net id mismatch (request {intent.RequestId}).");
             return;
         }
@@ -484,7 +485,7 @@ sealed class InventorySystem : IGameSystem
     /// Soft match before mutate (§54). Positive client ids must equal last DescribeForWire;
     /// ≤0 skipped (air / deferred prediction).
     /// </summary>
-    private static bool ValidateClientStackNetIds(InventoryProtocol protocol, InventoryStackAction[] actions)
+    private static bool ValidateClientStackNetIds(IInventoryChannel protocol, InventoryStackAction[] actions)
     {
         foreach (var action in actions)
         {
@@ -638,7 +639,7 @@ sealed class InventorySystem : IGameSystem
     {
         if (reference.Area != InventorySlotArea.Armor) return true;
         if (value.IsEmpty) return true;
-        return ArmorItems.TryGet(player.Session.Context.ItemPalette, value.Id, out var slot, out _) &&
+        return ArmorItems.TryGet(player.ItemPalette, value.Id, out var slot, out _) &&
                slot == reference.Index;
     }
 

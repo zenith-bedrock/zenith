@@ -12,29 +12,22 @@ static class ArmorFanout
     public static void Broadcast(Player.Player subject, IReadOnlyList<Player.Player> online)
     {
         var inv = subject.Inventory;
-        var protocol = subject.Session.Protocol.Inventory;
-        var head = protocol.DescribeArmor(inv, PlayerInventory.ArmorHelmetSlot);
-        var torso = protocol.DescribeArmor(inv, PlayerInventory.ArmorChestplateSlot);
-        var legs = protocol.DescribeArmor(inv, PlayerInventory.ArmorLeggingsSlot);
-        var feet = protocol.DescribeArmor(inv, PlayerInventory.ArmorBootsSlot);
-
         var rid = (ulong)subject.RuntimeId;
         foreach (var peer in online)
         {
             if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
-            peer.Session.Protocol.Entity.SendMobArmorEquipment(rid, head, torso, legs, feet);
+            peer.Client.Entity.SendMobArmorEquipment(rid, inv);
         }
     }
 
     /// <summary>Peer-visible offhand: the same fan-out shape as <see cref="Broadcast"/>, for the one offhand slot.</summary>
     public static void BroadcastOffhand(Player.Player subject, IReadOnlyList<Player.Player> online)
     {
-        var item = subject.Session.Protocol.Inventory.DescribeOffhand(subject.Inventory);
         var rid = (ulong)subject.RuntimeId;
         foreach (var peer in online)
         {
             if (!peer.IsInGame || ReferenceEquals(peer, subject)) continue;
-            peer.Session.Protocol.Entity.SendMobOffhandEquipment(rid, item);
+            peer.Client.Entity.SendMobOffhandEquipment(rid, subject.Inventory);
         }
     }
 }

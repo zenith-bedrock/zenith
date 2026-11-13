@@ -1,8 +1,9 @@
+using Zenith.Gameplay.Replication;
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
+using Zenith.Gameplay.Ports;
 using Zenith.Protocol;
 using Zenith.Player;
-using Zenith.Session;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Survival;
@@ -132,13 +133,13 @@ sealed class MovementSystem : IGameSystem
                     });
                 }
 
-                peer.Session.Protocol.Entity.SendMoveAbsolutes(_posesForPeer);
+                peer.Client.Entity.SendMoveAbsolutes(_posesForPeer);
             }
 
             foreach (var mover in _dirtyFlags)
             {
                 if (ReferenceEquals(mover, peer)) continue;
-                peer.Session.Protocol.Entity.SendActorFlags(
+                peer.Client.Entity.SendActorFlags(
                     (ulong)mover.RuntimeId,
                     mover.IsSneaking,
                     mover.IsSprinting);
@@ -147,7 +148,7 @@ sealed class MovementSystem : IGameSystem
             foreach (var mover in _swing)
             {
                 if (ReferenceEquals(mover, peer)) continue;
-                peer.Session.Protocol.Entity.SendAnimateSwingArm((ulong)mover.RuntimeId, "attack");
+                peer.Client.Entity.SendAnimateSwingArm((ulong)mover.RuntimeId, "attack");
             }
         }
 
@@ -246,7 +247,7 @@ sealed class MovementSystem : IGameSystem
             player.FallPeakY = player.PositionY;
 
             if (fallDistance <= SafeFallDistance || player.GameMode == GameMode.Creative ||
-                !player.Session.Context.World.Rules.FallDamage)
+                !player.Level.Rules.FallDamage)
                 return;
 
             var damage = MathF.Floor(fallDistance - SafeFallDistance);
@@ -267,12 +268,12 @@ sealed class MovementSystem : IGameSystem
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
         player.PositionX = 0f;
-        player.PositionY = player.Session.Context.World.SampleSpawnFeetY(0, 0);
+        player.PositionY = player.Level.SampleSpawnFeetY(0, 0);
         player.PositionZ = 0f;
         player.Pitch = 0f;
         player.CompleteRespawn();
 
-        var entity = player.Session.Protocol.Entity;
+        var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
         var eyeX = player.PositionX;
         var eyeY = player.PositionY + Blocks.PlayerEyeHeight;
@@ -291,9 +292,9 @@ sealed class MovementSystem : IGameSystem
         entity.SendRespawnReady(eyeX, eyeY, eyeZ, rid);
 
         // Client clears bag UI on death — resync like join (SpawnResponse).
-        player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-        player.Session.Protocol.Inventory.SendUiInventoryContent(player);
-        player.Session.Protocol.Inventory.SendArmorContent(player.Inventory);
-        player.Session.Protocol.Inventory.SendOffhandContent(player.Inventory);
+        player.Client.Inventory.SendInventoryContent(player.Inventory);
+        player.Client.Inventory.SendUiInventoryContent(player);
+        player.Client.Inventory.SendArmorContent(player.Inventory);
+        player.Client.Inventory.SendOffhandContent(player.Inventory);
     }
 }

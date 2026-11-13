@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Protocol;
@@ -83,7 +84,7 @@ sealed class BatSystem : IGameSystem
 
         foreach (var peer in online)
             if (_replicated.Remove((bat.EntityId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendRemoveActor(bat.EntityId);
+                peer.Client.Entity.SendRemoveActor(bat.EntityId);
         bat.Remove();
         _bats.Remove(bat);
         DespawnCount++;
@@ -96,14 +97,14 @@ sealed class BatSystem : IGameSystem
             peer => ActorInterest.Includes(peer, bat.PositionX, bat.PositionZ),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddBat(
+                peer.Client.Entity.SendAddMob(MobKind.Bat, 
                     bat.EntityId, bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, bat.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(bat.RuntimeId, bat.Health.Current, bat.Health.Maximum);
+                peer.Client.Entity.SendHealth(bat.RuntimeId, bat.Health.Current, bat.Health.Maximum);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
             {
-                peer.Session.Protocol.Entity.SendRemoveActor(bat.EntityId);
+                peer.Client.Entity.SendRemoveActor(bat.EntityId);
                 ReplicatedRemovalCount++;
             });
 
@@ -152,7 +153,7 @@ sealed class BatSystem : IGameSystem
         foreach (var peer in online)
         {
             if (!_replicated.Contains((bat.EntityId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, yaw: bat.Yaw, headYaw: bat.Yaw);
+            peer.Client.Entity.SendMoveActorAbsoluteRaw(bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, yaw: bat.Yaw, headYaw: bat.Yaw);
         }
     }
 

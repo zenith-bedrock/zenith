@@ -1,3 +1,4 @@
+using Zenith.Session;
 using System.Threading.Tasks;
 using Xunit;
 using Zenith.World;

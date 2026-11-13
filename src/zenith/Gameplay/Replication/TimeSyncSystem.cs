@@ -16,7 +16,7 @@ sealed class TimeSyncSystem : IGameSystem
         var time = clock.WorldTime;
         foreach (var player in online)
         {
-            player.Session.Protocol.World.SendTime(time);
+            player.Client.World.SendTime(time);
         }
     }
 }

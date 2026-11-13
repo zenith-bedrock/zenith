@@ -1,3 +1,4 @@
+using Zenith.Session;
 using Xunit;
 using Zenith.Protocol;
 using Zenith.World;

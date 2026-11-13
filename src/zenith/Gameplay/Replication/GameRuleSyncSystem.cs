@@ -22,7 +22,7 @@ sealed class GameRuleSyncSystem(World.World world) : IGameSystem
 
         var snapshot = rules.Snapshot;
         foreach (var player in online)
-            player.Session.Protocol.World.SendGameRules(snapshot);
+            player.Client.World.SendGameRules(snapshot);
         world.PersistGameRules();
     }
 }

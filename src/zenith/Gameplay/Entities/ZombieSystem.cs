@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -116,8 +117,7 @@ sealed class ZombieSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddZombie(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamageAndKnockback);
@@ -203,7 +203,7 @@ sealed class ZombieSystem : IGameSystem
             state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
                 if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                    peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
+                    peer.Client.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
 

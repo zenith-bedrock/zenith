@@ -13,7 +13,7 @@ namespace Zenith.Protocol;
 readonly record struct ChunkColumn(int X, int Z, int DimensionId, int SubChunkCount, byte[] ExtraPayload);
 
 /// <summary>Transmite intenções de mundo/spawn/chunks. Não seleciona visibilidade nem grade.</summary>
-sealed class WorldProtocol
+sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
 {
     private readonly NetworkSession _session;
 
@@ -196,6 +196,9 @@ sealed class WorldProtocol
     {
         _session.SendDataPacket(orderChannel, CreateUpdateBlock(x, y, z, blockRuntimeId, flags, dataLayerId));
     }
+
+    void Zenith.Gameplay.Ports.IWorldChannel.SendUpdateBlock(int x, int y, int z, int blockRuntimeId) =>
+        SendUpdateBlock(x, y, z, blockRuntimeId);
 
     /// <summary>One GamePacket envelope for N UpdateBlocks (ADR §44).</summary>
     public void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates)

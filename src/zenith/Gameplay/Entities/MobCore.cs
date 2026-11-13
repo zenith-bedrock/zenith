@@ -28,7 +28,7 @@ sealed class MobCore
         _stores = stores;
         _lootItem = StackId.FromItem(itemPalette.Require(definition.LootItemName));
         _withVelocity = withVelocity;
-        Replication = new ActorReplication(stores, trackPoses);
+        Replication = new ActorReplication(stores, definition.Kind, trackPoses);
     }
 
     public MobDefinition Definition { get; }

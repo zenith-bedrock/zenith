@@ -1,6 +1,5 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
-using Zenith.Session;
 using Zenith.World;
 using Zenith.Gameplay.Replication;
 
@@ -63,7 +62,7 @@ sealed class BlockDigSystem : IGameSystem
     private static void ApplyAbort(
         global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        BlockCrackFanout.Stop(online, player.Session, dig.X, dig.Y, dig.Z);
+        BlockCrackFanout.Stop(online, player.Client, dig.X, dig.Y, dig.Z);
         if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
             player.AbortBreak();
     }
@@ -72,15 +71,15 @@ sealed class BlockDigSystem : IGameSystem
         global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (player.TryGetBreakState(out var activeBreak))
-            BlockCrackFanout.Stop(online, player.Session, activeBreak.X, activeBreak.Y, activeBreak.Z);
+            BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
 
         player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
         if (dig.RequiredTicks > 0)
         {
-            BlockCrackFanout.Start(online, player.Session, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
+            BlockCrackFanout.Start(online, player.Client, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
             var hitBlock = _world.GetBlock(dig.X, dig.Y, dig.Z);
             if (hitBlock != World.World.AirRuntimeId)
-                BlockSoundFanout.Hit(online, player.Session, dig.X, dig.Y, dig.Z, hitBlock);
+                BlockSoundFanout.Hit(online, player.Client, dig.X, dig.Y, dig.Z, hitBlock);
         }
         PlayerVisibility.RelaySwingArm(player, online, swingSource: "mine");
     }
@@ -103,7 +102,7 @@ sealed class BlockDigSystem : IGameSystem
         var newNeed = Blocks.BreakTicks(block, heldId);
         if (newNeed < 0)
         {
-            BlockCrackFanout.Stop(online, player.Session, activeBreak.X, activeBreak.Y, activeBreak.Z);
+            BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
             player.AbortBreak();
             return;
         }
@@ -118,7 +117,7 @@ sealed class BlockDigSystem : IGameSystem
 
         if (Blocks.CrackEventData(oldNeed) != Blocks.CrackEventData(newNeed) && newNeed > 0)
             BlockCrackFanout.UpdateSpeed(
-                online, player.Session, activeBreak.X, activeBreak.Y, activeBreak.Z, newNeed);
+                online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z, newNeed);
     }
 
     /// <summary>
@@ -137,7 +136,7 @@ sealed class BlockDigSystem : IGameSystem
             clock.CurrentTick - activeBreak.LastActivityTick < Player.Player.DigIdleAbortTicks)
             return;
 
-        BlockCrackFanout.Stop(online, player.Session, activeBreak.X, activeBreak.Y, activeBreak.Z);
+        BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
         player.AbortBreak();
     }
 }

@@ -55,7 +55,7 @@ public class LevelSoundEventPacketTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         Assert.True(alice.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 0, Blocks.Stone, hotbarSlot: 0)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
 
         Assert.True(fx.Transport.Captured.Count >= 1);
