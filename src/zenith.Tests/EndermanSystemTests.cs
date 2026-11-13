@@ -9,7 +9,7 @@ namespace Zenith.Tests;
 
 /// <summary>
 /// Phase XV — Enderman: teleport movement and damage-triggered aggro, sharing only kill bookkeeping.
-/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (docs/decisions.md).
+/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (ADR §132).
 /// </summary>
 public sealed class EndermanSystemTests
 {

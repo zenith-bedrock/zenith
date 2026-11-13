@@ -1,6 +1,6 @@
 # Vanilla behavior guide (tester-facing)
 
-**Purpose:** a quick reference for anyone joining Zenith to test — what's implemented and *should* match vanilla Bedrock, what's known to differ or is missing outright, and where to report anomalies. This is **not** a new spec: it's a reading of [`roadmap.md`](roadmap.md), [`alpha-gate.md`](alpha-gate.md), and [`decisions.md`](decisions.md) aimed at people who don't want to dig through ADRs first.
+**Purpose:** a quick reference for anyone joining Zenith to test — what's implemented and *should* match vanilla Bedrock, what's known to differ or is missing outright, and where to report anomalies. This is **not** a new spec: it's a reading of [`roadmap.md`](roadmap.md), [`alpha-gate.md`](alpha-gate.md), and the [decision records](adr/README.md) aimed at people who don't want to dig through ADRs first.
 
 If you hit something that isn't listed as a known gap below, it's likely a real bug — please open an issue (see [`CONTRIBUTING.md`](../CONTRIBUTING.md)) with steps to reproduce, protocol version, and client version.
 
@@ -68,7 +68,7 @@ Full list of non-goals: [`decisions.md`](decisions.md) § "Explicit non-goals" a
 
 1. [`roadmap.md`](roadmap.md) — is this feature shipped, "yes-next," or Horizon 2 (later)?
 2. [`alpha-gate.md`](alpha-gate.md) — manual smoke checklist and known ops traps (e.g. empty `world.path` = InMemory, no warning).
-3. [`decisions.md`](decisions.md) — search `ADR §N` referenced in code comments for the *why* behind a behavior.
+3. [`adr/`](adr/README.md) — open the `ADR §N` referenced in code comments for the *why* behind a behavior.
 
 If it's in the ✅ table and still broken, that's a real bug report. If it's ⚠️ or ❌, check the linked docs first — it may be intentional scope, not a defect.
 

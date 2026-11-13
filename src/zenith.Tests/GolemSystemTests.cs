@@ -12,7 +12,7 @@ namespace Zenith.Tests;
 /// melee, and a multi-target area slam once enraged. Targeting is a fresh per-tick scan (no
 /// retained field), deliberately different from Zombie/Spider's shape — see GolemSystem's doc
 /// comment and docs/history/phases/phase-xviii-runtime-pressure-findings.md.
-/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (docs/decisions.md).
+/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (ADR §132).
 /// </summary>
 public sealed class GolemSystemTests
 {

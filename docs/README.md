@@ -1,6 +1,6 @@
 # Zenith documentation
 
-Everything here lives in-repo and is reviewed via PR, not on the GitHub Wiki — Zenith's doc culture is ADR-first and commit-backed (see [`decisions.md`](decisions.md)), which needs version control tied to the code it describes. Think of this page as the wiki sidebar: pick the section that matches what you're trying to do.
+Everything here lives in-repo and is reviewed via PR, not on the GitHub Wiki — Zenith's doc culture is ADR-first and commit-backed (see [`adr/`](adr/README.md)), which needs version control tied to the code it describes. Think of this page as the wiki sidebar: pick the section that matches what you're trying to do.
 
 Day-to-day engineering constraints live in the root [`ARCHITECTURE.md`](../ARCHITECTURE.md) (living rules, not narrative).
 
@@ -60,7 +60,7 @@ Understanding-oriented — the *why* behind a choice, not the mechanics.
 
 | Doc | Covers |
 |-----|--------|
-| [Decision history](decisions.md) | ADR §1 onward — why we chose X, traced from commits and milestones |
+| [Architecture decision records](adr/README.md) | ADR §1 onward, one file per decision — why we chose X. [Timeline and non-goals](decisions.md) |
 | [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
 | [Robustness / DX debt](robustness-dx-debt.md) | Platform-health risks tracked apart from product roadmap (ADR §54) |
@@ -80,13 +80,13 @@ Where the project is headed — check before picking up work.
 How Zenith arrived at its current architecture — phase-by-phase findings and point-in-time audits.
 Not required reading to work on the current codebase; the canonical docs above already carry the
 durable conclusions. Read these when you need the underlying measurements, rejected alternatives,
-or the full reasoning behind a specific line in [`decisions.md`](decisions.md).
+or the full reasoning behind a specific line in the [decision records](adr/README.md).
 
 | Doc | Covers |
 |-----|--------|
 | [Phase index](history/phases/README.md) | Every phase report, one line each: purpose, key result, current relevance, canonical successor |
 | [`history/audits/`](history/audits/) | Point-in-time audits — ECS feasibility spike, repo/package topology, maturity assessment |
-| [`adr/`](adr/) | Standalone ADRs too detailed for `decisions.md`'s entry format |
+| [`adr/`](adr/README.md) | One file per architecture decision (`ADR §N`); the three long-form designs sit beside their records |
 
 ---
 

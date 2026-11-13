@@ -1,14 +1,14 @@
 # Zenith ECS — living architecture doc
 
 **Status:** real, in production use since Phase XXI, expanded in Phase XXII, and again in the
-Creeper/Enderman/Golem/Fish migration (docs/decisions.md, the ADR after §131). Authoritative for
+Creeper/Enderman/Golem/Fish migration (ADR §132). Authoritative for
 Zombie, Minecart, Projectile, Cow, Skeleton, Spider, Fish, Creeper, Enderman, Golem. Not
 authoritative for anything else — see [Scope](#scope) below.
 
 This document describes what exists in `src/zenith/Ecs/` today. It is not a design proposal and
 not a plugin API. Update it when the ECS surface changes; do not let it drift into aspiration.
 
-Companion reading: [`docs/decisions.md` §106](decisions.md) records the Phase XXI acceptance
+Companion reading: [ADR §106](adr/0106-phase-xxi-accepts-a-real-ecs-for-a-deliberately-small.md) records the Phase XXI acceptance
 decision (why now, why this slice) without rewriting the earlier evidence-gated deferral (§99–102,
 still historically accurate for the state of the project when they were written).
 [`docs/phase-xxi-ecs-foundation-findings.md`](history/phases/phase-xxi-ecs-foundation-findings.md) and

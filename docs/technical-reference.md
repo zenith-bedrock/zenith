@@ -2,7 +2,7 @@
 
 Detailed pointers — protocol version, embedded assets, external study references, and what Zenith owns vs borrows. This is the deep-reference page; [`readme.md`](../readme.md) stays a short landing page and links here.
 
-Comments and ADR tags (`ADR §N`, `§N`) appear in many files. **They are pointers, not a second spec.** When code and prose disagree, **`ServerIdentity` + `ServerConfig.Validate()` + `ARCHITECTURE.md`** win for runtime; **[`decisions.md`](decisions.md)** wins for intent and history.
+Comments and ADR tags (`ADR §N`, `§N`) appear in many files. **They are pointers, not a second spec.** When code and prose disagree, **`ServerIdentity` + `ServerConfig.Validate()` + `ARCHITECTURE.md`** win for runtime; **the [decision records](adr/README.md)** win for intent and history.
 
 ## What this build speaks (SSOT)
 
@@ -20,7 +20,7 @@ Previously **1.26.52** with protocol **2193**; the Mojang schema tag for 1.26.51
 
 | Document | Use for |
 |----------|---------|
-| [`decisions.md`](decisions.md) | **ADR §1 onward** — every `ADR §N` / `§N` in code should resolve here |
+| [`adr/`](adr/README.md) | **ADR §1 onward**, one file per decision — every `ADR §N` / `§N` in code resolves to `adr/NNNN-*.md` ([`decisions.md`](decisions.md) keeps the timeline and the non-goals) |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer and folder rules, smoke expectations, freeze list |
 | [`dx.md`](dx.md) | Contributor workflow, protocol-doc usage, local reference clones |
 | [`roadmap.md`](roadmap.md) | Current dependency graph, maturity gates, NOW/NEXT/LATER |
@@ -90,4 +90,4 @@ Local clone layout (optional dev setup): [`dx.md`](dx.md) § "Bedrock references
 
 ## Reading `ADR §N` in source
 
-Example: `// ADR §57` → open [`decisions.md`](decisions.md) and search `### 57.` or `§57`. Shorthand `§N` in comments is the same index. New layers or abstractions need a **new ADR section before merge**, not only a code comment.
+Example: `// ADR §57` → open `adr/0057-*.md` (the [index](adr/README.md) lists every number). Shorthand `§N` in comments is the same index. New layers or abstractions need a **new ADR section before merge**, not only a code comment.

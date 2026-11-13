@@ -9,7 +9,7 @@ namespace Zenith.Tests;
 
 /// <summary>
 /// Phase XV — Creeper: fuse/explosion is a different death path, sharing only kill bookkeeping.
-/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (docs/decisions.md).
+/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (ADR §132).
 /// </summary>
 public sealed class CreeperSystemTests
 {

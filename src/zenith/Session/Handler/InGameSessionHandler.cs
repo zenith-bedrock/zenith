@@ -60,7 +60,7 @@ partial class InGameSessionHandler : ISessionHandler
     /// <summary>
     /// One delegate per packet ID, resolved once at startup instead of a per-call `switch`.
     /// `BinaryStream` is passed by `ref`, so this cannot be `Action&lt;&gt;` — needs a named delegate.
-    /// See ADR §113 (docs/decisions.md) for why this registry-map shape was introduced (mirrors
+    /// See ADR §113 (docs/adr/0113-ingamesessionhandler-dispatch-becomes-a-registry-map.md) for why this registry-map shape was introduced (mirrors
     /// `CommandCatalog`'s `Dictionary&lt;string, CommandDefinition&gt;` precedent) and why it is
     /// scoped to this handler only, not project-wide. Frozen because this is a build-once,
     /// read-on-every-inbound-packet table — <see cref="FrozenDictionary{TKey,TValue}"/> trades

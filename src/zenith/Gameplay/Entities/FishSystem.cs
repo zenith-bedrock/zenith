@@ -15,7 +15,7 @@ namespace Zenith.Gameplay.Entities;
 /// nearby. Combat/loot/XP/despawn/replication all reuse <see cref="DamageableActorCombat"/>/
 /// <see cref="DespawnLifecycle"/>/<see cref="ActorInterest"/> unmodified.
 ///
-/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// ECS-authoritative since this migration (see ADR §132, docs/adr/0132-migrate-creeper-enderman-golem-fish-onto-the-ecs-re.md): Position/
 /// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores; only
 /// <see cref="FishState"/> (wander heading) is feature-specific and owned here — same shape as
 /// <see cref="SpiderState"/>. Being on <see cref="DamageDispatch"/> means arrows can hit a fish like any other actor.

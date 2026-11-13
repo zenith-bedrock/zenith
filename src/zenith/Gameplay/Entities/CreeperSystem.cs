@@ -18,7 +18,7 @@ namespace Zenith.Gameplay.Entities;
 /// (a lethal self-inflicted hit is still exactly that bookkeeping) while area damage to nearby
 /// players is applied separately through the ordinary <see cref="PlayerDamage"/> path.
 ///
-/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// ECS-authoritative since this migration (see ADR §132, docs/adr/0132-migrate-creeper-enderman-golem-fish-onto-the-ecs-re.md): Position/
 /// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores,
 /// Velocity.Y is reused as gravity fall-speed (Phase XXIX convention), and only
 /// <see cref="CreeperState"/> (target, fuse state) is feature-specific. The fuse/explosion/

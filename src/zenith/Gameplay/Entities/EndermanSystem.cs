@@ -16,7 +16,7 @@ namespace Zenith.Gameplay.Entities;
 /// proximity-triggered (Zombie) or ignite-range-triggered (Creeper). Both are entirely local to
 /// this system.
 ///
-/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// ECS-authoritative since this migration (see ADR §132, docs/adr/0132-migrate-creeper-enderman-golem-fish-onto-the-ecs-re.md): Position/
 /// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores; only
 /// <see cref="EndermanState"/> (aggro target/window, teleport/attack cooldowns) is feature-specific
 /// and owned here — same shape as <see cref="SpiderState"/>. Enderman never used

@@ -1,6 +1,6 @@
 # ADR §97 — Choose Execution Model by Behavior, Not by Available Abstraction
 
-> Espelha `docs/decisions.md` §97 (log canônico de ADRs). Este arquivo existe como documento standalone porque o conteúdo é normativo/duradouro (um heurístico de decisão), não uma entrada de "feature shipped" como as demais entradas de `decisions.md`. Em caso de divergência, `decisions.md` §97 é a entrada oficial; este arquivo é a versão longa.
+> Companheiro de [ADR §97](0097-choose-execution-model-by-behavior-not-by-available.md) (o registro canônico no log de ADRs). Este arquivo existe como documento standalone porque o conteúdo é normativo/duradouro (um heurístico de decisão), não uma entrada de "feature shipped" como as demais entradas de `decisions.md`. Em caso de divergência, `decisions.md` §97 é a entrada oficial; este arquivo é a versão longa.
 
 ## Context
 

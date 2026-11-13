@@ -2,7 +2,7 @@
 
 > Git state and open work here are superseded by [`handoff-2026-11-13-runtime-and-entities.md`](handoff-2026-11-13-runtime-and-entities.md). The BDS learnings below remain valid.
 
-Read first: `AGENTS.md`, `docs/inventory-audit.md`, ADR §146 in `docs/decisions.md`, `tools/bedrock-data/README.md`.
+Read first: `AGENTS.md`, `docs/inventory-audit.md`, [ADR §146](adr/0146-crafting-runs-on-the-real-vanilla-recipe-set-matched.md), `tools/bedrock-data/README.md`.
 User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 
 ## Standing rules from the user

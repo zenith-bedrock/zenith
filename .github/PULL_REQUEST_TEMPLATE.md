@@ -9,7 +9,7 @@
 - [ ] Layers respected (decide ≠ transmit ≠ serialize)
 - [ ] No new `Network/` catch-all; files land in `Packets/` / `Protocol/` / `Session/` / domain folders
 - [ ] Packets do not reference `Player` / `World` / `Server`
-- [ ] No freeze-list additions without ADR in `docs/decisions.md`
+- [ ] No freeze-list additions without an ADR in `docs/adr/`
 
 ## Test plan
 

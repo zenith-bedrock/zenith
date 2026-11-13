@@ -2,7 +2,7 @@
 
 Platform-health work tracked separately from Horizon‑1 product ([`roadmap.md`](roadmap.md)). Recorded so later PRs cite one artifact instead of rediscovering the diagnostic.
 
-**ADR:** [`decisions.md`](decisions.md) §54.
+**ADR:** [ADR §54](adr/0054-platform-health-robustness-dx-separate-from-horizon-1.md).
 
 ## Critical delivery risks (audit refresh — jul 2026)
 

@@ -27,7 +27,7 @@ Also open when relevant:
 - [`AGENTS.md`](../../../AGENTS.md)
 - [`ARCHITECTURE.md`](../../../ARCHITECTURE.md)
 - [`.cursor/rules/zenith-architecture.mdc`](../../../.cursor/rules/zenith-architecture.mdc) (if present locally)
-- [`docs/decisions.md`](../../../docs/decisions.md) — only for touched themes
+- [`docs/adr/`](../../../docs/adr/README.md) — only for touched themes
 - [`docs/dx.md`](../../../docs/dx.md) — DX / non-goals
 
 Detailed rubric: [checklist.md](checklist.md).
