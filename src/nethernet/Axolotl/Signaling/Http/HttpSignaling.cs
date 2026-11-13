@@ -9,6 +9,7 @@ namespace Zenith.NetherNet.Axolotl.Signaling.Http;
 /// <summary>Prefixes every message with a component name (port of PocketMine's <c>PrefixedLogger</c>).</summary>
 public sealed class PrefixedNetherNetLogger(INetherNetLogger inner, string prefix) : INetherNetLogger
 {
+    public bool IsDebugEnabled => inner.IsDebugEnabled;
     public void Debug(string message) => inner.Debug($"[{prefix}] {message}");
     public void Info(string message) => inner.Info($"[{prefix}] {message}");
     public void Warning(string message) => inner.Warning($"[{prefix}] {message}");
@@ -192,7 +193,7 @@ public sealed class HttpSignaling : ISignaling
 
             IPolledStream stream = _certificate is not null ? new PolledTlsStream(client) : new PolledSocketStream(client);
             var connection = new HttpConnection(stream, peerAddress, _certificate, _logger, now);
-            _logger.Debug("Signaling connection opened from " + connection.PeerName);
+            _logger.Debug($"Signaling connection opened from {connection.PeerName}");
             _connections[_nextConnectionId++] = connection;
         }
     }

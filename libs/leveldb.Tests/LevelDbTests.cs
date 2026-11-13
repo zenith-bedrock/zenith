@@ -648,7 +648,7 @@ public class LevelDbTests
     }
 
     [Fact]
-    public void Concurrent_reads_and_writes_do_not_corrupt_or_deadlock()
+    public async Task Concurrent_reads_and_writes_do_not_corrupt_or_deadlock()
     {
         // Empirical validation of the ADR §118 reader/writer lock model — not just code review.
         // Distinct keys per writer thread so a wrong final count can only mean the MemTable's
@@ -700,9 +700,9 @@ public class LevelDbTests
                 }
             })).ToArray();
 
-            Assert.True(Task.WaitAll(writers, TimeSpan.FromSeconds(30)), "writers did not finish — possible deadlock");
+            Assert.True(await TestWait.CompletesAsync(Task.WhenAll(writers), TimeSpan.FromSeconds(30)), "writers did not finish — possible deadlock");
             stopReading.Cancel();
-            Assert.True(Task.WaitAll(readers, TimeSpan.FromSeconds(10)), "readers did not finish — possible deadlock");
+            Assert.True(await TestWait.CompletesAsync(Task.WhenAll(readers), TimeSpan.FromSeconds(10)), "readers did not finish — possible deadlock");
 
             Assert.Empty(exceptions);
 
@@ -719,7 +719,7 @@ public class LevelDbTests
     }
 
     [Fact]
-    public void Concurrent_overwrites_of_the_same_key_never_produce_a_torn_read()
+    public async Task Concurrent_overwrites_of_the_same_key_never_produce_a_torn_read()
     {
         // Fase 8 (ADR §118) made TryGet return the array MemTable already owns instead of cloning
         // it, safe specifically because MemTable never mutates an already-stored array in place.
@@ -770,9 +770,9 @@ public class LevelDbTests
                 }
             })).ToArray();
 
-            Assert.True(Task.WaitAll(readers, TimeSpan.FromSeconds(10)), "readers did not finish — possible deadlock");
+            Assert.True(await TestWait.CompletesAsync(Task.WhenAll(readers), TimeSpan.FromSeconds(10)), "readers did not finish — possible deadlock");
             stop.Cancel();
-            Assert.True(writer.Wait(TimeSpan.FromSeconds(10)), "writer did not finish — possible deadlock");
+            Assert.True(await TestWait.CompletesAsync(writer, TimeSpan.FromSeconds(10)), "writer did not finish — possible deadlock");
 
             Assert.Empty(exceptions);
         }

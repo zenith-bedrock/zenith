@@ -61,7 +61,7 @@ public class BlockCrackFanoutTests
         BlockCrackFanout.Start(fx.Players.Online, miner.Session, 0, -60, 0, 15);
         FlushRaknet(fx.Players);
 
-        Assert.Equal(1, fx.Transport.Captured.Count);
+        Assert.Single(fx.Transport.Captured);
     }
 
     /// <summary>Priority.Normal queues frames; Tick flushes OutputFrames to Server.Send.</summary>

@@ -29,9 +29,8 @@ partial class InGameSessionHandler : ISessionHandler
         }
         catch (Exception ex)
         {
-            var message = $"{label} decode rejected: {ex.Message}";
-            if (warnOnFailure) session.Context.Logger.Warning(message);
-            else session.Context.Logger.Debug(message);
+            if (warnOnFailure) session.Context.Logger.Warning($"{label} decode rejected: {ex.Message}");
+            else session.Context.Logger.Debug($"{label} decode rejected: {ex.Message}");
             packet = new T();
             return false;
         }

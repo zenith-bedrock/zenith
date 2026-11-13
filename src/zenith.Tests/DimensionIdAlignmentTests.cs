@@ -17,12 +17,12 @@ public class DimensionIdAlignmentTests
     }
 
     [Fact]
-    public void World_exposes_overworld_dimension_on_columns()
+    public async Task World_exposes_overworld_dimension_on_columns()
     {
         Blocks.EnsureLoaded();
         var world = new World.World(new InMemoryChunkStorage(), terrain: FlatTerrainProvider.Instance);
         Assert.Equal(DimensionId.Overworld, world.Overworld.WireId);
-        var col = world.GetOrCreateColumnAsync(0, 0).AsTask().GetAwaiter().GetResult();
+        var col = await world.GetOrCreateColumnAsync(0, 0);
         Assert.Equal(DimensionId.Overworld, col.Base.DimensionId);
     }
 }

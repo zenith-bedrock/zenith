@@ -96,7 +96,7 @@ public class GameRulesTests
 
         Assert.True(rules.KeepInventory);
         Assert.Equal(1, rules.Version);
-        Assert.Single(rules.Snapshot.Zip(before).Where(p => p.First != p.Second));
+        Assert.Single(rules.Snapshot.Zip(before), p => p.First != p.Second);
         // Setting the value it already has is not a change.
         Assert.True(rules.TrySet("keepInventory", "true", out _));
         Assert.Equal(1, rules.Version);
