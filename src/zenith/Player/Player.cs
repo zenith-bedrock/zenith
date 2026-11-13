@@ -12,6 +12,10 @@ namespace Zenith.Player;
 /// <see cref="Dig"/> (quebra de bloco), <see cref="Windows"/> (containers e janelas), <see cref="Effects"/> (efeitos de status) e
 /// <see cref="Replicated"/> (o que os peers já sabem).
 /// </para>
+/// <para>
+/// Os setters públicos (pose, vitals, flags) existem por simplicidade, mas quem pode escrever cada um é fixo: a tabela em
+/// <c>ArchitectureBoundaryTests.Player_state_is_written_only_by_its_owners</c> varre o IL e falha se outro tipo escrever.
+/// </para>
 /// </summary>
 class Player
 {

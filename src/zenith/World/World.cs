@@ -226,22 +226,24 @@ sealed class World
         GetBlock(blockX, feetY + 1, blockZ) == AirRuntimeId;
 
     /// <summary>
-    /// If saved pose is buried / flooded, snap feet to <see cref="SampleSpawnFeetY"/> at the same XZ.
-    /// Returns true when pose changed (caller should Persist).
+    /// If a saved pose is buried / flooded, finds the feet Y that stands on the surface at the same XZ.
+    /// Returns true (with <paramref name="healedY"/>) when the pose needs to change; the caller applies it and persists. A pure
+    /// query: the world never writes player state.
     /// </summary>
-    public bool TryHealSpawnFeet(Player.Player player)
+    public bool TryHealSpawnFeet(float x, float y, float z, out float healedY)
     {
-        var bx = (int)MathF.Floor(player.PositionX);
-        var by = (int)MathF.Floor(player.PositionY);
-        var bz = (int)MathF.Floor(player.PositionZ);
+        healedY = y;
+        var bx = (int)MathF.Floor(x);
+        var by = (int)MathF.Floor(y);
+        var bz = (int)MathF.Floor(z);
         if (IsSpawnFeetClear(bx, by, bz))
             return false;
 
-        var healedY = SampleSpawnFeetY(bx, bz);
-        if (healedY == by && IsSpawnFeetClear(bx, healedY, bz))
+        var candidate = SampleSpawnFeetY(bx, bz);
+        if (candidate == by && IsSpawnFeetClear(bx, candidate, bz))
             return false;
 
-        player.PositionY = healedY;
+        healedY = candidate;
         return true;
     }
 
