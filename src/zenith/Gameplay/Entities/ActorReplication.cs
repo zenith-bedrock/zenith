@@ -1,6 +1,7 @@
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Ports;
+using Zenith.Player;
 using Zenith.Protocol;
 
 namespace Zenith.Gameplay.Entities;
@@ -22,6 +23,13 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
     private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private readonly HashSet<long> _aliveScratch = [];
+    private readonly ViewerInterestTracker _interest = new();
+    private readonly Dictionary<long, ReconcileStamp> _stamps = new();
+    private readonly List<long> _staleStamps = [];
+    private bool _tickBegun;
+
+    /// <summary>Where and when an actor's viewer set was last brought up to date.</summary>
+    private readonly record struct ReconcileStamp(int ChunkX, int ChunkZ, ulong Frame);
 
     /// <summary>(actor unique id, peer runtime id) pairs for every actor a peer has been told about; shared with combat so a death is announced to exactly those peers.</summary>
     public HashSet<(long EntityId, long PlayerId)> Viewers { get; } = [];
@@ -33,6 +41,17 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
     public long DespawnCount;
 
     /// <summary>
+    /// Starts the species' tick: snapshots which players' interest changed since the last tick (<see cref="ViewerInterestTracker"/>).
+    /// Must run first in the tick, before any <see cref="Reconcile"/>, so <see cref="Reconcile"/> can re-check only those players
+    /// instead of all of them for an actor that did not change chunk.
+    /// </summary>
+    public void BeginTick(IReadOnlyList<Player.Player> online)
+    {
+        _interest.Begin(online);
+        _tickBegun = true;
+    }
+
+    /// <summary>
     /// Brings one actor's viewer set up to date: peers that became interested get <paramref name="sendSpawn"/> then the
     /// current health (then <paramref name="afterSpawn"/>, for species with more to tell a newcomer), peers that lost
     /// interest get the removal.
@@ -42,13 +61,22 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
         IReadOnlyList<Player.Player> online,
         Action<Player.Player, ActorIdentity>? afterSpawn = null)
     {
+        if (!_tickBegun) throw new InvalidOperationException($"{nameof(Reconcile)} before {nameof(BeginTick)}: the species' tick must begin the replication frame first.");
         if (!stores.Positions.TryGet(id, out var pos)) return;
         if (!stores.Identities.TryGet(id, out var identity)) return;
         if (!stores.Health.TryGet(id, out var healthComponent)) return;
         var health = healthComponent.State;
 
+        // An actor that stayed in its chunk since the previous tick has a viewer set that is only stale for players whose own
+        // interest changed; one that moved (or is new, or skipped a tick) is checked against everybody.
+        var chunkX = PlayerChunkTracker.BlockToChunk(pos.X);
+        var chunkZ = PlayerChunkTracker.BlockToChunk(pos.Z);
+        var current = _stamps.TryGetValue(identity.ActorUniqueId, out var stamp) &&
+                      stamp.ChunkX == chunkX && stamp.ChunkZ == chunkZ && stamp.Frame + 1 >= _interest.Frame;
+        _stamps[identity.ActorUniqueId] = new ReconcileStamp(chunkX, chunkZ, _interest.Frame);
+
         ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, Viewers,
+            identity.ActorUniqueId, current ? _interest.Changed : online, Viewers,
             peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
@@ -108,7 +136,12 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
             if (stores.Identities.TryGet(id, out var identity))
                 _aliveScratch.Add(identity.ActorUniqueId);
 
+        _tickBegun = false;
         Viewers.RemoveWhere(pair => !_aliveScratch.Contains(pair.EntityId) || !IsOnline(online, pair.PlayerId));
+        _staleStamps.Clear();
+        foreach (var uniqueId in _stamps.Keys)
+            if (!_aliveScratch.Contains(uniqueId)) _staleStamps.Add(uniqueId);
+        foreach (var uniqueId in _staleStamps) _stamps.Remove(uniqueId);
         List<(long, long)>? stale = null;
         foreach (var key in _lastProjected.Keys)
             if (!Viewers.Contains(key)) (stale ??= []).Add(key);

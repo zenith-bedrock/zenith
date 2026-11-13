@@ -61,6 +61,7 @@ sealed class MinecartSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _replication.BeginTick(online);
         if (online.Count == 0) return;
 
         _tickScratch.Clear();
