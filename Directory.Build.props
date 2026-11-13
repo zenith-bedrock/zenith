@@ -7,6 +7,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
+    <!-- A clean build has 0 warnings; keep it that way. NuGet audit advisories (NU19xx) come from an external feed that changes
+         without a code change, so they stay warnings and never break an unrelated build. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 </Project>
