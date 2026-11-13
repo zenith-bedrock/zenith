@@ -32,4 +32,7 @@ sealed class NoiseTerrainProvider : ITerrainProvider
 
     public int SampleSpawnFeetY(int x, int z)
         => OverworldTerrainSampler.SampleSpawnFeetY(x, z, _seed);
+
+    public OverworldBiomeKind SampleBiome(int x, int z)
+        => OverworldBiomeSampler.SampleKind(x, z, _seed);
 }

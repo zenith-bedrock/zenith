@@ -70,6 +70,7 @@ sealed class ServerRuntimeDiagnostics
         {
             ["game-rule-sync"] = builder.Timing("tick.system.game-rule-sync", "tick"),
             ["summon"] = builder.Timing("tick.system.summon", "tick"),
+            ["natural-spawn"] = builder.Timing("tick.system.natural-spawn", "tick"),
             ["time-sync"] = builder.Timing("tick.system.time-sync", "tick"),
             ["movement"] = builder.Timing("tick.system.movement", "tick"),
             ["player-spatial-index"] = builder.Timing("tick.system.player-spatial-index", "tick"),

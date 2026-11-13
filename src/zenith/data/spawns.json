@@ -1,0 +1,14 @@
+{
+  "categories": [
+    { "name": "monster",  "capPerPlayer": 20, "intervalTicks": 40 },
+    { "name": "creature", "capPerPlayer": 10, "intervalTicks": 400 }
+  ],
+  "spawns": [
+    { "mob": "zombie",   "category": "monster",  "weight": 100, "group": [1, 4], "time": "night", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
+    { "mob": "skeleton", "category": "monster",  "weight": 100, "group": [1, 3], "time": "night", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
+    { "mob": "spider",   "category": "monster",  "weight": 100, "group": [1, 2], "time": "night", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
+    { "mob": "creeper",  "category": "monster",  "weight": 100, "group": [1, 1], "time": "night", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
+    { "mob": "enderman", "category": "monster",  "weight": 10,  "group": [1, 1], "time": "night", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
+    { "mob": "cow",      "category": "creature", "weight": 8,   "group": [2, 4], "time": "any",   "biomes": ["Plains", "Forest", "Hills"] }
+  ]
+}

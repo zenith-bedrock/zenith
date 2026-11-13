@@ -63,6 +63,8 @@ sealed class World
     /// <summary>Feet Y for join/respawn above base terrain at (x,z) — ignores overlays.</summary>
     public int SampleSpawnFeetY(int x, int z) => _overworld.Terrain.SampleSpawnFeetY(x, z);
 
+    public OverworldBiomeKind SampleBiome(int x, int z) => _overworld.Terrain.SampleBiome(x, z);
+
     public World(
         IChunkStorage storage,
         ILogger? logger = null,

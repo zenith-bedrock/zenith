@@ -323,18 +323,19 @@ class ZenithServer
         gameLoop.Register(golemSystem, diagnostics.System("golem"));
         gameLoop.Register(fishSystem, diagnostics.System("fish"));
 
-        spawner.Register("zombie", (x, y, z) => zombieSystem.SpawnZombie(x, y, z));
-        spawner.Register("cow", (x, y, z) => cowSystem.SpawnCow(x, y, z));
-        spawner.Register("creeper", (x, y, z) => creeperSystem.SpawnCreeper(x, y, z));
-        spawner.Register("spider", (x, y, z) => spiderSystem.SpawnSpider(x, y, z));
-        spawner.Register("skeleton", (x, y, z) => skeletonSystem.SpawnSkeleton(x, y, z));
+        spawner.Register("zombie", (x, y, z) => zombieSystem.SpawnZombie(x, y, z), () => zombieSystem.Zombies.Count);
+        spawner.Register("cow", (x, y, z) => cowSystem.SpawnCow(x, y, z), () => cowSystem.Cows.Count);
+        spawner.Register("creeper", (x, y, z) => creeperSystem.SpawnCreeper(x, y, z), () => creeperSystem.Creepers.Count);
+        spawner.Register("spider", (x, y, z) => spiderSystem.SpawnSpider(x, y, z), () => spiderSystem.Spiders.Count);
+        spawner.Register("skeleton", (x, y, z) => skeletonSystem.SpawnSkeleton(x, y, z), () => skeletonSystem.Skeletons.Count);
         spawner.Register("iron_golem", (x, y, z) => golemSystem.SpawnGolem(x, y, z));
-        spawner.Register("enderman", (x, y, z) => endermanSystem.SpawnEnderman(x, y, z));
+        spawner.Register("enderman", (x, y, z) => endermanSystem.SpawnEnderman(x, y, z), () => endermanSystem.Endermen.Count);
         spawner.Register("fish", (x, y, z) => fishSystem.SpawnFish(x, y, z));
         spawner.Register("minecart", (x, y, z) => minecartSystem.SpawnMinecart(x, y, z));
         spawner.Register("bat", batSystem.SpawnBat);
         spawner.Register("villager", villagerSystem.SpawnVillager);
         gameLoop.Register(spawner, diagnostics.System("summon"));
+        gameLoop.Register(new NaturalSpawnSystem(world, spawner, SpawnTable.Default), diagnostics.System("natural-spawn"));
     }
 
     /// <summary>Stable RakNet GUID across restarts so LAN list identity does not churn (§41).</summary>

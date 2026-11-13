@@ -16,6 +16,9 @@ interface ITerrainProvider
 
     /// <summary>Domain feet Y for first join / respawn above base surface at (x,z).</summary>
     int SampleSpawnFeetY(int x, int z);
+
+    /// <summary>Biome at a column. Flat terrain is all plains; noise terrain reads its climate.</summary>
+    OverworldBiomeKind SampleBiome(int x, int z) => OverworldBiomeKind.Plains;
 }
 
 /// <summary>Classic Zenith flat overworld (stone / grass / air).</summary>
