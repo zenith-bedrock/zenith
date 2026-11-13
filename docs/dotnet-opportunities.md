@@ -26,8 +26,8 @@ Scope and limits: only Debug has a handler, because it is the only level meant t
 ## 5. `FrozenDictionary` / `FrozenSet` for read-only catalogs — open, profile first
 Item, block, recipe, mob and spawn catalogs are built at boot and only read. Use only where a profile shows hot lookups; one file uses it today.
 
-## 6. Stricter build — open, cheap
-A clean build has 0 warnings (11 were fixed on 2026-11-13: xUnit analyzer findings in tests, and a dead `length > MaxLength` check in `nethernet` `Der.Length`), so `TreatWarningsAsErrors` costs nothing now and stops regressions. Also consider `AnalysisMode` above default and `EnforceCodeStyleInBuild`. No third-party analyzers are used beyond the Microsoft ones.
+## 6. Warnings as errors — DONE (analysis level still default)
+`TreatWarningsAsErrors` is on in `Directory.Build.props` (Release and Debug both verified with `--no-incremental`). NuGet audit advisories (`NU1901`-`NU1904`) are excluded via `WarningsNotAsErrors`: they come from an external feed and would otherwise break unrelated builds. Still open from this item: a higher `AnalysisMode` and `EnforceCodeStyleInBuild`, which would first need their existing findings fixed. Original note: A clean build has 0 warnings (11 were fixed on 2026-11-13: xUnit analyzer findings in tests, and a dead `length > MaxLength` check in `nethernet` `Der.Length`), so `TreatWarningsAsErrors` costs nothing now and stops regressions. Also consider `AnalysisMode` above default and `EnforceCodeStyleInBuild`. No third-party analyzers are used beyond the Microsoft ones.
 
 ## 7. `System.Diagnostics.Metrics` as a bridge — open, operational value only
 `libs/diagnostics` is a custom metrics runtime. Publishing its counters through a `Meter` would let `dotnet-counters` and OpenTelemetry exporters read them. Keep the custom analysis; add the bridge, do not replace it.
