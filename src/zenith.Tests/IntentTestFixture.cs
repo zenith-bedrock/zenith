@@ -99,7 +99,7 @@ internal sealed class IntentTestFixture
             MTU = 1400
         };
         var session = new NetworkSession(new Zenith.Network.RakNet.RakNetGameConnection(rak), new StubSessionHandler(), Context);
-        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode)
+        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode, level: World, itemPalette: Context.ItemPalette)
         {
             IsInGame = isInGame
         };

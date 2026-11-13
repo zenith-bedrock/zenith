@@ -148,7 +148,9 @@ class LoginSessionHandler : ISessionHandler
             session.Context.PlayerManager.AllocateRuntimeId(),
             identity.Uuid,
             gameMode,
-            identity.IdentityStable)
+            identity.IdentityStable,
+            session.Context.World,
+            session.Context.ItemPalette)
         {
             SkinRgba = identity.SkinRgba,
             SkinWidth = identity.SkinWidth,

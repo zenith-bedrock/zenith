@@ -639,7 +639,7 @@ internal static class RuntimeLoadHarness
                     MTU = 1400
                 };
                 var session = new NetworkSession(new Zenith.Network.RakNet.RakNetGameConnection(rak), new InGameSessionHandler(), context);
-                var player = new Player.Player($"load-{i}", session, players.AllocateRuntimeId(), Guid.NewGuid(), GameMode.Survival)
+                var player = new Player.Player($"load-{i}", session, players.AllocateRuntimeId(), Guid.NewGuid(), GameMode.Survival, level: world, itemPalette: itemPalette)
                 {
                     IsInGame = true,
                     PositionX = i * 4,
