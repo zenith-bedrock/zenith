@@ -27,8 +27,8 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Stone, 1));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(801, [
-            InventoryStackAction.Drop(0, 4),
-            InventoryStackAction.Transfer(0, 9, 1)
+            InventoryStackAction.Drop(InventorySlotReference.Player(0), 4),
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -52,7 +52,7 @@ public class InventoryDuplicationRegressionTests
         var before = CountAuthoritativeQuantity(player, fx.World, dirt);
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(808, [
-            InventoryStackAction.Drop(0, 4)
+            InventoryStackAction.Drop(InventorySlotReference.Player(0), 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -73,9 +73,9 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.OakLog, 1));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(802, [
-            InventoryStackAction.Drop(0, 4),
-            InventoryStackAction.Drop(1, 4),
-            InventoryStackAction.Transfer(9, 2, 1)
+            InventoryStackAction.Drop(InventorySlotReference.Player(0), 4),
+            InventoryStackAction.Drop(InventorySlotReference.Player(1), 4),
+            InventoryStackAction.Transfer(InventorySlotReference.Player(9), InventorySlotReference.Player(2), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -98,8 +98,8 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(10, Blocks.Air, 0));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(803, [
-            InventoryStackAction.Transfer(0, 9, 2),
-            InventoryStackAction.Transfer(0, 10, 3)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), 2),
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(10), 3)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -116,7 +116,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 4));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(804, [
-            InventoryStackAction.Transfer(0, 0, 1)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(0), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -133,7 +133,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Dirt, PlayerInventory.MaxStack));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(806, [
-            InventoryStackAction.Transfer(0, 9, 1)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -153,7 +153,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Air, 0));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(807 + count, [
-            InventoryStackAction.Transfer(0, 9, count)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), count)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 

@@ -10,9 +10,6 @@ namespace Zenith.World;
 /// </summary>
 static class OverworldTerrainSampler
 {
-    /// <summary>Legacy flat hill variation (unused by §64 noise; kept for API clarity).</summary>
-    public const int MaxSurfaceRise = 6;
-
     public const int NoiseDirtDepth = 3;
 
     /// <summary>

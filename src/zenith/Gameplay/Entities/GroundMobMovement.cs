@@ -8,9 +8,8 @@ namespace Zenith.Gameplay.Entities;
 /// real physical semantics (<see cref="Blocks.CanSupportGroundActor"/>) plus a small deterministic
 /// vertical model (gravity, falling, landing, one-block step-up). Still a pure resolution predicate
 /// over primitives — it does not know what a "mob" is, does not choose a heading, and never touches
-/// replication. Both the ECS roster (Position + Velocity.Y reused as a fall-speed magnitude) and the
-/// legacy roster (a concrete PositionY + a small per-mob fall-speed field) call the same two static
-/// methods; neither needed to migrate for the other to gain physics. See
+/// replication. Every ground species (Position + Velocity.Y reused as a fall-speed magnitude) calls the same two static
+/// methods. See
 /// docs/history/phases/phase-xxix-ground-actor-physics-findings.md for the research behind the
 /// constants and the behavioral decisions this makes.
 /// </summary>
@@ -67,7 +66,7 @@ static class GroundMobMovement
     /// every reference implementation consulted (none snap-teleport a fall). Returns whether
     /// <paramref name="y"/> changed. <paramref name="fallSpeed"/> is caller-owned state (ECS:
     /// <c>Velocity.Y</c> reused as a downward-speed magnitude, matching <see cref="WorldInteraction.GravitySystem"/>'s
-    /// own <c>FallingBlockEntry.VelocityY</c> convention; legacy: a small per-mob field) — this method
+    /// own <c>FallingBlockEntry.VelocityY</c> convention) — this method
     /// only ever reads/writes it and <paramref name="y"/>, never decides whether it should be called.
     /// </summary>
     public static bool ResolveVertical(World.World world, float x, float z, ref float y, ref float fallSpeed, out bool grounded)

@@ -2461,7 +2461,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 5));
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.GrassBlock, 2));
 
-        var intent = InventoryStackIntent.Create(42, [InventoryStackAction.Swap(0, 9)]);
+        var intent = InventoryStackIntent.Create(42, [InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(9))]);
         Assert.True(player.Intents.SubmitInventoryStack(intent));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -2480,14 +2480,14 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 8));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
-            InventoryStackAction.Transfer(0, PlayerInventory.CursorSlot, 3)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Cursor, 3)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(5, player.Inventory.Get(0).Count);
         Assert.Equal(3, player.Inventory.Cursor.Count);
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(2, [
-            InventoryStackAction.Transfer(PlayerInventory.CursorSlot, 9, 3)
+            InventoryStackAction.Transfer(InventorySlotReference.Cursor, InventorySlotReference.Player(9), 3)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.True(player.Inventory.Cursor.IsEmpty);
@@ -2503,11 +2503,11 @@ public class IntentContractTests
 
         for (var i = 0; i < Player.PlayerIntents.MaxPendingInventoryStacks; i++)
             Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(i, [
-                InventoryStackAction.Swap(0, 1)
+                InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(1))
             ])));
 
         Assert.False(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(99, [
-            InventoryStackAction.Swap(0, 2)
+            InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(2))
         ])));
     }
 
@@ -2520,7 +2520,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.GrassBlock, 3));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(7, [
-            InventoryStackAction.Transfer(0, 9, 1)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -2539,11 +2539,11 @@ public class IntentContractTests
 
         for (var i = 0; i < Player.PlayerIntents.MaxPendingInventoryStacks; i++)
             Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(i, [
-                InventoryStackAction.Swap(0, 1)
+                InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(1))
             ])));
 
         Assert.False(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(99, [
-            InventoryStackAction.Swap(0, 2)
+            InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(2))
         ])));
         // Authoritative bag unchanged until tick drains prior intents
         Assert.Equal(64, player.Inventory.Get(0).Count);
@@ -2590,7 +2590,7 @@ public class IntentContractTests
         equipment.Tick(fx.Clock, fx.Players.Online); // Prime the initial held fingerprint.
 
         Assert.True(alice.Intents.SubmitInventoryStack(InventoryStackIntent.Create(900, [
-            InventoryStackAction.Swap(0, 9)
+            InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(9))
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         equipment.Tick(fx.Clock, fx.Players.Online);
@@ -2735,7 +2735,7 @@ public class IntentContractTests
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(
-                0, InventoryContainerMap.ChestBase, 4,
+                InventorySlotReference.Player(0), InventorySlotReference.OpenContainer(0), 4,
                 new WireSlot(InventoryContainerMap.Hotbar, 0),
                 new WireSlot(InventoryContainerMap.Chest, 0))
         ])));
@@ -2760,7 +2760,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(2, [
-            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.OpenContainer(0), 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -2782,7 +2782,7 @@ public class IntentContractTests
 
         var chestA = player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(50, [
-            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.OpenContainer(0), 4)
         ], chestA.Generation)));
 
         // A close/reopen was processed before the queued action. The packet referenced chest A;
@@ -3025,7 +3025,7 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("disconnect-stack");
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 2));
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(508, [
-            InventoryStackAction.Transfer(0, 9, 1)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Player(9), 1)
         ])));
 
         // The request was accepted before teardown but has no authority after disconnect.
@@ -3093,7 +3093,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(3, [
-            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.OpenContainer(0), 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3117,7 +3117,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(4, [
-            InventoryStackAction.Transfer(0, InventoryContainerMap.ChestBase, 4)
+            InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.OpenContainer(0), 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3135,7 +3135,7 @@ public class IntentContractTests
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(
-                0, InventoryContainerMap.CraftUiBase, 1,
+                InventorySlotReference.Player(0), InventorySlotReference.CraftGrid(0), 1,
                 new WireSlot(InventoryContainerMap.CombinedHotbarAndInventory, 0),
                 new WireSlot(InventoryContainerMap.CraftingInput, 28))
         ])));
@@ -3155,7 +3155,7 @@ public class IntentContractTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 10));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(3, [
-            InventoryStackAction.Drop(0, 4, new WireSlot(InventoryContainerMap.Hotbar, 0))
+            InventoryStackAction.Drop(InventorySlotReference.Player(0), 4, new WireSlot(InventoryContainerMap.Hotbar, 0))
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3201,7 +3201,7 @@ public class IntentContractTests
             InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 4,
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, 4,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Cursor, 0))
         ])));
@@ -3231,7 +3231,7 @@ public class IntentContractTests
             InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 1, 4)
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(1), 4)
         ])));
         sys.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(1).Id.Value);
@@ -3243,7 +3243,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(21, [
             InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 2, 4)
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(2), 4)
         ])));
         sys.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(4, player.Inventory.Get(2).Count);
@@ -3263,7 +3263,7 @@ public class IntentContractTests
             InventoryStackAction.Craft(TestRecipes.Chest),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 3, 1,
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(3), 1,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Inventory, 3))
         ])));
@@ -3282,7 +3282,7 @@ public class IntentContractTests
             InventoryStackAction.Craft(TestRecipes.Chest),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 3, 1,
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(3), 1,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Inventory, 3))
         ])));
@@ -3334,7 +3334,7 @@ public class IntentContractTests
             InventoryStackAction.Craft(TestRecipes.OakLogToPlanks, craftTimes: 2),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 9, 8,
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(9), 8,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Inventory, 9))
         ])));
@@ -3391,7 +3391,7 @@ public class IntentContractTests
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(11, [
             InventoryStackAction.Transfer(
-                9, PlayerInventory.CursorSlot, 8,
+                InventorySlotReference.Player(9), InventorySlotReference.Cursor, 8,
                 new WireSlot(InventoryContainerMap.Inventory, 9),
                 new WireSlot(InventoryContainerMap.Cursor, 0))
         ])));
@@ -3409,7 +3409,7 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("replay");
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 8));
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Stone, 3));
-        var intent = InventoryStackIntent.Create(712, [InventoryStackAction.Swap(0, 9)]);
+        var intent = InventoryStackIntent.Create(712, [InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(9))]);
 
         Assert.True(player.Intents.SubmitInventoryStack(intent));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -3620,7 +3620,7 @@ public class IntentContractTests
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack,
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, PlayerInventory.MaxStack,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Cursor, 0))
         ])));
@@ -3643,7 +3643,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(2, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 0, PlayerInventory.MaxStack)
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(0), PlayerInventory.MaxStack)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3665,7 +3665,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(3, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 32)
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, 32)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3686,7 +3686,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(4, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack)
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, PlayerInventory.MaxStack)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3707,7 +3707,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(7, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, 1)
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
@@ -3726,7 +3726,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(5, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Drop(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.MaxStack,
+                InventorySlotReference.CraftResult, PlayerInventory.MaxStack,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot))
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -3748,7 +3748,7 @@ public class IntentContractTests
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(6, [
             InventoryStackAction.CraftCreative(CreativeCatalog.Stone),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, PlayerInventory.CursorSlot, PlayerInventory.MaxStack)
+                InventorySlotReference.CraftResult, InventorySlotReference.Cursor, PlayerInventory.MaxStack)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 

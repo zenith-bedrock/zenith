@@ -107,7 +107,7 @@ sealed class ChestStore
         return true;
     }
 
-    /// <summary>Legacy void API — prefers <see cref="TryEnsure"/> when refuse matters.</summary>
+    /// <summary>Fire-and-forget <see cref="TryEnsure"/>: a SoftCap refusal is ignored, so use <see cref="TryEnsure"/> when the caller must react to it.</summary>
     public void Ensure(int x, int y, int z) => _ = TryEnsure(x, y, z);
 
     public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots) =>

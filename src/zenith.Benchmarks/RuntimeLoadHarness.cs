@@ -697,7 +697,7 @@ internal static class RuntimeLoadHarness
                 // transaction system without creating/destroying resources.
                 if (tick % 10 == 0)
                     player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(tick * 10000 + (int)player.RuntimeId,
-                        [InventoryStackAction.Swap(0, 9)]));
+                        [InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Player(9))]));
             }
         }
 

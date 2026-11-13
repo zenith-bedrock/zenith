@@ -9,7 +9,7 @@ namespace Zenith.Gameplay.Entities;
 /// not a second subtly-different implementation) containing a caller-supplied X/Z position.
 ///
 /// This is a derived acceleration structure, never authoritative position storage: it is rebuilt
-/// from whichever store already owns X/Z truth (ECS <c>Position</c>, a legacy actor's own fields,
+/// from whichever store already owns X/Z truth (ECS <c>Position</c>,
 /// <c>Player.PositionX/Z</c>) once per tick (see each consumer's own rebuild call site for exactly
 /// when), not maintained incrementally. See docs/history/phases/phase-xxviii-spatial-query-scaling-findings.md,
 /// "Rebuild vs incremental," for why: Zenith's ECS exposes direct mutable <c>ref</c> component

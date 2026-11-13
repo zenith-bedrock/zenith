@@ -18,8 +18,8 @@ public class InventoryStackNetIdTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 8));
         var inv = player.Session.Protocol.Inventory;
 
-        var a = inv.DescribeForWire(0, player.Inventory.Get(0));
-        var b = inv.DescribeForWire(0, player.Inventory.Get(0));
+        var a = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
+        var b = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
         Assert.NotEqual(0, a.StackNetworkId);
         Assert.Equal(a.StackNetworkId, b.StackNetworkId);
     }
@@ -32,9 +32,9 @@ public class InventoryStackNetIdTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 8));
         var inv = player.Session.Protocol.Inventory;
 
-        var a = inv.DescribeForWire(0, player.Inventory.Get(0));
+        var a = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 7));
-        var b = inv.DescribeForWire(0, player.Inventory.Get(0));
+        var b = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
         Assert.NotEqual(a.StackNetworkId, b.StackNetworkId);
     }
 
@@ -46,7 +46,7 @@ public class InventoryStackNetIdTests
         var bone = fx.Context.ItemPalette.Require("minecraft:bone");
         Assert.True(player.Inventory.TrySetItem(0, bone, 3));
 
-        var wire = player.Session.Protocol.Inventory.DescribeForWire(0, player.Inventory.Get(0));
+        var wire = player.Session.Protocol.Inventory.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
 
         Assert.Equal(bone, wire.NetworkId);
         Assert.Equal((ushort)3, wire.Count);
@@ -78,8 +78,8 @@ public class InventoryStackNetIdTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("soft");
         var inv = player.Session.Protocol.Inventory;
-        Assert.True(inv.MatchesAdvertisedStackNetId(0, 0));
-        Assert.True(inv.MatchesAdvertisedStackNetId(0, -1));
+        Assert.True(inv.MatchesAdvertisedStackNetId(InventorySlotReference.Player(0), 0));
+        Assert.True(inv.MatchesAdvertisedStackNetId(InventorySlotReference.Player(0), -1));
     }
 
     [Fact]
@@ -89,9 +89,9 @@ public class InventoryStackNetIdTests
         var player = fx.AddInGamePlayer("mismatch");
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 1));
         var inv = player.Session.Protocol.Inventory;
-        var wire = inv.DescribeForWire(0, player.Inventory.Get(0));
-        Assert.True(inv.MatchesAdvertisedStackNetId(0, wire.StackNetworkId));
-        Assert.False(inv.MatchesAdvertisedStackNetId(0, wire.StackNetworkId + 99));
+        var wire = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0));
+        Assert.True(inv.MatchesAdvertisedStackNetId(InventorySlotReference.Player(0), wire.StackNetworkId));
+        Assert.False(inv.MatchesAdvertisedStackNetId(InventorySlotReference.Player(0), wire.StackNetworkId + 99));
     }
 
     [Fact]
@@ -103,14 +103,14 @@ public class InventoryStackNetIdTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Air, 0));
         var inv = player.Session.Protocol.Inventory;
         inv.SendInventoryContent(player.Inventory);
-        var advertised = inv.DescribeForWire(0, player.Inventory.Get(0)).StackNetworkId;
+        var advertised = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0)).StackNetworkId;
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(
             requestId: 7,
             actions:
             [
                 InventoryStackAction.Transfer(
-                    0, 9, 4,
+                    InventorySlotReference.Player(0), InventorySlotReference.Player(9), 4,
                     new WireSlot(InventoryContainerMap.Hotbar, 0, advertised + 1),
                     new WireSlot(InventoryContainerMap.Inventory, 9, 0))
             ])));
@@ -131,14 +131,14 @@ public class InventoryStackNetIdTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Air, 0));
         var inv = player.Session.Protocol.Inventory;
         inv.SendInventoryContent(player.Inventory);
-        var advertised = inv.DescribeForWire(0, player.Inventory.Get(0)).StackNetworkId;
+        var advertised = inv.DescribeForWire(InventorySlotReference.Player(0), player.Inventory.Get(0)).StackNetworkId;
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(
             requestId: 8,
             actions:
             [
                 InventoryStackAction.Transfer(
-                    0, 9, 4,
+                    InventorySlotReference.Player(0), InventorySlotReference.Player(9), 4,
                     new WireSlot(InventoryContainerMap.Hotbar, 0, advertised),
                     new WireSlot(InventoryContainerMap.Inventory, 9, 0))
             ])));

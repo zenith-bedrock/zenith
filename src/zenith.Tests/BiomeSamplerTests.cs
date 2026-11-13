@@ -5,6 +5,9 @@ namespace Zenith.Tests;
 
 public class BiomeSamplerTests
 {
+    /// <summary>Spacing used to scan biome neighborhoods; climate is continuous, so it is only a sampling stride.</summary>
+    private const int NeighborhoodScanStep = 48;
+
     public BiomeSamplerTests() => Blocks.EnsureLoaded();
 
     [Fact]
@@ -163,7 +166,7 @@ public class BiomeSamplerTests
         int anchorX,
         int anchorZ)
     {
-        var half = OverworldBiomeSampler.BiomeCellSize / 2;
+        var half = NeighborhoodScanStep / 2;
         var count = 0;
         for (var x = anchorX - half; x < anchorX + half; x++)
         {
@@ -189,7 +192,7 @@ public class BiomeSamplerTests
         int anchorX,
         int anchorZ)
     {
-        var half = OverworldBiomeSampler.BiomeCellSize / 2;
+        var half = NeighborhoodScanStep / 2;
         var count = 0;
         for (var x = anchorX - half; x < anchorX + half; x++)
         {

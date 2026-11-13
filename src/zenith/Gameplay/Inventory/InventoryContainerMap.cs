@@ -42,17 +42,6 @@ static class InventoryContainerMap
     public const byte WindowTypeWorkbench = 1;
     public const byte WindowTypeInventory = 0xff;
 
-    /// <summary>Legacy characterization-test offset for open-container slots; not used by production transactions.</summary>
-    public const int ChestBase = 100;
-
-    /// <summary>
-    /// Legacy characterization-test offset for the ephemeral craft UI (ADR §35).
-    /// </summary>
-    public const int CraftUiBase = 200;
-
-    /// <summary>Legacy characterization-test offset for created output (container 60 wire slot 50).</summary>
-    public const int CraftResultFlat = CraftUiBase + PlayerCraftUi.GridSize;
-
     public const int CraftingGridWireOffset = 28;
     /// <summary>
     /// ADR §139 — the crafting table's 3×3 grid, verified against Dragonfly's
@@ -66,15 +55,6 @@ static class InventoryContainerMap
 
     /// <summary>Mojang PlayerUISlot::CURSOR — window 124 slot 0 (ISR container 59).</summary>
     public const int UiCursorSlot = 0;
-
-    public static bool IsChestFlat(int flat) =>
-        flat is >= ChestBase and < ChestBase + ChestStore.DoubleSize;
-
-    public static bool IsCraftUiFlat(int flat) =>
-        flat is >= CraftUiBase and <= CraftResultFlat;
-
-    public static bool IsCraftGridFlat(int flat) =>
-        flat is >= CraftUiBase and < CraftResultFlat;
 
     public static byte CraftGridWireSlot(int gridIndex) =>
         (byte)(CraftingGridWireOffset + gridIndex);
@@ -224,18 +204,5 @@ static class InventoryContainerMap
                 wireSlot = 0;
                 return false;
         }
-    }
-
-    /// <summary>Compatibility only for flat-index characterization tests.</summary>
-    public static bool TryToWire(int flat, out byte containerId, out byte wireSlot)
-    {
-        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
-        {
-            containerId = 0;
-            wireSlot = 0;
-            return false;
-        }
-
-        return TryToWire(reference, out containerId, out wireSlot);
     }
 }

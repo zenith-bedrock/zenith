@@ -205,7 +205,7 @@ public class FloorDropFanoutTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(9001, [
-            InventoryStackAction.Drop(0, 4)
+            InventoryStackAction.Drop(InventorySlotReference.Player(0), 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);

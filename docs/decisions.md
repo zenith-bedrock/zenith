@@ -308,7 +308,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 29. Crafting 2×2 — RecipeRegistry MVP (wire completed in §35)
 
-**Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid flats `CraftUiBase`+0–3, result `CraftResultFlat`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
+**Choice (updated Jul 2026):** Ephemeral `PlayerCraftUi` (grid slots `InventorySlotReference.CraftGrid(0–3)`, result `CraftResult`) outside `PlayerInventory` — chest-flat pattern. ISR maps containers 13/60; `CraftRecipe`+`Create`+`Consume` bake into one intent; tick `TryCraftFromGrid` then materialize result. Window **124** UI content on spawn + inventory open. Bag-only `TryCraft` remains for tools/tests. **`CraftRecipe.NumberOfCrafts` honored** (shift-click output): consume ×N, result `out×N` clamped by grid affordability and single-slot `MaxStack` (H0).
 
 **Why:** Empty ISR OK / bag consume never drove SAI craft UI (S35). Grid + Create is enough without a full 54-slot UI inventory. Discarding times made shift-click Place N×out fail after craft ×1. Skipping CreatedOutput (60) in ItemStackResponse desynced sequential take after planks→chest — **fixed:** always emit container 60 on OK; refuse Survival craft while Result still occupied.
 
@@ -404,7 +404,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 ### 38. CraftCreative from CreativeCatalog SSOT
 
-**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `CraftResultFlat` (CreatedOutput), then honor same-request Place/Take/Drop/Create. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response includes CreatedOutput (60) for craft path.
+**Choice (updated Jul 2026):** `CreativeCatalog` on `ServerContext` (net ids 1–7). Protocol `BuildCreativeContent` from catalog. ISR `CraftCreative` is a first-class `InventoryStackAction` (same contract as `CraftRecipe`): materialize `MaxStack` into `InventorySlotReference.CraftResult` (CreatedOutput), then honor same-request Place/Take/Drop/Create. `NumberOfCrafts` on CraftCreative is protocol boilerplate (ignored; do not reject times==0). Recipe+Creative in one request rejected. Creative-only (handler + system). Wire `WireTouch` echoes; response includes CreatedOutput (60) for craft path.
 
 **Why:** Palette vanilla is CreatedOutput→cursor/bag, not bag `TryAdd`. The prior `CraftCreativeNetId` parallel intent with empty Actions discarded client Places (click never reached cursor).
 
@@ -667,7 +667,7 @@ When held sync + §17 smoke are stable: (sketch retained; **MVP landed in §28**
 
 **Non-goals:** trapped/ender/copper; hopper; left/right palette `type` states unless smoke forces them; 54-slot LevelDB blob.
 
-**Domain flats:** chest open slots remain `ChestBase` (100) + 0..53; craft UI moved to `CraftUiBase` **200** so 54-slot chest flats do not collide with craft (was 150).
+**Domain slots:** chest open slots are `InventorySlotReference.OpenContainer(0..53)`. (This ADR originally used flat int offsets, `ChestBase` 100 / `CraftUiBase` 200; that scheme was removed on 2026-11-13, see the audit.)
 
 **Supersedes:** §28/§39/§46 Deferred “double-chest” lines — product leaf is this ADR.
 
@@ -1694,6 +1694,8 @@ combat attributes/effects/armor, ECS, VisibilitySystem, public actor/plugin API 
 
 ### 106. Phase XXI accepts a real ECS for a deliberately small, representative actor slice
 
+> **Superseded in part by §149:** `IDamageableActor`, `GroundMobCombat`, `DamageableActorCombat` and the per-species stores described here no longer exist; every species is an ECS actor on one replication path.
+
 **Choice:** build and adopt a real, auditable, non-archetype ECS runtime
 (`src/zenith/Ecs/`: `EntityId`, `EntityWorld`, `ComponentStore<T>`, `Query`/`Query2`/`Query3`,
 `RuntimeIdIndex`, `EntityRuntime`) and migrate three actors — Zombie, Minecart, Projectile — onto
@@ -1752,6 +1754,8 @@ Question 10 for why "what migrates next" is deliberately left to future evidence
 scheduled here.
 
 ### 107. Phase XXII expands the ECS roster and replaces the two-species damage dispatch chain
+
+> **Superseded in part by §149:** `IDamageableActor`, `GroundMobCombat`, `DamageableActorCombat` and the per-species stores described here no longer exist; every species is an ECS actor on one replication path.
 
 **Choice:** migrate three more actors — Cow, Skeleton, Spider — onto the ECS runtime established by
 §106, chosen to pressure passive/breeding behavior, ECS-to-ECS composition (Skeleton spawning an
@@ -2833,6 +2837,8 @@ separate, larger, not-yet-scoped follow-up — not touched here.
 
 ### 131. Close the ECS/entities question: unify `GroundMobCombat`/`DamageableActorCombat`'s duplicated logic, keep the storage split
 
+> **Superseded in part by §149:** `IDamageableActor`, `GroundMobCombat`, `DamageableActorCombat` and the per-species stores described here no longer exist; every species is an ECS actor on one replication path.
+
 **Context:** External review asked whether the Zenith's ECS-for-6-species/OOP-for-6-species split
 was "genuinely solving a measurable problem or becoming a second entity architecture." `docs/ecs.md`
 already had a detailed, twice-evaluated answer to this — Phase XXI's initial migration and Phase
@@ -2877,6 +2883,8 @@ the signal expected for a pure logic-deduplication refactor with unchanged publi
 `docs/ecs.md`'s retirement gate section updated to point here.
 
 ### 132. Migrate Creeper, Enderman, Golem, Fish onto the ECS — re-derive "non-mechanical" from the actual code, not the per-species summary
+
+> **Superseded in part by §149:** `IDamageableActor`, `GroundMobCombat`, `DamageableActorCombat` and the per-species stores described here no longer exist; every species is an ECS actor on one replication path.
 
 **Context:** §131's table (inherited from Phase XXII) listed all 6 unmigrated species as
 non-mechanical to migrate, each for a one-line reason: Creeper's area-damage-on-death, Enderman's
@@ -3067,6 +3075,8 @@ it's interleaved with today.
 recorded anywhere besides one inline comment.
 
 ### 135. A fatal combat blow always lands; loot-capacity failure only drops the loot, never the kill
+
+> **Superseded in part by §149:** `IDamageableActor`, `GroundMobCombat`, `DamageableActorCombat` and the per-species stores described here no longer exist; every species is an ECS actor on one replication path.
 
 **Context:** found via the same reference-parity audit that produced §133/§134.
 `DamageableActorCombatCore.TryApplyDamage` pre-checked `FloorDropFanout.CanDeposit` and refused the

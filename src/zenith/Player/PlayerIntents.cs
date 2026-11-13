@@ -121,7 +121,7 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     /// </summary>
     public void SubmitAttackIntent(long? targetActorRuntimeId = null) => _attack.Submit(targetActorRuntimeId);
 
-    /// <summary>Consumes an attack regardless of target; used only by direct characterization tests.</summary>
+    /// <summary>Consumes a pending attack whatever its target; production consumers use the targeted overloads, this one lets tests assert nothing was left pending.</summary>
     public bool TryConsumeAttackIntent() => _attack.TryConsume(out _);
 
     /// <summary>

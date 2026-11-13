@@ -74,7 +74,7 @@ public class AutoCraftTests
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 2),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
-                InventoryContainerMap.CraftResultFlat, 5, 8,
+                InventorySlotReference.CraftResult, InventorySlotReference.Player(5), 8,
                 new WireSlot(InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot),
                 new WireSlot(InventoryContainerMap.Inventory, 5)),
         ], requiresOpenContainer: true)));

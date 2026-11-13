@@ -47,16 +47,9 @@ readonly struct InventoryStackAction
         ToWire = toWire
     };
 
-    public static InventoryStackAction Transfer(int from, int to, int count, WireSlot fromWire, WireSlot toWire) =>
-        Transfer(Legacy(from), Legacy(to), count, fromWire, toWire);
-
     /// <summary>Test helper — wire coords filled from a domain reference at apply time if zero.</summary>
     public static InventoryStackAction Transfer(InventorySlotReference from, InventorySlotReference to, int count) =>
         Transfer(from, to, count, default, default);
-
-    /// <summary>Compatibility helper for flat-index characterization tests.</summary>
-    public static InventoryStackAction Transfer(int from, int to, int count) =>
-        Transfer(Legacy(from), Legacy(to), count, default, default);
 
     public static InventoryStackAction Swap(InventorySlotReference a, InventorySlotReference b, WireSlot wireA, WireSlot wireB) => new()
     {
@@ -67,14 +60,8 @@ readonly struct InventoryStackAction
         ToWire = wireB
     };
 
-    public static InventoryStackAction Swap(int a, int b, WireSlot wireA, WireSlot wireB) =>
-        Swap(Legacy(a), Legacy(b), wireA, wireB);
-
     public static InventoryStackAction Swap(InventorySlotReference a, InventorySlotReference b) =>
         Swap(a, b, default, default);
-
-    public static InventoryStackAction Swap(int a, int b) =>
-        Swap(Legacy(a), Legacy(b), default, default);
 
     public static InventoryStackAction Drop(InventorySlotReference from, int count, WireSlot fromWire) => new()
     {
@@ -84,16 +71,9 @@ readonly struct InventoryStackAction
         FromWire = fromWire
     };
 
-    public static InventoryStackAction Drop(int from, int count, WireSlot fromWire) =>
-        Drop(Legacy(from), count, fromWire);
-
     /// <summary>Test helper — wire coordinates are derived from the domain reference at apply time.</summary>
     public static InventoryStackAction Drop(InventorySlotReference from, int count) =>
         Drop(from, count, default);
-
-    /// <summary>Compatibility helper for flat-index characterization tests.</summary>
-    public static InventoryStackAction Drop(int from, int count) =>
-        Drop(Legacy(from), count, default);
 
     /// <summary>Creative-only delete from a source slot; never becomes a world drop.</summary>
     public static InventoryStackAction Destroy(InventorySlotReference from, int count, WireSlot fromWire) => new()
@@ -146,13 +126,6 @@ readonly struct InventoryStackAction
     {
         Kind = InventoryStackActionKind.NoOp
     };
-
-    private static InventorySlotReference Legacy(int flat)
-    {
-        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
-            throw new ArgumentOutOfRangeException(nameof(flat));
-        return reference;
-    }
 }
 
 /// <summary>Intenção ISR pendente — escrita no handler; mutação no InventorySystem.</summary>

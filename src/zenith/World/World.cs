@@ -482,7 +482,7 @@ sealed class World
         return true;
     }
 
-    /// <summary>Legacy void API — prefers <see cref="TrySetBlock"/> when refuse matters.</summary>
+    /// <summary>Fire-and-forget <see cref="TrySetBlock"/>: a SoftCap refusal is ignored, so use <see cref="TrySetBlock"/> when the caller must react to it.</summary>
     public void SetBlock(int x, int y, int z, int blockRuntimeId) =>
         _ = TrySetBlock(x, y, z, blockRuntimeId);
 
