@@ -76,7 +76,7 @@ docker compose up --build
 
 ```bash
 dotnet run -c Release --project src/zenith
-# config: next to the built DLL under bin/.../zenith.yml
+# config: next to the built DLL under Builds/bin/zenith/release/zenith.yml
 ```
 
 Artifact on this release: `zenith-v0.0.2-alpha-linux-x64.zip` (framework-dependent publish).

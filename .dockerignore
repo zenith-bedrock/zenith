@@ -1,6 +1,7 @@
 **/.git
 **/bin
 **/obj
+Builds/
 **/.vs
 **/BenchmarkDotNet.Artifacts
 **/zenith.Benchmarks-*/**

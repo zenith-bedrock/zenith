@@ -180,7 +180,8 @@ Manual smoke expectations (clients A/B, terrain hashes, chat, place/break) live 
 - **.NET 10** solution (`zenith.sln`) with focused test projects
 - Nullable + modern C# patterns (`ref struct` streams, `ValueTask` storage)
 - YAML for ops config; future player-facing strings planned as TOML (`lang/*.toml`) — not mixed into `zenith.yml`
-- VS Code: `.vscode/launch.json` — **Zenith** / **Zenith (no build)** with `cwd` = `src/zenith/bin/Debug/net10.0` (config beside DLL, ADR §20)
+- Build artifacts are centralized by the SDK under the ignored root `Builds/`: `bin/<project>/<configuration>/`, `obj/<project>/` and `publish/<project>/<configuration>/` (configuration is lowercase; RID-specific builds add the RID). `dotnet build/run/test/publish` use this layout automatically; explicit publish `-o` still selects its destination. Existing project-local `bin/` and `obj/` directories are unused and remain excluded from compilation; no config or world data is migrated automatically.
+- VS Code: `.vscode/launch.json` — **Zenith** / **Zenith (no build)** with `cwd` = `Builds/bin/zenith/debug` (config beside DLL, ADR §20)
 
 ## Extending later (shape, not API yet)
 

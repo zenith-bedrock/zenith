@@ -1,6 +1,7 @@
 # .gitignore for a .NET Solution
 
 ## Build Folders
+/Builds/
 bin/
 obj/
 
