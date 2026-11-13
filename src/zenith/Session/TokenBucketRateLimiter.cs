@@ -15,19 +15,19 @@ internal sealed class TokenBucketRateLimiter<TKey> where TKey : notnull
 
     private readonly double _capacity;
     private readonly double _refillPerMs;
-    private readonly Func<long> _nowMs;
+    private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<TKey, Bucket> _buckets = new();
 
-    public TokenBucketRateLimiter(double capacity, double refillPerSecond, Func<long>? nowMs = null)
+    public TokenBucketRateLimiter(double capacity, double refillPerSecond, TimeProvider? time = null)
     {
         _capacity = capacity;
         _refillPerMs = refillPerSecond / 1000.0;
-        _nowMs = nowMs ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        _time = time ?? TimeProvider.System;
     }
 
     public bool TryConsume(TKey key, double cost = 1)
     {
-        var now = _nowMs();
+        var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
         var bucket = _buckets.GetOrAdd(key, _ => new Bucket { Tokens = _capacity, LastRefillMs = now });
 
         lock (bucket)
@@ -47,7 +47,7 @@ internal sealed class TokenBucketRateLimiter<TKey> where TKey : notnull
 
     public void Cleanup(long maxIdleMs)
     {
-        var now = _nowMs();
+        var now = _time.GetUtcNow().ToUnixTimeMilliseconds();
         foreach (var (key, bucket) in _buckets)
         {
             bool idle;
