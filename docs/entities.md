@@ -616,7 +616,7 @@ time. Phase XXI does not overturn it with new measurements — it is a different
 an explicit choice to build a real ECS runtime for a representative slice and evaluate it by use,
 not by waiting for a specific actor count. Full detail:
 [phase-xxi findings](history/phases/phase-xxi-ecs-foundation-findings.md); the ECS itself:
-[`docs/ecs.md`](ecs.md); the ADR: [`docs/decisions.md` §106](decisions.md).
+[`docs/ecs.md`](ecs.md); the ADR: [ADR §106](adr/0106-phase-xxi-accepts-a-real-ecs-for-a-deliberately-small.md).
 
 **Scope:** Zombie, Minecart, Projectile are now ECS-authoritative — their `Position`/`Health`/
 `Velocity` live in `ComponentStore<T>`s inside a shared `EntityRuntime`, not in per-species
@@ -675,7 +675,7 @@ Phase XXII migrated three more species — Cow, Skeleton, Spider — chosen spec
 different gameplay shapes than Phase XXI's trio: a passive/breeding actor, a ranged actor that
 spawns another ECS actor, and a melee actor with a feature-specific post-hit consequence (poison).
 Full detail: [phase-xxii findings](history/phases/phase-xxii-ecs-roster-consolidation-findings.md);
-the ECS itself: [`docs/ecs.md`](ecs.md); the ADR: [`docs/decisions.md`](decisions.md).
+the ECS itself: [`docs/ecs.md`](ecs.md); the ADR: [ADR §149](adr/0149-every-actor-species-is-an-ecs-actor-one-replication.md).
 
 **Scope:** ECS-authoritative roster is now Zombie, Minecart, Projectile, Cow, Skeleton, Spider —
 six species. Legacy `IDamageableActor` roster is now Creeper, Enderman, Bat, Villager, Golem,

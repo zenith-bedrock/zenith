@@ -7,7 +7,7 @@ Use with [SKILL.md](SKILL.md). Tick mentally while reading the diff; only report
 - [ ] Changes match the user’s stated task (no drive-by refactors)
 - [ ] No `bin/`, `obj/`, `worlds/`, `BenchmarkDotNet.Artifacts/`, `tmp-*`, credentials
 - [ ] New files land in the correct role folder ([AGENTS.md](../../../AGENTS.md))
-- [ ] No new top-level abstraction folder without ADR (`docs/decisions.md`)
+- [ ] No new top-level abstraction folder without ADR (`docs/adr/`)
 
 ## 2. Layering matrix
 
@@ -45,7 +45,7 @@ Scheduler · Actor model · ECS · Job system · Service Locator · Runtime Mana
 
 ## 7. DX / docs
 
-- [ ] Behavior change → short note in `docs/decisions.md` if it alters an existing ADR theme
+- [ ] Behavior change → short note in the relevant `docs/adr/NNNN-*.md` (or a new ADR) if it alters an existing ADR theme
 - [ ] Config via `zenith.yml` only (no new env var matrix)
 - [ ] Public mental model still “decide → transmit → serialize”
 - [ ] Prefer leaf tests over “works in Bedrock client”

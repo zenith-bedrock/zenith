@@ -37,7 +37,7 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
             body.AppendLine();
         }
         body.AppendLine($"// Scaffolded by protocol-import from {source.Name} \"{packet.Name}\" (id {packet.Id}).");
-        body.AppendLine("// Review before committing - see ADR §76 in docs/decisions.md for what this tool does and does not handle.");
+        body.AppendLine("// Review before committing - see ADR §76 (docs/adr/0076-packet-wire-codegen-gamepacket-source-generator.md) for what this tool does and does not handle.");
         body.AppendLine($"[GamePacket({packet.Id})]");
         body.AppendLine($"sealed partial class {packet.Name} : DataPacket");
         body.AppendLine("{");

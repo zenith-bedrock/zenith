@@ -328,7 +328,7 @@ already correct) — only one real gap there, noted below.
   `RequiresCorrectToolForDrops=true` and no tier field at all, so a wood pickaxe already harvested
   diamond identically to a diamond pickaxe. `DigProfile.MinHarvestTier` now gates the drop by tier;
   a kind-matched-but-under-tier tool still digs at its own speed, just without the drop. See
-  `docs/decisions.md` §110 and `docs/history/phases/phase-xxvi-survival-gameplay-findings.md`.
+  [ADR §110](adr/0110-ore-harvest-gates-on-tooltier-not-just-toolkind-closing.md) and `docs/history/phases/phase-xxvi-survival-gameplay-findings.md`.
 
 **Confirmed clean (no bug found):** chunk/palette encoding (sub-chunk version, index ordering, bit
 widths); block-placement self-suffocation/obstruction checks; LevelDB overlay write queue (no

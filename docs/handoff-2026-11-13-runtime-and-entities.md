@@ -1,6 +1,6 @@
 # Handoff — runtime, entities, composition (2026-11-13)
 
-Read first: `AGENTS.md`, `docs/architecture.md` (GameLoop, Composition), `docs/entities.md`, ADR §149 in `docs/decisions.md`.
+Read first: `AGENTS.md`, `docs/architecture.md` (GameLoop, Composition), `docs/entities.md`, [ADR §149](adr/0149-every-actor-species-is-an-ecs-actor-one-replication.md).
 Post-`Player`-split audit with open findings (serial test suite, oversized `IntentContractTests`, `Player` setters, ADR layout; flat-slot API and stale §149 text are done): `docs/audit-2026-11-13-architecture-and-dx.md`. Do those before new features.
 Supersedes the git-state and open-work parts of `handoff-2026-11-12-data-from-bds-packs.md`; the BDS-pack learnings in that file stay valid.
 User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
@@ -38,8 +38,8 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 
 ## Open work (the user's weakness list, minus what is done)
 1. ~~`Player` split~~ done: `Intents`/`Dig`/`Windows`/`Effects`/`Replicated` components (`docs/architecture.md` "Player").
-2. 252 "ADR §" references / 148+ ADRs (item 6): consolidate. The test suite now runs in parallel (~1m20).
+2. ~~ADR consolidation~~ done: one file per decision in `docs/adr/` (`ADR §N` = `docs/adr/NNNN-*.md`), index in `docs/adr/README.md`, `AdrRecordTests` guards citations. The test suite runs in parallel (~1m20).
 3. Item 7: nothing validated with a retail client; night spawns never run live; `Consume`/`CraftResultsDeprecated` are no-ops; only chest/personal/crafting-table windows; `count==0` means whole stack; item/creative/biome/loot/trading catalogs not yet from the pack source (see the 2026-11-12 handoff, "Open work").
 4. Per-system tick-cost benchmark exists (`--runtime-load --mixed-roster`); extend it to bat/villager/fish/creeper/enderman/golem (it covers zombie, minecart, cow, spider, skeleton, projectile).
-5. Audit findings (`docs/audit-2026-11-13-architecture-and-dx.md`; items 1-4 done: parallel tests, `IntentContractTests` split, stale §149 text): tighten `Player` setters (item 5), consolidate ADRs (item 6).
+5. ~~Architecture/DX audit~~ all six items done (`docs/audit-2026-11-13-architecture-and-dx.md`); `Player` setter ownership is enforced by `ArchitectureBoundaryTests.Player_state_is_written_only_by_its_owners`.
 6. .NET opportunities (`docs/dotnet-opportunities.md`; item 1, allocation-free Debug logging in both `ILogger` and `INetherNetLogger`, is done): ReadyToRun + GC pause measurement, `TimeProvider` in tests, `System.Threading.Lock`. `TreatWarningsAsErrors` is on (NuGet audit excluded). Check warnings with `--no-incremental`.

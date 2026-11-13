@@ -36,7 +36,7 @@ them; for resource movement, test conservation across all participating stores.
 - Always-on: [`.cursor/rules/zenith-architecture.mdc`](.cursor/rules/zenith-architecture.mdc), [`.cursor/rules/folder-layout.mdc`](.cursor/rules/folder-layout.mdc), [`.cursor/rules/naming.mdc`](.cursor/rules/naming.mdc)
 - Intent/tick, raknet, testing: other files under `.cursor/rules/`
 - **Agent skills (invoke explicitly):** `zenith-post-impl-audit` — audit git status/diff vs architecture/DX after implementation; `zenith-unit-tests` — add leaf unit tests when the diff warrants them. Same content under [`.cursor/skills/`](.cursor/skills/), [`.claude/skills/`](.claude/skills/), [`.opencode/skills/`](.opencode/skills/)
-- Decisions: [`docs/decisions.md`](docs/decisions.md) — ADR **before** a new layer/abstraction
+- Decisions: [`docs/adr/`](docs/adr/README.md) — one file per ADR (`ADR §N` = `docs/adr/NNNN-*.md`); write the ADR **before** a new layer/abstraction, from [`TEMPLATE.md`](docs/adr/TEMPLATE.md). [`docs/decisions.md`](docs/decisions.md) holds the timeline and the explicit non-goals
 - **Technical references:** [`docs/technical-reference.md`](docs/technical-reference.md) — protocol SSOT, ADR § index, external study repos (PM/DF/Endstone/Mojang), what is owned vs borrowed
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md) — H1 closed; pick from **Yes-next** (no PM parity chase)
 - Refs habit: [`docs/dx.md`](docs/dx.md) — Dragonfly essentials + PocketMine issues as footgun catalog (not plugin/command framework copy)

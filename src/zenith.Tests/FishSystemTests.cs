@@ -11,7 +11,7 @@ namespace Zenith.Tests;
 /// Phase XX, Priority 2 — second non-ground-navigation mob: 3D wander like Bat's, but validity
 /// requires the destination cell to BE water, a third distinct movement rule. See FishSystem's
 /// doc comment and docs/history/phases/phase-xx-runtime-relationships-findings.md.
-/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (docs/decisions.md).
+/// ECS-authoritative since the Creeper/Enderman/Golem/Fish migration (ADR §132).
 /// </summary>
 public sealed class FishSystemTests
 {

@@ -6,7 +6,7 @@ indicadores pontuais de runtime em uma captura estruturada que permite investiga
 alocações/GC, do fan-out de pacotes ou do transporte.
 
 Não é um pacote público, uma plataforma de métricas, um dashboard, nem um framework de tracing.
-Para a decisão e os limites arquiteturais, veja [ADR §104a](decisions.md#104a-diagnostics-is-a-fixed-layout-leaf-not-a-server-metrics-platform).
+Para a decisão e os limites arquiteturais, veja [ADR §104a](adr/0104a-diagnostics-is-a-fixed-layout-leaf-not-a-server-metrics.md).
 
 ## Limites e ownership
 

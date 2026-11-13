@@ -90,4 +90,4 @@ PocketMine proved community Bedrock servers can thrive. Official BDS proved vani
 
 Create something extraordinary, but create it with a spine that survives contact with the protocol.
 
-— See [Architecture](architecture.md), [Decisions](decisions.md), [Comparison](comparison.md), [DX](dx.md).
+— See [Architecture](architecture.md), [Decisions](adr/README.md), [Comparison](comparison.md), [DX](dx.md).

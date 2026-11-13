@@ -146,7 +146,7 @@ We intentionally **do not** rewrite full subchunks on every place/break. Overlay
 
 Do **not** add for its own sake: Scheduler, Actor model, Job system, Service Locator, Runtime Manager, VisibilitySystem, DI container, or plugin API. Introduce a layer only when a real feature hits a wall the current design cannot absorb.
 
-**ECS is no longer universally frozen.** Since Phase XXI (ADR §106), expanded in Phase XXII (ADR §107), a real ECS exists in `src/zenith/Ecs/`, authoritative for every actor species (the twelve mobs, minecart and projectile) — see [`ecs.md`](ecs.md) for what exists and [`decisions.md` §106–§107, §149](decisions.md) for why. Everything else — Player, sessions, inventory, storage, packets, transport — stays under the original freeze: no ECS/generalized runtime there without a concrete feature forcing it, same bar as every other layer in this list.
+**ECS is no longer universally frozen.** Since Phase XXI (ADR §106), expanded in Phase XXII (ADR §107), a real ECS exists in `src/zenith/Ecs/`, authoritative for every actor species (the twelve mobs, minecart and projectile) — see [`ecs.md`](ecs.md) for what exists and ADR [§106](adr/0106-phase-xxi-accepts-a-real-ecs-for-a-deliberately-small.md), [§107](adr/0107-phase-xxii-expands-the-ecs-roster-and-replaces-the-two.md) and [§149](adr/0149-every-actor-species-is-an-ecs-actor-one-replication.md) for why. Everything else — Player, sessions, inventory, storage, packets, transport — stays under the original freeze: no ECS/generalized runtime there without a concrete feature forcing it, same bar as every other layer in this list.
 
 **Future extension form (ADR §21):** when external extensibility opens, first surface is `EventBus.Subscribe<T>` — not public `GameLoop.Register` and not hooks on `Protocol.Send*`.
 
@@ -154,7 +154,7 @@ Fan-out to all online players is acceptable at this stage when pose is **dirty**
 
 ## Related
 
-- [Decision history](decisions.md) — how we arrived here
+- [Architecture decision records](adr/README.md) — how we arrived here ([timeline and non-goals](decisions.md))
 - [ECS runtime](ecs.md) — the Phase XXI ECS design and contracts
 - [Entity catalog](entities.md) — current runtime/entity capability catalog
 - [Comparison](comparison.md) — how this differs from PocketMine-class stacks

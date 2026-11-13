@@ -85,7 +85,7 @@ Artifact on this release: `zenith-v0.0.2-alpha-linux-x64.zip` (framework-depende
 
 - Architecture: `ARCHITECTURE.md`, `docs/architecture.md`
 - Gate / roadmap: `docs/alpha-gate.md`, `docs/roadmap.md`
-- Decisions: `docs/decisions.md`
+- Decisions: `docs/adr/README.md`
 - Protocol smoke bot: https://github.com/zenith-bedrock/zenith-smoke-bot
 
 ---

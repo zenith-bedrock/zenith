@@ -1,6 +1,6 @@
 # Roadmap: evidence before architecture
 
-**Purpose:** the canonical order of current work. It is a dependency graph with maturity gates, not a PocketMine parity list or a backlog. Architecture constraints remain in [`ARCHITECTURE.md`](../ARCHITECTURE.md); historical rationale stays in [`decisions.md`](decisions.md); the capability assessment is [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](history/audits/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md).
+**Purpose:** the canonical order of current work. It is a dependency graph with maturity gates, not a PocketMine parity list or a backlog. Architecture constraints remain in [`ARCHITECTURE.md`](../ARCHITECTURE.md); historical rationale stays in the [decision records](adr/README.md); the capability assessment is [`audit/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md`](history/audits/ZENITH_MATURITY_AND_ECS_READINESS_AUDIT.md).
 
 ## Current position
 
@@ -161,7 +161,7 @@ DX rather than by a measured-pressure trigger. Full detail:
 [`docs/ecs.md`](ecs.md) (what exists),
 [`phase-xxi-ecs-foundation-findings.md`](history/phases/phase-xxi-ecs-foundation-findings.md) (benchmarks, DX
 comparison, rejected alternatives, final-questions answers), ADR
-[`decisions.md` §106](decisions.md).
+[§106](adr/0106-phase-xxi-accepts-a-real-ecs-for-a-deliberately-small.md).
 
 **Exit criteria — all met:** ECS core (`EntityId`, `EntityWorld`, `ComponentStore<T>`, `Query`)
 with full test coverage including stale-handle safety; Zombie/Minecart/Projectile migrated with
@@ -188,7 +188,7 @@ shapes (passive/breeding, ranged-with-ECS-composition, melee-with-outgoing-effec
 two-species damage-dispatch chain Phase XXI explicitly left as temporary. Full detail:
 [`docs/ecs.md`](ecs.md) (what exists now),
 [`phase-xxii-ecs-roster-consolidation-findings.md`](history/phases/phase-xxii-ecs-roster-consolidation-findings.md)
-(benchmarks, DX comparison, final-questions answers), ADR [`decisions.md` §107](decisions.md).
+(benchmarks, DX comparison, final-questions answers), ADR [§107](adr/0107-phase-xxii-expands-the-ecs-roster-and-replaces-the-two.md).
 
 **Exit criteria — all met:** Cow, Skeleton, Spider migrated to ECS-authoritative with their old
 `*Store`/concrete classes deleted; Skeleton→Projectile ECS-to-ECS composition proven with no new
@@ -249,4 +249,4 @@ Current beta-foundation evidence is in [`phase-g-beta-readiness.md`](history/pha
 
 ## Historical record
 
-H0/H1 shipped details, Cereal migration history, and individual leaf rationale remain in [`decisions.md`](decisions.md) and git history. Do not re-open closed horizons just to append polish. Update this file when a gate closes, a measurement changes the dependency graph, or the ECS ADR changes the decision state.
+H0/H1 shipped details, Cereal migration history, and individual leaf rationale remain in the [decision records](adr/README.md) and git history. Do not re-open closed horizons just to append polish. Update this file when a gate closes, a measurement changes the dependency graph, or the ECS ADR changes the decision state.

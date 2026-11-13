@@ -28,7 +28,7 @@ body:
       label: ADR needed?
       options:
         - "No — fits existing architecture"
-        - "Yes — I will draft a note in docs/decisions.md"
+        - "Yes — I will draft an ADR in docs/adr/"
         - "Unsure — need discussion first"
     validations:
       required: true

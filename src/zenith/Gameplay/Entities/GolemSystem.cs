@@ -24,7 +24,7 @@ namespace Zenith.Gameplay.Entities;
 /// movement for one ability would be exactly the kind of speculative mechanism this project avoids
 /// building ahead of a second real need.
 ///
-/// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
+/// ECS-authoritative since this migration (see ADR §132, docs/adr/0132-migrate-creeper-enderman-golem-fish-onto-the-ecs-re.md): Position/
 /// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores,
 /// Velocity.Y is reused as gravity fall-speed (Phase XXIX convention), and only
 /// <see cref="GolemState"/> (enrage/target/cooldowns) is feature-specific. The boss-phase branching

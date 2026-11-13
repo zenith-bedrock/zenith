@@ -1,6 +1,6 @@
 # ADR §114 — Resident chunk state: a hydrate/evict design, not yet implemented
 
-**Status: superseded by ADR §123 (`docs/decisions.md`), which implemented this.** Kept as historical
+**Status: superseded by [ADR §123](0123-resident-chunk-state-implemented-supersedes-adr-114.md), which implemented this.** Kept as historical
 context — re-verifying this design against current code before implementing surfaced several
 corrections (RAM-ceiling framing, `FloorDropStore` scope, key-format feasibility, residency-tracking
 approach) recorded in §123, not here. Read §123 for what actually shipped; the analysis below is the

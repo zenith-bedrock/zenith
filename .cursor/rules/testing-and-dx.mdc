@@ -26,7 +26,7 @@ alwaysApply: true
 
 ```text
 ✅ Smallest leaf first; InternalsVisibleTo for internal types
-✅ Document trade-offs in docs/decisions.md when behavior changes
+✅ Document trade-offs in an ADR under docs/adr/ when behavior changes
 ✅ Config via zenith.yml (AppContext.BaseDirectory) — no new ZENITH_* env soup
 ❌ New DI / plugin / Actor “to make testing easier”
 ❌ Silent InMemory fallback when LevelDB open fails
