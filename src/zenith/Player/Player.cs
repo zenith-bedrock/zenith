@@ -63,13 +63,23 @@ class Player
     public NetworkSession Session { get; }
 
     /// <summary>This player's connection as gameplay sees it: ports only, no session, packet or protocol type.</summary>
-    public Zenith.Gameplay.Ports.IClientChannel Client => Session;
+    public Zenith.Gameplay.Ports.IClientChannel Client => _client ?? Session;
+
+    /// <summary>
+    /// Replaces the channel gameplay uses to reach this player's client (default: its session). A headless or scripted player, or a
+    /// test that wants to record what gameplay says to a client, attaches its own <see cref="Zenith.Gameplay.Ports.IClientChannel"/>.
+    /// </summary>
+    public void AttachClient(Zenith.Gameplay.Ports.IClientChannel client) => _client = client;
+
+    private Zenith.Gameplay.Ports.IClientChannel? _client;
+    private readonly World.World? _level;
+    private readonly ItemPalette? _itemPalette;
 
     /// <summary>The world this player lives in; gameplay resolves positions, rules and storage against it.</summary>
-    public World.World Level { get; }
+    public World.World Level => _level ?? throw new InvalidOperationException($"Player '{Username}' was created without a world.");
 
     /// <summary>The item registry this player's stacks resolve against.</summary>
-    public ItemPalette ItemPalette { get; }
+    public ItemPalette ItemPalette => _itemPalette ?? throw new InvalidOperationException($"Player '{Username}' was created without an item palette.");
 
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
     public long RuntimeId { get; }
@@ -639,13 +649,14 @@ class Player
         long runtimeId,
         Guid uuid,
         GameMode gameMode = GameMode.Survival,
-        bool identityStable = true)
+        bool identityStable = true,
+        World.World? level = null,
+        ItemPalette? itemPalette = null)
     {
         Username = username;
         Session = session;
-        // Headless players (unit tests) have no session and so no server context; nothing that needs a world or a palette runs for them.
-        Level = session?.Context.World!;
-        ItemPalette = session?.Context.ItemPalette!;
+        _level = level;
+        _itemPalette = itemPalette;
         RuntimeId = runtimeId;
         Uuid = uuid;
         IdentityStable = identityStable;
