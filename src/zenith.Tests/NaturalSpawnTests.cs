@@ -15,6 +15,44 @@ public sealed class NaturalSpawnTests
 
     private static SpawnTable Table(string json = Json) => SpawnTable.Parse(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
+    [Fact]
+    public void Finalization_rejects_unknown_species_and_allows_fixing_the_registration()
+    {
+        var spawner = new MobSpawner();
+        var error = Assert.Throws<InvalidDataException>(() => spawner.Freeze(Table()));
+        Assert.Contains("spawns.json", error.Message);
+        Assert.Contains("zombie", error.Message);
+        Assert.Contains("monster", error.Message);
+        spawner.Register("zombie", (_, _, _) => { }, () => 0);
+        spawner.Freeze(Table());
+        Assert.Throws<InvalidOperationException>(() => spawner.Register("cow", (_, _, _) => { }));
+    }
+
+    [Fact]
+    public void Finalization_requires_a_population_counter_for_natural_spawns()
+    {
+        var spawner = new MobSpawner();
+        spawner.Register("zombie", (_, _, _) => { });
+        var error = Assert.Throws<InvalidDataException>(() => spawner.Freeze(Table()));
+        Assert.Contains("population counter", error.Message);
+        Assert.Contains("zombie", error.Message);
+    }
+
+    [Fact]
+    public void Finalization_does_not_spawn_and_requests_still_execute_only_on_tick()
+    {
+        var spawned = 0;
+        var spawner = new MobSpawner();
+        spawner.Register("zombie", (_, _, _) => spawned++, () => spawned);
+        spawner.Freeze(Table());
+        spawner.Freeze(Table());
+        Assert.Equal(0, spawned);
+        Assert.True(spawner.Request("ZOMBIE", 1, 2, 3));
+        Assert.Equal(0, spawned);
+        spawner.Tick(new Zenith.Gameplay.Runtime.GameClock(), []);
+        Assert.Equal(1, spawned);
+    }
+
     private static (NaturalSpawnSystem System, List<(float X, float Y, float Z)> Spawned, MobSpawner Spawner, IntentTestFixture Fx)
         Setup(Func<int>? liveCount = null)
     {

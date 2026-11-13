@@ -30,11 +30,26 @@ internal static class GameTransportFactory
     public static IReadOnlyList<IGameTransport> Create(ServerConfig config, GameTransportEnvironment environment)
     {
         var transports = new List<IGameTransport>();
-        if (config.Network.UsesRakNet)
-            transports.Add(CreateRakNet(config, environment));
-        if (config.Network.UsesNetherNet)
-            transports.Add(CreateNetherNet(config, environment));
-        return transports;
+        try
+        {
+            if (config.Network.UsesRakNet)
+                transports.Add(CreateRakNet(config, environment));
+            if (config.Network.UsesNetherNet)
+                transports.Add(CreateNetherNet(config, environment));
+            return transports;
+        }
+        catch (Exception startupError)
+        {
+            var cleanupErrors = new List<Exception>();
+            for (var index = transports.Count - 1; index >= 0; index--)
+            {
+                try { transports[index].ShutdownAsync().GetAwaiter().GetResult(); }
+                catch (Exception ex) { cleanupErrors.Add(ex); }
+            }
+            if (cleanupErrors.Count > 0)
+                startupError.Data["TransportCleanupErrors"] = new AggregateException(cleanupErrors);
+            throw;
+        }
     }
 
     private static RakNetTransport CreateRakNet(ServerConfig config, GameTransportEnvironment environment)

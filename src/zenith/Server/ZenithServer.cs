@@ -57,143 +57,148 @@ class ZenithServer
         Config = config;
         ConfigPath = configPath;
 
-        // Debug tooling (Phase XXIII) — log.to-file: one text log + one diagnostics-snapshot jsonl
-        // per run under {data-root}/logs/, sharing a timestamp so the pair is easy to correlate.
-        string? logFilePath = null;
-        if (config.Log.ToFile)
+        var startupCleanup = new Stack<Action>();
+        startupCleanup.Push(_lifetime.Dispose);
+        try
         {
-            var logsDir = Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "logs");
-            Directory.CreateDirectory(logsDir);
-            var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
-            logFilePath = Path.Combine(logsDir, $"zenith-{runStamp}.log");
-            _logFileWriter = new StreamWriter(logFilePath, append: false);
-            _diagnosticsFileWriter = new StreamWriter(
-                Path.Combine(logsDir, $"zenith-diagnostics-{runStamp}.jsonl"), append: false) { AutoFlush = true };
+            // Debug tooling (Phase XXIII) — log.to-file: one text log + one diagnostics-snapshot jsonl
+            // per run under {data-root}/logs/, sharing a timestamp so the pair is easy to correlate.
+            string? logFilePath = null;
+            if (config.Log.ToFile)
+            {
+                var logsDir = Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "logs");
+                Directory.CreateDirectory(logsDir);
+                var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
+                logFilePath = Path.Combine(logsDir, $"zenith-{runStamp}.log");
+                _logFileWriter = new StreamWriter(logFilePath, append: false);
+                startupCleanup.Push(_logFileWriter.Dispose);
+                _diagnosticsFileWriter = new StreamWriter(
+                    Path.Combine(logsDir, $"zenith-diagnostics-{runStamp}.jsonl"), append: false) { AutoFlush = true };
+                startupCleanup.Push(_diagnosticsFileWriter.Dispose);
+            }
+
+            _logSink = new AsyncLogSink(fileWriter: _logFileWriter);
+            startupCleanup.Push(() => _logSink.DisposeAsync().AsTask().GetAwaiter().GetResult());
+
+            var serverLogger = new Logger(_logSink)
+            {
+                LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
+            };
+            var raknetLogger = new Logger(_logSink)
+            {
+                LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet")
+            };
+            _logger = serverLogger;
+            serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
+            serverLogger.Info($"config: {configPath}");
+            var dataDir = ServerConfigPaths.ResolveDataDirectory();
+            if (dataDir is not null)
+                serverLogger.Info($"data root ({ServerConfigPaths.DataDirEnvironmentVariable}): {dataDir}");
+            if (logFilePath is not null)
+                serverLogger.Info($"log.to-file: writing {logFilePath} (+ diagnostics jsonl alongside it)");
+            serverLogger.Info($"log.server={config.Log.Server} log.raknet={config.Log.Raknet}");
+            serverLogger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
+            if (!config.Auth.RequireStrictXbox)
+            {
+                serverLogger.Warning(
+                    "*** AUTH WARNING: auth.accept includes self-signed and/or offline. " +
+                    "Clients may join without Xbox Live. Use accept: [xbox] before public exposure. ***");
+            }
+            var players = new PlayerManager();
+            var clock = new GameClock();
+            var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for every actor species (mobs, minecart, projectile).
+            var diagnostics = new ServerRuntimeDiagnostics();
+            startupCleanup.Push(diagnostics.Dispose);
+            var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick, diagnostics.Pacing);
+
+            var resources = ServerResources.Load(serverLogger);
+            var (blockPalette, itemPalette, recipes, durability, creative) = resources;
+
+            _chunkStorage = CreateChunkStorage(config, serverLogger);
+            if (_chunkStorage is IDisposable storage) startupCleanup.Push(storage.Dispose);
+            var worldIdentity = WorldIdentity.Reconcile(
+                _chunkStorage, new WorldMetadata(config.World.Terrain, config.World.Seed), serverLogger);
+            var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed, diagnostics.Worldgen);
+            serverLogger.Info($"world.terrain={worldIdentity.Terrain} seed={worldIdentity.Seed}");
+            var world = new World.World(
+                _chunkStorage,
+                serverLogger,
+                terrain,
+                diagnostics.Worldgen,
+                config.World.ChunkGenerationWorkers,
+                config.World.ChunkGenerationCacheColumns);
+            startupCleanup.Push(() => world.StopGenerationAsync().AsTask().GetAwaiter().GetResult());
+            world.LoadGameRules();
+            var spawner = new MobSpawner();
+            var services = new ServerServices(
+                gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
+                entities, new PlayerSpatialIndex(), spawner,
+                config.World.ChunkResidencySweepIntervalTicks);
+            var compositionStarted = Stopwatch.GetTimestamp();
+            var worldModule = GameplayComposition.Register(services);
+            serverLogger.Info($"startup: gameplay registration validated in {Stopwatch.GetElapsedTime(compositionStarted).TotalMilliseconds:F1} ms");
+
+            var eventBus = new EventBus(serverLogger);
+            Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner);
+            GameLoop = gameLoop;
+            _gravity = worldModule.Gravity;
+
+            // First real EventBus domain consumers (ADR §78) — join/leave system chat.
+            eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
+            eventBus.Subscribe<PlayerQuitEvent>(e => PlayerPresenceAnnouncer.OnQuit(Context, e));
+
+            // ADR §114 — a departing player never calls ForgetOutsideRadius/TryAbandon for whatever
+            // chunks are still in their PlayerChunkTracker at disconnect time; without this, those
+            // chunks would leak as permanently "viewed" in ChunkResidencyIndex.
+            eventBus.Subscribe<PlayerQuitEvent>(e =>
+            {
+                var known = new List<(int X, int Z)>();
+                e.Player.Chunks.CopyKnown(known);
+                foreach (var (cx, cz) in known)
+                    world.ChunkResidency.Release(cx, cz);
+            });
+
+            _sessionHost = new GameSessionHost(Context);
+            _transports = GameTransportFactory.Create(config, new GameTransportEnvironment(
+                _sessionHost,
+                serverLogger,
+                raknetLogger,
+                () => Context.PlayerManager.Count,
+                ServerConfigPaths.ResolvePersistentRoot(),
+                LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger)));
+            foreach (var transport in _transports)
+                startupCleanup.Push(() => transport.ShutdownAsync().GetAwaiter().GetResult());
+            _telemetry = new RuntimeTelemetry(serverLogger);
+            serverLogger.Info(RuntimeTelemetry.DescribeGc());
+            var diagnosticsFileTicks = 0L;
+            const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
+            gameLoop.SetTickObserver(elapsed =>
+            {
+                var actors = entities.Entities.AliveCount +
+                             world.FallingBlocks.Active.Count + world.FloorDrops.Count;
+                diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
+                    diagnostics.Systems.Count, TransportStatistics());
+                _telemetry.RecordTick(elapsed, players.Count, actors, TransportStatistics());
+
+                if (_diagnosticsFileWriter is not null && ++diagnosticsFileTicks % diagnosticsFileEveryTicks == 0)
+                    _diagnosticsFileWriter.WriteLine(diagnostics.Runtime.CaptureSnapshot().ToJson(indented: false));
+            });
+            serverLogger.Info("startup: required resources validated; runtime can start");
         }
-
-        _logSink = new AsyncLogSink(fileWriter: _logFileWriter);
-
-        var serverLogger = new Logger(_logSink)
+        catch (Exception startupError)
         {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Server, "server")
-        };
-        var raknetLogger = new Logger(_logSink)
-        {
-            LogLevel = ServerConfig.ParseLogLevel(config.Log.Raknet, "raknet")
-        };
-        _logger = serverLogger;
-        serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
-        serverLogger.Info($"config: {configPath}");
-        var dataDir = ServerConfigPaths.ResolveDataDirectory();
-        if (dataDir is not null)
-            serverLogger.Info($"data root ({ServerConfigPaths.DataDirEnvironmentVariable}): {dataDir}");
-        if (logFilePath is not null)
-            serverLogger.Info($"log.to-file: writing {logFilePath} (+ diagnostics jsonl alongside it)");
-        serverLogger.Info($"log.server={config.Log.Server} log.raknet={config.Log.Raknet}");
-        serverLogger.Info($"auth.accept: {config.Auth.EffectiveAcceptSummary}");
-        if (!config.Auth.RequireStrictXbox)
-        {
-            serverLogger.Warning(
-                "*** AUTH WARNING: auth.accept includes self-signed and/or offline. " +
-                "Clients may join without Xbox Live. Use accept: [xbox] before public exposure. ***");
+            // The instance never escaped construction. Release every acquired owner in reverse order;
+            // cleanup failure must not hide the resource/registration error that prevented startup.
+            var cleanupErrors = new List<Exception>();
+            while (startupCleanup.TryPop(out var cleanup))
+            {
+                try { cleanup(); }
+                catch (Exception ex) { cleanupErrors.Add(ex); }
+            }
+            if (cleanupErrors.Count > 0)
+                startupError.Data["StartupCleanupErrors"] = new AggregateException(cleanupErrors);
+            throw;
         }
-        var players = new PlayerManager();
-        var clock = new GameClock();
-        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for every actor species (mobs, minecart, projectile).
-        var diagnostics = new ServerRuntimeDiagnostics();
-        var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick, diagnostics.Pacing);
-
-        var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
-        Blocks.Load(blockPalette);
-        serverLogger.Info($"Block palette loaded (air={Blocks.Air}, stone={Blocks.Stone}, grass={Blocks.GrassBlock})");
-
-        var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
-        // Boot contract: placeable starter blocks + air must exist in item palette.
-        _ = itemPalette.Require("minecraft:air");
-        _ = itemPalette.Require("minecraft:stone");
-        _ = itemPalette.Require("minecraft:grass_block");
-        _ = itemPalette.Require("minecraft:dirt");
-        _ = itemPalette.Require("minecraft:oak_planks");
-        _ = itemPalette.Require("minecraft:oak_log");
-        _ = itemPalette.Require("minecraft:oak_leaves");
-        _ = itemPalette.Require("minecraft:sand");
-        _ = itemPalette.Require("minecraft:gravel");
-        _ = itemPalette.Require("minecraft:bedrock");
-        _ = itemPalette.Require("minecraft:water");
-        _ = itemPalette.Require("minecraft:cobblestone");
-        _ = itemPalette.Require("minecraft:deepslate");
-        _ = itemPalette.Require("minecraft:chest");
-        Tools.Load(itemPalette);
-        serverLogger.Info($"Item palette loaded ({itemPalette.Count} entries); curated tools ready");
-
-        _chunkStorage = CreateChunkStorage(config, serverLogger);
-        var worldIdentity = WorldIdentity.Reconcile(
-            _chunkStorage, new WorldMetadata(config.World.Terrain, config.World.Seed), serverLogger);
-        var terrain = TerrainProviders.Create(worldIdentity.Terrain, worldIdentity.Seed, diagnostics.Worldgen);
-        serverLogger.Info($"world.terrain={worldIdentity.Terrain} seed={worldIdentity.Seed}");
-        var world = new World.World(
-            _chunkStorage,
-            serverLogger,
-            terrain,
-            diagnostics.Worldgen,
-            config.World.ChunkGenerationWorkers,
-            config.World.ChunkGenerationCacheColumns);
-        world.LoadGameRules();
-        var recipes = RecipeRegistry.CreateDefault(itemPalette);
-        var durability = ItemDurability.CreateDefault(itemPalette);
-        var creative = CreativeCatalog.CreateDefault(itemPalette);
-        // Compose → freeze → gameplay reads only: boot composition for the creative catalog is done as of here.
-        creative.Freeze();
-        var spawner = new MobSpawner();
-        var services = new ServerServices(
-            gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
-            entities, new PlayerSpatialIndex(), spawner,
-            config.World.ChunkResidencySweepIntervalTicks);
-        var worldModule = GameplayComposition.Register(services);
-
-        var eventBus = new EventBus(serverLogger);
-        Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner);
-        GameLoop = gameLoop;
-        _gravity = worldModule.Gravity;
-
-        // First real EventBus domain consumers (ADR §78) — join/leave system chat.
-        eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
-        eventBus.Subscribe<PlayerQuitEvent>(e => PlayerPresenceAnnouncer.OnQuit(Context, e));
-
-        // ADR §114 — a departing player never calls ForgetOutsideRadius/TryAbandon for whatever
-        // chunks are still in their PlayerChunkTracker at disconnect time; without this, those
-        // chunks would leak as permanently "viewed" in ChunkResidencyIndex.
-        eventBus.Subscribe<PlayerQuitEvent>(e =>
-        {
-            var known = new List<(int X, int Z)>();
-            e.Player.Chunks.CopyKnown(known);
-            foreach (var (cx, cz) in known)
-                world.ChunkResidency.Release(cx, cz);
-        });
-
-        _sessionHost = new GameSessionHost(Context);
-        _transports = GameTransportFactory.Create(config, new GameTransportEnvironment(
-            _sessionHost,
-            serverLogger,
-            raknetLogger,
-            () => Context.PlayerManager.Count,
-            ServerConfigPaths.ResolvePersistentRoot(),
-            LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger)));
-        _telemetry = new RuntimeTelemetry(serverLogger);
-        serverLogger.Info(RuntimeTelemetry.DescribeGc());
-        var diagnosticsFileTicks = 0L;
-        const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
-        gameLoop.SetTickObserver(elapsed =>
-        {
-            var actors = entities.Entities.AliveCount +
-                         world.FallingBlocks.Active.Count + world.FloorDrops.Count;
-            diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
-                diagnostics.Systems.Count, TransportStatistics());
-            _telemetry.RecordTick(elapsed, players.Count, actors, TransportStatistics());
-
-            if (_diagnosticsFileWriter is not null && ++diagnosticsFileTicks % diagnosticsFileEveryTicks == 0)
-                _diagnosticsFileWriter.WriteLine(diagnostics.Runtime.CaptureSnapshot().ToJson(indented: false));
-        });
     }
 
     private TransportStatistics TransportStatistics() =>

@@ -161,4 +161,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 148 | [Item damage is stack user data, not aux (evidence from a stock BDS 1.26.63.1)](0148-item-damage-is-stack-user-data-not-aux-evidence.md) |
 | 149 | [Every actor species is an ECS actor; one replication path; the legacy combat backend is gone](0149-every-actor-species-is-an-ecs-actor-one-replication.md) |
 
+| 150 | [Prepare required resources before starting runtime](0150-prepare-required-resources-before-runtime.md) |
+
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

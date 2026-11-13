@@ -11,6 +11,16 @@ public class MobDefinitionTests
     private static Stream Json(string text) => new MemoryStream(Encoding.UTF8.GetBytes(text));
 
     [Fact]
+    public void Boot_validation_identifies_the_species_and_missing_loot_item()
+    {
+        var definition = MobDefinitions.All.First();
+        var error = Assert.Throws<InvalidDataException>(() => MobDefinitions.ValidateLoot(new ItemPalette([])));
+        Assert.Contains(MobDefinitions.ResourceName, error.Message);
+        Assert.Contains(definition.Name, error.Message);
+        Assert.Contains(definition.LootItemName, error.Message);
+    }
+
+    [Fact]
     public void Every_species_the_systems_use_is_defined()
     {
         var names = MobDefinitions.All.Select(d => d.Name).ToHashSet();

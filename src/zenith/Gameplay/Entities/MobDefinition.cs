@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 
 using Zenith.Gameplay.Ports;
+using Zenith.World;
 
 namespace Zenith.Gameplay.Entities;
 
@@ -27,6 +28,15 @@ static class MobDefinitions
     private static readonly Lazy<IReadOnlyDictionary<string, MobDefinition>> Loaded = new(Load);
 
     public static IReadOnlyCollection<MobDefinition> All => Loaded.Value.Values.ToArray();
+
+    /// <summary>Boot validation against the same item palette the species constructors will receive.</summary>
+    public static void ValidateLoot(ItemPalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        foreach (var definition in Loaded.Value.Values)
+            if (!palette.TryGet(definition.LootItemName, out _))
+                throw new InvalidDataException($"{ResourceName}: '{definition.Name}' references unknown loot item '{definition.LootItemName}'.");
+    }
 
     public static MobDefinition Get(string name) =>
         Loaded.Value.TryGetValue(name, out var definition)

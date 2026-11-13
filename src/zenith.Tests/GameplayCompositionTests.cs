@@ -62,6 +62,7 @@ public sealed class GameplayCompositionTests
     {
         var (_, _, services) = Compose();
         var names = services.Spawner.Names;
+        Assert.Throws<InvalidOperationException>(() => services.Spawner.Register("late-species", (_, _, _) => { }));
         Assert.Equal(
             new[] { "bat", "cow", "creeper", "enderman", "fish", "iron_golem", "minecart", "skeleton", "spider", "villager", "zombie" },
             names);
