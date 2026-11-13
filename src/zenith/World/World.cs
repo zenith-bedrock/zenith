@@ -482,9 +482,15 @@ sealed class World
         return true;
     }
 
-    /// <summary>Fire-and-forget <see cref="TrySetBlock"/>: a SoftCap refusal is ignored, so use <see cref="TrySetBlock"/> when the caller must react to it.</summary>
-    public void SetBlock(int x, int y, int z, int blockRuntimeId) =>
-        _ = TrySetBlock(x, y, z, blockRuntimeId);
+    /// <summary>
+    /// Setup-time write (world seeding, benchmarks, tests): a refusal is a bug in the caller, so it throws instead of dropping the
+    /// edit. Gameplay uses <see cref="TrySetBlock"/> and reacts to the refusal.
+    /// </summary>
+    public void SetBlock(int x, int y, int z, int blockRuntimeId)
+    {
+        if (!TrySetBlock(x, y, z, blockRuntimeId))
+            throw new InvalidOperationException($"World overlay store is at its SoftCap ({OverrideSoftCap}); block at {x},{y},{z} was not set.");
+    }
 
     /// <summary>
     /// Live-edit write path (<see cref="TrySetBlock"/>) — unconditional overwrite, SoftCap-gated by

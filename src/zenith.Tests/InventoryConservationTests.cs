@@ -119,8 +119,8 @@ public class InventoryConservationTests
             var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
             fx.World.SetBlock(2, 64, 2, south);
             fx.World.SetBlock(3, 64, 2, south);
-            fx.World.Chests.Ensure(2, 64, 2);
-            fx.World.Chests.Ensure(3, 64, 2);
+            Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
+            Assert.True(fx.World.Chests.TryEnsure(3, 64, 2));
             player.PositionX = 2.5f;
             player.PositionY = 64;
             player.PositionZ = 2.5f;

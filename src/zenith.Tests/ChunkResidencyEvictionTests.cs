@@ -78,7 +78,7 @@ public sealed class ChunkResidencyEvictionTests
         var storage = new InMemoryChunkStorage();
         var world = new World.World(storage);
         await world.GetOrCreateColumnAsync(0, 0);
-        world.Chests.Ensure(1, 64, 2);
+        Assert.True(world.Chests.TryEnsure(1, 64, 2));
         Assert.True(world.Chests.TrySet(1, 64, 2, 0, InventorySlot.OfBlock(Blocks.Dirt, 5)));
 
         Assert.True(world.TryEvictChunk(0, 0));
@@ -96,7 +96,7 @@ public sealed class ChunkResidencyEvictionTests
         var storage = new InMemoryChunkStorage();
         var world = new World.World(storage);
         await world.GetOrCreateColumnAsync(0, 0);
-        world.Chests.Ensure(1, 64, 2);
+        Assert.True(world.Chests.TryEnsure(1, 64, 2));
         Assert.True(world.Chests.TryAddOpener(1, 64, 2, playerRuntimeId: 42));
 
         Assert.True(world.TryEvictChunk(0, 0)); // chunk itself still evicts (no chunk viewer)
