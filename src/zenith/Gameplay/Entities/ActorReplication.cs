@@ -18,8 +18,17 @@ namespace Zenith.Gameplay.Entities;
 ///
 /// It owns replication bookkeeping and the despawn lifecycle, nothing about what a species does: no AI, damage or loot.
 /// </summary>
-sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPoses = true)
+sealed class ActorReplication(EntityRuntime stores, ActorAnnouncer announce, bool trackPoses = true)
 {
+    /// <summary>A mob species: announced as <paramref name="kind"/> and followed by its current health.</summary>
+    public static ActorReplication ForMob(EntityRuntime stores, MobKind kind, bool trackPoses = true) =>
+        new(stores, (entity, id, identity, pos) =>
+        {
+            entity.SendAddMob(kind, identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+            if (stores.Health.TryGet(id, out var health))
+                entity.SendHealth(identity.ActorRuntimeId, health.State.Current, health.State.Maximum);
+        }, trackPoses);
+
     private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
     private readonly HashSet<long> _aliveScratch = [];
@@ -64,8 +73,6 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
         if (!_tickBegun) throw new InvalidOperationException($"{nameof(Reconcile)} before {nameof(BeginTick)}: the species' tick must begin the replication frame first.");
         if (!stores.Positions.TryGet(id, out var pos)) return;
         if (!stores.Identities.TryGet(id, out var identity)) return;
-        if (!stores.Health.TryGet(id, out var healthComponent)) return;
-        var health = healthComponent.State;
 
         // An actor that stayed in its chunk since the previous tick has a viewer set that is only stale for players whose own
         // interest changed; one that moved (or is new, or skipped a tick) is checked against everybody.
@@ -75,13 +82,28 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
                       stamp.ChunkX == chunkX && stamp.ChunkZ == chunkZ && stamp.Frame + 1 >= _interest.Frame;
         _stamps[identity.ActorUniqueId] = new ReconcileStamp(chunkX, chunkZ, _interest.Frame);
 
+        Sync(id, pos, identity, current ? _interest.Changed : online, afterSpawn);
+    }
+
+    /// <summary>
+    /// <see cref="Reconcile"/> against every online player, with no tick begun: for an actor created outside this species' own tick
+    /// (a skeleton firing an arrow during the skeleton system's tick), which has no previous viewer set to refine.
+    /// </summary>
+    public void ReconcileAll(EntityId id, IReadOnlyList<Player.Player> online, Action<Player.Player, ActorIdentity>? afterSpawn = null)
+    {
+        if (!stores.Positions.TryGet(id, out var pos)) return;
+        if (!stores.Identities.TryGet(id, out var identity)) return;
+        Sync(id, pos, identity, online, afterSpawn);
+    }
+
+    private void Sync(
+        EntityId id, Position pos, ActorIdentity identity, IReadOnlyList<Player.Player> candidates, Action<Player.Player, ActorIdentity>? afterSpawn) =>
         ViewerReconciliation.Sync(
-            identity.ActorUniqueId, current ? _interest.Changed : online, Viewers,
+            identity.ActorUniqueId, candidates, Viewers,
             peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                peer.Client.Entity.SendAddMob(kind, identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
-                peer.Client.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                announce(peer.Client.Entity, id, identity, pos);
                 afterSpawn?.Invoke(peer, identity);
                 if (trackPoses) _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 SpawnCount++;
@@ -92,6 +114,21 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
                 peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
                 RemovalCount++;
             });
+
+    /// <summary>
+    /// Tells every peer that saw the actor that it is gone and forgets them. Does not destroy the actor: the caller does that once
+    /// its own consequences (loot, a rider dismounting, a projectile's impact) are done.
+    /// </summary>
+    public void Retire(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        if (!stores.Identities.TryGet(id, out var identity)) return;
+        foreach (var peer in online)
+        {
+            if (!Viewers.Remove((identity.ActorUniqueId, peer.RuntimeId))) continue;
+            _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
+            peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
+            RemovalCount++;
+        }
     }
 
     /// <summary>Drops the pose cache for one peer after the actor's death was announced to it by combat.</summary>
@@ -115,13 +152,7 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
 
         beforeDestroy?.Invoke(id);
         if (!stores.Identities.TryGet(id, out var identity)) return false;
-        foreach (var peer in online)
-        {
-            if (!Viewers.Remove((identity.ActorUniqueId, peer.RuntimeId))) continue;
-            _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-            peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
-            RemovalCount++;
-        }
+        Retire(id, online);
 
         stores.DestroyActor(identity.ActorRuntimeId, id);
         DespawnCount++;
@@ -192,3 +223,6 @@ sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPose
         return false;
     }
 }
+
+/// <summary>Sends the packets that make one actor appear on a client (the spawn, plus whatever the actor needs right after it).</summary>
+delegate void ActorAnnouncer(IEntityChannel entity, EntityId id, ActorIdentity identity, Position pos);

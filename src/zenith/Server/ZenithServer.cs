@@ -98,9 +98,7 @@ class ZenithServer
         }
         var players = new PlayerManager();
         var clock = new GameClock();
-        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for Zombie/Minecart/Projectile/Cow/Skeleton/Spider/Fish/Creeper/Enderman/Golem.
-        var bats = new BatStore();
-        var villagers = new VillagerStore();
+        var entities = new EntityRuntime(); // Phase XXI/XXII — ECS-authoritative storage for every actor species (mobs, minecart, projectile).
         var diagnostics = new ServerRuntimeDiagnostics();
         var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick, diagnostics.Pacing);
 
@@ -148,7 +146,7 @@ class ZenithServer
         var spawner = new MobSpawner();
         var services = new ServerServices(
             gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
-            entities, bats, villagers, new PlayerSpatialIndex(), spawner,
+            entities, new PlayerSpatialIndex(), spawner,
             config.World.ChunkResidencySweepIntervalTicks);
         var worldModule = GameplayComposition.Register(services);
 
@@ -186,7 +184,6 @@ class ZenithServer
         gameLoop.SetTickObserver(elapsed =>
         {
             var actors = entities.Entities.AliveCount +
-                         bats.Active.Count + villagers.Active.Count +
                          world.FallingBlocks.Active.Count + world.FloorDrops.Count;
             diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
                 diagnostics.Systems.Count, TransportStatistics());

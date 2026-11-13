@@ -129,7 +129,7 @@ public sealed class ViewerInterestTests
     {
         var fx = new IntentTestFixture();
         var stores = new EntityRuntime();
-        var replication = new ActorReplication(stores, Zenith.Gameplay.Ports.MobKind.Cow);
+        var replication = ActorReplication.ForMob(stores, Zenith.Gameplay.Ports.MobKind.Cow);
         var id = stores.CreateActor(1, 1, 0, 0, 0) ?? throw new InvalidOperationException();
 
         Assert.Throws<InvalidOperationException>(() => replication.Reconcile(id, fx.Players.Online));

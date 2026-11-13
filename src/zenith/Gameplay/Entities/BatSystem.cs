@@ -1,179 +1,125 @@
-using Zenith.Gameplay.Ports;
+using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
+using Zenith.Gameplay.Survival;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
-using Zenith.Gameplay.Survival;
 namespace Zenith.Gameplay.Entities;
 
 /// <summary>
-/// Phase XVII, Priority 1 — the first non-ground-navigation mob. Combat/loot/XP bookkeeping is
-/// shared via <see cref="GroundMobCombat"/>, same as every other ground mob: that contract turned
-/// out to be movement-agnostic despite its name (identity + position + health + damage + removal,
-/// nothing about walking). Movement itself is bespoke 3D flight, deliberately NOT
-/// <see cref="GroundMobMovement"/> — a bat has no supporting-block requirement and wanders on a
-/// vertical axis no ground mob uses. Kept entirely local since there is only one flying mob so
-/// far; see docs/history/phases/phase-xvii-runtime-pressure-findings.md for the resulting evidence.
+/// The flying mob. Position, health, identity and despawn tracking are the shared <see cref="EntityRuntime"/> components and
+/// showing it to players is the shared <see cref="ActorReplication"/>; only <see cref="BatState"/> (its 3D wander heading) and the
+/// flight rule are its own. Movement is bespoke 3D flight, not <see cref="GroundMobMovement"/>: a bat has no supporting-block
+/// requirement and wanders on a vertical axis no ground mob uses.
 /// </summary>
 sealed class BatSystem : IGameSystem
 {
-    private const float SpawnDistance = 5f;
-    private const float SpawnHeightOffset = 3f;
     private const float MovePerTick = 0.1f;
     private const int MinWanderTicks = 30;
     private const int MaxWanderTicks = 80;
     private const float WanderVerticalBias = 0.5f; // Keeps the random heading from drifting mostly sideways.
-    private const string LootItemName = "minecraft:feather";
-    private const int KillExperience = 1;
+    private const float AttackDamage = 4f;
+    private const float AttackDistance = 2.25f;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
-    private readonly PlayerManager _players;
-    private readonly BatStore _bats;
-    private readonly StackId _lootItem;
+    private readonly EntityRuntime _stores;
+    private readonly ComponentStore<BatState> _bats;
+    private readonly MobCore _mob;
+    private readonly ActorReplication _replication;
     private readonly Random _random;
-    private readonly HashSet<(long BatId, long PlayerId)> _replicated = new();
+    private readonly List<EntityId> _tickScratch = [];
 
-    public BatSystem(World.World world, PlayerManager players, BatStore bats, ItemPalette itemPalette, Random? random = null)
+    public BatSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
-        _players = players;
-        _bats = bats;
-        _lootItem = StackId.FromItem(itemPalette.Require(LootItemName));
+        _stores = stores;
+        _mob = new MobCore(MobDefinitions.Bat, world, players, stores, itemPalette, withVelocity: false);
+        _replication = _mob.Replication;
+        _bats = new ComponentStore<BatState>(stores.Entities);
         _random = random ?? new Random();
     }
 
-    public BatStore Bats => _bats;
+    internal IReadOnlyList<EntityId> Bats => _bats.Entities;
+    internal EntityRuntime Stores => _stores;
+    internal ComponentStore<BatState> BatStates => _bats;
 
-    internal void SpawnBat(float x, float y, float z)
+    /// <summary>Cross-species dispatch seam — "is this ECS entity a bat," nothing more.</summary>
+    internal bool Owns(EntityId id) => _bats.Has(id);
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedMoveCount => _replication.MoveCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
+    internal long DespawnCount => _replication.DespawnCount;
+
+    internal EntityId SpawnBat(float x, float y, float z)
     {
-        var entityId = _players.AllocateRuntimeId();
-        _bats.TryAdd(new Bat(entityId, (ulong)entityId, x, y, z));
+        var id = _mob.Spawn(x, y, z);
+        _bats.Set(id, new BatState());
+        return id;
     }
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
-    internal long DespawnCount { get; private set; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _replication.BeginTick(online);
         if (online.Count == 0) return;
 
-        foreach (var bat in _bats.Active.ToArray())
+        _tickScratch.Clear();
+        _tickScratch.AddRange(_bats.Entities);
+
+        foreach (var id in _tickScratch)
         {
-            if (!bat.IsActive) continue;
-            if (TryDespawn(bat, clock, online)) continue;
-            ReconcileViewers(bat, online);
-            ApplyPlayerAttacks(bat, online, clock.CurrentTick);
-            if (!bat.IsActive) continue;
-            Wander(bat, clock, online);
-            ReconcileViewers(bat, online);
+            if (!_stores.Entities.IsAlive(id)) continue;
+            if (_replication.TryDespawn(id, clock, online, DespawnRadius)) continue;
+            _replication.Reconcile(id, online);
+            DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, clock.CurrentTick, TryApplyDamage);
+            if (!_stores.Entities.IsAlive(id)) continue;
+            Wander(id, clock);
+            _replication.Reconcile(id, online);
         }
 
-        _replicated.RemoveWhere(pair => !_bats.Active.Any(b => b.EntityId == pair.BatId) ||
-                                        !online.Any(p => p.RuntimeId == pair.PlayerId));
+        _replication.Prune(_bats.Entities, online);
+        _replication.ReplicateMoves(_bats.Entities, online);
     }
 
-    /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. Same shape as every other ground mob's despawn — the despawn rule turned out position-mode-agnostic too.</summary>
-    private bool TryDespawn(Bat bat, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        var (shouldDespawn, lastSeen) = DespawnLifecycle.EvaluateDespawn(
-            bat.PositionX, bat.PositionZ, online, DespawnRadius, clock.CurrentTick, bat.LastSeenNearPlayerTick);
-        bat.LastSeenNearPlayerTick = lastSeen;
-        if (!shouldDespawn) return false;
-
-        foreach (var peer in online)
-            if (_replicated.Remove((bat.EntityId, peer.RuntimeId)))
-                peer.Client.Entity.SendRemoveActor(bat.EntityId);
-        bat.Remove();
-        _bats.Remove(bat);
-        DespawnCount++;
-        return true;
-    }
-
-    private void ReconcileViewers(Bat bat, IReadOnlyList<Player.Player> online) =>
-        ViewerReconciliation.Sync(
-            bat.EntityId, online, _replicated,
-            peer => ActorInterest.Includes(peer, bat.PositionX, bat.PositionZ),
-            onEnter: peer =>
-            {
-                peer.Client.Entity.SendAddMob(MobKind.Bat, 
-                    bat.EntityId, bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, bat.Yaw);
-                peer.Client.Entity.SendHealth(bat.RuntimeId, bat.Health.Current, bat.Health.Maximum);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                peer.Client.Entity.SendRemoveActor(bat.EntityId);
-                ReplicatedRemovalCount++;
-            });
-
-    private void ApplyPlayerAttacks(Bat bat, IReadOnlyList<Player.Player> online, ulong currentTick)
-    {
-        const float attackDistance = 2.25f;
-        GroundMobCombat.ApplyPlayerMeleeAttacks(bat, online, attackDistance, 4f, currentTick, TryApplyDamage);
-    }
-
-    /// <summary>Concrete Bat health/removal operation — same shape as every other ground mob's, one loot item, no retaliation.</summary>
-    public bool TryApplyDamage(Bat bat, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        GroundMobCombat.TryApplyDamage(
-            bat, source, amount, online, _world, _players, _replicated, _lootItem, KillExperience, "Bat", currentTick,
-            removeFromStore: _bats.Remove,
-            onDeathReplicatedToPeer: _ => ReplicatedRemovalCount++);
+    /// <summary>Concrete Bat health/removal operation: one loot item, no retaliation.</summary>
+    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     /// <summary>
-    /// Bespoke 3D wander: picks a random heading including a vertical component, walks it, retries
-    /// sooner if blocked. The one real behavioral difference from every ground mob's wander is the
-    /// Y axis being live, not fixed to a sampled ground height.
+    /// Bespoke 3D wander: picks a random heading including a vertical component, walks it, retries sooner if blocked. The one real
+    /// behavioural difference from every ground mob's wander is the Y axis being live, not fixed to a sampled ground height.
     /// </summary>
-    private void Wander(Bat bat, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void Wander(EntityId id, GameClock clock)
     {
-        if (clock.CurrentTick >= bat.WanderChangeAtTick)
-            PickNewHeading(bat, clock);
+        if (clock.CurrentTick >= _bats.GetRef(id).WanderChangeAtTick)
+            PickNewHeading(id, clock);
 
-        var desiredX = bat.PositionX + bat.WanderDirectionX * MovePerTick;
-        var desiredY = bat.PositionY + bat.WanderDirectionY * MovePerTick;
-        var desiredZ = bat.PositionZ + bat.WanderDirectionZ * MovePerTick;
-        if (TryFly(bat, desiredX, desiredY, desiredZ))
+        var state = _bats.GetRef(id);
+        if (!_stores.Positions.TryGet(id, out var pos)) return;
+        if (TryFly(id, pos.X + state.WanderDirectionX * MovePerTick, pos.Y + state.WanderDirectionY * MovePerTick, pos.Z + state.WanderDirectionZ * MovePerTick))
         {
-            bat.Yaw = LookMath.MoveYawTowards(bat.Yaw, LookMath.YawTowards(bat.WanderDirectionX, bat.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
-            BroadcastMove(bat, online);
+            ref var p = ref _stores.Positions.GetRef(id);
+            p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(state.WanderDirectionX, state.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
         }
         else
-            bat.WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
+            _bats.GetRef(id).WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
     }
 
-    /// <summary>
-    /// No batching/move-skip optimization here (unlike Cow/Zombie's <c>ReplicateMoves</c>) — one
-    /// flying mob doesn't yet justify that machinery; see the phase findings for why this was left
-    /// as the simplest thing that replicates correctly rather than copying the batched shape.
-    /// </summary>
-    private void BroadcastMove(Bat bat, IReadOnlyList<Player.Player> online)
+    private void PickNewHeading(EntityId id, GameClock clock)
     {
-        foreach (var peer in online)
-        {
-            if (!_replicated.Contains((bat.EntityId, peer.RuntimeId))) continue;
-            peer.Client.Entity.SendMoveActorAbsoluteRaw(bat.RuntimeId, bat.PositionX, bat.PositionY, bat.PositionZ, yaw: bat.Yaw, headYaw: bat.Yaw);
-        }
-    }
-
-    private void PickNewHeading(Bat bat, GameClock clock)
-    {
+        ref var state = ref _bats.GetRef(id);
         var yaw = _random.NextSingle() * MathF.PI * 2f;
         var horizontal = MathF.Cos(_random.NextSingle() * MathF.PI * WanderVerticalBias);
-        bat.WanderDirectionX = MathF.Cos(yaw) * horizontal;
-        bat.WanderDirectionZ = MathF.Sin(yaw) * horizontal;
-        bat.WanderDirectionY = (_random.NextSingle() * 2f - 1f) * (1f - horizontal);
-        bat.WanderChangeAtTick = clock.CurrentTick + (ulong)_random.Next(MinWanderTicks, MaxWanderTicks);
+        state.WanderDirectionX = MathF.Cos(yaw) * horizontal;
+        state.WanderDirectionZ = MathF.Sin(yaw) * horizontal;
+        state.WanderDirectionY = (_random.NextSingle() * 2f - 1f) * (1f - horizontal);
+        state.WanderChangeAtTick = clock.CurrentTick + (ulong)_random.Next(MinWanderTicks, MaxWanderTicks);
     }
 
     /// <summary>
-    /// Flight-validity probe, kept local and bespoke rather than reused from
-    /// <see cref="GroundMobMovement"/>: a flying mob needs body clearance but, unlike every ground
-    /// mob, no solid block underneath. This is the concrete difference the phase brief asked to be
-    /// tested for.
+    /// Flight-validity probe: a flying mob needs body clearance but, unlike every ground mob, no solid block underneath.
     /// </summary>
-    private bool TryFly(Bat bat, float x, float y, float z)
+    private bool TryFly(EntityId id, float x, float y, float z)
     {
         var blockX = (int)MathF.Floor(x);
         var blockY = (int)MathF.Floor(y);
@@ -182,9 +128,10 @@ sealed class BatSystem : IGameSystem
             _world.GetBlock(blockX, blockY + 1, blockZ) != World.World.AirRuntimeId)
             return false;
 
-        bat.PositionX = x;
-        bat.PositionY = y;
-        bat.PositionZ = z;
+        ref var p = ref _stores.Positions.GetRef(id);
+        p.X = x;
+        p.Y = y;
+        p.Z = z;
         return true;
     }
 }

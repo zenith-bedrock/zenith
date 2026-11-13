@@ -10,7 +10,7 @@ namespace Zenith.Gameplay.Entities;
 
 /// <summary>
 /// Phase XXI — third ECS-authoritative actor, deliberately chosen to prove the ECS is not built
-/// around <see cref="IDamageableActor"/>: a projectile has Position/Velocity/ActorIdentity but no
+/// around damageable actors: a projectile has Position/Velocity/ActorIdentity but no
 /// <see cref="HealthComponent"/> at all (it deals damage, never takes it), and its lifetime
 /// (<see cref="ProjectileState.AgeTicks"/>) is unconditional pure age, not sharing
 /// <see cref="DespawnTracking"/> with the visibility-reset family.
@@ -64,9 +64,7 @@ sealed class ProjectileSystem : IGameSystem
     // X/Z," so keeping this local avoids a cross-system ownership/ordering question a shared index
     // would raise for no proven benefit yet (see docs/history/phases/phase-xxviii-spatial-query-scaling-findings.md).
     private readonly ChunkSpatialIndex<EntityId> _actorSpatial = new();
-    private readonly HashSet<(long EntityId, long PlayerId)> _replicated = [];
-    private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPosition> _lastProjected = [];
-    private readonly List<RawActorPose> _moveBatch = [];
+    private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
 
     public ProjectileSystem(World.World world, PlayerManager players, EntityRuntime stores, DamageDispatch damage, PlayerSpatialIndex playerSpatial)
@@ -77,15 +75,21 @@ sealed class ProjectileSystem : IGameSystem
         _projectiles = new ComponentStore<ProjectileState>(stores.Entities);
         _damage = damage;
         _playerSpatial = playerSpatial;
+        // A projectile is announced with its velocity and has no health; everything else about showing it is the shared replication.
+        _replication = new ActorReplication(stores, (entity, id, identity, pos) =>
+        {
+            if (!stores.Velocities.TryGet(id, out var vel)) throw new InvalidOperationException("A projectile without a Velocity cannot be announced.");
+            entity.SendAddProjectile(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, vel.X, vel.Y, vel.Z);
+        });
     }
 
     internal IReadOnlyList<EntityId> Projectiles => _projectiles.Entities;
     internal EntityRuntime Stores => _stores;
     internal ComponentStore<ProjectileState> ProjectileStates => _projectiles;
-    internal long ReplicatedSpawnCount { get; private set; }
-    internal long ReplicatedMoveCount { get; private set; }
-    internal long ReplicatedMoveSkippedCount { get; private set; }
-    internal long ReplicatedRemovalCount { get; private set; }
+    internal long ReplicatedSpawnCount => _replication.SpawnCount;
+    internal long ReplicatedMoveCount => _replication.MoveCount;
+    internal long ReplicatedMoveSkippedCount => _replication.MoveSkippedCount;
+    internal long ReplicatedRemovalCount => _replication.RemovalCount;
     internal long RemovalCount { get; private set; }
 
     /// <summary>Concrete gameplay spawn used by a ranged actor; this system remains the projectile lifecycle owner.</summary>
@@ -97,12 +101,13 @@ sealed class ProjectileSystem : IGameSystem
                  ?? throw new InvalidOperationException("Duplicate actor runtime id allocated for a new Projectile.");
         _stores.Velocities.Set(id, new Velocity { X = velocityX, Y = velocityY, Z = velocityZ });
         _projectiles.Set(id, new ProjectileState { OwnerRuntimeId = ownerRuntimeId, AgeTicks = 0 });
-        ReconcileViewers(id, online);
+        _replication.ReconcileAll(id, online);
         return true;
     }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _replication.BeginTick(online);
         SpawnFromPlayerInputs(online);
 
         // Rebuilt once per Tick, not per projectile: every projectile this tick shares the same
@@ -123,22 +128,12 @@ sealed class ProjectileSystem : IGameSystem
         foreach (var id in _tickScratch)
         {
             if (!_stores.Entities.IsAlive(id)) continue;
-            ReconcileViewers(id, online);
+            _replication.Reconcile(id, online);
             Advance(id, online, clock.CurrentTick);
         }
 
-        _replicated.RemoveWhere(pair => !IsKnownAliveProjectileId(pair.EntityId) || !online.Any(p => p.RuntimeId == pair.PlayerId));
-        foreach (var key in _lastProjected.Keys.Where(key => !_replicated.Contains(key)).ToArray())
-            _lastProjected.Remove(key);
-        ReplicateMoves(online);
-    }
-
-    private bool IsKnownAliveProjectileId(long actorUniqueId)
-    {
-        foreach (var id in _projectiles.Entities)
-            if (_stores.Identities.TryGet(id, out var identity) && identity.ActorUniqueId == actorUniqueId)
-                return true;
-        return false;
+        _replication.Prune(_projectiles.Entities, online);
+        _replication.ReplicateMoves(_projectiles.Entities, online);
     }
 
     private void SpawnFromPlayerInputs(IReadOnlyList<Player.Player> online)
@@ -196,7 +191,7 @@ sealed class ProjectileSystem : IGameSystem
         p.Z = nextZ;
         ref var v = ref _stores.Velocities.GetRef(id);
         v.Y -= GravityPerTick;
-        ReconcileViewers(id, online);
+        _replication.Reconcile(id, online);
     }
 
     /// <summary>
@@ -240,37 +235,6 @@ sealed class ProjectileSystem : IGameSystem
     private bool TryDamageActor(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         _damage.TryApplyDamage(id, source, amount, online, currentTick);
 
-    private void ReplicateMoves(IReadOnlyList<Player.Player> online)
-    {
-        foreach (var peer in online)
-        {
-            _moveBatch.Clear();
-            foreach (var id in _projectiles.Entities)
-            {
-                if (!_stores.Identities.TryGet(id, out var identity)) continue;
-                var key = (identity.ActorUniqueId, peer.RuntimeId);
-                if (!_replicated.Contains(key)) continue;
-                if (!_stores.Positions.TryGet(id, out var pos)) continue;
-                var current = new ProjectedPosition(pos.X, pos.Y, pos.Z);
-                if (_lastProjected.TryGetValue(key, out var previous) && !current.MeaningfullyChanged(previous))
-                {
-                    ReplicatedMoveSkippedCount++;
-                    continue;
-                }
-                _moveBatch.Add(new RawActorPose
-                {
-                    ActorRuntimeId = identity.ActorRuntimeId,
-                    X = pos.X,
-                    Y = pos.Y,
-                    Z = pos.Z
-                });
-                _lastProjected[key] = current;
-                ReplicatedMoveCount++;
-            }
-            peer.Client.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
-        }
-    }
-
     private Player.Player? FindHitPlayer(long ownerRuntimeId, float x, float y, float z)
     {
         // The existing player snowball slice only targets Zombies/Minecarts. Concrete ranged
@@ -300,57 +264,12 @@ sealed class ProjectileSystem : IGameSystem
     private bool HitsWorld(float x, float y, float z) =>
         Blocks.BlocksMovement(_world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z)));
 
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online)
-    {
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        if (!_stores.Velocities.TryGet(id, out var vel)) return;
-
-        ViewerReconciliation.Sync(
-            identity.ActorUniqueId, online, _replicated,
-            peer => ActorInterest.Includes(peer, pos.X, pos.Z),
-            onEnter: peer =>
-            {
-                peer.Client.Entity.SendAddProjectile(
-                    identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, vel.X, vel.Y, vel.Z);
-                _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPosition(pos.X, pos.Y, pos.Z);
-                ReplicatedSpawnCount++;
-            },
-            onExit: peer =>
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            });
-    }
-
     private void Remove(EntityId id, IReadOnlyList<Player.Player> online)
     {
         if (!_stores.Entities.IsAlive(id)) return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
+        _replication.Retire(id, online);
         _stores.DestroyActor(identity.ActorRuntimeId, id);
         RemovalCount++;
-        foreach (var peer in online)
-        {
-            if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
-            {
-                _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
-                ReplicatedRemovalCount++;
-            }
-        }
-    }
-
-    private readonly record struct ProjectedPosition(float X, float Y, float Z)
-    {
-        private const float PositionEpsilonSquared = 0.0001f;
-
-        public bool MeaningfullyChanged(ProjectedPosition previous)
-        {
-            var dx = X - previous.X;
-            var dy = Y - previous.Y;
-            var dz = Z - previous.Z;
-            return dx * dx + dy * dy + dz * dz > PositionEpsilonSquared;
-        }
     }
 }

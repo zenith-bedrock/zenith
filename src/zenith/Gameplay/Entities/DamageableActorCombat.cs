@@ -7,26 +7,14 @@ using Zenith.Gameplay.Replication;
 namespace Zenith.Gameplay.Entities;
 
 /// <summary>
-/// Phase XXI — the ECS-native sibling of <see cref="GroundMobCombat"/>, for actors migrated onto
-/// <see cref="EntityRuntime"/>. Same responsibility (reach-checked melee consumption, damage
-/// application, health replication, death detection, loot deposit, XP credit, death
-/// replication/destruction) and the same non-goals (no spawning, AI, movement, or targeting) —
-/// only the storage it reads/writes changed, from an <c>IDamageableActor</c> object to
-/// <see cref="Position"/>/<see cref="HealthComponent"/> components keyed by <see cref="EntityId"/>.
-///
-/// <see cref="GroundMobCombat"/> was NOT deleted or adapted in place: it still correctly serves
-/// every unmigrated ground mob (Skeleton, Cow, Creeper, Enderman, Bat, Spider, Villager, Golem,
-/// Fish). Building a fake <c>IDamageableActor</c> wrapper around an ECS entity just to keep
-/// calling <c>GroundMobCombat</c> unchanged was explicitly rejected — see
-/// docs/history/phases/phase-xxi-ecs-foundation-findings.md, "IDamageableActor migration strategy."
-///
-/// A thin adapter over <see cref="DamageableActorCombatCore"/>, same as <see cref="GroundMobCombat"/>
-/// now is — see that class's doc comment for why the two were unified. Public signatures below are
-/// unchanged; every caller of this class is untouched.
+/// Combat bookkeeping for every actor species in <see cref="EntityRuntime"/>: reach-checked melee consumption, damage application,
+/// health replication, death detection, loot deposit, XP credit and death replication/destruction. It owns none of what a species
+/// decides (spawning, AI, movement, targeting). A thin adapter over <see cref="DamageableActorCombatCore"/>: it reads
+/// <see cref="Position"/>/<see cref="HealthComponent"/> components keyed by <see cref="EntityId"/> and hands the core a view.
 /// </summary>
 static class DamageableActorCombat
 {
-    /// <summary>Reach-checked melee: consumes at most one player's attack intent per call, same shape <see cref="GroundMobCombat.ApplyPlayerMeleeAttacks{TMob}"/> already used.</summary>
+    /// <summary>Reach-checked melee: consumes at most one player's attack intent per call, the same for every species.</summary>
     public static void ApplyPlayerMeleeAttacks(
         EntityId id,
         EntityRuntime stores,
@@ -44,12 +32,9 @@ static class DamageableActorCombat
     }
 
     /// <summary>
-    /// One authoritative damage attempt against an ECS-backed damageable actor. Same guard/deposit/
-    /// XP/replication/destruction sequence as <see cref="GroundMobCombat.TryApplyDamage{TMob}"/>;
-    /// <paramref name="destroyActor"/> is the caller's only remaining hook (equivalent to that
-    /// method's <c>removeFromStore</c>) because destruction now goes through
-    /// <see cref="EntityRuntime.DestroyActor"/> and every feature system's own pre-destroy cleanup,
-    /// not a store removal.
+    /// One authoritative damage attempt against an ECS-backed damageable actor. Guard, deposit, XP, replication,
+    /// then destruction: <paramref name="destroyActor"/> is the caller's only hook, because destruction goes through
+    /// <see cref="EntityRuntime.DestroyActor"/> and every feature system's own pre-destroy cleanup.
     /// </summary>
     public static bool TryApplyDamage(
         EntityId id,

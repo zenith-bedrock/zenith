@@ -7,10 +7,8 @@ namespace Zenith.Gameplay.Entities;
 
 /// <summary>
 /// A read-only snapshot of exactly the state <see cref="DamageableActorCombatCore"/> needs, cheap
-/// for either combat backend to produce: <see cref="GroundMobCombat"/> builds one from an
-/// <see cref="IDamageableActor"/> object's own properties; <see cref="DamageableActorCombat"/>
-/// builds one from three <c>ComponentStore&lt;T&gt;.TryGet</c> calls. <see cref="Health"/> is a
-/// reference to the same authoritative <see cref="HealthState"/> instance either backend
+/// to produce: <see cref="DamageableActorCombat"/> builds one from three <c>ComponentStore&lt;T&gt;.TryGet</c> calls.
+/// <see cref="Health"/> is a reference to the same authoritative <see cref="HealthState"/> instance the actor
 /// already owns — mutating it here (via <see cref="HealthState.Apply"/>) is visible to the
 /// owner with no write-back step, since <c>HealthComponent</c> only ever wraps that one shared
 /// instance (see <c>docs/ecs.md</c>'s Shared components table).
@@ -18,8 +16,8 @@ namespace Zenith.Gameplay.Entities;
 internal readonly struct DamageableActorView(
     long entityKey, ulong runtimeId, float x, float y, float z, HealthState health)
 {
-    /// <summary><c>IDamageableActor.EntityId</c> or <c>ActorIdentity.ActorUniqueId</c> — whichever
-    /// key the caller's per-viewer <c>replicated</c> set is keyed on.</summary>
+    /// <summary><c>ActorIdentity.ActorUniqueId</c>: the key the caller's per-viewer
+    /// <c>replicated</c> set is keyed on.</summary>
     public long EntityKey { get; } = entityKey;
     public ulong RuntimeId { get; } = runtimeId;
     public float X { get; } = x;
@@ -29,14 +27,10 @@ internal readonly struct DamageableActorView(
 }
 
 /// <summary>
-/// The one place the actual damage/loot/XP/replication/destruction sequence lives (Phase XXI shipped
-/// this logic twice — once per storage backend — and it stayed byte-for-byte identical except for
-/// how a mob's state was read; this is that duplication closed without touching either backend's
-/// storage model, which stays split for the documented, evidence-based reasons in
-/// <c>docs/ecs.md</c>'s retirement gate). <see cref="GroundMobCombat"/> and
-/// <see cref="DamageableActorCombat"/> are thin adapters: build a <see cref="DamageableActorView"/>
-/// from their own backend, call this, translate the destroy callback. Neither adapter's public
-/// signature changed — every one of the 12 species' call sites is untouched by this.
+/// The one place the actual damage/loot/XP/replication/destruction sequence lives (it used to exist
+/// once per storage backend; every species is an ECS actor now, so there is one backend).
+/// <see cref="DamageableActorCombat"/> is the adapter: it builds a <see cref="DamageableActorView"/>
+/// from the components, calls this, and translates the destroy callback.
 /// </summary>
 internal static class DamageableActorCombatCore
 {

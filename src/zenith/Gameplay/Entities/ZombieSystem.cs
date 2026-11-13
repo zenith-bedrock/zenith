@@ -14,9 +14,7 @@ namespace Zenith.Gameplay.Entities;
 /// <see cref="ZombieState"/> (retained target, attack cooldown) is feature-specific and owned
 /// here. The old <c>Zombie</c> object and <c>ZombieStore</c> are gone — there is exactly one
 /// authoritative copy of this data now, not a concrete object mirroring what the components
-/// already hold. Combat/loot/XP bookkeeping moved to <see cref="DamageableActorCombat"/> (the
-/// ECS-native sibling of <see cref="GroundMobCombat"/>, which still serves every unmigrated
-/// mob). See docs/history/phases/phase-xxi-ecs-foundation-findings.md.
+/// already hold. Combat/loot/XP bookkeeping moved to <see cref="DamageableActorCombat"/> (shared by every species). See docs/history/phases/phase-xxi-ecs-foundation-findings.md.
 /// </summary>
 sealed class ZombieSystem : IGameSystem
 {
@@ -27,7 +25,7 @@ sealed class ZombieSystem : IGameSystem
     private const float AttackDamage = 4f;
     private const int AttackCooldownTicks = 20;
     // Phase XVI — knockback: a movement consequence of combat, deliberately not part of
-    // GroundMobCombat/DamageableActorCombat (which never touch position) or a shared primitive
+    // DamageableActorCombat (which never touches position) or a shared primitive
     // (single mob so far).
     private const float KnockbackImpulse = 0.3f;
     private const float KnockbackDecayPerTick = 0.5f;
@@ -125,8 +123,8 @@ sealed class ZombieSystem : IGameSystem
 
     /// <summary>
     /// Wraps the shared kill bookkeeping with a purely local, Zombie-only side effect: a landed hit
-    /// also pushes the zombie back. Neither GroundMobCombat's nor DamageableActorCombat's contract
-    /// needed to grow to support this.
+    /// also pushes the zombie back. DamageableActorCombat's contract
+    /// did not need to grow to support this.
     /// </summary>
     private bool TryApplyDamageAndKnockback(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {

@@ -30,8 +30,8 @@ sealed class EntityModule : IGameplayModule
         var golem = new GolemSystem(world, players, entities, palette);
         var projectile = new ProjectileSystem(world, players, entities, damage, s.PlayerSpatial);
         var skeleton = new SkeletonSystem(world, players, entities, projectile, palette);
-        var bat = new BatSystem(world, players, s.Bats, palette);
-        var villager = new VillagerSystem(world, players, s.Villagers, palette);
+        var bat = new BatSystem(world, players, entities, palette);
+        var villager = new VillagerSystem(world, players, entities, palette);
 
         damage.Register(zombie.Owns, zombie.TryApplyDamage);
         damage.Register(minecart.Owns, minecart.TryApplyDamage);
@@ -42,6 +42,8 @@ sealed class EntityModule : IGameplayModule
         damage.Register(enderman.Owns, enderman.TryApplyDamage);
         damage.Register(golem.Owns, golem.TryApplyDamage);
         damage.Register(skeleton.Owns, skeleton.TryApplyDamage);
+        damage.Register(bat.Owns, bat.TryApplyDamage);
+        damage.Register(villager.Owns, villager.TryApplyDamage);
 
         s.Register(zombie, "zombie");
         s.Register(minecart, "minecart");
@@ -66,8 +68,8 @@ sealed class EntityModule : IGameplayModule
         spawner.Register("enderman", (x, y, z) => enderman.SpawnEnderman(x, y, z), () => enderman.Endermen.Count);
         spawner.Register("fish", (x, y, z) => fish.SpawnFish(x, y, z));
         spawner.Register("minecart", (x, y, z) => minecart.SpawnMinecart(x, y, z));
-        spawner.Register("bat", bat.SpawnBat);
-        spawner.Register("villager", villager.SpawnVillager);
+        spawner.Register("bat", (x, y, z) => bat.SpawnBat(x, y, z), () => bat.Bats.Count);
+        spawner.Register("villager", (x, y, z) => villager.SpawnVillager(x, y, z), () => villager.Villagers.Count);
         s.Register(spawner, "summon");
         s.Register(new NaturalSpawnSystem(world, spawner, SpawnTable.Default), "natural-spawn");
     }

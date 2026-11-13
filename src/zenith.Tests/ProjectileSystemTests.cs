@@ -8,7 +8,7 @@ namespace Zenith.Tests;
 
 /// <summary>
 /// Phase XXI — Projectile is the third ECS-authoritative actor, deliberately chosen to prove the
-/// ECS isn't built around <see cref="IDamageableActor"/>: it has Position/Velocity/ActorIdentity
+/// ECS isn't built around damageable actors: it has Position/Velocity/ActorIdentity
 /// but no HealthComponent at all. Hit resolution against Zombie now goes through the generalized
 /// cross-species query (<see cref="ProjectileSystem.Projectiles"/> vs. any entity with
 /// Health+Position) rather than a direct <c>ZombieStore</c> coupling — see
