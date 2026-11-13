@@ -376,7 +376,7 @@ public class LevelDbEdgeCaseTests
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void Multiple_iterators_over_the_same_snapshot_are_safe_used_concurrently()
+    public async Task Multiple_iterators_over_the_same_snapshot_are_safe_used_concurrently()
     {
         var dir = NewDir();
         try
@@ -410,7 +410,7 @@ public class LevelDbEdgeCaseTests
                 }
             })).ToArray();
 
-            Assert.True(Task.WaitAll(tasks, TimeSpan.FromSeconds(10)));
+            Assert.True(await TestWait.CompletesAsync(Task.WhenAll(tasks), TimeSpan.FromSeconds(10)));
             Assert.Empty(exceptions);
             Assert.All(results, count => Assert.Equal(200, count));
         }
@@ -421,7 +421,7 @@ public class LevelDbEdgeCaseTests
     }
 
     [Fact]
-    public void Concurrent_Close_calls_from_multiple_threads_are_idempotent_and_safe()
+    public async Task Concurrent_Close_calls_from_multiple_threads_are_idempotent_and_safe()
     {
         var dir = NewDir();
         try
@@ -442,7 +442,7 @@ public class LevelDbEdgeCaseTests
                 }
             })).ToArray();
 
-            Assert.True(Task.WaitAll(tasks, TimeSpan.FromSeconds(10)), "Close() calls did not finish — possible deadlock");
+            Assert.True(await TestWait.CompletesAsync(Task.WhenAll(tasks), TimeSpan.FromSeconds(10)), "Close() calls did not finish — possible deadlock");
             Assert.Empty(exceptions);
 
             // The lock is released exactly once — a fresh DB can reopen the directory.

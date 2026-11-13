@@ -37,8 +37,7 @@ public sealed class SessionManager
         var session = new Session.Session(_nextSessionId++, peer.Transport, peer.Channels, peer.Address,
             peer.ClientAddress, SegmenterFor(peer.Channels), _budget);
         var id = session.Id;
-        _logger.Debug($"Session {id} opened for network id {peer.NetworkId} from {peer.Address}"
-            + (peer.ClientAddress is not null ? $" (client {peer.ClientAddress})" : ""));
+        _logger.Debug($"Session {id} opened for network id {peer.NetworkId} from {peer.Address}{(peer.ClientAddress is not null ? $" (client {peer.ClientAddress})" : "")}");
         _sessions[id] = session;
 
         try

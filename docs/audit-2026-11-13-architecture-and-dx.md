@@ -6,7 +6,7 @@ Taken after the `Player` split (`5d645d9`). Method: reading code, greps and one 
 - `ArchitectureBoundaryTests` pins, at IL level: Packets reference no domain/protocol layer; Gameplay references no wire models, `Session` or `Protocol`.
 - Nothing under `Packets/` references `Player`. Gameplay has no real `lock` (concurrency stays at the handoff edges).
 - Largest domain file is `InventorySystem` (694 lines). `Player` went from 947 lines to identity/pose/inventory/vitals plus `Intents`, `Dig`, `Windows`, `Effects`, `Replicated` (`docs/architecture.md`, "Player").
-- Build has 0 warnings.
+- A clean build (`--no-incremental`) has 0 warnings (an earlier version of this audit said so from incremental builds, which hid 11; fixed).
 
 ## Findings, most serious first
 

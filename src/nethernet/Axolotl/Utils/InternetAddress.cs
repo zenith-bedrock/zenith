@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Net.Sockets;
 
 namespace Zenith.NetherNet.Axolotl.Utils;
@@ -16,10 +17,24 @@ public class SocketException : NetherNetException
         new($"{what}: {e.Message}", e.ErrorCode, e);
 }
 
-/// <summary>Minimal logging surface used by the library (the reference uses PocketMine's <c>Logger</c>).</summary>
+/// <summary>
+/// Minimal logging surface used by the library (the reference uses PocketMine's <c>Logger</c>). This package stays free of other
+/// Zenith packages, so it carries its own copy of the allocation-free Debug mechanism that <c>Zenith.Logging.ILogger</c> has.
+/// </summary>
 public interface INetherNetLogger
 {
+    /// <summary>False when Debug output is discarded; <c>Debug($"...")</c> then builds and evaluates nothing (see <see cref="NetherNetDebugHandler"/>).</summary>
+    bool IsDebugEnabled => true;
+
     void Debug(string message);
+
+    /// <summary>Chosen by the compiler for interpolated strings: no formatting, allocation or argument evaluation while Debug is off.</summary>
+    void Debug([InterpolatedStringHandlerArgument("")] ref NetherNetDebugHandler message)
+    {
+        if (message.IsEnabled)
+            Debug(message.ToStringAndClear());
+    }
+
     void Info(string message);
     void Warning(string message);
     void Error(string message);
@@ -29,6 +44,7 @@ public sealed class NullNetherNetLogger : INetherNetLogger
 {
     public static readonly NullNetherNetLogger Instance = new();
 
+    public bool IsDebugEnabled => false;
     public void Debug(string message) { }
     public void Info(string message) { }
     public void Warning(string message) { }

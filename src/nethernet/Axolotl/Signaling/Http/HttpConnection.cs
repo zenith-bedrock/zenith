@@ -242,8 +242,7 @@ public sealed partial class HttpConnection
         if (State is HttpConnectionState.Writing or HttpConnectionState.Done)
             return;
 
-        _logger.Debug($"{PeerName}: " + (_request is null ? "<unparsed request>" : $"{_request.Method} {_request.GetPath()}")
-            + $" -> {(int)response.Status} {response.Status.GetReasonPhrase()}");
+        _logger.Debug($"{PeerName}: {(_request is null ? "<unparsed request>" : $"{_request.Method} {_request.GetPath()}")} -> {(int)response.Status} {response.Status.GetReasonPhrase()}");
 
         _output = response.Encode(omitBody: _request?.Method == HttpRequest.MethodHead);
         _outputOffset = 0;

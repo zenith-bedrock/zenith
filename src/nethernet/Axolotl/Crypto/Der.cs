@@ -3,8 +3,6 @@ namespace Zenith.NetherNet.Axolotl.Crypto;
 /// <summary>Minimal DER writer (port of <c>Der</c>).</summary>
 public static class Der
 {
-    private const long MaxLength = 0xffffffffL;
-
     public static byte[] Encode(int tag, ReadOnlySpan<byte> body)
     {
         var length = Length(body.Length);
@@ -48,8 +46,6 @@ public static class Der
     {
         if (length <= 0x7f)
             return [(byte)length];
-        if (length > MaxLength)
-            throw new ArgumentException($"DER body of {length} bytes is too long to encode");
         var bytes = new[] { (byte)(length >> 24), (byte)(length >> 16), (byte)(length >> 8), (byte)length }
             .SkipWhile(b => b == 0).ToArray();
         return [(byte)(0x80 | bytes.Length), .. bytes];

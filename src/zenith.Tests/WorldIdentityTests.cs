@@ -21,7 +21,7 @@ public class WorldIdentityTests
     }
 
     [Fact]
-    public void A_brand_new_world_commits_the_configured_identity()
+    public async Task A_brand_new_world_commits_the_configured_identity()
     {
         var storage = new InMemoryChunkStorage();
         var logger = new SilentLogger();
@@ -32,7 +32,7 @@ public class WorldIdentityTests
         Assert.Equal(12345, resolved.Seed);
         Assert.Null(logger.LastWarning);
 
-        var committed = storage.GetWorldMetadataAsync().AsTask().GetAwaiter().GetResult();
+        var committed = await storage.GetWorldMetadataAsync();
         Assert.Equal(new WorldMetadata("noise", 12345), committed);
     }
 

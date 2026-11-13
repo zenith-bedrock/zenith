@@ -95,7 +95,7 @@ public sealed partial class JoinHandler(
         }
         catch (NegotiationException e)
         {
-            logger.Debug("Refused an offer: " + e.Message);
+            logger.Debug($"Refused an offer: {e.Message}");
             return JoinResult.Respond(Failure(e.ErrorCode));
         }
     }
@@ -115,7 +115,7 @@ public sealed partial class JoinHandler(
             }
             catch (System.Text.Json.JsonException e)
             {
-                logger.Debug("Could not build the server status: " + e.Message);
+                logger.Debug($"Could not build the server status: {e.Message}");
             }
         }
         return new HttpResponse(HttpStatus.Ok);
@@ -130,7 +130,7 @@ public sealed partial class JoinHandler(
 
         if (negotiation.IsFailed)
         {
-            logger.Debug("Negotiation failed: " + (negotiation.FailureReason ?? "no reason given"));
+            logger.Debug($"Negotiation failed: {negotiation.FailureReason ?? "no reason given"}");
             return Failure(negotiation.FailureCode);
         }
         return null;

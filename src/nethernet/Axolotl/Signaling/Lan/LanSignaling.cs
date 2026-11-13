@@ -256,7 +256,7 @@ public sealed class LanSignaling : ISignaling
         }
         catch (NegotiationException e)
         {
-            _logger.Debug("Peer sent an unusable ICE candidate: " + e.Message);
+            _logger.Debug($"Peer sent an unusable ICE candidate: {e.Message}");
         }
     }
 

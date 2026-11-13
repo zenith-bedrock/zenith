@@ -2,7 +2,7 @@
 
 Survey of platform features Zenith does not use yet and what each would buy. Method: grep of `src/` and `libs/` for each feature, plus the Dockerfile and build props. **Nothing here except item 1 has been implemented or measured**; "expected benefit" is a hypothesis until a benchmark says otherwise (use `--tick-jitter` / `--runtime-load` and BenchmarkDotNet, both already in the repo).
 
-Toolchain today: SDK 10.0.303, `net10.0`, `LangVersion 14`, Nullable on, analyzers `latest`, 0 warnings.
+Toolchain today: SDK 10.0.303, `net10.0`, `LangVersion 14`, Nullable on, analyzers `latest`. A clean build (`dotnet build zenith.sln -c Release --no-incremental`) has 0 warnings; incremental builds hide warnings of projects that were not recompiled, so always check with `--no-incremental`.
 
 ## Already used well (no action)
 `Span`/`stackalloc` (105 files), `ArrayPool`, `BinaryPrimitives`, `Channels`, `readonly record struct` (57), `required`, primary constructors, collection expressions, `GeneratedRegex`, a source generator (`zenith.PacketGenerator`), `FrozenDictionary` in one file, `field` keyword in four places.
@@ -10,7 +10,8 @@ Toolchain today: SDK 10.0.303, `net10.0`, `LangVersion 14`, Nullable on, analyze
 ## 1. Debug logging that allocated while disabled — DONE
 `ILogger.Debug(string)` received an already-built string, so every `Debug($"...")` formatted and allocated even with Debug off (about 110 call sites across Session, Gameplay, RakNet).
 Now `ILogger.Debug(ref DebugLogHandler)` (default interface method, `libs/logging/DebugLogHandler.cs`) is picked by the compiler for interpolated strings: with Debug off nothing is formatted or allocated and the interpolated expressions are not evaluated; with Debug on the output is identical. No call site changed. `DebugLoggingTests` pins both behaviours and that 10,000 disabled calls allocate 0 bytes.
-Limits: `IsDebugEnabled` is still needed when the arguments are prepared outside the string (LINQ/joins, e.g. `NetworkSession` outbound). `nethernet` has its own `INetherNetLogger` (no `IsDebugEnabled`, no reference to `libs/logging`), so its ~30 interpolated Debug calls (connection setup and error paths, not per-tick) still allocate; unifying it onto `ILogger` would fix that.
+`nethernet` is a packable library that depends on no other Zenith package, so `INetherNetLogger` carries its own copy of the mechanism (`IsDebugEnabled`, `Debug(ref NetherNetDebugHandler)`, `NetherNetDebugHandler`); the Zenith adapter forwards `IsDebugEnabled`, and the `Null`/`Prefixed` loggers honour it. Its string-concatenation Debug calls were rewritten as single interpolations so they take the same path. Tests: `src/nethernet.Tests/Axolotl/DebugLoggingTests.cs`.
+Scope and limits: only Debug has a handler, because it is the only level meant to be off in production; Info/Warning/Error calls are emitted by default, so building their text is the work, not waste. `IsDebugEnabled` is still needed when the arguments are prepared outside the string (LINQ/joins, e.g. `NetworkSession` outbound).
 
 ## 2. First tick and GC settings — open, needs measurement
 - The earlier tick-jitter work found max 2-4 ms stalls caused by first-tick JIT. `PublishReadyToRun` in the publish (and a `TieredCompilation`/`TieredPGO` check; PGO is on by default) targets that. The Dockerfile publishes without ReadyToRun and without a `runtimeconfig` template.
@@ -26,7 +27,7 @@ Limits: `IsDebugEnabled` is still needed when the arguments are prepared outside
 Item, block, recipe, mob and spawn catalogs are built at boot and only read. Use only where a profile shows hot lookups; one file uses it today.
 
 ## 6. Stricter build — open, cheap
-Build is already at 0 warnings, so `TreatWarningsAsErrors` costs nothing now and stops regressions. Also consider `AnalysisMode` above default and `EnforceCodeStyleInBuild`. No third-party analyzers are used beyond the Microsoft ones.
+A clean build has 0 warnings (11 were fixed on 2026-11-13: xUnit analyzer findings in tests, and a dead `length > MaxLength` check in `nethernet` `Der.Length`), so `TreatWarningsAsErrors` costs nothing now and stops regressions. Also consider `AnalysisMode` above default and `EnforceCodeStyleInBuild`. No third-party analyzers are used beyond the Microsoft ones.
 
 ## 7. `System.Diagnostics.Metrics` as a bridge — open, operational value only
 `libs/diagnostics` is a custom metrics runtime. Publishing its counters through a `Meter` would let `dotnet-counters` and OpenTelemetry exporters read them. Keep the custom analysis; add the bridge, do not replace it.

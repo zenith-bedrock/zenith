@@ -133,8 +133,7 @@ public sealed class NetherNetServer : IServerInterface, ISignalingRegistry
 
             if (_blockTracker.IsBlocked(peer.Address.Ip) || (peer.ClientAddress is not null && _blockTracker.IsBlocked(peer.ClientAddress)))
             {
-                _logger.Debug("Closed connection from blocked address: " + peer.Address.Ip
-                    + (peer.ClientAddress is not null ? $" (client {peer.ClientAddress})" : ""));
+                _logger.Debug($"Closed connection from blocked address: {peer.Address.Ip}{(peer.ClientAddress is not null ? $" (client {peer.ClientAddress})" : "")}");
                 peer.Transport.Close();
                 continue;
             }
@@ -187,7 +186,7 @@ public sealed class NetherNetServer : IServerInterface, ISignalingRegistry
     {
         var now = Environment.TickCount64 / 1000.0;
         _blockTracker.Block(address, timeout < 0 ? double.PositiveInfinity : now + timeout);
-        _logger.Debug($"Blocked {address}" + (timeout < 0 ? "" : $" for {timeout} seconds"));
+        _logger.Debug($"Blocked {address}{(timeout < 0 ? "" : $" for {timeout} seconds")}");
 
         var blocked = InternetAddress.NormalizeIp(address) ?? address;
         foreach (var session in _sessionManager.GetSessions())

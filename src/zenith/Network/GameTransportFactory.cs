@@ -124,7 +124,8 @@ internal static class GameTransportFactory
 
     private sealed class NetherNetLogAdapter(ILogger logger) : INetherNetLogger
     {
-        public void Debug(string message) => logger.Debug("[NetherNet] " + message);
+        public bool IsDebugEnabled => logger.IsDebugEnabled;
+        public void Debug(string message) => logger.Debug($"[NetherNet] {message}");
         public void Info(string message) => logger.Info("[NetherNet] " + message);
         public void Warning(string message) => logger.Warning("[NetherNet] " + message);
         public void Error(string message) => logger.Error("[NetherNet] " + message);
