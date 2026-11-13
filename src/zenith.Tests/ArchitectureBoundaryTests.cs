@@ -45,6 +45,118 @@ public class ArchitectureBoundaryTests
             referencedType => IsInAnyNamespace(referencedType, "Zenith.Session", "Zenith.Protocol"));
     }
 
+    /// <summary>
+    /// Single-writer rule made executable: the pose, vitals and lifecycle scalars on <c>Player</c> keep public setters (the class is
+    /// a plain state holder), so which code may write each one is pinned here. Adding a writer means adding it to this table on
+    /// purpose; the review question is then "does this type own that state?". Tests are not scanned: they arrange state freely.
+    /// </summary>
+    [Fact]
+    public void Player_state_is_written_only_by_its_owners()
+    {
+        const string Movement = "Zenith.Gameplay.Survival.MovementSystem";
+        const string Hunger = "Zenith.Gameplay.Survival.HungerSystem";
+        const string Minecart = "Zenith.Gameplay.Entities.MinecartSystem";
+        const string Login = "Zenith.Session.Handler.LoginSessionHandler";
+        const string InGame = "Zenith.Session.Handler.InGameSessionHandler";
+        const string PlayerType = "Zenith.Player.Player";
+
+        var owners = new Dictionary<string, string[]>
+        {
+            // Pose: MovementSystem applies client input on the tick; a mounted rider mirrors its vehicle; login places the player.
+            ["PositionX"] = [Movement, Minecart, Login],
+            ["PositionY"] = [Movement, Minecart, Login],
+            ["PositionZ"] = [Movement, Minecart, Login],
+            ["Pitch"] = [Movement, Login],
+            ["Yaw"] = [Movement, Login],
+            ["HeadYaw"] = [Movement, Login],
+            ["IsOnGround"] = [Movement],
+            ["IsSneaking"] = [Movement, PlayerType],
+            ["IsSprinting"] = [Movement, PlayerType],
+            ["FallPeakY"] = [Movement, PlayerType],
+            // Vitals: HungerSystem owns the food model; mining and damage are exhaustion sources it prices.
+            ["Hunger"] = [Hunger, PlayerType],
+            ["Saturation"] = [Hunger, PlayerType],
+            ["Exhaustion"] = [Hunger, "Zenith.Gameplay.Survival.PlayerDamage", "Zenith.Gameplay.WorldInteraction.BlockEditSystem", PlayerType],
+            // Cross-system signals with exactly one producer.
+            ["RidingEntityId"] = [Minecart],
+            ["LastVillagerAttack"] = [PlayerType, "Zenith.Gameplay.Entities.VillagerSystem"],
+            // Hotbar selection is the documented rule-6 exception (ADR §80): an atomic scalar the handler writes directly.
+            ["SelectedHotbarSlot"] = [InGame],
+            // Connection data owned by the session boundary.
+            ["SkinRgba"] = [Login, InGame],
+            ["SkinWidth"] = [Login, InGame],
+            ["SkinHeight"] = [Login, InGame],
+            // Connection-lifecycle gates flipped by the session state machine (ADR §97): handler enable/disable and close.
+            ["IsInGame"] = [InGame, "Zenith.Session.NetworkSession"],
+            ["IsSpawning"] = [InGame, "Zenith.Session.Handler.SpawnResponseSessionHandler"],
+        };
+
+        var playerType = typeof(Zenith.Player.Player);
+        var tracked = owners.Keys.ToHashSet();
+        var untracked = playerType.GetProperties()
+            .Where(p => p.SetMethod is { IsPublic: true } && !tracked.Contains(p.Name))
+            .Select(p => p.Name)
+            .ToList();
+        Assert.True(untracked.Count == 0,
+            "Player has public setters with no declared owner (add them to the table): " + string.Join(", ", untracked));
+
+        var violations = new List<string>();
+        foreach (var type in typeof(RecipeRegistry).Assembly.GetTypes())
+        {
+            var outermost = type;
+            while (outermost.DeclaringType is { } parent) outermost = parent;
+
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                                                   BindingFlags.Static | BindingFlags.DeclaredOnly).Cast<MethodBase>()
+                         .Concat(type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                                                      BindingFlags.Static)))
+            {
+                foreach (var callee in EnumerateCalledMethods(method))
+                {
+                    if (callee.DeclaringType != playerType || !callee.Name.StartsWith("set_", StringComparison.Ordinal))
+                        continue;
+                    var property = callee.Name["set_".Length..];
+                    if (owners.TryGetValue(property, out var allowed) && !allowed.Contains(outermost.FullName))
+                        violations.Add($"{outermost.FullName}.{method.Name} writes Player.{property}");
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            "Player state written outside its owners:\n" + string.Join("\n", violations.Distinct().OrderBy(x => x)));
+    }
+
+    private static IEnumerable<MethodBase> EnumerateCalledMethods(MethodBase method)
+    {
+        var body = method.GetMethodBody();
+        if (body?.GetILAsByteArray() is not { } il)
+            yield break;
+
+        for (var offset = 0; offset < il.Length;)
+        {
+            var opcode = ReadOpCode(il, ref offset);
+            var operandOffset = offset;
+            OperandSize(opcode.OperandType, il, ref offset);
+            if (opcode.OperandType != OperandType.InlineMethod)
+                continue;
+
+            MethodBase? callee;
+            try
+            {
+                callee = method.Module.ResolveMethod(BitConverter.ToInt32(il, operandOffset),
+                    method.DeclaringType?.GetGenericArguments(),
+                    method is MethodInfo info ? info.GetGenericArguments() : null);
+            }
+            catch (ArgumentException)
+            {
+                continue;
+            }
+
+            if (callee is not null)
+                yield return callee;
+        }
+    }
+
     private static void AssertNoReferences(
         Func<Type, bool> subject,
         Func<Type, bool> forbidden)

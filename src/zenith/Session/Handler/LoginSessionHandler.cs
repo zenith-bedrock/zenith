@@ -189,8 +189,9 @@ class LoginSessionHandler : ISessionHandler
                 $"hp={savedHealth:F1} hunger={savedHunger:F1}");
 
             // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
-            if (session.Context.World.TryHealSpawnFeet(player))
+            if (session.Context.World.TryHealSpawnFeet(player.PositionX, player.PositionY, player.PositionZ, out var healedY))
             {
+                player.PositionY = healedY;
                 session.Context.Logger.Info(
                     $"Spawn heal for '{player.Username}': Y {py:F1} → {player.PositionY:F0} (clear feet at XZ)");
                 session.Context.World.PersistPlayerData(player);

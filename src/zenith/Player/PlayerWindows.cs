@@ -57,10 +57,10 @@ sealed class PlayerWindows(Func<bool> isDead)
         }
     }
 
-    /// <summary>Compatibility projection of the active chest target; null for every other view.</summary>
+    /// <summary>The chest (or double chest) the open container looks into; null when no container is open or it is another kind.</summary>
     public OpenChestView? OpenChest => OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest } ? chest : null;
 
-    /// <summary>Compatibility projection of the active player-inventory window.</summary>
+    /// <summary>Whether the player's own inventory window is the open container.</summary>
     public bool InventoryWindowOpen => OpenContainer is { Target: OpenContainerSession.TargetKind.PlayerInventory };
 
     /// <summary>Whether a crafting-table window is the currently active container (ADR §139).</summary>

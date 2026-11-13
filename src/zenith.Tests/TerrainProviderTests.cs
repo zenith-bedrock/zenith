@@ -283,13 +283,14 @@ public class TerrainProviderTests
         };
 
         Assert.False(world.IsSpawnFeetClear(0, Blocks.FlatSpawnY, 0));
-        Assert.True(world.TryHealSpawnFeet(player));
+        Assert.True(world.TryHealSpawnFeet(player.PositionX, player.PositionY, player.PositionZ, out var healedY));
+        player.PositionY = healedY;
         Assert.True(player.PositionY >= OverworldTerrainSampler.SeaLevel);
         Assert.True(world.IsSpawnFeetClear(
             (int)MathF.Floor(player.PositionX),
             (int)MathF.Floor(player.PositionY),
             (int)MathF.Floor(player.PositionZ)));
-        Assert.False(world.TryHealSpawnFeet(player)); // already clear
+        Assert.False(world.TryHealSpawnFeet(player.PositionX, player.PositionY, player.PositionZ, out _)); // already clear
     }
 
     [Fact]
