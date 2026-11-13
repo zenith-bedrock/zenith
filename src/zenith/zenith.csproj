@@ -44,6 +44,9 @@
     <EmbeddedResource Include="data\mobs.json">
       <LogicalName>mobs.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\spawns.json">
+      <LogicalName>spawns.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\recipes.json.gz">
       <LogicalName>recipes.json.gz</LogicalName>
     </EmbeddedResource>

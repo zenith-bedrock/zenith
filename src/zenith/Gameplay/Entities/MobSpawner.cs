@@ -11,17 +11,25 @@ namespace Zenith.Gameplay.Entities;
 sealed class MobSpawner : IGameSystem
 {
     private readonly Dictionary<string, Action<float, float, float>> _species = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Func<int>> _liveCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<(Action<float, float, float> Spawn, float X, float Y, float Z)> _pending = new();
 
     /// <summary>Names a species can be summoned by, in alphabetical order.</summary>
     public IReadOnlyList<string> Names => _species.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
 
-    public void Register(string name, Action<float, float, float> spawn)
+    /// <param name="liveCount">How many of this species are alive right now; the natural spawner reads it to respect the mob cap.</param>
+    public void Register(string name, Action<float, float, float> spawn, Func<int>? liveCount = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (!_species.TryAdd(name, spawn))
             throw new InvalidOperationException($"A mob named '{name}' is already registered for summoning.");
+        if (liveCount is not null) _liveCounts[name] = liveCount;
     }
+
+    public bool IsRegistered(string name) => _species.ContainsKey(name);
+
+    /// <summary>Live count of a species, or 0 when it did not register a counter.</summary>
+    public int LiveCount(string name) => _liveCounts.TryGetValue(name, out var count) ? count() : 0;
 
     /// <summary>Queues a spawn of <paramref name="name"/>; false when no such species is registered.</summary>
     public bool Request(string name, float x, float y, float z)

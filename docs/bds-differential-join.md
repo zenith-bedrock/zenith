@@ -46,10 +46,10 @@ checks in the golden tests; it does not compare every field.
 ### What the game rules do (honestly)
 
 All 39 rules are replicated, so the client sees BDS's defaults and reads the ones it handles itself (`showCoordinates`, ...).
-Server side, **only four are enforced**: `keepInventory` (death keeps the items), `fallDamage`, `naturalRegeneration` and
-`doTileDrops` (a broken block gives no item; a broken chest still drops its contents). `/gamerule <rule> [value]` shows or sets any
-of the 39; the other 35 change the replicated value and nothing else: `doDayLightCycle` (world time is `tick % 24000` with no
-pause), `doMobSpawning`, `mobGriefing`, `pvp`, `drowningDamage`, `fireDamage`, `doImmediateRespawn`, ... have no server behaviour
+Server side, **only five are enforced**: `keepInventory` (death keeps the items), `fallDamage`, `naturalRegeneration`,
+`doTileDrops` (a broken block gives no item; a broken chest still drops its contents) and `doMobSpawning` (stops natural spawning). `/gamerule <rule> [value]` shows or sets any
+of the 39; the other 34 change the replicated value and nothing else: `doDayLightCycle` (world time is `tick % 24000` with no
+pause), `mobGriefing`, `pvp`, `drowningDamage`, `fireDamage`, `doImmediateRespawn`, ... have no server behaviour
 behind them. Rules persist across restarts (stored in the wire encoding under key `gr:`); a stored rule this build does not know,
 or whose type changed, is dropped with a warning that names it.
 

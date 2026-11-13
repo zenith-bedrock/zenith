@@ -716,3 +716,21 @@ pressure crossed one real bar (cross-category damage dispatch, above) and was re
 smallest design that eliminated the type-switch growth, not a generic framework. Archetypes remain
 unjustified — six ECS-damageable species, still zero measured allocation regression at steady
 state (see the findings doc's benchmark section).
+
+## Putting mobs in the world (current)
+
+Nothing spawns by itself at join any more (the old per-species "showcase" is gone). Two paths exist, both through
+`MobSpawner` (a thread-safe queue drained inside the tick):
+
+- `/summon <mob>`: one mob at the executing player's position. Names: zombie, cow, creeper, spider, skeleton, iron_golem,
+  enderman, fish, minecart, bat, villager.
+- `NaturalSpawnSystem`, driven by `data/spawns.json` (hand-authored, validated at load): per category a cap per online player
+  and a round interval; a round places a weighted-random group 24-48 blocks from each living in-game player, on the terrain
+  surface, where a ground mob can stand. Entries filter by biome (`OverworldBiomeKind`) and time (`night` = world time
+  13000-23000). `doMobSpawning=false` stops it.
+
+Deliberate gaps against vanilla: no light level (time of day stands in for it), no per-chunk mob-cap area (one cap scaled by
+player count), no water, cave, structure or village spawns (fish, bat, villager, iron golem, minecart are summon-only), no
+spawn on player-edited terrain (the column is sampled from base terrain, so a built-over spot can be rejected or wrong).
+Verified: unit tests and a real server where a bot saw cows appear within 45 s; nothing was observed with a retail client,
+and the night (zombie, skeleton, spider, creeper, enderman) path was only unit-tested, not waited for in a live world.
