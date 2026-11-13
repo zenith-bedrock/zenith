@@ -102,7 +102,7 @@ class ZenithServer
         var bats = new BatStore();
         var villagers = new VillagerStore();
         var diagnostics = new ServerRuntimeDiagnostics();
-        var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick);
+        var gameLoop = new GameLoop(clock, players, serverLogger, diagnostics.Runtime, diagnostics.Tick, diagnostics.Pacing);
 
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         Blocks.Load(blockPalette);
