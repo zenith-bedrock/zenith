@@ -5,6 +5,8 @@ try
 {
     if (args.Length > 0 && args[0] == "--runtime-load")
         Environment.ExitCode = RuntimeLoadHarness.Run(args[1..]);
+    else if (args.Length > 0 && args[0] == "--tick-jitter")
+        Environment.ExitCode = TickJitterHarness.Run(args[1..]);
     else if (args.Length > 0 && args[0] == "--worldgen-scale")
         Environment.ExitCode = WorldgenScaleHarness.Run(args[1..]);
     else if (args.Length > 0 && args[0] == "--ecs-spike")

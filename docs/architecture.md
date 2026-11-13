@@ -97,6 +97,16 @@ depends on another having run first for an object to exist. (`RuntimeLoadHarness
 - A system exception stops the authoritative loop and starts coordinated server shutdown. Continuing after a partially applied gameplay transition would hide corruption.
 - **Single-threaded** until a concrete feature forces parallelism — no Scheduler / Actor / ECS “for cleanliness.”
 
+### Tick pacing
+
+`Task.Delay`/`Thread.Sleep` are only as exact as the OS timer (≈15.6 ms on Windows by default), a 30% error on a 50 ms tick. So the loop does not use them for pacing:
+
+- **Own thread.** `RunAsync` runs the loop on a dedicated `zenith-game-loop` thread (above-normal priority, background), so a thread-pool starved by network work cannot delay a tick. Exceptions are propagated to the awaiting caller unchanged. `GC.GetAllocatedBytesForCurrentThread()` therefore refers to this thread.
+- **Absolute deadlines** (`TickSchedule`, pure arithmetic over `Stopwatch` timestamps): tick N is due at `start + N * interval`. A late wake-up never shifts later ticks, so the average rate stays exact. When behind, ticks run back to back up to `MaxCatchUpTicks` (5); beyond that the lost time is given up and a warning is logged, instead of bursting dozens of ticks.
+- **`PreciseWaiter`**: a cancellable coarse sleep, then a `Stopwatch` spin for the last `SpinMargin`. Coarse sleep is a per-timer high-resolution waitable timer on Windows 10 1803+ (no machine-wide timer change; margin 1.5 ms), `timeBeginPeriod(1)` + millisecond wait on older Windows (2.5 ms), a millisecond wait on Linux/macOS. Cost: at most the margin of CPU per tick (~0.2–3% of one core at 20 TPS).
+- **Metrics** (`ServerRuntimeDiagnostics.Pacing`): `tick.wake-lateness` (timing) and `tick.skipped` (counter).
+- **Measuring**: `dotnet run -c Release --project src/zenith.Benchmarks -- --tick-jitter [seconds]` compares the old `Task.Delay` pacing with the current one. On the Windows 11 dev machine (20 s, 20 TPS, empty tick): old p50 lateness 1.2–9.1 ms, p95 11.6–20 ms, max up to 26.9 ms; new p50 0.001 ms, p95 0.2 ms, p99 1.7 ms, max 3.6 ms. The Linux/macOS path and pre-1803 Windows fallback are untested.
+
 Gameplay authority normally has one writer: the `GameLoop`. Networking, storage, compression and logging may run concurrently, but they do not acquire authority over `Player`, `World`, inventory or equivalent gameplay state. Keep synchronization at handoff boundaries; do not hold a lock across I/O, `await`, protocol sends or callbacks.
 
 ## Persistence model (world)

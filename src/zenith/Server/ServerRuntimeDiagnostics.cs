@@ -58,6 +58,7 @@ sealed class ServerRuntimeDiagnostics
 
     public DiagnosticsRuntime Runtime { get; }
     public TimingMetric Tick { get; }
+    public Zenith.Gameplay.Runtime.TickPacingMetrics Pacing { get; }
     public IReadOnlyDictionary<string, TimingMetric> Systems { get; }
     public DiagnosticsIncidentBuffer Incidents { get; }
     public WorldGenerationDiagnostics Worldgen { get; }
@@ -66,6 +67,7 @@ sealed class ServerRuntimeDiagnostics
     {
         var builder = new DiagnosticsBuilder();
         Tick = builder.Timing("tick");
+        Pacing = new Zenith.Gameplay.Runtime.TickPacingMetrics(builder.Timing("tick.wake-lateness"), builder.Counter("tick.skipped"));
         Systems = new Dictionary<string, TimingMetric>(StringComparer.Ordinal)
         {
             ["game-rule-sync"] = builder.Timing("tick.system.game-rule-sync", "tick"),

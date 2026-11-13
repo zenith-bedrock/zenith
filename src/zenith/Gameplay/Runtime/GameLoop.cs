@@ -6,7 +6,7 @@ using System.Diagnostics;
 namespace Zenith.Gameplay.Runtime;
 
 /// <summary>
-/// Orquestra o ciclo de atualização a 20 TPS. Avança o <see cref="GameClock"/> e chama
+/// Orquestra o ciclo de atualização a 20 TPS (relógio monotônico absoluto, thread dedicada). Avança o <see cref="GameClock"/> e chama
 /// sistemas na ordem de <see cref="Register"/>. Sem regras de gameplay.
 /// </summary>
 sealed class GameLoop
@@ -19,17 +19,22 @@ sealed class GameLoop
     private readonly List<Player.Player> _onlineScratch = new();
     private readonly DiagnosticsRuntime? _diagnostics;
     private readonly TimingMetric _tickTiming;
+    private readonly TickPacingMetrics _pacing;
     private Action<TimeSpan>? _tickObserver;
+
+    /// <summary>How far behind schedule the loop may fall and still catch up by running ticks back to back; beyond it the time is given up.</summary>
+    public const int MaxCatchUpTicks = 5;
 
     public GameClock Clock => _clock;
 
-    public GameLoop(GameClock clock, PlayerManager players, ILogger logger, DiagnosticsRuntime? diagnostics = null, TimingMetric tickTiming = default)
+    public GameLoop(GameClock clock, PlayerManager players, ILogger logger, DiagnosticsRuntime? diagnostics = null, TimingMetric tickTiming = default, TickPacingMetrics pacing = default)
     {
         _clock = clock;
         _players = players;
         _logger = logger;
         _diagnostics = diagnostics;
         _tickTiming = tickTiming;
+        _pacing = pacing;
     }
 
     /// <summary>The registered systems in execution order (composition tests pin it).</summary>
@@ -51,30 +56,61 @@ sealed class GameLoop
     /// <summary>Composition-root-only operational hook; it observes completed ticks and owns no gameplay state.</summary>
     internal void SetTickObserver(Action<TimeSpan> observer) => _tickObserver = observer;
 
-    public async Task RunAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs the loop on its own dedicated thread until <paramref name="cancellationToken"/> fires, and completes when the thread ends (or
+    /// faults: the original exception is the task's). It is not a thread-pool continuation, so no other work can delay a tick's start, and the
+    /// pacing is <see cref="TickSchedule"/> over <see cref="PreciseWaiter"/>, not a timer-resolution-bound <c>Task.Delay</c>.
+    /// </summary>
+    public Task RunAsync(CancellationToken cancellationToken) => RunAsync(new PreciseWaiter(), cancellationToken, ownsWaiter: true);
+
+    internal Task RunAsync(ITickWaiter waiter, CancellationToken cancellationToken, bool ownsWaiter = false)
     {
-        var interval = TimeSpan.FromMilliseconds(1000.0 / GameClock.TicksPerSecond);
-        var loopStart = TimeSpan.FromMilliseconds(Environment.TickCount64);
-        ulong tickIndex = 0;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Run(waiter, cancellationToken);
+                completion.SetResult();
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+            finally
+            {
+                if (ownsWaiter) waiter.Dispose();
+            }
+        })
+        {
+            Name = "zenith-game-loop",
+            IsBackground = true,
+            Priority = ThreadPriority.AboveNormal
+        };
+        thread.Start();
+        return completion.Task;
+    }
+
+    private void Run(ITickWaiter waiter, CancellationToken cancellationToken)
+    {
+        var interval = Stopwatch.Frequency / GameClock.TicksPerSecond;
+        var schedule = new TickSchedule(Stopwatch.GetTimestamp(), interval, maxLagTimestampTicks: interval * MaxCatchUpTicks);
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            waiter.WaitUntil(schedule.NextDeadline, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) break;
+
+            var woke = Stopwatch.GetTimestamp();
+            _diagnostics?.Record(_pacing.Lateness, schedule.Lateness(woke));
+
             TickOnce();
 
-            tickIndex++;
-            var deadline = loopStart + interval * tickIndex;
-            var now = TimeSpan.FromMilliseconds(Environment.TickCount64);
-            var delay = deadline - now;
-            if (delay > TimeSpan.Zero)
+            var skipped = schedule.Complete(Stopwatch.GetTimestamp());
+            if (skipped > 0)
             {
-                try
-                {
-                    await Task.Delay(delay, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                _diagnostics?.Increment(_pacing.SkippedTicks, skipped);
+                _logger.Warning($"Game loop fell {skipped} tick(s) behind its schedule and gave the time up (tick={_clock.CurrentTick}).");
             }
         }
     }

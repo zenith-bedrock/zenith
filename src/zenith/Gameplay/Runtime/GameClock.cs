@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Zenith.Gameplay.Runtime;
 
 /// <summary>
@@ -18,7 +20,7 @@ sealed class GameClock
 
     public GameClock()
     {
-        _windowStartTimestamp = Environment.TickCount64;
+        _windowStartTimestamp = Stopwatch.GetTimestamp();
     }
 
     public void Advance()
@@ -27,11 +29,11 @@ sealed class GameClock
         WorldTime = (int)(CurrentTick % DayLengthTicks);
 
         _ticksInWindow++;
-        var now = Environment.TickCount64;
-        var elapsedMs = now - _windowStartTimestamp;
-        if (elapsedMs >= 1000)
+        var now = Stopwatch.GetTimestamp();
+        var elapsedSeconds = Stopwatch.GetElapsedTime(_windowStartTimestamp, now).TotalSeconds;
+        if (elapsedSeconds >= 1.0)
         {
-            MeasuredTps = _ticksInWindow * 1000.0 / elapsedMs;
+            MeasuredTps = _ticksInWindow / elapsedSeconds;
             _ticksInWindow = 0;
             _windowStartTimestamp = now;
         }
