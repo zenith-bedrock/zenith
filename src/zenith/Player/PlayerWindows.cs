@@ -13,7 +13,7 @@ sealed class PlayerWindows(Func<bool> isDead)
 
     // The GameLoop is the only writer. This lock is a narrow snapshot handoff for the network
     // decoder, which must bind a wire container action to the session it observed.
-    private readonly object _containerLock = new();
+    private readonly Lock _containerLock = new();
     private OpenContainerSession? _open;
     private uint _nextGeneration;
     private readonly PendingMailbox<InventoryWindowIntent> _intents = new(MaxPendingWindowIntents);

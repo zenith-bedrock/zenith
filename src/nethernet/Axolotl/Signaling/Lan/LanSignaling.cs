@@ -4,6 +4,7 @@ using Zenith.NetherNet.Axolotl.Protocol;
 using Zenith.NetherNet.Axolotl.Signaling.Http;
 using Zenith.NetherNet.Axolotl.Signaling.Lan.Packet;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Signaling.Lan;
 
@@ -234,7 +235,7 @@ public sealed class LanSignaling : ISignaling
         INegotiation negotiation;
         try
         {
-            negotiation = _negotiator.BeginNegotiation(signal.Data, senderId.ToString(), CandidateMode.Trickle);
+            negotiation = _negotiator.BeginNegotiation(signal.Data, senderId.ToString(CultureInfo.InvariantCulture), CandidateMode.Trickle);
         }
         catch (NegotiationException e)
         {

@@ -10,8 +10,8 @@ public sealed class AnswerBuilder(IIdentityProvider identityProvider, IReadOnlyL
     public LocalAnswer Build(string localDescription, CandidateMode candidateMode)
     {
         var answer = SessionDescription.Parse(localDescription);
-        var ufrag = answer.GetMediaAttributeValues("ice-ufrag").FirstOrDefault()
-            ?? throw new SdpException("Local description has no ice-ufrag");
+        var ufragValues = answer.GetMediaAttributeValues("ice-ufrag");
+        var ufrag = ufragValues.Count > 0 ? ufragValues[0] : throw new SdpException("Local description has no ice-ufrag");
 
         // Advertised addresses only rewrite bundled answers; trickle ICE is used for LAN discovery where
         // local gathered addresses are required.

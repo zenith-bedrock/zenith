@@ -61,7 +61,7 @@ public sealed record DiagnosticsComparison(
         return output.ToString();
     }
 
-    public string ToJson(bool indented = true) => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = indented });
+    public string ToJson(bool indented = true) => JsonSerializer.Serialize(this, indented ? JsonOptions.Indented : JsonOptions.Compact);
 }
 
 public readonly record struct DiagnosticsMetricComparison(

@@ -72,7 +72,7 @@ public sealed class ProtocolGovernanceTests
         try
         {
             await SchemaCache.PublishAsync(cache, "fake", "stable", "abc123",
-                (staging, _) => File.WriteAllTextAsync(Path.Combine(staging, "packet.json"), "{}"), CancellationToken.None);
+                (staging, token) => File.WriteAllTextAsync(Path.Combine(staging, "packet.json"), "{}", token), CancellationToken.None);
             await File.WriteAllTextAsync(Path.Combine(packets, "SetTimePacket.cs"), "[GamePacket(1)] sealed partial class SetTimePacket { [WireVar] public int Time { get; set; } }");
             var source = new FakeSchemaSource();
             source.Packets["SetTimePacket"] = new PacketSchema(1, "SetTimePacket",

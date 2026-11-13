@@ -96,7 +96,7 @@ public sealed class SessionDescription
         return size;
     }
 
-    public string? GetIdentity() => GetSessionAttributeValues(AttributeIdentity).FirstOrDefault();
+    public string? GetIdentity() => GetSessionAttributeValues(AttributeIdentity) is { Count: > 0 } values ? values[0] : null;
 
     public SessionDescription WithoutIdentity()
     {

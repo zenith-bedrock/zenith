@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using Zenith.Binary;
 using static Zenith.Binary.BinaryStream;
+using System.Globalization;
 
 namespace Zenith.Raknet.Extension;
 
@@ -35,7 +36,7 @@ public static class BinaryStreamExtension
                 return new IPEndPoint(addr, port);
             }
             default:
-                throw new Exception($"Unknown IP address version {version}");
+                throw new InvalidDataException($"Unknown IP address version {version}");
         }
     }
 
@@ -50,7 +51,7 @@ public static class BinaryStreamExtension
                 var addr = value.Address.ToString().Split('.');
                 foreach (var b in addr)
                 {
-                    stream.WriteByte((byte)(~int.Parse(b) & 0xff));
+                    stream.WriteByte((byte)(~int.Parse(b, CultureInfo.InvariantCulture) & 0xff));
                 }
                 stream.WriteUShort((ushort)value.Port);
                 break;
@@ -65,7 +66,7 @@ public static class BinaryStreamExtension
                 break;
             }
             default:
-                throw new Exception($"Unknown IP address version {version}");
+                throw new InvalidDataException($"Unknown IP address version {version}");
         }
     }
 }

@@ -151,6 +151,8 @@ internal static class SchemaCache
         catch (JsonException) { return ["Snapshot manifest is invalid."]; }
     }
 
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     private static Task WriteJsonAsync(string path, object value, CancellationToken ct) =>
-        File.WriteAllTextAsync(path, JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }), ct);
+        File.WriteAllTextAsync(path, JsonSerializer.Serialize(value, IndentedJson), ct);
 }

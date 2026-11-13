@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Negotiation;
 
@@ -66,7 +67,7 @@ public sealed partial class IceCandidate
     }
 
     public static IceCandidate ServerReflexive(string foundation, string address, string port, int priority = ServerReflexivePriority) =>
-        new(foundation, "udp", priority.ToString(), address, port, TypeServerReflexive);
+        new(foundation, "udp", priority.ToString(CultureInfo.InvariantCulture), address, port, TypeServerReflexive);
 
     public IceCandidate WithoutRelatedAddress() => new(Foundation, Protocol, Priority, Address, Port, Type);
 

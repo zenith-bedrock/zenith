@@ -16,6 +16,7 @@ using Zenith.Player;
 using Zenith.Logging;
 using Zenith.Network;
 using Zenith.World;
+using System.Globalization;
 
 namespace Zenith.Server;
 
@@ -26,7 +27,7 @@ namespace Zenith.Server;
 class ZenithServer
 {
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private readonly IChunkStorage _chunkStorage;
     private readonly ILogger _logger;
     private readonly GameSessionHost _sessionHost;
@@ -63,7 +64,7 @@ class ZenithServer
         {
             var logsDir = Path.Combine(ServerConfigPaths.ResolvePersistentRoot(), "logs");
             Directory.CreateDirectory(logsDir);
-            var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            var runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
             logFilePath = Path.Combine(logsDir, $"zenith-{runStamp}.log");
             _logFileWriter = new StreamWriter(logFilePath, append: false);
             _diagnosticsFileWriter = new StreamWriter(
@@ -179,6 +180,7 @@ class ZenithServer
             ServerConfigPaths.ResolvePersistentRoot(),
             LoadOrCreateServerGuid(ServerConfigPaths.ResolvePersistentRoot(), serverLogger)));
         _telemetry = new RuntimeTelemetry(serverLogger);
+        serverLogger.Info(RuntimeTelemetry.DescribeGc());
         var diagnosticsFileTicks = 0L;
         const long diagnosticsFileEveryTicks = 20 * 30; // Same ~30s cadence as RuntimeTelemetry's console line.
         gameLoop.SetTickObserver(elapsed =>
@@ -220,7 +222,7 @@ class ZenithServer
         var guid = BitConverter.ToUInt64(bytes);
         try
         {
-            File.WriteAllText(path, guid.ToString());
+            File.WriteAllText(path, guid.ToString("D", CultureInfo.InvariantCulture));
             logger.Info($"Wrote stable RakNet GUID to {path}");
         }
         catch (Exception ex)
@@ -469,6 +471,7 @@ class ZenithServer
             _logFileWriter?.Dispose();
             _diagnosticsFileWriter?.Flush();
             _diagnosticsFileWriter?.Dispose();
+            Context.Diagnostics.Dispose();
         }
         finally
         {

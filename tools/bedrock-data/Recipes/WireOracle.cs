@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Globalization;
 
 namespace Zenith.BedrockData.Recipes;
 
@@ -76,7 +77,7 @@ internal static class WireOracle
         int? suffixAux = null;
         if (tail.Length > 0 && tail.All(char.IsAsciiDigit) && head.Contains(':'))
         {
-            suffixAux = int.Parse(tail);
+            suffixAux = int.Parse(tail, CultureInfo.InvariantCulture);
             name = head;
         }
 

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Runtime;
 using System.Net;
 using Zenith.Diagnostics;
 using Zenith.Event;
@@ -30,6 +32,12 @@ internal static class RuntimeLoadHarness
 
     public static int Run(string[] args)
     {
+        if (args.Contains("--cold-start"))
+        {
+            RunColdStart(players: 10, actors: 100, ticks: 400);
+            return 0;
+        }
+
         var options = LoadOptions.Parse(args);
         if (options.Soak)
         {
@@ -99,6 +107,41 @@ internal static class RuntimeLoadHarness
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// First-ticks cost: the same mixed-roster tick as <c>--mixed-roster</c>, but with no warmup, reporting what the JIT did while the
+    /// loop was already running. Run it against a plain build and a ReadyToRun publish to see what precompilation buys; the number to
+    /// read is the time and method count the JIT spent after the host existed, and the slowest of the first ticks.
+    /// </summary>
+    private static void RunColdStart(int players, int actors, int ticks)
+    {
+        var startupJit = (JitInfo.GetCompilationTime(), JitInfo.GetCompiledMethodCount());
+        var built = Stopwatch.StartNew();
+        var host = new RuntimeHost(players, streamChunks: false, includeMixedRoster: true, includeWorldInteractionDiagnostics: true);
+        host.ConfigureActorInterest(enabled: true);
+        host.SeedMixedRoster(actors);
+        built.Stop();
+        var afterBuildJit = (JitInfo.GetCompilationTime(), JitInfo.GetCompiledMethodCount());
+        var gcBefore = GcCounts.Capture();
+
+        var elapsed = new double[ticks];
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            host.FireMixedRosterProjectile(tick);
+            var started = Stopwatch.GetTimestamp();
+            host.Tick();
+            elapsed[tick] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        }
+
+        var afterTicksJit = (JitInfo.GetCompilationTime(), JitInfo.GetCompiledMethodCount());
+        var gc = GcCounts.Capture() - gcBefore;
+        var steady = elapsed.Skip(ticks / 2).Order().ToArray();
+        Console.WriteLine($"cold-start players={players} actors={actors} ticks={ticks}");
+        Console.WriteLine($"  host build   {built.Elapsed.TotalMilliseconds,8:F1} ms   jit {(afterBuildJit.Item1 - startupJit.Item1).TotalMilliseconds,7:F1} ms / {afterBuildJit.Item2 - startupJit.Item2} methods");
+        Console.WriteLine($"  first ticks  {string.Join(' ', elapsed.Take(10).Select(e => e.ToString("F1", CultureInfo.InvariantCulture)))} ms");
+        Console.WriteLine($"  ticks 1-{ticks}  slowest {elapsed.Max():F1} ms   >5 ms: {elapsed.Count(e => e > 5)}   >10 ms: {elapsed.Count(e => e > 10)}   (first half of ticks: {elapsed.Take(ticks / 2).Max():F1} ms, second half: {steady[^1]:F1} ms)");
+        Console.WriteLine($"  jit during ticks {(afterTicksJit.Item1 - afterBuildJit.Item1).TotalMilliseconds,7:F1} ms / {afterTicksJit.Item2 - afterBuildJit.Item2} methods   gc={gc.Gen0}/{gc.Gen1}/{gc.Gen2} pause={gc.Pause.TotalMilliseconds:F2} ms");
     }
 
     private static LoadResult RunSteady(int playerCount, int ticks)
@@ -457,7 +500,7 @@ internal static class RuntimeLoadHarness
             $"{result.Scenario,-11} players={result.PlayerCount,3} ticks={result.TickCount,3} " +
             $"avg={result.AverageMs:F3}ms p50={result.P50Ms:F3}ms p95={result.P95Ms:F3}ms p99={result.P99Ms:F3}ms max={result.MaxMs:F3}ms " +
             $"alloc={result.AllocatedBytes / (double)result.TickCount:F0}B/tick " +
-            $"gc={result.GcCounts.Gen0}/{result.GcCounts.Gen1}/{result.GcCounts.Gen2} " +
+            $"gc={result.GcCounts.Gen0}/{result.GcCounts.Gen1}/{result.GcCounts.Gen2} gcPause={result.GcCounts.Pause.TotalMilliseconds:F2}ms " +
             $"egress={result.Datagrams} datagrams/{result.Bytes}B" +
             (result.TargetActorCount == 0 ? "" :
                 $" actors={result.ActiveActorCount}/{result.TargetActorCount} spawnFanout={result.SpawnFanout} moveFanout={result.MoveFanout} moveSkipped={result.MoveSkippedFanout} actorRemoved={result.RemovedActors} removeFanout={result.RemoveFanout}"));
@@ -494,8 +537,7 @@ internal static class RuntimeLoadHarness
             int generationWorkers = 1,
             bool instrumentWorldgen = false)
         {
-            if (playerCount <= 0)
-                throw new ArgumentOutOfRangeException(nameof(playerCount));
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(playerCount);
 
             Blocks.EnsureLoaded();
             var logger = new SilentLogger();
@@ -1159,11 +1201,12 @@ internal static class RuntimeLoadHarness
         }
     }
 
-    private readonly record struct GcCounts(int Gen0, int Gen1, int Gen2)
+    private readonly record struct GcCounts(int Gen0, int Gen1, int Gen2, TimeSpan Pause)
     {
-        public static GcCounts Capture() => new(GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
+        public static GcCounts Capture() =>
+            new(GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2), GC.GetTotalPauseDuration());
         public static GcCounts operator -(GcCounts after, GcCounts before) =>
-            new(after.Gen0 - before.Gen0, after.Gen1 - before.Gen1, after.Gen2 - before.Gen2);
+            new(after.Gen0 - before.Gen0, after.Gen1 - before.Gen1, after.Gen2 - before.Gen2, after.Pause - before.Pause);
     }
 
     private enum ZombieWorkloadMode : byte
@@ -1216,11 +1259,11 @@ internal static class RuntimeLoadHarness
                 if (args[i] == "--players" && i + 1 < args.Length)
                     counts = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray();
                 else if (args[i] == "--ticks" && i + 1 < args.Length)
-                    ticks = int.Parse(args[++i]);
+                    ticks = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--actors" && i + 1 < args.Length)
                     actorCounts = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray();
                 else if (args[i] == "--actor-players" && i + 1 < args.Length)
-                    actorPlayers = int.Parse(args[++i]);
+                    actorPlayers = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--world-interaction")
                     worldInteraction = true;
                 else if (args[i] == "--zombie-behavior")
@@ -1234,17 +1277,17 @@ internal static class RuntimeLoadHarness
                 else if (args[i] == "--worldgen-stream")
                     worldgenStream = true;
                 else if (args[i] == "--radius" && i + 1 < args.Length)
-                    worldgenRadius = int.Parse(args[++i]);
+                    worldgenRadius = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--workers" && i + 1 < args.Length)
-                    worldgenWorkers = int.Parse(args[++i]);
+                    worldgenWorkers = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--soak")
                     soak = true;
                 else if (args[i] == "--soak-players" && i + 1 < args.Length)
-                    soakPlayers = int.Parse(args[++i]);
+                    soakPlayers = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--soak-ticks" && i + 1 < args.Length)
-                    soakTicks = int.Parse(args[++i]);
+                    soakTicks = int.Parse(args[++i], CultureInfo.InvariantCulture);
                 else if (args[i] == "--soak-checkpoint-ticks" && i + 1 < args.Length)
-                    soakCheckpointTicks = int.Parse(args[++i]);
+                    soakCheckpointTicks = int.Parse(args[++i], CultureInfo.InvariantCulture);
             }
 
             if (counts.Any(count => count <= 0) || actorCounts.Any(count => count <= 0) || actorPlayers <= 0 || ticks <= 0 ||

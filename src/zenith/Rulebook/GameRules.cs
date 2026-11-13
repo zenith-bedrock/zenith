@@ -21,7 +21,7 @@ sealed class GameRules
     private sealed record State(long Version, GameRule[] Rules);
 
     private readonly Dictionary<string, int> _index;
-    private readonly object _writeGate = new();
+    private readonly Lock _writeGate = new();
     private volatile State _state;
 
     public GameRules(IEnumerable<GameRule> defaults)

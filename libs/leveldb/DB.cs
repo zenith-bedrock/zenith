@@ -26,7 +26,7 @@ public sealed class DB : IDisposable
     /// dominated, not the work inside it. §119 removes the read-side lock entirely instead of
     /// picking a different lock primitive.
     /// </summary>
-    private readonly object _writeGate = new();
+    private readonly Lock _writeGate = new();
 
     private readonly MemTable _mem = new();
     private JournalWriter? _journal;
@@ -588,7 +588,6 @@ public sealed class DB : IDisposable
 
     private void EnsureOpen()
     {
-        if (_closed)
-            throw new ObjectDisposedException(nameof(DB));
+        ObjectDisposedException.ThrowIf(_closed, this);
     }
 }

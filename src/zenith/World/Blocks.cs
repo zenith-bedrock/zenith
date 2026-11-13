@@ -435,5 +435,5 @@ static class Blocks
         }
     }
 
-    private static readonly object LoadGate = new();
+    private static readonly Lock LoadGate = new();
 }

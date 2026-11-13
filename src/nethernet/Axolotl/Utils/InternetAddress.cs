@@ -1,6 +1,7 @@
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Net.Sockets;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Utils;
 
@@ -83,7 +84,7 @@ public sealed class InternetAddress
             return true;
         }
         var parts = ip.Split('.');
-        if (parts.Length != 4 || parts.Any(p => p.Length is < 1 or > 3 || !p.All(char.IsAsciiDigit) || int.Parse(p) > 255))
+        if (parts.Length != 4 || parts.Any(p => p.Length is < 1 or > 3 || !p.All(char.IsAsciiDigit) || int.Parse(p, CultureInfo.InvariantCulture) > 255))
             return false;
         if (!IPAddress.TryParse(ip, out var v4))
             return false;

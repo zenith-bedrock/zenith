@@ -1,6 +1,7 @@
 using System.Text;
 using Zenith.PacketGenerator;
 using Zenith.ProtocolImport.Schema;
+using System.Globalization;
 
 namespace Zenith.ProtocolImport.Scaffolding;
 
@@ -36,10 +37,10 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
             body.Append(nestedTypes);
             body.AppendLine();
         }
-        body.AppendLine($"// Scaffolded by protocol-import from {source.Name} \"{packet.Name}\" (id {packet.Id}).");
+        body.AppendLine(CultureInfo.InvariantCulture, $"// Scaffolded by protocol-import from {source.Name} \"{packet.Name}\" (id {packet.Id}).");
         body.AppendLine("// Review before committing - see ADR §76 (docs/adr/0076-packet-wire-codegen-gamepacket-source-generator.md) for what this tool does and does not handle.");
-        body.AppendLine($"[GamePacket({packet.Id})]");
-        body.AppendLine($"sealed partial class {packet.Name} : DataPacket");
+        body.AppendLine(CultureInfo.InvariantCulture, $"[GamePacket({packet.Id})]");
+        body.AppendLine(CultureInfo.InvariantCulture, $"sealed partial class {packet.Name} : DataPacket");
         body.AppendLine("{");
         body.Append(properties);
         body.AppendLine("}");
@@ -54,7 +55,7 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
         if (field.IsConstantLiteral)
         {
             notes.Add($"Field '{field.Name}' (type '{field.Type}'): wire-present constant/tag, not a settable property - matches the StartGamePacket-style literal-placeholder pattern (ADR §76). Skipped, not scaffolded.");
-            properties.AppendLine($"    // SKIPPED: constant/tag field (type '{field.Type}') - wire-present literal, not a real property (see ADR §76)");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // SKIPPED: constant/tag field (type '{field.Type}') - wire-present literal, not a real property (see ADR §76)");
             properties.AppendLine();
             return;
         }
@@ -62,8 +63,8 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
         if (field.IsComplexType)
         {
             notes.Add($"Field '{field.Name}': type is a discriminated union/complex object in the schema (not a plain type name) - the importer doesn't model unions in v1. Left as TODO.");
-            properties.AppendLine($"    // TODO: discriminated-union field '{field.Name}' - importer doesn't model unions in v1, resolve by hand (see ADR §76)");
-            properties.AppendLine($"    // public object? {propertyName} {{ get; set; }}");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // TODO: discriminated-union field '{field.Name}' - importer doesn't model unions in v1, resolve by hand (see ADR §76)");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // public object? {propertyName} {{ get; set; }}");
             properties.AppendLine();
             return;
         }
@@ -80,14 +81,14 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
             if (TryResolveNestedType(field.Type, nestedTypes, notes))
             {
                 EmitAttributeLine(properties, "[WireNested]", field.Optional);
-                properties.AppendLine($"    public {NullableSuffix(field.Type, field.Optional)} {propertyName} {{ get; set; }}");
+                properties.AppendLine(CultureInfo.InvariantCulture, $"    public {NullableSuffix(field.Type, field.Optional)} {propertyName} {{ get; set; }}");
                 properties.AppendLine();
                 return;
             }
 
             notes.Add($"Field '{field.Name}': unknown type '{field.Type}' - not in KnownTypeMap and not resolvable as a simple nested type. Left as TODO.");
-            properties.AppendLine($"    // TODO: resolve type '{field.Type}' by hand (see KnownTypeMap / ADR §76)");
-            properties.AppendLine($"    // public object? {propertyName} {{ get; set; }}");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // TODO: resolve type '{field.Type}' by hand (see KnownTypeMap / ADR §76)");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // public object? {propertyName} {{ get; set; }}");
             properties.AppendLine();
             return;
         }
@@ -112,7 +113,7 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
             "byte[]" => " = [];",
             _ => ""
         };
-        properties.AppendLine($"    public {clrType} {propertyName} {{ get; set; }}{defaultSuffix}");
+        properties.AppendLine(CultureInfo.InvariantCulture, $"    public {clrType} {propertyName} {{ get; set; }}{defaultSuffix}");
         properties.AppendLine();
     }
 
@@ -140,13 +141,13 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
             if (elementEmission.Kind == WireEmissionKind.Uuid)
             {
                 properties.AppendLine("    [WireUuidArray]");
-                properties.AppendLine($"    public Guid[] {propertyName} {{ get; set; }} = [];");
+                properties.AppendLine(CultureInfo.InvariantCulture, $"    public Guid[] {propertyName} {{ get; set; }} = [];");
                 properties.AppendLine();
                 return;
             }
             notes.Add($"Field '{field.Name}': array of primitive '{field.Type}' - [WireNestedArray] requires named-type elements with Read/Write (see ADR §76 EmoteListPacket note). Left as TODO.");
-            properties.AppendLine($"    // TODO: primitive-element array (type '{field.Type}'), not covered by [WireNestedArray] v1 - see ADR §76 EmoteListPacket note");
-            properties.AppendLine($"    // public {elementEmission.ClrType}[] {propertyName} {{ get; set; }} = [];");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // TODO: primitive-element array (type '{field.Type}'), not covered by [WireNestedArray] v1 - see ADR §76 EmoteListPacket note");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // public {elementEmission.ClrType}[] {propertyName} {{ get; set; }} = [];");
             properties.AppendLine();
             return;
         }
@@ -154,14 +155,14 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
         if (!TryResolveNestedType(field.Type, nestedTypes, notes))
         {
             notes.Add($"Field '{field.Name}': array of unresolvable type '{field.Type}'. Left as TODO.");
-            properties.AppendLine($"    // TODO: resolve array element type '{field.Type}' by hand");
-            properties.AppendLine($"    // public object[] {propertyName} {{ get; set; }} = [];");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // TODO: resolve array element type '{field.Type}' by hand");
+            properties.AppendLine(CultureInfo.InvariantCulture, $"    // public object[] {propertyName} {{ get; set; }} = [];");
             properties.AppendLine();
             return;
         }
 
-        properties.AppendLine($"    [WireNestedArray({countEncoding})]");
-        properties.AppendLine($"    public {field.Type}[] {propertyName} {{ get; set; }} = [];");
+        properties.AppendLine(CultureInfo.InvariantCulture, $"    [WireNestedArray({countEncoding})]");
+        properties.AppendLine(CultureInfo.InvariantCulture, $"    public {field.Type}[] {propertyName} {{ get; set; }} = [];");
         properties.AppendLine();
     }
 
@@ -187,24 +188,24 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
         if (fieldPlans.Count == 0) return false;
 
         var sb = new StringBuilder();
-        sb.AppendLine($"readonly struct {typeName}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"readonly struct {typeName}");
         sb.AppendLine("{");
         foreach (var (propName, f, emission) in fieldPlans)
         {
             var clrType = f.Optional ? $"{emission.ClrType}?" : emission.ClrType;
-            sb.AppendLine($"    public {clrType} {propName} {{ get; init; }}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public {clrType} {propName} {{ get; init; }}");
         }
         sb.AppendLine();
-        sb.AppendLine($"    public static {typeName} Read(ref BinaryStream stream) => new()");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public static {typeName} Read(ref BinaryStream stream) => new()");
         sb.AppendLine("    {");
         foreach (var (propName, f, emission) in fieldPlans)
-            sb.AppendLine($"        {propName} = {ReadExpr(emission, f.Optional)},");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        {propName} = {ReadExpr(emission, f.Optional)},");
         sb.AppendLine("    };");
         sb.AppendLine();
         sb.AppendLine("    public void Write(ref BinaryStream writer)");
         sb.AppendLine("    {");
         foreach (var (propName, _, emission) in fieldPlans)
-            sb.AppendLine($"        {WriteStmt(emission, propName)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        {WriteStmt(emission, propName)}");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         sb.AppendLine();
@@ -264,7 +265,7 @@ internal sealed class AttributeScaffolder(ISchemaSource source, string cacheDir)
 
     private static void EmitAttributeLine(StringBuilder properties, string baseAttr, bool optional)
     {
-        properties.AppendLine($"    {baseAttr}");
+        properties.AppendLine(CultureInfo.InvariantCulture, $"    {baseAttr}");
         if (optional) properties.AppendLine("    [WireOptional]");
     }
 

@@ -81,7 +81,7 @@ public partial class Logger : ILogger
 
     private string FormatMessage(LogLevel level, string message)
     {
-        var levelStr = level.ToString().ToUpper();
+        var levelStr = level.ToString().ToUpperInvariant();
         var color = CustomLevelColorMap.GetValueOrDefault(level, "white");
 
         var formattedMessage = Format
@@ -110,7 +110,7 @@ public partial class Logger : ILogger
     private static string Colorize(Match match)
     {
         const string reset = "\x1b[0m";
-        return ColorMap.TryGetValue(match.Groups[1].Value.ToLower(), out var color)
+        return ColorMap.TryGetValue(match.Groups[1].Value.ToLowerInvariant(), out var color)
             ? color + match.Groups[2].Value + reset
             : match.Groups[2].Value;
     }

@@ -14,7 +14,7 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     public const int MaxPendingInventoryStacks = 8;
     public const int MaxPendingChat = 8;
 
-    private readonly object _movementInputLock = new();
+    private readonly Lock _movementInputLock = new();
     private MovementInputState _movementInput;
 
     // A target is present only for InventoryTransaction.ItemUseOnActor. AuthInput missed swings

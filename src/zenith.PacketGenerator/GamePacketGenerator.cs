@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Globalization;
 
 namespace Zenith.PacketGenerator;
 
@@ -274,7 +275,7 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
                     var endianessArg = baseAttr.ConstructorArguments.Length > 0
                         ? baseAttr.ConstructorArguments[0].Value
                         : 0;
-                    field.Endianess = Convert.ToInt32(endianessArg) == 1 ? "Little" : "Big";
+                    field.Endianess = Convert.ToInt32(endianessArg, CultureInfo.InvariantCulture) == 1 ? "Little" : "Big";
                 }
                 else
                 {
@@ -375,10 +376,10 @@ public sealed class GamePacketGenerator : IIncrementalGenerator
                 field.NestedHasStaticRead = elemHasStaticRead;
 
                 var countEncoding = baseAttr.ConstructorArguments.Length > 0
-                    ? Convert.ToInt32(baseAttr.ConstructorArguments[0].Value)
+                    ? Convert.ToInt32(baseAttr.ConstructorArguments[0].Value, CultureInfo.InvariantCulture)
                     : 0;
                 var countEndianess = baseAttr.ConstructorArguments.Length > 1
-                    ? Convert.ToInt32(baseAttr.ConstructorArguments[1].Value)
+                    ? Convert.ToInt32(baseAttr.ConstructorArguments[1].Value, CultureInfo.InvariantCulture)
                     : 1;
 
                 field.CountEncoding = countEncoding switch

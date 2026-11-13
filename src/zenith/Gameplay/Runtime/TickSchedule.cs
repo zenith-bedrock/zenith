@@ -17,7 +17,7 @@ struct TickSchedule
 
     public TickSchedule(long startTimestamp, long intervalTimestampTicks, long maxLagTimestampTicks)
     {
-        if (intervalTimestampTicks <= 0) throw new ArgumentOutOfRangeException(nameof(intervalTimestampTicks));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(intervalTimestampTicks);
         if (maxLagTimestampTicks < intervalTimestampTicks) throw new ArgumentOutOfRangeException(nameof(maxLagTimestampTicks), "The lag budget must allow at least one tick.");
         _interval = intervalTimestampTicks;
         _maxLag = maxLagTimestampTicks;

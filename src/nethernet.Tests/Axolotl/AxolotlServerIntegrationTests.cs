@@ -17,6 +17,7 @@ using Zenith.NetherNet.Axolotl.Server;
 using Zenith.NetherNet.Axolotl.Signaling.Http;
 using Zenith.NetherNet.Axolotl.Transport.WebRtc;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Tests.Axolotl;
 
@@ -215,7 +216,7 @@ public sealed class AxolotlServerIntegrationTests
             // A syntactically valid POST with an unusable offer yields the NetherNet error code in a 500 body.
             var bad = await http.PostAsync(baseUrl + "/v1/join/1", new StringContent("not sdp", Encoding.UTF8, "application/sdp"));
             Assert.Equal(HttpStatusCode.InternalServerError, bad.StatusCode);
-            Assert.Equal(((int)ErrorCode.FailedToSetRemoteDescription).ToString(), await bad.Content.ReadAsStringAsync());
+            Assert.Equal(((int)ErrorCode.FailedToSetRemoteDescription).ToString(CultureInfo.InvariantCulture), await bad.Content.ReadAsStringAsync());
         }
         finally
         {

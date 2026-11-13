@@ -16,6 +16,8 @@ namespace Zenith.BedrockData.Commands;
 /// </summary>
 internal sealed class ImportCommand : Command<ImportCommand.Settings>
 {
+    private static readonly string[] CapturedBodies = ["item_registry", "creative_content", "biome_definitions"];
+
     private static readonly JsonSerializerOptions Indented = new()
     {
         WriteIndented = true,
@@ -103,7 +105,7 @@ internal sealed class ImportCommand : Command<ImportCommand.Settings>
             },
             ["assets"] = ToObject(assets.Select(a => KeyValuePair.Create(a.Key,
                 (JsonNode)new JsonObject { ["bytes"] = a.Value.Length, ["sha256"] = Sha256(a.Value) }))),
-            ["captured_packet_bodies"] = ToObject(new[] { "item_registry", "creative_content", "biome_definitions" }.Select(n =>
+            ["captured_packet_bodies"] = ToObject(CapturedBodies.Select(n =>
                 KeyValuePair.Create(n, (JsonNode)Sha256(File.ReadAllBytes(Path.Combine(capture, n + ".bin")))))),
         };
 

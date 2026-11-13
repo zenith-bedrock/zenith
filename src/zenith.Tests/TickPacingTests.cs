@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Xunit;
+using System.Globalization;
 
 namespace Zenith.Tests;
 
@@ -90,7 +91,7 @@ public sealed class TickPacingTests
             if (medians[^1] < 1.5) return;
         }
 
-        Assert.Fail($"median lateness never dropped below 1.5 ms in 5 rounds ({waiter.Mode}): {string.Join(' ', medians.Select(m => m.ToString("F2")))}");
+        Assert.Fail($"median lateness never dropped below 1.5 ms in 5 rounds ({waiter.Mode}): {string.Join(' ', medians.Select(m => m.ToString("F2", CultureInfo.InvariantCulture)))}");
     }
 
     [Fact]

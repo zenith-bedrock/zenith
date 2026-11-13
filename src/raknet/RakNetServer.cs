@@ -20,7 +20,7 @@ public class RakNetServer
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private Task? _runTask;
     private Task? _shutdownTask;
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private readonly UnconnectedRakNet _unconnected;
 
     private readonly ConcurrentDictionary<ulong, RakNetSession> _sessions = new();

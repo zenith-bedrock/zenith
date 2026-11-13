@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Zenith.ProtocolImport.Schema;
+using System.Globalization;
 
 namespace Zenith.ProtocolImport.Commands;
 
@@ -49,11 +50,11 @@ internal sealed class ReportCommand : Command<ReportSettings>
         var coverage = SchemaCoverageAnalyzer.Analyze(schemas);
 
         var summary = new Table().AddColumn("Coverage").AddColumn("Count");
-        summary.AddRow("GREEN — generated local packets", generated.ToString());
-        summary.AddRow("YELLOW — arrays requiring capability review", coverage.ArraysRequiringReview.ToString());
-        summary.AddRow("RED — source constructs requiring manual handling", coverage.Unsupported.Count.ToString());
-        summary.AddRow("Manual local packet files (Tier B / outbound-only included)", handwritten.ToString());
-        summary.AddRow("Cached source packets", cached.Count.ToString());
+        summary.AddRow("GREEN — generated local packets", generated.ToString(CultureInfo.InvariantCulture));
+        summary.AddRow("YELLOW — arrays requiring capability review", coverage.ArraysRequiringReview.ToString(CultureInfo.InvariantCulture));
+        summary.AddRow("RED — source constructs requiring manual handling", coverage.Unsupported.Count.ToString(CultureInfo.InvariantCulture));
+        summary.AddRow("Manual local packet files (Tier B / outbound-only included)", handwritten.ToString(CultureInfo.InvariantCulture));
+        summary.AddRow("Cached source packets", cached.Count.ToString(CultureInfo.InvariantCulture));
         AnsiConsole.Write(summary);
         foreach (var item in coverage.Unsupported.OrderBy(item => item.Packet).ThenBy(item => item.Field))
             AnsiConsole.MarkupLine($"[red]RED[/] {item.Packet.EscapeMarkup()}.{item.Field.EscapeMarkup()}: {item.Reason.EscapeMarkup()}");

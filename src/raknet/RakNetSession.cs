@@ -92,7 +92,7 @@ public class RakNetSession
     /// Serializa mutações de saída (OutputFrames, índices, backup) e ACK/NACK de backup
     /// contra Tick / Incoming / fan-out cross-session no GameLoop.
     /// </summary>
-    private readonly object _sessionLock = new();
+    private readonly Lock _sessionLock = new();
 
     // Sem isso, uma sessão cujo peer não drena rápido o bastante (conexão lenta, ou tráfego
     // malicioso que nunca ACKa) acumula FrameSets aguardando ACK indefinidamente — RAM sem limite

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Zenith.Server;
 using Zenith.World;
+using System.Globalization;
 
 namespace Zenith.Benchmarks;
 
@@ -26,9 +27,9 @@ internal static class WorldgenScaleHarness
         var workers = ParseInt(args, "--workers") ?? 2;
         var includeExtremeMultiplayer = args.Contains("--include-extreme-multiplayer", StringComparer.Ordinal);
         if (timeoutSeconds is <= 0 or > 3_600)
-            throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), "Timeout must be 1..3600 seconds.");
+            throw new ArgumentException("Timeout must be 1..3600 seconds.", nameof(args));
         if (workers is < 1 or > 64)
-            throw new ArgumentOutOfRangeException(nameof(workers), "Workers must be 1..64.");
+            throw new ArgumentException("Workers must be 1..64.", nameof(args));
 
         Console.WriteLine("scenario,radius,players,workers,expectedChunks,completedPlayers,generated,coalesced,failed,queuePeak,queueBackpressure,surfaceAvgMs,cavesAvgMs,featuresAvgMs,payloadAvgMs,elapsedMs,msPerRequestedChunk,allocatedBytes,workingSetBytes,status");
         foreach (var radius in radii)
@@ -158,7 +159,7 @@ internal static class WorldgenScaleHarness
     private static int? ParseInt(string[] args, string option)
     {
         var value = ParseOption(args, option);
-        return value is null ? null : int.Parse(value);
+        return value is null ? null : int.Parse(value, CultureInfo.InvariantCulture);
     }
 
     private static string? ParseOption(string[] args, string option)

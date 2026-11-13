@@ -25,7 +25,7 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
     private const int WriteWorkerPollMs = 50;
 
     private readonly DB _db;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly ConcurrentQueue<PendingWrite> _pendingWrites = new();
     private readonly AutoResetEvent _writeSignal = new(false);
     private readonly Thread _writeWorker;

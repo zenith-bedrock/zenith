@@ -118,17 +118,45 @@ sealed class World
             _logger?.Warning($"Stored game rules ignored (unknown name or changed type): {string.Join(", ", ignored)}.");
     }
 
-    public void PersistGameRules() => _ = _storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot));
+    /// <summary>
+    /// Write-behind: the storage call enqueues the write and returns; nobody waits for it. A ValueTask must still be consumed, so a
+    /// completed one is read and a pending or faulted one is observed here, where a failure is logged instead of vanishing as an
+    /// unobserved task exception.
+    /// </summary>
+    private void WriteBehind(ValueTask write, string what)
+    {
+        if (write.IsCompletedSuccessfully)
+        {
+            write.GetAwaiter().GetResult();
+            return;
+        }
+
+        _ = ObserveWriteAsync(write, what);
+    }
+
+    private async Task ObserveWriteAsync(ValueTask write, string what)
+    {
+        try
+        {
+            await write.ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger?.Warning($"World write-behind '{what}' failed: {exception.Message}");
+        }
+    }
+
+    public void PersistGameRules() => WriteBehind(_storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot)), "PutGameRules");
 
     public void PersistChest(int x, int y, int z)
     {
         var blob = Chests.PackBlob(x, y, z);
         if (blob is null) return;
-        _ = _storage.PutChestAsync(x, y, z, blob);
+        WriteBehind(_storage.PutChestAsync(x, y, z, blob), "PutChest");
     }
 
     public void DeletePersistedChest(int x, int y, int z) =>
-        _ = _storage.DeleteChestAsync(x, y, z);
+        WriteBehind(_storage.DeleteChestAsync(x, y, z), "DeleteChest");
 
     public void PersistInventory(Player.Player player)
     {
@@ -138,7 +166,7 @@ sealed class World
 
     /// <summary>Raw Put for tests / loaders — prefer <see cref="PersistInventory(Player.Player)"/> on live sessions.</summary>
     public void PersistInventory(Guid uuid, Player.PlayerInventory inventory) =>
-        _ = _storage.PutInventoryAsync(uuid, inventory.PackMainBlob());
+        WriteBehind(_storage.PutInventoryAsync(uuid, inventory.PackMainBlob()), "PutInventory");
 
     public bool TryLoadInventory(Guid uuid, Player.PlayerInventory inventory)
     {
@@ -149,7 +177,7 @@ sealed class World
     public void PersistArmor(Player.Player player)
     {
         if (!player.IdentityStable) return;
-        _ = _storage.PutArmorAsync(player.Uuid, player.Inventory.PackArmorBlob());
+        WriteBehind(_storage.PutArmorAsync(player.Uuid, player.Inventory.PackArmorBlob()), "PutArmor");
     }
 
     public bool TryLoadArmor(Guid uuid, Player.PlayerInventory inventory)
@@ -161,7 +189,7 @@ sealed class World
     public void PersistOffhand(Player.Player player)
     {
         if (!player.IdentityStable) return;
-        _ = _storage.PutOffhandAsync(player.Uuid, player.Inventory.PackOffhandBlob());
+        WriteBehind(_storage.PutOffhandAsync(player.Uuid, player.Inventory.PackOffhandBlob()), "PutOffhand");
     }
 
     public bool TryLoadOffhand(Guid uuid, Player.PlayerInventory inventory)
@@ -193,7 +221,7 @@ sealed class World
             player.Hunger,
             player.Saturation,
             player.Exhaustion);
-        _ = _storage.PutPlayerDataAsync(player.Uuid, blob);
+        WriteBehind(_storage.PutPlayerDataAsync(player.Uuid, blob), "PutPlayerData");
     }
 
     /// <summary>
@@ -461,7 +489,7 @@ sealed class World
             if (had)
             {
                 RemoveOverlay(x, y, z);
-                _ = _storage.DeleteOverlayAsync(x, y, z);
+                WriteBehind(_storage.DeleteOverlayAsync(x, y, z), "DeleteOverlay");
             }
 
             return true;
@@ -480,7 +508,7 @@ sealed class World
         }
 
         StoreOverlay(x, y, z, blockRuntimeId);
-        _ = _storage.PutOverlayAsync(x, y, z, blockRuntimeId);
+        WriteBehind(_storage.PutOverlayAsync(x, y, z, blockRuntimeId), "PutOverlay");
         return true;
     }
 

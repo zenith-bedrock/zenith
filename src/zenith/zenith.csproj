@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- Precompile on publish (a RID-specific publish, which is what release and the images do); build and run stay on the JIT.
+         Measured with the cold-start scenario of the runtime-load harness (see the .NET opportunities doc): first tick 108-124 ms -> 55-63 ms, methods JIT-compiled while the loop runs
+         1510 -> 561 (docs/dotnet-opportunities.md, item 2). -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\raknet\raknet.csproj" />
     <ProjectReference Include="..\nethernet\nethernet.csproj" />
