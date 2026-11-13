@@ -286,7 +286,7 @@ public class GameRulesTests
         fx.Clock.AdvanceBy(need);
         Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
 
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)

@@ -43,7 +43,7 @@ sealed class GravitySystem : IGameSystem
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
-            peer.Session.Protocol.World.PublishUpdateBlocks(updates);
+            peer.Client.World.PublishUpdateBlocks(updates);
         }
     }
 
@@ -185,7 +185,7 @@ sealed class GravitySystem : IGameSystem
             foreach (var peer in online)
             {
                 if (!peer.IsInGame) continue;
-                peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(
+                peer.Client.Entity.SendMoveActorAbsoluteRaw(
                     entry.RuntimeId, entry.LandX + 0.5f, entry.Y, entry.LandZ + 0.5f);
             }
         }
@@ -196,7 +196,7 @@ sealed class GravitySystem : IGameSystem
             foreach (var peer in online)
             {
                 if (!peer.IsInGame) continue;
-                peer.Session.Protocol.Entity.SendRemoveActor(entry.EntityId);
+                peer.Client.Entity.SendRemoveActor(entry.EntityId);
             }
         }
 
@@ -238,7 +238,7 @@ sealed class GravitySystem : IGameSystem
             foreach (var peer in online)
             {
                 if (!peer.IsInGame) continue;
-                peer.Session.Protocol.Entity.SendRemoveActor(entry.EntityId);
+                peer.Client.Entity.SendRemoveActor(entry.EntityId);
             }
         }
 
@@ -256,7 +256,7 @@ sealed class GravitySystem : IGameSystem
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
-            peer.Session.Protocol.Entity.SendAddFallingBlock(
+            peer.Client.Entity.SendAddFallingBlock(
                 entry.EntityId, entry.RuntimeId, entry.BlockRuntimeId,
                 entry.LandX + 0.5f, entry.Y, entry.LandZ + 0.5f);
         }

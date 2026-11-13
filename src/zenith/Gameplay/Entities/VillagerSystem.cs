@@ -1,5 +1,6 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Gameplay.Ports;
 using Zenith.Protocol;
 using Zenith.World;
 
@@ -136,8 +137,8 @@ sealed class VillagerSystem : IGameSystem
             return false;
         }
 
-        player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-        player.Session.Context.World.PersistInventory(player);
+        player.Client.Inventory.SendInventoryContent(player.Inventory);
+        player.Level.PersistInventory(player);
         TradeCount++;
         return true;
     }
@@ -154,7 +155,7 @@ sealed class VillagerSystem : IGameSystem
             if (_replicated.Remove((villager.EntityId, peer.RuntimeId)))
             {
                 _lastProjected.Remove((villager.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(villager.EntityId);
+                peer.Client.Entity.SendRemoveActor(villager.EntityId);
                 ReplicatedRemovalCount++;
             }
         villager.Remove();
@@ -169,16 +170,16 @@ sealed class VillagerSystem : IGameSystem
             peer => ActorInterest.Includes(peer, villager.PositionX, villager.PositionZ),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddVillager(
+                peer.Client.Entity.SendAddMob(MobKind.Villager, 
                     villager.EntityId, villager.RuntimeId, villager.PositionX, villager.PositionY, villager.PositionZ, villager.Yaw);
-                peer.Session.Protocol.Entity.SendHealth(villager.RuntimeId, villager.Health.Current, villager.Health.Maximum);
+                peer.Client.Entity.SendHealth(villager.RuntimeId, villager.Health.Current, villager.Health.Maximum);
                 _lastProjected[(villager.EntityId, peer.RuntimeId)] = new ProjectedPose(villager.PositionX, villager.PositionY, villager.PositionZ, villager.Yaw);
                 ReplicatedSpawnCount++;
             },
             onExit: peer =>
             {
                 _lastProjected.Remove((villager.EntityId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(villager.EntityId);
+                peer.Client.Entity.SendRemoveActor(villager.EntityId);
                 ReplicatedRemovalCount++;
             });
 
@@ -287,7 +288,7 @@ sealed class VillagerSystem : IGameSystem
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
+            peer.Client.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
         }
     }
 }

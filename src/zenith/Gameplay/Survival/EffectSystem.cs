@@ -1,7 +1,7 @@
+using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
 using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Session;
 
 namespace Zenith.Gameplay.Survival;
 
@@ -43,7 +43,7 @@ sealed class EffectSystem : IGameSystem
     {
         if (!player.TryConsumeEffectIntent(out var intent)) return;
 
-        var entity = player.Session.Protocol.Entity;
+        var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
 
         if (intent.ClearAll)
@@ -95,7 +95,7 @@ sealed class EffectSystem : IGameSystem
         }
 
         if (expired.Count == 0) return;
-        var entity = player.Session.Protocol.Entity;
+        var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
         foreach (var type in expired)
         {
@@ -125,7 +125,7 @@ sealed class EffectSystem : IGameSystem
         if (player.Health >= player.MaxHealth) return;
 
         player.Heal(1f);
-        player.Session.Protocol.Entity.SendPlayerAttributes(player);
+        player.Client.Entity.SendPlayerAttributes(player);
         PlayerVisibility.RelayHealth(player, online);
     }
 }

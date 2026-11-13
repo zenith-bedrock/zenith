@@ -1,6 +1,6 @@
+using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
-using Zenith.Session;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Survival;
@@ -62,7 +62,7 @@ sealed class HungerSystem : IGameSystem
 
             if (player.GameMode == GameMode.Creative)
             {
-                if (player.Hunger != hungerBefore) player.Session.Protocol.Entity.SendPlayerAttributes(player);
+                if (player.Hunger != hungerBefore) player.Client.Entity.SendPlayerAttributes(player);
                 continue;
             }
 
@@ -79,19 +79,19 @@ sealed class HungerSystem : IGameSystem
             }
 
             if (player.Hunger >= RegenHungerThreshold && player.Health < player.MaxHealth &&
-                player.Session.Context.World.Rules.NaturalRegeneration &&
+                player.Level.Rules.NaturalRegeneration &&
                 clock.CurrentTick % RegenIntervalTicks == 0)
             {
                 player.Heal(1f);
                 // Every vanilla-parity natural heal costs exhaustion, same as sprinting/mining/damage
                 // — otherwise a well-fed player heals indefinitely at no food cost.
                 player.Exhaustion += RegenExhaustionCost;
-                player.Session.Protocol.Entity.SendPlayerAttributes(player);
+                player.Client.Entity.SendPlayerAttributes(player);
                 PlayerVisibility.RelayHealth(player, online);
                 continue;
             }
 
-            if (player.Hunger != hungerBefore) player.Session.Protocol.Entity.SendPlayerAttributes(player);
+            if (player.Hunger != hungerBefore) player.Client.Entity.SendPlayerAttributes(player);
         }
     }
 
@@ -110,8 +110,8 @@ sealed class HungerSystem : IGameSystem
         if (player.GameMode != GameMode.Creative)
         {
             if (!player.Inventory.TryConsume(stack.Id, 1)) return;
-            player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
-            player.Session.Context.World.PersistInventory(player);
+            player.Client.Inventory.SendInventoryContent(player.Inventory);
+            player.Level.PersistInventory(player);
         }
 
         player.Hunger = MathF.Min(20f, player.Hunger + nutrition);

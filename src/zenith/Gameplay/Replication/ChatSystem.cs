@@ -22,10 +22,10 @@ sealed class ChatSystem : IGameSystem
                 foreach (var peer in online)
                 {
                     if (!peer.IsInGame) continue;
-                    peer.Session.Protocol.Chat.SendChat(
+                    peer.Client.Chat.SendChat(
                         player.Username,
                         message,
-                        player.Session.Profile.Xuid);
+                        player.Client.Xuid);
                 }
             }
         }

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
-using Zenith.Session;
 using Zenith.World;
 using Zenith.Gameplay.Inventory;
 using Zenith.Gameplay.Replication;
@@ -19,11 +18,13 @@ sealed class BlockEditSystem : IGameSystem
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
     private readonly World.World _world;
+    private readonly ItemDurability _durability;
 
-    public BlockEditSystem(PlayerManager players, World.World world)
+    public BlockEditSystem(PlayerManager players, World.World world, ItemDurability durability)
     {
         _players = players;
         _world = world;
+        _durability = durability;
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
@@ -53,7 +54,7 @@ sealed class BlockEditSystem : IGameSystem
                 // UpdateBlock during PreSpawn/SpawnResponse (§14).
                 if (peer.IsInGame)
                 {
-                    peer.Session.Protocol.World.PublishUpdateBlocks(updates);
+                    peer.Client.World.PublishUpdateBlocks(updates);
                     continue;
                 }
 
@@ -68,7 +69,7 @@ sealed class BlockEditSystem : IGameSystem
                 }
 
                 if (joinerSubset.Count > 0)
-                    peer.Session.Protocol.World.PublishUpdateBlocks(joinerSubset);
+                    peer.Client.World.PublishUpdateBlocks(joinerSubset);
             }
         }
 
@@ -123,7 +124,7 @@ sealed class BlockEditSystem : IGameSystem
             if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
                 (Blocks.IsChest(edit.BlockRuntimeId) && !_world.Chests.CanAcceptNew(edit.X, edit.Y, edit.Z)))
             {
-                player.Session.Context.Logger.Debug(
+                player.Level.Logger?.Debug(
                     $"Place refused (store SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
@@ -176,7 +177,7 @@ sealed class BlockEditSystem : IGameSystem
             inventoryChanged = consumedPlacementStack;
 
             BlockSoundFanout.Place(
-                online, player.Session, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+                online, player.Client, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         }
         else
         {
@@ -197,7 +198,7 @@ sealed class BlockEditSystem : IGameSystem
                 // need < 0 = no DigProfile (ADR §55); need > 0 requires dig auth + elapsed.
                 if (need < 0 || (need > 0 && !edit.DigAuthorized))
                 {
-                    player.Session.Context.Logger.Debug(
+                    player.Level.Logger?.Debug(
                         $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                     RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                     return false;
@@ -214,7 +215,7 @@ sealed class BlockEditSystem : IGameSystem
                     var minElapsed = need > 1 ? (ulong)(need - 1) : (ulong)need;
                     if (elapsed < minElapsed)
                     {
-                        player.Session.Context.Logger.Debug(
+                        player.Level.Logger?.Debug(
                             $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks (min={minElapsed})");
                         RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                         return false;
@@ -264,7 +265,7 @@ sealed class BlockEditSystem : IGameSystem
                 if (floorDropRequests.Count > 0 &&
                     !FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, floorDropRequests))
                 {
-                    player.Session.Context.Logger.Debug(
+                    player.Level.Logger?.Debug(
                         $"Break refused (no chest-loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                     RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                     return false;
@@ -281,7 +282,7 @@ sealed class BlockEditSystem : IGameSystem
                 if (!inventoryCanReceiveDrop &&
                     !FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, 1))
                 {
-                    player.Session.Context.Logger.Debug(
+                    player.Level.Logger?.Debug(
                         $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                     RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                     return false;
@@ -291,7 +292,7 @@ sealed class BlockEditSystem : IGameSystem
             if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
                 !_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
             {
-                player.Session.Context.Logger.Debug(
+                player.Level.Logger?.Debug(
                     $"Break refused (overlay SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                 RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                 return false;
@@ -307,8 +308,8 @@ sealed class BlockEditSystem : IGameSystem
             }
 
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
-            BlockCrackFanout.Stop(online, player.Session, edit.X, edit.Y, edit.Z);
-            BlockSoundFanout.Break(online, player.Session, edit.X, edit.Y, edit.Z, previous);
+            BlockCrackFanout.Stop(online, player.Client, edit.X, edit.Y, edit.Z);
+            BlockSoundFanout.Break(online, player.Client, edit.X, edit.Y, edit.Z, previous);
             if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
                 player.AbortBreak();
 
@@ -329,9 +330,9 @@ sealed class BlockEditSystem : IGameSystem
                 }
 
                 if (lidBroken)
-                    ChestLidFanout.Close(online, player.Session, edit.X, edit.Y, edit.Z);
+                    ChestLidFanout.Close(online, player.Client, edit.X, edit.Y, edit.Z);
                 if (lidPartner)
-                    ChestLidFanout.Close(online, player.Session, partnerX, partnerY, partnerZ);
+                    ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
 
                 var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
@@ -388,13 +389,13 @@ sealed class BlockEditSystem : IGameSystem
                 throw new InvalidOperationException("Prevalidated block-drop floor commit failed.");
             }
 
-            player.Session.Context.Logger.Debug(
+            player.Level.Logger?.Debug(
                 $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
         }
 
         if (inventoryChanged)
         {
-            player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+            player.Client.Inventory.SendInventoryContent(player.Inventory);
             _world.PersistInventory(player);
         }
 
@@ -422,7 +423,7 @@ sealed class BlockEditSystem : IGameSystem
     private void ResyncCellToBreaker(global::Zenith.Player.Player player, int x, int y, int z)
     {
         if (!player.IsInGame) return;
-        player.Session.Protocol.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
+        player.Client.World.SendUpdateBlock(x, y, z, _world.GetBlock(x, y, z));
     }
 
     /// <summary>
@@ -437,7 +438,7 @@ sealed class BlockEditSystem : IGameSystem
         int y,
         int z)
     {
-        BlockCrackFanout.Stop(online, player.Session, x, y, z);
+        BlockCrackFanout.Stop(online, player.Client, x, y, z);
         if (player.IsBreakTarget(x, y, z))
             player.AbortBreak();
         ResyncCellToBreaker(player, x, y, z);
@@ -453,13 +454,13 @@ sealed class BlockEditSystem : IGameSystem
         var slot = player.SelectedHotbarSlot;
         if (!PlayerInventory.IsValidHotbarSlot(slot)) return;
 
-        var outcome = ItemWear.Apply(player.Session.Context.Durability, player.Inventory.Get(slot), 1, out var after);
+        var outcome = ItemWear.Apply(_durability, player.Inventory.Get(slot), 1, out var after);
         if (outcome == ItemWear.Outcome.NotDurable) return;
 
         if (!player.Inventory.TrySet(slot, after.IsEmpty ? StackId.FromBlock(Blocks.Air) : after.Id, after.IsEmpty ? 0 : after.Count))
             return;
         // The client predicts its own wear, but only the server's stack is authoritative: resend it, and persist.
-        player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+        player.Client.Inventory.SendInventoryContent(player.Inventory);
         _world.PersistInventory(player);
     }
 

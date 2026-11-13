@@ -148,7 +148,7 @@ class ZenithServer
         var spawner = new MobSpawner();
         var gravity = RegisterWorldSystems(
             gameLoop, diagnostics, world, players, entities,
-            bats, villagers, itemPalette, recipes, creative, playerSpatial,
+            bats, villagers, itemPalette, recipes, durability, creative, playerSpatial,
             config.World.ChunkResidencySweepIntervalTicks, spawner);
 
         var eventBus = new EventBus(serverLogger);
@@ -235,6 +235,7 @@ class ZenithServer
         VillagerStore villagerStore,
         ItemPalette itemPalette,
         RecipeRegistry recipes,
+        ItemDurability durability,
         CreativeCatalog creative,
         PlayerSpatialIndex playerSpatial,
         int chunkResidencySweepIntervalTicks,
@@ -245,7 +246,7 @@ class ZenithServer
 
         gameLoop.Register(new GameRuleSyncSystem(world), diagnostics.System("game-rule-sync"));
         gameLoop.Register(new BlockDigSystem(world), diagnostics.System("block-dig"));
-        gameLoop.Register(new BlockEditSystem(players, world), diagnostics.System("block-edit"));
+        gameLoop.Register(new BlockEditSystem(players, world, durability), diagnostics.System("block-edit"));
         gameLoop.Register(gravity, diagnostics.System("gravity"));
         gameLoop.Register(new FloorDropSystem(world), diagnostics.System("floor-drop"));
         gameLoop.Register(new InventorySystem(players, world, recipes, creative), diagnostics.System("inventory"));

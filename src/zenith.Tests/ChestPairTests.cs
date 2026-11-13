@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Protocol;
@@ -134,7 +135,7 @@ public class ChestPairTests
             need > 0
                 ? BlockEditIntent.BreakWithDig(2, 64, 2, player.BreakStartedTick, player.BreakRequiredTicks)
                 : BlockEditIntent.Set(2, 64, 2, Blocks.Air)));
-        new BlockEditSystem(fx.Players, fx.World).Tick(fx.Clock, fx.Players.Online);
+        new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(2, 64, 2));
         Assert.Equal(south, fx.World.GetBlock(3, 64, 2));

@@ -1,7 +1,7 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Packets;
 using Zenith.Player;
 using Zenith.Protocol;
-using Zenith.Session;
 using Zenith.World;
 using Zenith.Gameplay.Replication;
 
@@ -45,7 +45,7 @@ internal readonly record struct PlayerDamageResult(
         }
 
         PlayerVisibility.RelayDeath(Player, online);
-        var world = Player.Session.Context.World;
+        var world = Player.Level;
         if (Player.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, Player);
         // keepInventory: the player dies but the items stay where they are (Creative already keeps everything).
         if (Player.GameMode != GameMode.Creative && !world.Rules.KeepInventory)
@@ -97,7 +97,7 @@ static class PlayerDamage
         // deliberate Void exception above, and shouldn't feed the hunger cycle either).
         if (player.GameMode != GameMode.Creative)
             player.Exhaustion += HungerSystem.DamageExhaustion;
-        var entity = player.Session.Protocol.Entity;
+        var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
         if (!result.CausedDeath)
         {
@@ -131,7 +131,7 @@ static class PlayerDamage
     /// direction (Fall/Starve/Magic/Void) and no impulse is sent — vanilla doesn't knock back for
     /// those causes either.
     /// </summary>
-    private static void ApplyKnockback(Player.Player player, EntityProtocol entity, float dirX, float dirZ)
+    private static void ApplyKnockback(Player.Player player, IEntityChannel entity, float dirX, float dirZ)
     {
         var lengthSquared = dirX * dirX + dirZ * dirZ;
         if (lengthSquared < 0.0001f) return;

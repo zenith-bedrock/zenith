@@ -37,6 +37,14 @@ public class ArchitectureBoundaryTests
             referencedType => IsInNamespace(referencedType, "Zenith.Packets"));
     }
 
+    [Fact]
+    public void Gameplay_reaches_the_client_only_through_ports_not_session_or_protocol()
+    {
+        AssertNoReferences(
+            gameplayType => IsInNamespace(gameplayType, "Zenith.Gameplay"),
+            referencedType => IsInAnyNamespace(referencedType, "Zenith.Session", "Zenith.Protocol"));
+    }
+
     private static void AssertNoReferences(
         Func<Type, bool> subject,
         Func<Type, bool> forbidden)

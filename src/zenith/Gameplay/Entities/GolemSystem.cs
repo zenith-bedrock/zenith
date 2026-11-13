@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -138,8 +139,7 @@ sealed class GolemSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddGolem(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
@@ -237,7 +237,7 @@ sealed class GolemSystem : IGameSystem
             s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
             foreach (var peer in online)
                 if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                    peer.Session.Protocol.Entity.SendAttackSwing(identity.ActorRuntimeId);
+                    peer.Client.Entity.SendAttackSwing(identity.ActorRuntimeId);
         }
     }
 
@@ -274,7 +274,7 @@ sealed class GolemSystem : IGameSystem
         SlamCount++;
         foreach (var peer in online)
             if (peer.IsInGame)
-                peer.Session.Protocol.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
+                peer.Client.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
     }
 
 }

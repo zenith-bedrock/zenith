@@ -8,7 +8,7 @@ using Zenith.Gameplay.Inventory;
 namespace Zenith.Protocol;
 
 /// <summary>Transmite inventário / ISR responses — façade over builders + <see cref="InventoryNetIds"/> (§54).</summary>
-sealed class InventoryProtocol
+sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
 {
     private const int MaxUnknownBlockWarns = 64;
 

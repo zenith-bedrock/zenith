@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Packets;
@@ -139,8 +140,7 @@ sealed class CreeperSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddCreeper(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
@@ -165,7 +165,7 @@ sealed class CreeperSystem : IGameSystem
         if (!_stores.Identities.TryGet(id, out var identity)) return;
         foreach (var peer in online)
             if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                peer.Session.Protocol.Entity.SendActorIgnited(identity.ActorRuntimeId, ignited);
+                peer.Client.Entity.SendActorIgnited(identity.ActorRuntimeId, ignited);
     }
 
     private void Defuse(EntityId id, IReadOnlyList<Player.Player> online) => SetIgnited(id, false, online);
@@ -225,10 +225,10 @@ sealed class CreeperSystem : IGameSystem
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
-            peer.Session.Protocol.World.SendLevelEvent(LevelEventPacket.EventParticleExplosion, explosionX, explosionY, explosionZ);
-            peer.Session.Protocol.World.SendLevelSoundEvent("explode", explosionX, explosionY, explosionZ);
+            peer.Client.World.SendLevelEvent(LevelEventPacket.EventParticleExplosion, explosionX, explosionY, explosionZ);
+            peer.Client.World.SendLevelSoundEvent("explode", explosionX, explosionY, explosionZ);
             if (blockUpdates.Count > 0)
-                peer.Session.Protocol.World.PublishUpdateBlocks(blockUpdates);
+                peer.Client.World.PublishUpdateBlocks(blockUpdates);
         }
     }
 

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 namespace Zenith.Player;
 
 /// <summary>

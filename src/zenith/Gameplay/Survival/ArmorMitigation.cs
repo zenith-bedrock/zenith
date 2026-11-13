@@ -26,7 +26,7 @@ static class ArmorMitigation
 
     public static float TotalProtectionPoints(Player.Player player)
     {
-        var palette = player.Session.Context.ItemPalette;
+        var palette = player.ItemPalette;
         var total = 0f;
         for (var slot = 0; slot < PlayerInventory.ArmorSize; slot++)
         {

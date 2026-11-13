@@ -238,7 +238,7 @@ partial class InGameSessionHandler : ISessionHandler
             player.SkinHeight = height;
         }
 
-        PlayerVisibility.RelaySkin(
+        PeerRelay.RelaySkin(
             player,
             packet.Skin,
             packet.SkinName,
@@ -276,7 +276,7 @@ partial class InGameSessionHandler : ISessionHandler
         var platformChatId = !string.IsNullOrEmpty(player.Session.Profile.PlatformChatId)
             ? player.Session.Profile.PlatformChatId
             : packet.PlatformChatId;
-        PlayerVisibility.RelayEmote(
+        PeerRelay.RelayEmote(
             player,
             packet.EmoteId,
             packet.TickLength,

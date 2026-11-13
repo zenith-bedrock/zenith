@@ -607,9 +607,9 @@ internal static class RuntimeLoadHarness
             }
             Loop.Register(new BlockDigSystem(world));
             if (WorldDiagnostics is { } timings)
-                Loop.Register(new BlockEditSystem(players, world), timings.BlockEdit);
+                Loop.Register(new BlockEditSystem(players, world, ItemDurability.CreateDefault(itemPalette)), timings.BlockEdit);
             else
-                Loop.Register(new BlockEditSystem(players, world));
+                Loop.Register(new BlockEditSystem(players, world, ItemDurability.CreateDefault(itemPalette)));
             Loop.Register(new GravitySystem(world, players));
             if (WorldDiagnostics is { } floorTimings)
                 Loop.Register(new FloorDropSystem(world), floorTimings.FloorDrop);

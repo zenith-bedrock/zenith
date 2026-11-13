@@ -83,9 +83,9 @@ internal static class DamageableActorCombatCore
         foreach (var peer in online)
             if (replicated.Contains((view.EntityKey, peer.RuntimeId)))
             {
-                peer.Session.Protocol.Entity.SendHealth(view.RuntimeId, health.Current, health.Maximum);
+                peer.Client.Entity.SendHealth(view.RuntimeId, health.Current, health.Maximum);
                 if (!result.CausedDeath)
-                    peer.Session.Protocol.Entity.SendHurt(view.RuntimeId);
+                    peer.Client.Entity.SendHurt(view.RuntimeId);
             }
 
         if (!result.CausedDeath) return true;
@@ -103,8 +103,8 @@ internal static class DamageableActorCombatCore
         foreach (var peer in online)
             if (replicated.Remove((view.EntityKey, peer.RuntimeId)))
             {
-                peer.Session.Protocol.Entity.SendDeath(view.RuntimeId);
-                peer.Session.Protocol.Entity.SendRemoveActor(view.EntityKey);
+                peer.Client.Entity.SendDeath(view.RuntimeId);
+                peer.Client.Entity.SendRemoveActor(view.EntityKey);
                 onDeathReplicatedToPeer?.Invoke(peer);
             }
 

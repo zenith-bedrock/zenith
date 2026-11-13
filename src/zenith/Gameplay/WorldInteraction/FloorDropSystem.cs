@@ -47,7 +47,7 @@ sealed class FloorDropSystem : IGameSystem
             foreach (var peer in online)
             {
                 if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
-                peer.Session.Protocol.Entity.SendRemoveActor(entityRuntimeId);
+                peer.Client.Entity.SendRemoveActor(entityRuntimeId);
             }
         }
     }
@@ -85,7 +85,7 @@ sealed class FloorDropSystem : IGameSystem
             var eid = takenEntity != 0 ? takenEntity : drop.EntityRuntimeId;
             NotifyPickup(player, eid, drop.Pos.X, drop.Pos.Z, remainingPublish, online);
 
-            player.Session.Protocol.Inventory.SendInventoryContent(player.Inventory);
+            player.Client.Inventory.SendInventoryContent(player.Inventory);
             _world.PersistInventory(player);
             return;
         }
@@ -100,13 +100,13 @@ sealed class FloorDropSystem : IGameSystem
         foreach (var peer in online)
         {
             if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
-            peer.Session.Protocol.Entity.SendTakeItemActor((ulong)eid, (ulong)player.RuntimeId);
+            peer.Client.Entity.SendTakeItemActor((ulong)eid, (ulong)player.RuntimeId);
             // TakeItemActor is only the pickup animation, not a despawn (confirmed against
             // PocketMine/Dragonfly: both always pair it with a real actor removal). A full
             // take has no later tick to emit one — the cell is already gone from the store —
             // so without this the client renders an orphaned item forever after pickup.
             if (remainingPublish is null)
-                peer.Session.Protocol.Entity.SendRemoveActor(eid);
+                peer.Client.Entity.SendRemoveActor(eid);
         }
 
         // Partial pickup replaces the actor with the remaining authoritative stack.

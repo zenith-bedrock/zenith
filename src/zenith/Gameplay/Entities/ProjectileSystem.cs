@@ -1,6 +1,7 @@
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
+using Zenith.Gameplay.Ports;
 using Zenith.Protocol;
 using Zenith.World;
 
@@ -266,7 +267,7 @@ sealed class ProjectileSystem : IGameSystem
                 _lastProjected[key] = current;
                 ReplicatedMoveCount++;
             }
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
+            peer.Client.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
         }
     }
 
@@ -310,7 +311,7 @@ sealed class ProjectileSystem : IGameSystem
             peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                peer.Session.Protocol.Entity.SendAddProjectile(
+                peer.Client.Entity.SendAddProjectile(
                     identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, vel.X, vel.Y, vel.Z);
                 _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPosition(pos.X, pos.Y, pos.Z);
                 ReplicatedSpawnCount++;
@@ -318,7 +319,7 @@ sealed class ProjectileSystem : IGameSystem
             onExit: peer =>
             {
                 _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+                peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             });
     }
@@ -334,7 +335,7 @@ sealed class ProjectileSystem : IGameSystem
             if (_replicated.Remove((identity.ActorUniqueId, peer.RuntimeId)))
             {
                 _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+                peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
                 ReplicatedRemovalCount++;
             }
         }

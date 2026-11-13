@@ -202,7 +202,7 @@ static class FloorDropFanout
         var requests = CollectDeathLoot(player);
         if (!TryDepositBatch(world, players, online, ox, oy, oz, requests, PlayerThrowPickupDelay))
         {
-            player.Session.Context.Logger.Debug(
+            player.Level.Logger?.Debug(
                 $"Death loot refused for {player.Username}: floor-drop capacity could not accept the complete inventory.");
             return false;
         }
@@ -294,7 +294,7 @@ static class FloorDropFanout
             // InGame always; PreSpawn joiners only if they Know the column (§14).
             if (!peer.IsInGame && !peer.Chunks.Knows(cx, cz)) continue;
 
-            var entity = peer.Session.Protocol.Entity;
+            var entity = peer.Client.Entity;
             if (!deposit.Created && deposit.CountChanged)
                 entity.SendRemoveActor(deposit.EntityRuntimeId);
             entity.SendFloorDropActor(

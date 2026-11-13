@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Replication;
 using System.Collections.Generic;
 using Zenith.Binary;
 using Zenith.Packets;

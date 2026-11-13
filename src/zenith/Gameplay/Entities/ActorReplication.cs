@@ -1,5 +1,6 @@
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
+using Zenith.Gameplay.Ports;
 using Zenith.Protocol;
 
 namespace Zenith.Gameplay.Entities;
@@ -16,7 +17,7 @@ namespace Zenith.Gameplay.Entities;
 ///
 /// It owns replication bookkeeping and the despawn lifecycle, nothing about what a species does: no AI, damage or loot.
 /// </summary>
-sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
+sealed class ActorReplication(EntityRuntime stores, MobKind kind, bool trackPoses = true)
 {
     private readonly Dictionary<(long EntityId, long PlayerId), ProjectedPose> _lastProjected = new();
     private readonly List<RawActorPose> _moveBatch = [];
@@ -39,7 +40,6 @@ sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
     public void Reconcile(
         EntityId id,
         IReadOnlyList<Player.Player> online,
-        Action<Player.Player, ActorIdentity, Position> sendSpawn,
         Action<Player.Player, ActorIdentity>? afterSpawn = null)
     {
         if (!stores.Positions.TryGet(id, out var pos)) return;
@@ -52,8 +52,8 @@ sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
             peer => ActorInterest.Includes(peer, pos.X, pos.Z),
             onEnter: peer =>
             {
-                sendSpawn(peer, identity, pos);
-                peer.Session.Protocol.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
+                peer.Client.Entity.SendAddMob(kind, identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw);
+                peer.Client.Entity.SendHealth(identity.ActorRuntimeId, health.Current, health.Maximum);
                 afterSpawn?.Invoke(peer, identity);
                 if (trackPoses) _lastProjected[(identity.ActorUniqueId, peer.RuntimeId)] = new ProjectedPose(pos.X, pos.Y, pos.Z, pos.Yaw);
                 SpawnCount++;
@@ -61,7 +61,7 @@ sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
             onExit: peer =>
             {
                 _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-                peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+                peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
                 RemovalCount++;
             });
     }
@@ -91,7 +91,7 @@ sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
         {
             if (!Viewers.Remove((identity.ActorUniqueId, peer.RuntimeId))) continue;
             _lastProjected.Remove((identity.ActorUniqueId, peer.RuntimeId));
-            peer.Session.Protocol.Entity.SendRemoveActor(identity.ActorUniqueId);
+            peer.Client.Entity.SendRemoveActor(identity.ActorUniqueId);
             RemovalCount++;
         }
 
@@ -148,7 +148,7 @@ sealed class ActorReplication(EntityRuntime stores, bool trackPoses = true)
                 MoveCount++;
             }
 
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
+            peer.Client.Entity.SendMoveActorAbsoluteRaws(_moveBatch);
         }
     }
 

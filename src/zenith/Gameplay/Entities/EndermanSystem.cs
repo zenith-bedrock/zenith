@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -119,8 +120,7 @@ sealed class EndermanSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online,
-            (peer, identity, pos) => peer.Session.Protocol.Entity.SendAddEnderman(identity.ActorUniqueId, identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, pos.Yaw));
+        _replication.Reconcile(id, online);
 
     /// <summary>A landed player hit both damages the Enderman and provokes it — the one place aggro is triggered.</summary>
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
@@ -242,8 +242,8 @@ sealed class EndermanSystem : IGameSystem
         {
             if (!peer.IsInGame) continue;
             if (!_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
-            peer.Session.Protocol.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, flags: 0, yaw: pos.Yaw, headYaw: pos.Yaw);
-            peer.Session.Protocol.World.SendLevelSoundEvent("mob.endermen.portal", pos.X, pos.Y, pos.Z);
+            peer.Client.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, flags: 0, yaw: pos.Yaw, headYaw: pos.Yaw);
+            peer.Client.World.SendLevelSoundEvent("mob.endermen.portal", pos.X, pos.Y, pos.Z);
         }
     }
 }

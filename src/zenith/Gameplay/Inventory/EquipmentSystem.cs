@@ -39,13 +39,12 @@ sealed class EquipmentSystem : IGameSystem
 
             if (online.Count < 2) continue;
 
-            var wire = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, slot);
             foreach (var peer in online)
             {
                 if (ReferenceEquals(peer, player) || !peer.IsInGame) continue;
-                peer.Session.Protocol.Entity.SendMobEquipment(
+                peer.Client.Entity.SendMobEquipment(
                     (ulong)player.RuntimeId,
-                    wire,
+                    player.Inventory,
                     slot);
             }
         }

@@ -1,3 +1,4 @@
+using Zenith.Session;
 using Xunit;
 using Zenith.Player;
 using Zenith.World;

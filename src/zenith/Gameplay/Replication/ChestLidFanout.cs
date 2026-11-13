@@ -1,4 +1,4 @@
-using Zenith.Session;
+using Zenith.Gameplay.Ports;
 using Zenith.Player;
 using Zenith.World;
 
@@ -13,23 +13,23 @@ static class ChestLidFanout
 {
     public static void Open(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ)
     {
-        subject.Protocol.World.SendChestLidOpen(blockX, blockY, blockZ);
+        subject.World.SendChestLidOpen(blockX, blockY, blockZ);
         FanPeers(online, subject, blockX, blockY, blockZ, open: true);
     }
 
     public static void Close(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ)
     {
-        subject.Protocol.World.SendChestLidClose(blockX, blockY, blockZ);
+        subject.World.SendChestLidClose(blockX, blockY, blockZ);
         FanPeers(online, subject, blockX, blockY, blockZ, open: false);
     }
 
@@ -52,14 +52,14 @@ static class ChestLidFanout
             partnerClosed = world.Chests.TryRemoveOpener(px, py, pz, player.RuntimeId);
 
         if (primaryClosed)
-            Close(online, player.Session, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+            Close(online, player.Client, view.PrimaryX, view.PrimaryY, view.PrimaryZ);
         if (partnerClosed)
-            Close(online, player.Session, px, py, pz);
+            Close(online, player.Client, px, py, pz);
     }
 
     private static void FanPeers(
         IReadOnlyList<Player.Player> online,
-        NetworkSession subject,
+        IClientChannel subject,
         int blockX,
         int blockY,
         int blockZ,
@@ -72,13 +72,13 @@ static class ChestLidFanout
 
         foreach (var peer in online)
         {
-            if (ReferenceEquals(peer.Session, subject) || !peer.IsInGame) continue;
+            if (ReferenceEquals(peer.Client, subject) || !peer.IsInGame) continue;
             if (!peer.Chunks.Knows(cx, cz)) continue;
 
             if (open)
-                peer.Session.Protocol.World.SendChestLidOpen(blockX, blockY, blockZ);
+                peer.Client.World.SendChestLidOpen(blockX, blockY, blockZ);
             else
-                peer.Session.Protocol.World.SendChestLidClose(blockX, blockY, blockZ);
+                peer.Client.World.SendChestLidClose(blockX, blockY, blockZ);
         }
     }
 }
