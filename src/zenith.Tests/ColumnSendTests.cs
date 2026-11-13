@@ -21,8 +21,8 @@ public class ColumnSendTests
         var drop = StackId.FromBlock(Blocks.Stone);
 
         // Chunk (0,0) covers blocks 0..15; chunk (1,0) covers 16..31.
-        fx.World.FloorDrops.AddOrMerge(5, 64, 5, drop, 1, entityRuntimeIdIfNew: 1001);
-        fx.World.FloorDrops.AddOrMerge(20, 64, 5, drop, 1, entityRuntimeIdIfNew: 1002);
+        fx.World.FloorDrops.TryAddOrMerge(5, 64, 5, drop, 1, entityRuntimeIdIfNew: 1001, out _);
+        fx.World.FloorDrops.TryAddOrMerge(20, 64, 5, drop, 1, entityRuntimeIdIfNew: 1002, out _);
 
         ColumnSend.EmitFloorDropsInColumn(player.Session, fx.World, chunkX: 0, chunkZ: 0);
         player.Session.Transport.FlushOutgoing();

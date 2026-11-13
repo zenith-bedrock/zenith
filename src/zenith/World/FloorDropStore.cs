@@ -67,10 +67,6 @@ sealed class FloorDropStore
             _drops.Add(key, slot);
     }
 
-    /// <summary>Legacy alias — prefer <see cref="TryAddOrMerge"/> when refuse matters.</summary>
-    public void AddOrMerge(int x, int y, int z, StackId id, int count, long entityRuntimeIdIfNew) =>
-        TryAddOrMerge(x, y, z, id, count, entityRuntimeIdIfNew, out _);
-
     /// <summary>
     /// Merge into an existing same-<see cref="StackId"/> cell, or place a new cell under SoftCap.
     /// </summary>

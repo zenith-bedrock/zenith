@@ -176,10 +176,6 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         });
     }
 
-    /// <summary>Legacy single-cell content (tests / call sites that only know a cell).</summary>
-    public void SendChestContent(ChestStore chests, int x, int y, int z) =>
-        SendChestContent(chests, OpenChestView.Single(x, y, z));
-
     /// <summary>
     /// Reconciles the player-owned inventory plus the currently visible authoritative view after
     /// a rejected wire request. Container-specific replication stays at the protocol boundary;
@@ -205,14 +201,6 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         return ToNetworkStack(slot, netId);
     }
 
-    /// <summary>Compatibility overload for flat-index characterization tests.</summary>
-    public NetworkItemStack DescribeForWire(int flat, InventorySlot slot)
-    {
-        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
-            throw new ArgumentOutOfRangeException(nameof(flat));
-        return DescribeForWire(reference, slot);
-    }
-
     /// <summary>
     /// Soft ISR match vs last <see cref="DescribeForWire"/> advertisement.
     /// <paramref name="clientStackNetId"/> ≤ 0 → accept (air / prediction deferred).
@@ -223,14 +211,6 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         if (clientStackNetId <= 0)
             return true;
         return _netIds.Peek(reference) == clientStackNetId;
-    }
-
-    /// <summary>Compatibility overload for flat-index characterization tests.</summary>
-    public bool MatchesAdvertisedStackNetId(int flat, int clientStackNetId)
-    {
-        if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference))
-            return false;
-        return MatchesAdvertisedStackNetId(reference, clientStackNetId);
     }
 
     /// <summary>
@@ -355,21 +335,6 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         }
 
         _session.SendDataPacket(ItemStackResponsePacket.Ok(requestId, containers));
-    }
-
-    /// <summary>Legacy flat-only path — maps via TryToWire (closed inventory / hotbar).</summary>
-    public void SendItemStackResponseOk(int requestId, global::Zenith.Player.Player player, IReadOnlyList<int> touchedFlats)
-    {
-        var touches = new List<WireTouch>(touchedFlats.Count);
-        foreach (var flat in touchedFlats)
-        {
-            if (!InventorySlotReference.TryFromLegacyFlat(flat, out var reference) ||
-                !InventoryContainerMap.TryToWire(reference, out var containerId, out var wireSlot))
-                continue;
-            touches.Add(new WireTouch(reference, containerId, wireSlot));
-        }
-
-        SendItemStackResponseOk(requestId, player, touches);
     }
 
     private InventorySlot ResolveStack(global::Zenith.Player.Player player, in InventorySlotReference reference) =>

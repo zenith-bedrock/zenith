@@ -1,7 +1,7 @@
 # Handoff — runtime, entities, composition (2026-11-13)
 
 Read first: `AGENTS.md`, `docs/architecture.md` (GameLoop, Composition), `docs/entities.md`, ADR §149 in `docs/decisions.md`.
-Post-`Player`-split audit with open findings (flat-slot test API in production, serial test suite, oversized `IntentContractTests`, stale §149 text): `docs/audit-2026-11-13-architecture-and-dx.md`. Do those before new features.
+Post-`Player`-split audit with open findings (serial test suite, oversized `IntentContractTests`, `Player` setters, ADR layout; flat-slot API and stale §149 text are done): `docs/audit-2026-11-13-architecture-and-dx.md`. Do those before new features.
 Supersedes the git-state and open-work parts of `handoff-2026-11-12-data-from-bds-packs.md`; the BDS-pack learnings in that file stay valid.
 User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 
@@ -41,4 +41,4 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 2. 252 "ADR §" references / 148+ ADRs and a ~2-minute test suite (item 6): consolidate, make the suite faster.
 3. Item 7: nothing validated with a retail client; night spawns never run live; `Consume`/`CraftResultsDeprecated` are no-ops; only chest/personal/crafting-table windows; `count==0` means whole stack; item/creative/biome/loot/trading catalogs not yet from the pack source (see the 2026-11-12 handoff, "Open work").
 4. Per-system tick-cost benchmark exists (`--runtime-load --mixed-roster`); extend it to bat/villager/fish/creeper/enderman/golem (it covers zombie, minecart, cow, spider, skeleton, projectile).
-5. Audit findings (`docs/audit-2026-11-13-architecture-and-dx.md`): remove the flat-slot API, enable test parallelism, split `IntentContractTests`, clean stale §149 text, tighten `Player` setters, consolidate ADRs.
+5. Audit findings (`docs/audit-2026-11-13-architecture-and-dx.md`; items 1 and 4 done): enable test parallelism, split `IntentContractTests`, clean stale §149 text, tighten `Player` setters, consolidate ADRs.

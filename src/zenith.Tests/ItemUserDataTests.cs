@@ -106,11 +106,11 @@ public class ItemUserDataWireTests
         var palette = fx.Context.ItemPalette;
         var inv = player.Session.Protocol.Inventory;
 
-        var worn = inv.DescribeForWire(0, new InventorySlot(StackId.FromItem(palette.Require("minecraft:iron_pickaxe"), damage: 100), 1));
-        var fresh = inv.DescribeForWire(0, new InventorySlot(StackId.FromItem(palette.Require("minecraft:iron_pickaxe")), 1));
-        var stick = inv.DescribeForWire(0, new InventorySlot(StackId.FromItem(palette.Require("minecraft:stick")), 3));
-        var bed = inv.DescribeForWire(0, new InventorySlot(StackId.FromItem(palette.Require("minecraft:bed"), aux: 5), 1));
-        var shield = inv.DescribeForWire(0, new InventorySlot(StackId.FromItem(palette.Require("minecraft:shield")), 1));
+        var worn = inv.DescribeForWire(InventorySlotReference.Player(0), new InventorySlot(StackId.FromItem(palette.Require("minecraft:iron_pickaxe"), damage: 100), 1));
+        var fresh = inv.DescribeForWire(InventorySlotReference.Player(0), new InventorySlot(StackId.FromItem(palette.Require("minecraft:iron_pickaxe")), 1));
+        var stick = inv.DescribeForWire(InventorySlotReference.Player(0), new InventorySlot(StackId.FromItem(palette.Require("minecraft:stick")), 3));
+        var bed = inv.DescribeForWire(InventorySlotReference.Player(0), new InventorySlot(StackId.FromItem(palette.Require("minecraft:bed"), aux: 5), 1));
+        var shield = inv.DescribeForWire(InventorySlotReference.Player(0), new InventorySlot(StackId.FromItem(palette.Require("minecraft:shield")), 1));
 
         Assert.Equal(100, worn.Damage);
         Assert.Equal(0, worn.Meta);

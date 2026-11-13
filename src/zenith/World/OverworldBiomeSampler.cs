@@ -16,9 +16,6 @@ enum OverworldBiomeKind
 /// </summary>
 static class OverworldBiomeSampler
 {
-    /// <summary>Legacy cell size — kept for tests that scan biome neighborhoods; climate is continuous now.</summary>
-    public const int BiomeCellSize = 48;
-
     public static OverworldBiomeKind SampleKind(int worldX, int worldZ, int seed)
     {
         SampleClimate(worldX, worldZ, seed, out var temperature, out var rainfall);

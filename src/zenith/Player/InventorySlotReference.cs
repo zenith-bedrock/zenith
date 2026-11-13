@@ -17,47 +17,6 @@ readonly record struct InventorySlotReference(InventorySlotArea Area, int Index)
     public static InventorySlotReference Offhand => new(InventorySlotArea.Offhand, 0);
     public static InventorySlotReference Armor(int index) => new(InventorySlotArea.Armor, index);
     public static InventorySlotReference TableCraftGrid(int index) => new(InventorySlotArea.TableCraftGrid, index);
-
-    /// <summary>
-    /// Compatibility only for existing in-process characterization tests. Production packet
-    /// decoding must use <c>InventoryContainerMap.TryMap</c>, which creates this reference
-    /// directly instead of leaking a protocol-derived flat number into gameplay.
-    /// </summary>
-    public static bool TryFromLegacyFlat(int flat, out InventorySlotReference reference)
-    {
-        if (flat == PlayerInventory.CursorSlot)
-        {
-            reference = Cursor;
-            return true;
-        }
-
-        if (flat is >= 100 and < 100 + World.ChestStore.DoubleSize)
-        {
-            reference = OpenContainer(flat - 100);
-            return true;
-        }
-
-        if (flat is >= 200 and < 200 + PlayerCraftUi.GridSize)
-        {
-            reference = CraftGrid(flat - 200);
-            return true;
-        }
-
-        if (flat == 200 + PlayerCraftUi.GridSize)
-        {
-            reference = CraftResult;
-            return true;
-        }
-
-        if (PlayerInventory.IsValidInventorySlot(flat))
-        {
-            reference = Player(flat);
-            return true;
-        }
-
-        reference = default;
-        return false;
-    }
 }
 
 /// <summary>Inventory storage area, independent of any wire container ID.</summary>

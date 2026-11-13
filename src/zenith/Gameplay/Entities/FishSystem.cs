@@ -18,9 +18,7 @@ namespace Zenith.Gameplay.Entities;
 /// ECS-authoritative since this migration (see docs/decisions.md, the ADR after §131): Position/
 /// Health/ActorIdentity/DespawnTracking live in the shared <see cref="EntityRuntime"/> stores; only
 /// <see cref="FishState"/> (wander heading) is feature-specific and owned here — same shape as
-/// <see cref="SpiderState"/>. Migrating onto <see cref="DamageDispatch"/> also means arrows can now
-/// hit a fish, which the old <c>IDamageableActor</c>/<c>FishStore</c> pattern never allowed
-/// (<c>ProjectileSystem.FindHitDamageableActor</c> only ever queried ECS component stores).
+/// <see cref="SpiderState"/>. Being on <see cref="DamageDispatch"/> means arrows can hit a fish like any other actor.
 /// </summary>
 sealed class FishSystem : IGameSystem
 {

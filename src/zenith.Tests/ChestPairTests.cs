@@ -92,10 +92,10 @@ public class ChestPairTests
         Assert.Equal(1, fx.World.Chests.OpenerCount(3, 64, 2));
 
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 5));
-        var partnerFlat = InventoryContainerMap.ChestBase + ChestStore.SingleSize;
+        var partnerSlot = InventorySlotReference.OpenContainer(ChestStore.SingleSize);
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(
-                0, partnerFlat, 3,
+                InventorySlotReference.Player(0), partnerSlot, 3,
                 new WireSlot(InventoryContainerMap.Hotbar, 0),
                 new WireSlot(InventoryContainerMap.Chest, (byte)ChestStore.SingleSize))
         ])));
