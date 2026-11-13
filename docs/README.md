@@ -64,6 +64,8 @@ Understanding-oriented — the *why* behind a choice, not the mechanics.
 | [Comparison](comparison.md) | Zenith vs PocketMine, NukkitX, BDS, and other stacks |
 | [Why Zenith / future](why-zenith.md) | Positioning, honesty about maturity, long-term bet |
 | [Robustness / DX debt](robustness-dx-debt.md) | Platform-health risks tracked apart from product roadmap (ADR §54) |
+| [Architecture and DX audit](audit-2026-11-13-architecture-and-dx.md) | Findings after the `Player` split, with done/open status |
+| [.NET opportunities](dotnet-opportunities.md) | Platform features not used yet, expected benefit, what is done (debug logging) and what needs measuring |
 
 ## Planning
 
