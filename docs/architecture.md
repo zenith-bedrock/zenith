@@ -81,6 +81,20 @@ The network thread **must not** mutate authoritative gameplay state (final posit
 
 ## Composition
 
+### Required resources at startup (ADR §150)
+
+`ServerResources.Load` prepares palettes, block/tool/dig/loot tables, recipes, durability, creative data and mob definitions
+before world storage is opened. Each resource stage reports its name and duration; a failure includes the stage and original cause.
+Block loot uses the already-loaded item palette. Entity composition loads the spawn table, validates species and population-counter
+references, and freezes the spawner before any runtime reader starts. Preparation never executes a gameplay tick.
+
+To add required data: put parsing/validation with its domain owner, call it explicitly from resource preparation (or its composition
+module when it needs registered systems), pass already-loaded dependencies, and finalize registration before starting runtime.
+Reject invalid references with the source resource and offending entry in the error. Do not hide mandatory I/O behind a gameplay lookup.
+Boot owns disposable resources until successful construction; failures attempt reverse-order cleanup and preserve the original exception
+(secondary cleanup failures are attached to its `Data`). Successful construction transfers cleanup to server shutdown.
+These are internal composition boundaries; plugin discovery, contribution hooks and reload semantics remain undecided.
+
 `ZenithServer` builds the shared objects (world, palettes, stores, the spatial index, the mob spawner) once into a `ServerServices`, then
 `GameplayComposition.Register` runs three modules in order: `PlayerInputModule`, `EntityModule`, `WorldModule` (`Server/Composition/`).
 A module constructs its systems and registers them with `services.Register(system, "diagnostics-name")`, which pairs the loop and the

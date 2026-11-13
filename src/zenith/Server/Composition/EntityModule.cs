@@ -71,6 +71,8 @@ sealed class EntityModule : IGameplayModule
         spawner.Register("bat", (x, y, z) => bat.SpawnBat(x, y, z), () => bat.Bats.Count);
         spawner.Register("villager", (x, y, z) => villager.SpawnVillager(x, y, z), () => villager.Villagers.Count);
         s.Register(spawner, "summon");
-        s.Register(new NaturalSpawnSystem(world, spawner, SpawnTable.Default), "natural-spawn");
+        var spawnTable = SpawnTable.Default;
+        spawner.Freeze(spawnTable);
+        s.Register(new NaturalSpawnSystem(world, spawner, spawnTable), "natural-spawn");
     }
 }

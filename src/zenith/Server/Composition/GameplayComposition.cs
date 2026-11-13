@@ -63,7 +63,11 @@ static class GameplayComposition
         WorldModule? world = null;
         foreach (var module in Modules())
         {
-            module.Register(services);
+            try { module.Register(services); }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Startup gameplay module '{module.Name}' failed: {ex.Message}", ex);
+            }
             world ??= module as WorldModule;
         }
 

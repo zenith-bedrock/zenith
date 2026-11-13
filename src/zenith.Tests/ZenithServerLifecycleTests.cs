@@ -12,6 +12,35 @@ namespace Zenith.Tests;
 public sealed class ZenithServerLifecycleTests
 {
     [Fact]
+    public async Task Construction_failure_releases_world_storage_before_rethrowing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"zenith-startup-{Guid.NewGuid():N}");
+        var storagePath = Path.Combine(root, "worlds", "startup-test");
+        try
+        {
+            using (var storage = new Zenith.World.LevelDbChunkStorage(storagePath))
+                await storage.PutWorldMetadataAsync(new Zenith.World.WorldMetadata("invalid-startup-terrain", 1));
+
+            var config = new ServerConfig
+            {
+                Server = { Port = 0 },
+                World = { Path = root, Name = "startup-test" }
+            };
+            var error = Assert.Throws<InvalidOperationException>(() => new ZenithServer(config, "startup-test.yml"));
+            Assert.Contains("invalid-startup-terrain", error.Message);
+            Assert.False(error.Data.Contains("StartupCleanupErrors"));
+
+            // Reopening fails if the abandoned construction still owns the LevelDB lock/files.
+            using var reopened = new Zenith.World.LevelDbChunkStorage(storagePath);
+            Assert.NotNull(await reopened.GetWorldMetadataAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Run_and_shutdown_calls_share_one_lifetime_and_cleanup_operation()
     {
         var server = CreateServer(port: 0);
