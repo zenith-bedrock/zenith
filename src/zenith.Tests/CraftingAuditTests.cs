@@ -25,14 +25,14 @@ public class CraftingAuditTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("craft-take");
-        player.OpenPlayerContainer(0, 0xff);
-        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 3)));
+        player.Windows.OpenPlayerContainer(0, 0xff);
+        Assert.True(player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 3)));
 
-        Assert.True(player.SubmitInventoryStack(CraftThenTake(901, 1)));
+        Assert.True(player.Intents.SubmitInventoryStack(CraftThenTake(901, 1)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(2, player.CraftUi.GetGrid(0).Count);
-        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.Equal(2, player.Windows.CraftUi.GetGrid(0).Count);
+        Assert.True(player.Windows.CraftUi.Result.IsEmpty);
         Assert.Equal(StackId.FromBlock(Blocks.OakPlanks), player.Inventory.Cursor.Id);
         Assert.Equal(4, player.Inventory.Cursor.Count);
     }
@@ -42,13 +42,13 @@ public class CraftingAuditTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("craft-overask");
-        player.OpenPlayerContainer(0, 0xff);
-        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+        player.Windows.OpenPlayerContainer(0, 0xff);
+        Assert.True(player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
-        Assert.True(player.SubmitInventoryStack(CraftThenTake(902, 3)));
+        Assert.True(player.Intents.SubmitInventoryStack(CraftThenTake(902, 3)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
+        Assert.Equal(1, player.Windows.CraftUi.GetGrid(0).Count);
         Assert.True(player.Inventory.Cursor.IsEmpty);
     }
 }

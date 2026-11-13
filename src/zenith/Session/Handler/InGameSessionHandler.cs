@@ -162,7 +162,7 @@ partial class InGameSessionHandler : ISessionHandler
             return;
         }
 
-        if (!player.SubmitChat(message))
+        if (!player.Intents.SubmitChat(message))
             session.Context.Logger.Debug($"Dropped chat from {player.Username}: chat queue full.");
     }
 
@@ -266,10 +266,10 @@ partial class InGameSessionHandler : ISessionHandler
             return;
 
         var tick = session.Context.Clock.CurrentTick;
-        if (player.LastEmoteTick != 0 && tick - player.LastEmoteTick < 20)
+        if (player.Replicated.LastEmoteTick != 0 && tick - player.Replicated.LastEmoteTick < 20)
             return;
 
-        player.LastEmoteTick = tick;
+        player.Replicated.LastEmoteTick = tick;
         var xuid = !string.IsNullOrEmpty(player.Session.Profile.Xuid)
             ? player.Session.Profile.Xuid
             : packet.Xuid;

@@ -105,7 +105,7 @@ public class InventoryStackNetIdTests
         inv.SendInventoryContent(player.Inventory);
         var advertised = inv.DescribeForWire(0, player.Inventory.Get(0)).StackNetworkId;
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(
             requestId: 7,
             actions:
             [
@@ -133,7 +133,7 @@ public class InventoryStackNetIdTests
         inv.SendInventoryContent(player.Inventory);
         var advertised = inv.DescribeForWire(0, player.Inventory.Get(0)).StackNetworkId;
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(
             requestId: 8,
             actions:
             [

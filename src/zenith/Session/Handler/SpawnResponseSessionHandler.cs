@@ -52,6 +52,6 @@ class SpawnResponseSessionHandler : ISessionHandler
         if (player is null) return;
 
         session.Context.Logger.Info($"{player.Username} confirmed spawn (actor {packet.ActorRuntimeId}); queued for gameplay transition.");
-        player.SubmitSpawnReady();
+        player.Intents.SubmitSpawnReady();
     }
 }

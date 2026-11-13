@@ -97,7 +97,7 @@ sealed class HungerSystem : IGameSystem
 
     private void TryEat(Player.Player player)
     {
-        if (!player.TryConsumeEatIntent()) return;
+        if (!player.Intents.TryConsumeEatIntent()) return;
         if (player.Hunger >= 20f) return;
 
         var slot = player.SelectedHotbarSlot;

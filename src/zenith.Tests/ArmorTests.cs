@@ -42,7 +42,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("equipper");
         Assert.True(player.Inventory.TrySetItem(0, IronHelmet(fx), 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Armor(PlayerInventory.ArmorHelmetSlot), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -60,7 +60,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("unequipper");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronHelmet(fx)), 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(InventorySlotReference.Armor(PlayerInventory.ArmorHelmetSlot), InventorySlotReference.Player(6), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -76,7 +76,7 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("mismatched");
         Assert.True(player.Inventory.TrySetItem(0, IronHelmet(fx), 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(0), InventorySlotReference.Armor(PlayerInventory.ArmorChestplateSlot), 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -93,7 +93,7 @@ public class ArmorTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 1));
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronHelmet(fx)), 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Swap(InventorySlotReference.Player(0), InventorySlotReference.Armor(PlayerInventory.ArmorHelmetSlot))
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -163,7 +163,7 @@ public class ArmorTests
         PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Void, player.MaxHealth, 0).Conclude(fx.Players.Online);
         Assert.True(player.IsDead);
 
-        player.SubmitRespawn();
+        player.Intents.SubmitRespawn();
         new MovementSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
 
         Assert.False(player.IsDead);

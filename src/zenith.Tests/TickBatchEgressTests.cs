@@ -22,14 +22,14 @@ public class TickBatchEgressTests
         var system = new MovementSystem(fx.Players);
 
         // Seed last-replicated with different baseline so both go dirty.
-        a.SubmitMovementInput(MovementInputState.From(1f, Blocks.FlatSpawnY, 0f, 0f, 0f));
-        b.SubmitMovementInput(MovementInputState.From(2f, Blocks.FlatSpawnY, 0f, 0f, 0f));
+        a.Intents.SubmitMovementInput(MovementInputState.From(1f, Blocks.FlatSpawnY, 0f, 0f, 0f));
+        b.Intents.SubmitMovementInput(MovementInputState.From(2f, Blocks.FlatSpawnY, 0f, 0f, 0f));
         system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        a.SubmitMovementInput(MovementInputState.From(1.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
-        b.SubmitMovementInput(MovementInputState.From(2.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
+        a.Intents.SubmitMovementInput(MovementInputState.From(1.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
+        b.Intents.SubmitMovementInput(MovementInputState.From(2.5f, Blocks.FlatSpawnY, 0f, 0f, 0f));
         system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
 

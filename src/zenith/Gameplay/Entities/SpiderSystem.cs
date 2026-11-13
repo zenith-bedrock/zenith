@@ -139,7 +139,7 @@ sealed class SpiderSystem : IGameSystem
     }
 
     /// <summary>
-    /// The mob side of a status effect: writes the same <c>Player.Effects</c> entry a potion or
+    /// The mob side of a status effect: writes the same <c>Player.Effects.Active</c> entry a potion or
     /// intent would (see <see cref="EffectSystem"/>'s <c>ApplyPendingIntent</c>), then replicates
     /// the same <see cref="MobEffectPacket"/>. Unchanged by ECS migration — see this class's doc
     /// comment.
@@ -150,7 +150,7 @@ sealed class SpiderSystem : IGameSystem
         if (_random.NextDouble() >= PoisonChance) return;
 
         var expiresAtTick = clock.CurrentTick + PoisonDurationTicks;
-        if (!target.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
+        if (!target.Effects.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
         target.Client.Entity.SendMobEffect(
             (ulong)target.RuntimeId, MobEffectPacket.EventAdd, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
         PoisonInflictedCount++;

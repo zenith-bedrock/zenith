@@ -71,7 +71,7 @@ partial class InGameSessionHandler
             var heldStack = player.Inventory.Get(hotbarSlot);
             if (heldStack.Count > 0 && FoodItems.TryGetNutrition(session.Context.ItemPalette, heldStack.Id, out _))
             {
-                player.SubmitEatIntent();
+                player.Intents.SubmitEatIntent();
                 return;
             }
 
@@ -90,7 +90,7 @@ partial class InGameSessionHandler
         // creation, movement, collision, damage and removal on the gameplay tick.
         if (useActionType == InventoryTransactionPacket.UseAsAttack)
         {
-            player.SubmitProjectileIntent();
+            player.Intents.SubmitProjectileIntent();
             PlayerVisibility.RelaySwingArm(
                 player,
                 session.Context.PlayerManager.SnapshotOnline(),
@@ -122,15 +122,15 @@ partial class InGameSessionHandler
         if (Blocks.IsChest(clicked) || Blocks.IsCraftingTable(clicked))
         {
             var sneaking = player.IsSneaking;
-            if (player.TryPeekMovementInput(out var pendingMove))
+            if (player.Intents.TryPeekMovementInput(out var pendingMove))
                 sneaking = pendingMove.Sneaking;
 
             var emptyHand = stack.IsEmpty || stack.Count <= 0;
             if (emptyHand || !sneaking)
             {
                 var opened = Blocks.IsChest(clicked)
-                    ? player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ))
-                    : player.SubmitWindowIntent(InventoryWindowIntent.OpenCraftingTable(blockX, blockY, blockZ));
+                    ? player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(blockX, blockY, blockZ))
+                    : player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenCraftingTable(blockX, blockY, blockZ));
                 if (!opened)
                     session.Context.Logger.Debug($"Dropped container open from {player.Username}: window queue full.");
                 return;
@@ -168,7 +168,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        if (!player.SubmitBlockEdit(intent))
+        if (!player.Intents.SubmitBlockEdit(intent))
             session.Context.Logger.Debug($"Dropped place from {player.Username}: block-edit queue full.");
         else
         {

@@ -175,7 +175,7 @@ sealed class CowSystem : IGameSystem
             var dz = pos.Z - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
             if (!_stores.Identities.TryGet(id, out var identity)) continue;
-            if (!player.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
+            if (!player.Intents.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
 
             if (player.Inventory.TryConsume(_feedItem, 1))
             {

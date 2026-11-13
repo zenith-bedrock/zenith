@@ -1,58 +1,29 @@
 using Zenith.Session;
-using Zenith.World;
 using Zenith.Gameplay.Survival;
+using Zenith.World;
 
 namespace Zenith.Player;
 
 /// <summary>
 /// Entidade lógica de um jogador conectado. Não sabe nada sobre raknet nem wire format.
-/// Estado de gameplay (posição) só é mutado no GameLoop; a rede só escreve <see cref="MovementInputState"/>.
+/// Estado de gameplay (posição) só é mutado no GameLoop; a rede só escreve intents.
+/// <para>
+/// O que não é identidade, pose ou vitals vive em componentes próprios: <see cref="Intents"/> (caixas de entrada da rede),
+/// <see cref="Dig"/> (quebra de bloco), <see cref="Windows"/> (containers e janelas), <see cref="Effects"/> (efeitos de status) e
+/// <see cref="Replicated"/> (o que os peers já sabem).
+/// </para>
 /// </summary>
 class Player
 {
-    public const int MaxPendingBlockEdits = 8;
-    public const int MaxPendingInventoryStacks = 8;
-    public const int MaxPendingDig = 4;
-    public const int MaxPendingWindowIntents = 4;
-    public const int MaxPendingChat = 8;
-
     /// <summary>Vanilla player maximum for the current first health slice; not an attribute framework.</summary>
     public const float DefaultMaxHealth = 20f;
 
     /// <summary>Euclidean interact reach (blocks) from eye to target center — Fase 3 simple authority.</summary>
     public const float MaxBlockReach = 6f;
 
-    private readonly object _movementInputLock = new();
-    // A target is present only for InventoryTransaction.ItemUseOnActor. AuthInput missed swings
-    // and air use intentionally remain untargeted, so combat may resolve the first valid target.
-    private readonly PendingValue<long?> _attackIntent = new();
-    private readonly PendingSignal _projectileIntent = new();
-    private readonly PendingSignal _eatIntent = new();
-    private readonly PendingValue<long> _interactIntent = new();
-    private MovementInputState _movementInput;
-    private readonly PendingMailbox<BlockEditIntent> _blockEdits = new(MaxPendingBlockEdits);
-    private readonly PendingMailbox<InventoryStackIntent> _inventoryStacks = new(MaxPendingInventoryStacks);
-    // GameLoop-owned replay ledger: request IDs are protocol correlation tokens, not item authority.
-    private readonly HashSet<int> _claimedInventoryRequests = new();
-    private readonly Queue<int> _claimedInventoryRequestOrder = new();
-    private readonly object _digLock = new();
-    private readonly Queue<DigIntent> _digIntents = new();
-    private DigIntent? _provisionalDig;
-    private DigIntent? _suppressedDigAuthorization;
-    private readonly PendingMailbox<InventoryWindowIntent> _windowIntents = new(MaxPendingWindowIntents);
-    private readonly PendingMailbox<string> _pendingChat = new(MaxPendingChat);
-    private readonly PendingValue<GameMode> _pendingGameMode = new();
-    private readonly PendingValue<EffectIntent> _pendingEffectIntent = new();
-    // GameLoop-only: EffectSystem is the sole reader/writer on tick, like FallPeakY/IsSneaking.
-    private readonly Dictionary<EffectType, ActiveEffect> _effects = new();
-    private readonly PendingSignal _respawnIntent = new();
     private readonly HealthState _health = new(DefaultMaxHealth);
     private bool _deathTransitionFinalized;
-    private readonly PendingSignal _spawnReadyIntent = new();
-    // The GameLoop is the only writer. This lock is a narrow snapshot handoff for the network
-    // decoder, which must bind a wire container action to the session it observed.
-    private readonly object _containerLock = new();
-    private OpenContainerSession? _openContainer;
+
     // Connection lifecycle gates are intentionally independent scalars written by the session
     // boundary and observed by the GameLoop. They are not gameplay authority, but visibility
     // matters when cancelling a just-disconnected player's pending input.
@@ -91,6 +62,21 @@ class Player
     /// False when login minted an ephemeral Guid — skip <c>pd:</c> / prefer no reconnect honesty (ADR §60).
     /// </summary>
     public bool IdentityStable { get; }
+
+    /// <summary>Requests the network hands to the GameLoop (movement input, attack, chat, block edits, ...).</summary>
+    public PlayerIntents Intents { get; }
+
+    /// <summary>Block-breaking state and the dig intent queue.</summary>
+    public PlayerDig Dig { get; }
+
+    /// <summary>The open container, the crafting grids, the window intents and the inventory-request ledger.</summary>
+    public PlayerWindows Windows { get; }
+
+    /// <summary>Active status effects and the pending effect command.</summary>
+    public PlayerEffects Effects { get; }
+
+    /// <summary>What peers were last told about this player (held item, pose, flags).</summary>
+    public PlayerReplicatedState Replicated { get; } = new();
 
     /// <summary>
     /// True after SetLocalPlayerAsInitialized → InGame. Connection-lifecycle scalar deliberately
@@ -210,438 +196,12 @@ class Player
     /// <summary>Cause string last sent via DeathInfo (tests / Debug).</summary>
     public string DeathCause => _health.FatalSource?.DeathInfoCause ?? "";
 
-    /// <summary>Último held replicado a peers (EquipmentSystem).</summary>
-    public int LastReplicatedHotbarSlot { get; set; } = -1;
-    public StackId LastReplicatedHeldStackId { get; set; }
-    public int LastReplicatedHeldCount { get; set; } = int.MinValue;
-
-    /// <summary>Última pose enviada a peers via MoveActorAbsolute (MovementSystem dirty-check).</summary>
-    public float LastReplicatedX { get; set; }
-    public float LastReplicatedY { get; set; }
-    public float LastReplicatedZ { get; set; }
-    public float LastReplicatedPitch { get; set; }
-    public float LastReplicatedYaw { get; set; }
-    public float LastReplicatedHeadYaw { get; set; }
-
     /// <summary>AuthInput pose modes applied on tick (§53).</summary>
     public bool IsSneaking { get; set; }
     public bool IsSprinting { get; set; }
 
     /// <summary>AuthInput VerticalCollision — peer Absolute ON_GROUND (default true until first input).</summary>
     public bool IsOnGround { get; set; } = true;
-
-    public bool LastReplicatedSneaking { get; set; }
-    public bool LastReplicatedSprinting { get; set; }
-    public bool LastReplicatedOnGround { get; set; } = true;
-
-    /// <summary>GameClock tick of last relayed emote (rate-limit §53).</summary>
-    public ulong LastEmoteTick { get; set; }
-
-    /// <summary>Server-authoritative break progress (AuthInput start → predict). Cleared on abort/success.</summary>
-    private int _breakTargetX;
-    private int _breakTargetY;
-    private int _breakTargetZ;
-    private ulong _breakStartedTick;
-    private int _breakRequiredTicks;
-    private StackId _digHeldStackId;
-    private bool _hasBreakTarget;
-    private ulong _lastDigActivityTick;
-
-    public int BreakTargetX { get { lock (_digLock) return _breakTargetX; } }
-    public int BreakTargetY { get { lock (_digLock) return _breakTargetY; } }
-    public int BreakTargetZ { get { lock (_digLock) return _breakTargetZ; } }
-    public ulong BreakStartedTick { get { lock (_digLock) return _breakStartedTick; } }
-    /// <summary>Dig duration snapshotted at <see cref="BeginBreak"/> (GameLoop ticks).</summary>
-    public int BreakRequiredTicks { get { lock (_digLock) return _breakRequiredTicks; } }
-    /// <summary>Held <see cref="StackId"/> at dig start / last retarget (ADR §55).</summary>
-    public StackId DigHeldStackId { get { lock (_digLock) return _digHeldStackId; } }
-    public bool HasBreakTarget { get { lock (_digLock) return _hasBreakTarget; } }
-
-    /// <summary>
-    /// Last GameClock tick that saw start/crack/continue for the dig target.
-    /// After <see cref="BreakRequiredTicks"/> + <see cref="DigIdleAbortTicks"/> without activity → StopCrack.
-    /// </summary>
-    public ulong LastDigActivityTick { get { lock (_digLock) return _lastDigActivityTick; } }
-
-    /// <summary>
-    /// Post-dig-window grace without dig AuthInput before aborting crack (~2s @ 20 TPS).
-    /// Idle abort must not fire before <see cref="BreakRequiredTicks"/> elapse (§27).
-    /// </summary>
-    public const ulong DigIdleAbortTicks = 40;
-
-    private uint _nextContainerGeneration;
-
-    /// <summary>Single authoritative active container for this connection; assigned on GameLoop.</summary>
-    public OpenContainerSession? OpenContainer
-    {
-        get
-        {
-            lock (_containerLock)
-                return _openContainer;
-        }
-    }
-
-    /// <summary>
-    /// Takes a coherent protocol-to-domain container-session snapshot at the network handoff.
-    /// It grants no mutation authority; the InventorySystem revalidates its generation on tick.
-    /// </summary>
-    public bool TryGetOpenContainerSession(out OpenContainerSession session)
-    {
-        lock (_containerLock)
-        {
-            if (_openContainer is not { } active)
-            {
-                session = default;
-                return false;
-            }
-
-            session = active;
-            return true;
-        }
-    }
-
-    /// <summary>Compatibility projection of the active chest target; null for every other view.</summary>
-    public OpenChestView? OpenChest => OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest }
-        ? chest
-        : null;
-
-    /// <summary>Compatibility projection of the active player-inventory window.</summary>
-    public bool InventoryWindowOpen => OpenContainer is { Target: OpenContainerSession.TargetKind.PlayerInventory };
-
-    /// <summary>Whether a crafting-table window is the currently active container (ADR §139).</summary>
-    public bool IsAtCraftingTable => OpenContainer is { Target: OpenContainerSession.TargetKind.CraftingTable };
-
-    public OpenContainerSession OpenPlayerContainer(byte windowId, byte windowType)
-    {
-        lock (_containerLock)
-        {
-            var session = OpenContainerSession.PlayerInventory(windowId, windowType, ++_nextContainerGeneration);
-            _openContainer = session;
-            return session;
-        }
-    }
-
-    public OpenContainerSession OpenChestContainer(byte windowId, byte windowType, in OpenChestView view)
-    {
-        lock (_containerLock)
-        {
-            var session = OpenContainerSession.ChestView(windowId, windowType, ++_nextContainerGeneration, view);
-            _openContainer = session;
-            return session;
-        }
-    }
-
-    public OpenContainerSession OpenCraftingTableContainer(byte windowId, byte windowType)
-    {
-        lock (_containerLock)
-        {
-            var session = OpenContainerSession.CraftingTable(windowId, windowType, ++_nextContainerGeneration);
-            _openContainer = session;
-            return session;
-        }
-    }
-
-    public bool TryCloseContainer(byte windowId, byte windowType, out OpenContainerSession closed)
-    {
-        lock (_containerLock)
-        {
-            if (_openContainer is not { } active || active.WindowId != windowId || active.WindowType != windowType)
-            {
-                closed = default;
-                return false;
-            }
-
-            _openContainer = null;
-            closed = active;
-            return true;
-        }
-    }
-
-    public bool TryClearOpenContainer(out OpenContainerSession closed)
-    {
-        lock (_containerLock)
-        {
-            if (_openContainer is not { } active)
-            {
-                closed = default;
-                return false;
-            }
-
-            _openContainer = null;
-            closed = active;
-            return true;
-        }
-    }
-
-    /// <summary>Ephemeral 2×2 craft grid — not persisted.</summary>
-    public PlayerCraftUi CraftUi { get; } = new();
-
-    /// <summary>Ephemeral 3×3 crafting-table grid (ADR §139) — not persisted, only live while <see cref="OpenContainerSession.TargetKind.CraftingTable"/> is open.</summary>
-    public PlayerTableCraftUi TableCraftUi { get; } = new();
-
-    /// <summary>GameLoop-only authoritative start; network submits <see cref="DigIntent"/> instead.</summary>
-    public void BeginBreak(int x, int y, int z, ulong tick, int requiredTicks, StackId heldStackId = default)
-    {
-        lock (_digLock)
-        {
-            _breakTargetX = x;
-            _breakTargetY = y;
-            _breakTargetZ = z;
-            _breakStartedTick = tick;
-            _breakRequiredTicks = requiredTicks;
-            _digHeldStackId = heldStackId;
-            _hasBreakTarget = true;
-            _lastDigActivityTick = tick;
-        }
-    }
-
-    /// <summary>Refresh dig activity (same-cell crack/continue) so idle abort does not fire.</summary>
-    public void MarkDigActive(ulong tick)
-    {
-        lock (_digLock)
-        {
-            if (!_hasBreakTarget) return;
-            _lastDigActivityTick = tick;
-        }
-    }
-
-    /// <summary>Progress-preserving dig retarget when held tool changes mid-break (ADR §27).</summary>
-    public void RetargetBreakTiming(ulong startedTick, int requiredTicks, StackId heldStackId)
-    {
-        lock (_digLock)
-        {
-            if (!_hasBreakTarget) return;
-            _breakStartedTick = startedTick;
-            _breakRequiredTicks = requiredTicks;
-            _digHeldStackId = heldStackId;
-        }
-    }
-
-    /// <summary>GameLoop-only authoritative abort; network submits an abort <see cref="DigIntent"/> instead.</summary>
-    public void AbortBreak()
-    {
-        lock (_digLock)
-        {
-            _hasBreakTarget = false;
-            _breakRequiredTicks = 0;
-            _digHeldStackId = default;
-            _lastDigActivityTick = 0;
-            _provisionalDig = null;
-        }
-    }
-
-    /// <summary>
-    /// Network-side handoff only: suppresses authorization until the queued edit/abort is applied.
-    /// It never mutates the tick-owned break target.
-    /// </summary>
-    public void CancelDigAuthorization(int x, int y, int z)
-    {
-        lock (_digLock)
-        {
-            _suppressedDigAuthorization = DigIntent.Abort(x, y, z);
-            _provisionalDig = null;
-            CancelPendingDigStartUnsafe(x, y, z);
-        }
-    }
-
-    public bool IsBreakTarget(int x, int y, int z)
-    {
-        lock (_digLock)
-            return _hasBreakTarget && _breakTargetX == x && _breakTargetY == y && _breakTargetZ == z;
-    }
-
-    /// <summary>Gets one coherent break-state snapshot for readers outside the GameLoop.</summary>
-    public bool TryGetBreakState(out BreakState state)
-    {
-        lock (_digLock)
-        {
-            if (!_hasBreakTarget)
-            {
-                state = default;
-                return false;
-            }
-
-            state = new BreakState(
-                _breakTargetX, _breakTargetY, _breakTargetZ,
-                _breakStartedTick, _breakRequiredTicks, _digHeldStackId, _lastDigActivityTick);
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Dig auth for same-packet Predict before tick applies <see cref="BeginBreak"/> (§27/§54).
-    /// </summary>
-    public bool TryGetDigAuth(int x, int y, int z, out ulong startedTick, out int requiredTicks)
-    {
-        lock (_digLock)
-        {
-            if (_suppressedDigAuthorization is { } suppressed &&
-                suppressed.X == x && suppressed.Y == y && suppressed.Z == z)
-                goto NoAuth;
-            if (_hasBreakTarget && _breakTargetX == x && _breakTargetY == y && _breakTargetZ == z)
-            {
-                startedTick = _breakStartedTick;
-                requiredTicks = _breakRequiredTicks;
-                return true;
-            }
-
-            if (_provisionalDig is { HasValue: true, IsAbort: false } dig &&
-                dig.X == x && dig.Y == y && dig.Z == z)
-            {
-                startedTick = dig.StartedTick;
-                requiredTicks = dig.RequiredTicks;
-                return true;
-            }
-        }
-
-    NoAuth:
-        startedTick = 0;
-        requiredTicks = 0;
-        return false;
-    }
-
-    /// <summary>Queue dig start (handler). Provisional auth for same-packet Predict.</summary>
-    public bool SubmitDigStart(
-        int x, int y, int z, ulong startedTick, int requiredTicks, StackId heldStackId = default)
-    {
-        if (IsDead) return false;
-        var intent = DigIntent.Start(x, y, z, startedTick, requiredTicks, heldStackId);
-        lock (_digLock)
-        {
-            if (_digIntents.Count >= MaxPendingDig)
-                return false;
-            _digIntents.Enqueue(intent);
-            _provisionalDig = intent;
-            _suppressedDigAuthorization = null;
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Queue dig abort (handler). Suppresses same-packet auth; tick owns the actual abort.
-    /// </summary>
-    public bool SubmitDigAbort(int x, int y, int z)
-    {
-        var intent = DigIntent.Abort(x, y, z);
-        lock (_digLock)
-        {
-            if (_digIntents.Count >= MaxPendingDig)
-                return false;
-            _digIntents.Enqueue(intent);
-            _provisionalDig = null;
-            _suppressedDigAuthorization = intent;
-            return true;
-        }
-    }
-
-    /// <summary>Queues refresh activity; only BlockDigSystem updates the active dig timestamp.</summary>
-    public bool SubmitDigActivity(int x, int y, int z, ulong tick)
-    {
-        lock (_digLock)
-        {
-            if (_digIntents.Count >= MaxPendingDig) return false;
-            _digIntents.Enqueue(DigIntent.Activity(x, y, z, tick));
-            return true;
-        }
-    }
-
-    public bool SubmitDigActivityForActive(ulong tick)
-    {
-        lock (_digLock)
-        {
-            if (!_hasBreakTarget || _digIntents.Count >= MaxPendingDig) return false;
-            _digIntents.Enqueue(DigIntent.Activity(_breakTargetX, _breakTargetY, _breakTargetZ, tick));
-            return true;
-        }
-    }
-
-    public bool TryConsumeDig(out DigIntent intent)
-    {
-        lock (_digLock)
-        {
-            if (_digIntents.Count == 0)
-            {
-                intent = default;
-                return false;
-            }
-
-            intent = _digIntents.Dequeue();
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Drop a queued Start for the cell after DigAuthorized break is queued (same-packet Start+Predict).
-    /// </summary>
-    public void CancelPendingDigStart(int x, int y, int z)
-    {
-        lock (_digLock)
-        {
-            _provisionalDig = null;
-            CancelPendingDigStartUnsafe(x, y, z);
-        }
-    }
-
-    private void CancelPendingDigStartUnsafe(int x, int y, int z)
-    {
-            if (_digIntents.Count == 0) return;
-            var kept = new Queue<DigIntent>(_digIntents.Count);
-            var removed = false;
-            while (_digIntents.Count > 0)
-            {
-                var d = _digIntents.Dequeue();
-                if (!removed && !d.IsAbort && d.X == x && d.Y == y && d.Z == z)
-                {
-                    removed = true;
-                    continue;
-                }
-
-                kept.Enqueue(d);
-            }
-
-            while (kept.Count > 0)
-                _digIntents.Enqueue(kept.Dequeue());
-    }
-
-    /// <summary>Coherent view of one active break target and its server-authoritative timing.</summary>
-    public readonly record struct BreakState(
-        int X,
-        int Y,
-        int Z,
-        ulong StartedTick,
-        int RequiredTicks,
-        StackId HeldStackId,
-        ulong LastActivityTick);
-
-    public bool SubmitWindowIntent(in InventoryWindowIntent intent)
-    {
-        if (IsDead && intent.Action != InventoryWindowIntent.Kind.Close) return false;
-        return _windowIntents.Submit(intent);
-    }
-
-    public bool TryConsumeWindowIntent(out InventoryWindowIntent intent) =>
-        _windowIntents.TryConsume(out intent);
-
-    /// <summary>
-    /// Reports whether the latest not-yet-applied window intent will open a compatible
-    /// container. Session uses this only to retain an ISR that arrived immediately after the
-    /// corresponding open packet; <see cref="Gameplay.Systems.InventorySystem"/> remains the
-    /// sole owner that creates and validates the actual container session.
-    /// </summary>
-    public bool HasPendingContainerOpen(OpenContainerSession.TargetKind? expectedTarget)
-    {
-        if (!_windowIntents.TryPeekLast(out var pending))
-            return false;
-
-        return pending.Action switch
-        {
-            InventoryWindowIntent.Kind.OpenInventory =>
-                expectedTarget is null or OpenContainerSession.TargetKind.PlayerInventory,
-            InventoryWindowIntent.Kind.OpenChest =>
-                expectedTarget is null or OpenContainerSession.TargetKind.Chest,
-            _ => false
-        };
-    }
 
     public Player(
         string username,
@@ -662,132 +222,14 @@ class Player
         IdentityStable = identityStable;
         GameMode = gameMode;
         Inventory = new PlayerInventory(seedStarterHotbar: gameMode == GameMode.Survival);
+        Intents = new PlayerIntents(() => IsDead, () => GameMode);
+        Dig = new PlayerDig(() => IsDead);
+        Windows = new PlayerWindows(() => IsDead);
+        Effects = new PlayerEffects(() => IsDead);
     }
-
-    public void SubmitMovementInput(in MovementInputState input)
-    {
-        lock (_movementInputLock)
-        {
-            _movementInput = input;
-        }
-    }
-
-    /// <summary>
-    /// Peek pending AuthInput without consuming — UseItem may need same-packet sneak (§56).
-    /// </summary>
-    public bool TryPeekMovementInput(out MovementInputState input)
-    {
-        lock (_movementInputLock)
-        {
-            if (!_movementInput.HasValue)
-            {
-                input = default;
-                return false;
-            }
-
-            input = _movementInput;
-            return true;
-        }
-    }
-
-    public bool TryConsumeMovementInput(out MovementInputState input)
-    {
-        lock (_movementInputLock)
-        {
-            if (!_movementInput.HasValue)
-            {
-                input = default;
-                return false;
-            }
-
-            input = _movementInput;
-            _movementInput = default;
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Enfileira place/break (FIFO). Cap <see cref="MaxPendingBlockEdits"/>;
-    /// overflow rejeita o mais novo (ações já aceites preservam ordem).
-    /// </summary>
-    public bool SubmitBlockEdit(in BlockEditIntent intent) => _blockEdits.Submit(intent);
-
-    public bool TryConsumeBlockEdit(out BlockEditIntent intent) => _blockEdits.TryConsume(out intent);
-
-    /// <summary>
-    /// Enfileira rearrange ISR (FIFO). Cap <see cref="MaxPendingInventoryStacks"/>;
-    /// overflow rejeita o mais novo.
-    /// </summary>
-    public bool SubmitInventoryStack(in InventoryStackIntent intent) => _inventoryStacks.Submit(intent);
-
-    public bool TryConsumeInventoryStack(out InventoryStackIntent intent) => _inventoryStacks.TryConsume(out intent);
-
-    /// <summary>
-    /// Mensagem já validada pelo ChatProtocol; fan-out no ChatSystem (FIFO, cap
-    /// <see cref="MaxPendingChat"/> — overflow rejeita o mais novo, §54).
-    /// </summary>
-    public bool SubmitChat(string message) => _pendingChat.Submit(message);
-
-    public bool TryConsumeChat(out string message)
-    {
-        if (_pendingChat.TryConsume(out message)) return true;
-        message = "";
-        return false;
-    }
-
-    /// <summary>Overwrite-latest runtime mode (§52). Applied on GameLoop — not by handlers.</summary>
-    public void SubmitGameMode(GameMode mode)
-    {
-        if (IsDead) return;
-        _pendingGameMode.Submit(mode);
-    }
-
-    /// <summary>No pending change reports the current mode (not <c>default</c>) so callers always get a real value.</summary>
-    public bool TryConsumeGameMode(out GameMode mode) => _pendingGameMode.TryConsume(GameMode, out mode);
 
     /// <summary>GameLoop only. Does not reseed inventory (§52).</summary>
     public void SetGameMode(GameMode mode) => GameMode = mode;
-
-    /// <summary>Network/command-to-gameplay handoff for one effect command (Phase XI.3, overwrite-latest like GameMode).</summary>
-    public void SubmitEffect(EffectIntent intent)
-    {
-        if (IsDead) return;
-        _pendingEffectIntent.Submit(intent);
-    }
-
-    public bool TryConsumeEffectIntent(out EffectIntent intent) => _pendingEffectIntent.TryConsume(out intent);
-
-    /// <summary>GameLoop-owned active effects; sole writer is <see cref="Gameplay.Systems.EffectSystem"/>.</summary>
-    internal IReadOnlyDictionary<EffectType, ActiveEffect> Effects => _effects;
-
-    /// <summary>
-    /// Vanilla/PocketMine "stronger wins" (cross-reference audit finding, Phase XXIII-B polish
-    /// pass): a currently-active effect is kept, not overwritten, unless the new instance is a
-    /// strictly higher amplifier or the same amplifier with more remaining duration. Previously this
-    /// unconditionally overwrote — a weak potion could silently downgrade/shorten a stronger one
-    /// already ticking. Returns whether the new instance actually took effect, so the caller knows
-    /// whether to tell the client anything changed.
-    /// </summary>
-    internal bool ApplyOrRefreshEffect(EffectType type, int amplifier, ulong expiresAtTick, ulong currentTick)
-    {
-        if (_effects.TryGetValue(type, out var existing) && !existing.HasExpired(currentTick))
-        {
-            if (existing.Amplifier > amplifier) return false;
-            if (existing.Amplifier == amplifier && existing.ExpiresAtTick >= expiresAtTick) return false;
-        }
-
-        _effects[type] = new ActiveEffect(type, amplifier, expiresAtTick);
-        return true;
-    }
-
-    internal bool RemoveEffect(EffectType type) => _effects.Remove(type);
-
-    internal bool ClearEffects()
-    {
-        if (_effects.Count == 0) return false;
-        _effects.Clear();
-        return true;
-    }
 
     /// <summary>
     /// Applies an authoritative damage request on the GameLoop. Network handlers and async work
@@ -806,61 +248,10 @@ class Player
         _deathTransitionFinalized = true;
         IsSneaking = false;
         IsSprinting = false;
-        AbortBreak();
-        _ = TryClearOpenContainer(out _);
-        _ = _respawnIntent.TryConsume();
+        Dig.AbortBreak();
+        _ = Windows.TryClearOpenContainer(out _);
+        _ = Intents.TryConsumeRespawn();
         return true;
-    }
-
-    /// <summary>Client Respawn CLIENT_READY / PlayerAction RESPAWN — overwrite-latest one-shot.</summary>
-    public void SubmitRespawn()
-    {
-        if (!IsDead) return;
-        _respawnIntent.Submit();
-    }
-
-    public bool TryConsumeRespawn() => _respawnIntent.TryConsume();
-
-    /// <summary>
-    /// Network-to-gameplay handoff for one attack swing. <paramref name="targetActorRuntimeId"/>
-    /// is populated only by ItemUseOnActor; reach and target ownership remain tick-validated.
-    /// </summary>
-    internal void SubmitAttackIntent(long? targetActorRuntimeId = null) => _attackIntent.Submit(targetActorRuntimeId);
-
-    /// <summary>Consumes an attack regardless of target; used only by direct characterization tests.</summary>
-    internal bool TryConsumeAttackIntent() => _attackIntent.TryConsume(out _);
-
-    /// <summary>
-    /// Consumes an attack only when it was untargeted or named this actor. A targeted wire attack
-    /// must never be claimed by another nearby actor merely because that system ticks first.
-    /// </summary>
-    internal bool TryConsumeAttackIntent(long expectedTargetActorRuntimeId) =>
-        _attackIntent.TryConsumeIf(
-            target => target is null || target.Value == expectedTargetActorRuntimeId,
-            out _);
-
-    /// <summary>
-    /// Strict targeted variant for consumers whose candidate set contains players. Unlike the
-    /// legacy characterization helper above, an absent target can never be promoted into a hit.
-    /// <paramref name="isKnownTarget"/> lets the caller resolve the id against its own index (e.g.
-    /// <c>PlayerManager.GetByRuntimeId</c>) without pre-selecting a candidate: this only consumes
-    /// when the pending target resolves to something the caller actually owns, so an id from a
-    /// different owner (a mob, in the shared RuntimeId space — see
-    /// <c>PlayerManager.AllocateRuntimeId</c>) is left untouched for that owner's own system to
-    /// consume later.
-    /// </summary>
-    internal bool TryConsumeTargetedAttackIntent(Predicate<long> isKnownTarget, out long targetActorRuntimeId)
-    {
-        if (_attackIntent.TryConsumeIf(
-                target => target is { } id && isKnownTarget(id),
-                out var consumed))
-        {
-            targetActorRuntimeId = consumed!.Value;
-            return true;
-        }
-
-        targetActorRuntimeId = default;
-        return false;
     }
 
     /// <summary>
@@ -872,27 +263,6 @@ class Player
     /// exactly one producer and one consumer.
     /// </summary>
     internal (ulong Tick, float X, float Z)? LastVillagerAttack { get; set; }
-
-    /// <summary>Network-to-gameplay handoff for the first short-lived projectile slice.</summary>
-    internal void SubmitProjectileIntent() => _projectileIntent.Submit();
-
-    internal bool TryConsumeProjectileIntent() => _projectileIntent.TryConsume();
-
-    /// <summary>Network-to-gameplay handoff for eating the held food stack (Phase XI.1).</summary>
-    internal void SubmitEatIntent() => _eatIntent.Submit();
-
-    internal bool TryConsumeEatIntent() => _eatIntent.TryConsume();
-
-    /// <summary>
-    /// Network-to-gameplay handoff for a non-attack actor interact (Phase XVIII) — right-click on
-    /// an entity. Carries only the target's runtime id; which gameplay system owns that id is
-    /// resolved on the tick, one candidate system at a time, via <see cref="TryConsumeInteractIntent"/>.
-    /// </summary>
-    internal void SubmitInteractIntent(long targetActorRuntimeId) => _interactIntent.Submit(targetActorRuntimeId);
-
-    /// <summary>Consumes the pending interact only if it targets <paramref name="expectedTargetRuntimeId"/> — otherwise leaves it for another system to check.</summary>
-    internal bool TryConsumeInteractIntent(long expectedTargetRuntimeId) =>
-        _interactIntent.TryConsumeIf(target => target == expectedTargetRuntimeId, out _);
 
     /// <summary>Authoritative well-fed regeneration entry point for <see cref="Gameplay.Systems.HungerSystem"/>.</summary>
     internal void Heal(float amount) => _health.Heal(amount);
@@ -906,29 +276,6 @@ class Player
         Exhaustion = exhaustion;
     }
 
-    /// <summary>
-    /// Claims one ISR request id exactly once before any authoritative mutation. Kept bounded so
-    /// a long-lived session cannot turn replay protection into unbounded memory.
-    /// </summary>
-    public bool TryClaimInventoryRequest(int requestId)
-    {
-        if (!_claimedInventoryRequests.Add(requestId))
-            return false;
-
-        _claimedInventoryRequestOrder.Enqueue(requestId);
-        if (_claimedInventoryRequestOrder.Count > 256)
-            _claimedInventoryRequests.Remove(_claimedInventoryRequestOrder.Dequeue());
-        return true;
-    }
-
-    /// <summary>
-    /// Client confirmation after PLAYER_SPAWN. The network thread records only this one-shot;
-    /// the gameplay owner performs the visible join/session transition in ChunkStreamSystem.
-    /// </summary>
-    public void SubmitSpawnReady() => _spawnReadyIntent.Submit();
-
-    public bool TryConsumeSpawnReady() => _spawnReadyIntent.TryConsume();
-
     /// <summary>Clears death after GameLoop applied spawn pose + vitals.</summary>
     public void CompleteRespawn()
     {
@@ -939,9 +286,8 @@ class Player
         Exhaustion = 0f;
         IsSneaking = false;
         IsSprinting = false;
-        LastReplicatedSneaking = false;
-        LastReplicatedSprinting = false;
+        Replicated.ForgetPoseFlags();
         FallPeakY = PositionY;
-        _ = _respawnIntent.TryConsume();
+        _ = Intents.TryConsumeRespawn();
     }
 }

@@ -19,11 +19,11 @@ public class DeathLootAtomicityTests
         ClearInventory(player);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 3));
         Assert.True(player.Inventory.TrySetBlock(PlayerInventory.CursorSlot, Blocks.Stone, 2));
-        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 4)));
-        Assert.True(player.CraftUi.TrySetResult(InventorySlot.OfBlock(Blocks.OakPlanks, 1)));
+        Assert.True(player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 4)));
+        Assert.True(player.Windows.CraftUi.TrySetResult(InventorySlot.OfBlock(Blocks.OakPlanks, 1)));
         // ADR §139 — a crafting table's 3x3 grid is a real material source too; must conserve the
         // same as the personal grid right above.
-        Assert.True(player.TableCraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.Cobblestone, 5)));
+        Assert.True(player.Windows.TableCraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.Cobblestone, 5)));
         // The offhand is player-owned storage like armor: death must move it too, not wipe it with Clear().
         Assert.True(player.Inventory.TrySetOffhand(StackId.FromBlock(Blocks.Sand), 6));
 
@@ -36,9 +36,9 @@ public class DeathLootAtomicityTests
         Assert.Equal(0f, player.Health);
         Assert.True(player.Inventory.Get(0).IsEmpty);
         Assert.True(player.Inventory.Cursor.IsEmpty);
-        Assert.True(player.CraftUi.GetGrid(0).IsEmpty);
-        Assert.True(player.CraftUi.Result.IsEmpty);
-        Assert.True(player.TableCraftUi.GetGrid(0).IsEmpty);
+        Assert.True(player.Windows.CraftUi.GetGrid(0).IsEmpty);
+        Assert.True(player.Windows.CraftUi.Result.IsEmpty);
+        Assert.True(player.Windows.TableCraftUi.GetGrid(0).IsEmpty);
         Assert.True(player.Inventory.Offhand.IsEmpty);
         Assert.Equal(expectedQuantity, fx.World.FloorDrops.Snapshot().Sum(drop => drop.Count));
     }
@@ -79,7 +79,7 @@ public class DeathLootAtomicityTests
     }
 
     private static void SubmitVoidMove(Player.Player player) =>
-        player.SubmitMovementInput(MovementInputState.From(
+        player.Intents.SubmitMovementInput(MovementInputState.From(
             x: 3.5f,
             y: MovementSystem.VoidRescueY - 1f,
             z: 4.5f,

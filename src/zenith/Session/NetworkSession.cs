@@ -295,7 +295,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
 
             // The network thread owns transport teardown, not ChestStore mutation. InventorySystem
             // releases this opener on its next tick against the authoritative world state.
-            if (Player.OpenChest.HasValue)
+            if (Player.Windows.OpenChest.HasValue)
                 Context.PlayerManager.SubmitDisconnectedContainerCleanup(Player);
 
             // Ephemeral login uuid — skip disk so we do not litter inv:/pd: (ADR §60).

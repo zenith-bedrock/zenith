@@ -65,17 +65,17 @@ sealed class InventorySystem : IGameSystem
             // container session after that player has left gameplay.
             if (!player.IsInGame)
             {
-                while (player.TryConsumeWindowIntent(out _)) { }
+                while (player.Windows.TryConsumeWindowIntent(out _)) { }
                 continue;
             }
 
-            while (player.TryConsumeWindowIntent(out var window))
+            while (player.Windows.TryConsumeWindowIntent(out var window))
                 ApplyWindow(player, window, online);
         }
 
         foreach (var player in online)
         {
-            while (player.TryConsumeInventoryStack(out var intent))
+            while (player.Intents.TryConsumeInventoryStack(out var intent))
             {
                 // See the window pass above. A player can have been in the tick snapshot when
                 // the network lifecycle removes it; queued client work is cancelled, never
@@ -100,12 +100,12 @@ sealed class InventorySystem : IGameSystem
                 // crash the client (Dragonfly's handler_interact documents this behavior).
                 // The open-container state is gameplay-owned, so coalesce it here rather than
                 // making the network handler a second writer.
-                if (player.InventoryWindowOpen)
+                if (player.Windows.InventoryWindowOpen)
                     return;
 
-                if (player.OpenChest.HasValue)
+                if (player.Windows.OpenChest.HasValue)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
-                var inventorySession = player.OpenPlayerContainer(
+                var inventorySession = player.Windows.OpenPlayerContainer(
                     (byte)InventoryContainerMap.WindowInventory,
                     InventoryContainerMap.WindowTypeInventory);
                 inv.BeginOpenContainerSession(inventorySession.Generation);
@@ -117,7 +117,7 @@ sealed class InventorySystem : IGameSystem
                 break;
 
             case InventoryWindowIntent.Kind.OpenChest:
-                if (player.OpenChest is { } previous &&
+                if (player.Windows.OpenChest is { } previous &&
                     !previous.Contains(intent.X, intent.Y, intent.Z))
                     ChestLidFanout.ReleaseOpener(online, _world, player);
 
@@ -126,7 +126,7 @@ sealed class InventorySystem : IGameSystem
                 if (view.TryGetPartner(out var partnerX, out var partnerY, out var partnerZ))
                     _world.Chests.Ensure(partnerX, partnerY, partnerZ);
 
-                var chestSession = player.OpenChestContainer(
+                var chestSession = player.Windows.OpenChestContainer(
                     (byte)InventoryContainerMap.WindowChest,
                     InventoryContainerMap.WindowTypeChest,
                     view);
@@ -152,13 +152,13 @@ sealed class InventorySystem : IGameSystem
 
             case InventoryWindowIntent.Kind.OpenCraftingTable:
                 // Same re-transmit-crash risk OpenInventory's dedup guard above exists for.
-                if (player.IsAtCraftingTable)
+                if (player.Windows.IsAtCraftingTable)
                     return;
 
-                if (player.OpenChest.HasValue)
+                if (player.Windows.OpenChest.HasValue)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
 
-                var tableSession = player.OpenCraftingTableContainer(
+                var tableSession = player.Windows.OpenCraftingTableContainer(
                     (byte)InventoryContainerMap.WindowCraftingTable,
                     InventoryContainerMap.WindowTypeWorkbench);
                 inv.BeginOpenContainerSession(tableSession.Generation);
@@ -172,10 +172,10 @@ sealed class InventorySystem : IGameSystem
                 // sometimes send WindowId 0xFF ("none", signed -1) instead of echoing the actual
                 // window id — e.g. if another UI was already open when the close fired. Zenith's
                 // exact-match check silently rejected that as "stale" and never cleared
-                // player.OpenContainer, permanently locking the player out of every future
+                // player.Windows.OpenContainer, permanently locking the player out of every future
                 // container open (found via real-client testing). Treat 0xFF as "close whatever is
                 // currently open", the same workaround PocketMine uses.
-                if (player.OpenContainer is not { } active)
+                if (player.Windows.OpenContainer is not { } active)
                 {
                     player.Level.Logger?.Debug(
                         $"Ignored stale container close from {player.Username}: {intent.WindowId}/{intent.WindowType}.");
@@ -202,7 +202,7 @@ sealed class InventorySystem : IGameSystem
                 if (active.Target == OpenContainerSession.TargetKind.Chest)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
                 else
-                    _ = player.TryCloseContainer(active.WindowId, active.WindowType, out _);
+                    _ = player.Windows.TryCloseContainer(active.WindowId, active.WindowType, out _);
                 inv.EndOpenContainerSession();
                 inv.SendContainerClose(active.WindowId, active.WindowType);
                 break;
@@ -217,12 +217,12 @@ sealed class InventorySystem : IGameSystem
         var protocol = player.Client.Inventory;
         var inventory = player.Inventory;
 
-        if (!player.TryClaimInventoryRequest(intent.RequestId))
+        if (!player.Windows.TryClaimInventoryRequest(intent.RequestId))
         {
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
-            if (player.OpenChest is { } openReplay)
+            if (player.Windows.OpenChest is { } openReplay)
                 protocol.SendChestContent(_world.Chests, openReplay);
             player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: duplicate request {intent.RequestId}.");
@@ -230,7 +230,7 @@ sealed class InventorySystem : IGameSystem
         }
 
         if ((intent.RequiresOpenContainer || intent.ExpectedOpenContainerGeneration != 0) &&
-            (player.OpenContainer is not { } openContainer ||
+            (player.Windows.OpenContainer is not { } openContainer ||
              (intent.RequiredOpenContainerTarget is { } requiredTarget && openContainer.Target != requiredTarget) ||
              (intent.ExpectedOpenContainerGeneration != 0 &&
               openContainer.Generation != intent.ExpectedOpenContainerGeneration)))
@@ -238,7 +238,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
-            if (player.OpenChest is { } openStale)
+            if (player.Windows.OpenChest is { } openStale)
                 protocol.SendChestContent(_world.Chests, openStale);
             player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: stale open-container session (request {intent.RequestId}).");
@@ -250,7 +250,7 @@ sealed class InventorySystem : IGameSystem
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
-            if (player.OpenChest is { } openMismatch)
+            if (player.Windows.OpenChest is { } openMismatch)
                 protocol.SendChestContent(_world.Chests, openMismatch);
             player.Level.Logger?.Debug(
                 $"ISR rejected for {player.Username}: stack net id mismatch (request {intent.RequestId}).");
@@ -259,10 +259,10 @@ sealed class InventorySystem : IGameSystem
 
         var invSnap = inventory.CaptureSnapshot();
         var armorSnap = inventory.SnapshotArmor();
-        var craftSnap = player.CraftUi.CaptureSnapshot();
-        var tableCraftSnap = player.TableCraftUi.CaptureSnapshot();
+        var craftSnap = player.Windows.CraftUi.CaptureSnapshot();
+        var tableCraftSnap = player.Windows.TableCraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
-        OpenChestView? chestView = player.OpenChest;
+        OpenChestView? chestView = player.Windows.OpenChest;
         if (chestView is { } cv)
             chestSnap = _world.Chests.CaptureOpenSnapshot(cv);
 
@@ -279,8 +279,8 @@ sealed class InventorySystem : IGameSystem
                     // ADR §139: which physical grid has the ingredients follows which container is
                     // actually open — a table-only recipe is refused inside TryCraftFromGrid itself
                     // (isAtTable), not by which grid happened to be passed in.
-                    var isAtTable = player.IsAtCraftingTable;
-                    ICraftGrid grid = isAtTable ? player.TableCraftUi : player.CraftUi;
+                    var isAtTable = player.Windows.IsAtCraftingTable;
+                    ICraftGrid grid = isAtTable ? player.Windows.TableCraftUi : player.Windows.CraftUi;
 
                     // Materialize CreatedOutput so same-request Take/Place can move it;
                     // refuse if a prior result is still sitting untaken.
@@ -432,8 +432,8 @@ sealed class InventorySystem : IGameSystem
         {
             inventory.RestoreSnapshot(invSnap);
             inventory.RestoreArmorSnapshot(armorSnap);
-            player.CraftUi.RestoreSnapshot(craftSnap);
-            player.TableCraftUi.RestoreSnapshot(tableCraftSnap);
+            player.Windows.CraftUi.RestoreSnapshot(craftSnap);
+            player.Windows.TableCraftUi.RestoreSnapshot(tableCraftSnap);
             if (chestView is { } cvFail && chestSnap is not null)
                 _world.Chests.RestoreOpenSnapshot(cvFail, chestSnap);
             protocol.SendItemStackResponseError(intent.RequestId);
@@ -445,7 +445,7 @@ sealed class InventorySystem : IGameSystem
         }
 
         protocol.SendItemStackResponseOk(intent.RequestId, player, wireTouches);
-        if (player.InventoryWindowOpen)
+        if (player.Windows.InventoryWindowOpen)
             protocol.SendUiInventoryContent(player);
         if (chestView is { } openAfter)
             protocol.SendChestContent(_world.Chests, openAfter);
@@ -522,8 +522,8 @@ sealed class InventorySystem : IGameSystem
     {
         if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty) return false;
 
-        var isAtTable = player.IsAtCraftingTable;
-        ICraftGrid grid = isAtTable ? player.TableCraftUi : player.CraftUi;
+        var isAtTable = player.Windows.IsAtCraftingTable;
+        ICraftGrid grid = isAtTable ? player.Windows.TableCraftUi : player.Windows.CraftUi;
 
         var references = new List<InventorySlotReference>(grid.GridSize + PlayerInventory.FullInventorySize);
         for (var g = 0; g < grid.GridSize; g++)
@@ -647,7 +647,7 @@ sealed class InventorySystem : IGameSystem
     {
         return reference.Area switch
         {
-            InventorySlotArea.OpenContainer => player.OpenContainer is
+            InventorySlotArea.OpenContainer => player.Windows.OpenContainer is
                 { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view } &&
                 reference.Index >= 0 && reference.Index < view.SlotCount && IsOpenChestAccessible(player, view),
             InventorySlotArea.CraftGrid => reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize,

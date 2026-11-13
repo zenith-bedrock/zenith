@@ -30,7 +30,7 @@ internal readonly record struct PlayerDamageResult(
     public bool Applied => Outcome != PlayerDamageOutcome.NotApplied;
 
     /// <summary>No-ops for <see cref="PlayerDamageOutcome.NotApplied"/> — callers never need an
-    /// `if` around this call. Re-reads <c>Player.OpenChest</c>/<c>Player.GameMode</c> fresh (still
+    /// `if` around this call. Re-reads <c>Player.Windows.OpenChest</c>/<c>Player.GameMode</c> fresh (still
     /// valid — <see cref="PlayerDamage.ApplyCore"/> never clears them) instead of threading them
     /// through the result.</summary>
     public void Conclude(IReadOnlyList<Player.Player> online)
@@ -46,7 +46,7 @@ internal readonly record struct PlayerDamageResult(
 
         PlayerVisibility.RelayDeath(Player, online);
         var world = Player.Level;
-        if (Player.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, Player);
+        if (Player.Windows.OpenChest.HasValue) ChestLidFanout.ReleaseOpener(online, world, Player);
         // keepInventory: the player dies but the items stay where they are (Creative already keeps everything).
         if (Player.GameMode != GameMode.Creative && !world.Rules.KeepInventory)
             _ = FloorDropFanout.TryDropDeathLoot(world, Players, online, Player);
@@ -106,13 +106,13 @@ static class PlayerDamage
             return new PlayerDamageResult(PlayerDamageOutcome.Hurt, player, players);
         }
 
-        if (player.Effects.Count > 0)
+        if (player.Effects.Active.Count > 0)
         {
             // Death clears every timed effect (vanilla parity); tell the owning client each is gone.
-            var expiring = new List<EffectType>(player.Effects.Keys);
+            var expiring = new List<EffectType>(player.Effects.Active.Keys);
             foreach (var type in expiring)
                 entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
-            player.ClearEffects();
+            player.Effects.ClearEffects();
         }
         if (!player.TryFinalizeDeath()) throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");
         // Phase XXV — vanilla resets experience to zero on death regardless of gamemode (a Creative

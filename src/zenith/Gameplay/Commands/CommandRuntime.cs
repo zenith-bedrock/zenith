@@ -96,7 +96,7 @@ sealed class CommandRuntime
         {
             case "gamemode":
                 var target = arguments.TryGetValue("target", out var targetValue) ? (Player.Player)targetValue : source;
-                target.SubmitGameMode((GameMode)arguments["mode"]);
+                target.Intents.SubmitGameMode((GameMode)arguments["mode"]);
                 return new("Game mode", $"Queued for {target.Username}.");
             case "help":
                 return new("Commands", string.Join(", ", _catalog.Suggest("")));
@@ -140,14 +140,14 @@ sealed class CommandRuntime
         var action = (string)arguments["action"];
         if (action == "clear")
         {
-            target.SubmitEffect(EffectIntent.Clear);
+            target.Effects.SubmitEffect(EffectIntent.Clear);
             return new("Effect", $"Clearing effects for {target.Username}.");
         }
 
         var type = (EffectType)arguments["type"];
         var duration = arguments.TryGetValue("duration", out var durationValue) ? (int)durationValue : 600;
         var amplifier = arguments.TryGetValue("amplifier", out var amplifierValue) ? (int)amplifierValue : 0;
-        target.SubmitEffect(EffectIntent.Give(type, amplifier, duration));
+        target.Effects.SubmitEffect(EffectIntent.Give(type, amplifier, duration));
         return new("Effect", $"Queued {type} (amplifier {amplifier}, {duration} ticks) for {target.Username}.");
     }
 

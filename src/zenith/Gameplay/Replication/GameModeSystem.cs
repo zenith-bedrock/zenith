@@ -5,7 +5,7 @@ using Zenith.Player;
 namespace Zenith.Gameplay.Replication;
 
 /// <summary>
-/// Aplica <see cref="Player.Player.SubmitGameMode"/> no tick e transmite wire (§52).
+/// Aplica <see cref="Player.Player.Intents.SubmitGameMode"/> no tick e transmite wire (§52).
 /// Handler só enfileira; inventário não é reseedado.
 /// </summary>
 sealed class GameModeSystem : IGameSystem
@@ -18,7 +18,7 @@ sealed class GameModeSystem : IGameSystem
         foreach (var player in online)
         {
             if (!player.IsInGame) continue;
-            if (!player.TryConsumeGameMode(out var mode)) continue;
+            if (!player.Intents.TryConsumeGameMode(out var mode)) continue;
 
             player.SetGameMode(mode);
 

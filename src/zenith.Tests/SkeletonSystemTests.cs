@@ -70,7 +70,7 @@ public sealed class SkeletonSystemTests
 
         for (var i = 0; i < 5; i++)
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             fx.Clock.AdvanceBy(11);
             system.Tick(fx.Clock, fx.Players.Online);
         }

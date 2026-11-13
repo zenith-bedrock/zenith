@@ -71,7 +71,7 @@ public sealed class CowSystemTests
 
         for (var i = 0; i < 3; i++)
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -93,7 +93,7 @@ public sealed class CowSystemTests
         var id = system.SpawnCow(player.PositionX + 10, player.PositionY, player.PositionZ);
         var maxHealth = Health(system, id).Maximum;
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(maxHealth, Health(system, id).Current);
@@ -259,7 +259,7 @@ public sealed class CowSystemTests
         player.SelectedHotbarSlot = 0;
 
         Assert.True(system.Stores.Identities.TryGet(id, out var identity));
-        player.SubmitInteractIntent(identity.ActorUniqueId);
+        player.Intents.SubmitInteractIntent(identity.ActorUniqueId);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.FeedCount);
@@ -278,7 +278,7 @@ public sealed class CowSystemTests
         state.BreedCooldownUntilTick = 5_000;
 
         Assert.True(system.Stores.Identities.TryGet(id, out var identity));
-        player.SubmitInteractIntent(identity.ActorUniqueId);
+        player.Intents.SubmitInteractIntent(identity.ActorUniqueId);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(0, system.FeedCount);

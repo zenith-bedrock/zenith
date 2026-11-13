@@ -226,7 +226,7 @@ public class GameRulesTests
         Assert.True(fx.World.Rules.TrySet("keepInventory", "true", out _));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 3));
 
-        player.SubmitMovementInput(MovementInputState.From(3.5f, MovementSystem.VoidRescueY - 1f, 4.5f, 0f, 0f));
+        player.Intents.SubmitMovementInput(MovementInputState.From(3.5f, MovementSystem.VoidRescueY - 1f, 4.5f, 0f, 0f));
         new MovementSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(player.IsDead);
@@ -244,11 +244,11 @@ public class GameRulesTests
 
         var air = MovementInputState.From(0f, Blocks.FlatSpawnY + 10f, 0f, 0f, 0f);
         air.OnGround = false;
-        mover.SubmitMovementInput(air);
+        mover.Intents.SubmitMovementInput(air);
         system.Tick(fx.Clock, fx.Players.Online);
         var land = MovementInputState.From(0f, Blocks.FlatSpawnY, 0f, 0f, 0f);
         land.OnGround = true;
-        mover.SubmitMovementInput(land);
+        mover.Intents.SubmitMovementInput(land);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, mover.Health);
@@ -282,9 +282,9 @@ public class GameRulesTests
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         player.SelectedHotbarSlot = 0;
         var need = Blocks.BreakTicks(Blocks.Dirt, default(StackId));
-        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, default(StackId));
+        player.Dig.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, default(StackId));
         fx.Clock.AdvanceBy(need);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.Dig.BreakStartedTick, player.Dig.BreakRequiredTicks)));
 
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 

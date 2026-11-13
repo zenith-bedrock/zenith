@@ -40,16 +40,16 @@ sealed class MovementSystem : IGameSystem
             // AuthInput must not move, kill, or otherwise mutate authoritative state.
             if (!player.IsInGame)
             {
-                _ = player.TryConsumeMovementInput(out _);
-                _ = player.TryConsumeRespawn();
+                _ = player.Intents.TryConsumeMovementInput(out _);
+                _ = player.Intents.TryConsumeRespawn();
                 continue;
             }
 
             if (player.IsDead)
             {
                 // Drain stale AuthInput while on death screen; do not apply pose.
-                _ = player.TryConsumeMovementInput(out _);
-                if (player.TryConsumeRespawn())
+                _ = player.Intents.TryConsumeMovementInput(out _);
+                if (player.Intents.TryConsumeRespawn())
                 {
                     ApplyRespawn(player, online);
                     if (IsPoseDirty(player))
@@ -71,7 +71,7 @@ sealed class MovementSystem : IGameSystem
                 // steering at whatever direction the player faced at the moment of mounting, and
                 // would also feed a stale Yaw into MinecartSystem's dismount teleport (found via a
                 // live-client bug report: exiting a vehicle left the player unable to act).
-                if (player.TryConsumeMovementInput(out var ridingInput))
+                if (player.Intents.TryConsumeMovementInput(out var ridingInput))
                 {
                     player.Pitch = ridingInput.Pitch;
                     player.Yaw = ridingInput.Yaw;
@@ -80,7 +80,7 @@ sealed class MovementSystem : IGameSystem
                 continue;
             }
 
-            if (!player.TryConsumeMovementInput(out var input)) continue;
+            if (!player.Intents.TryConsumeMovementInput(out var input)) continue;
 
             var wasOnGround = player.IsOnGround;
             player.PositionX = input.X;
@@ -179,33 +179,33 @@ sealed class MovementSystem : IGameSystem
     }
 
     private static bool IsPoseDirty(global::Zenith.Player.Player player) =>
-        player.PositionX != player.LastReplicatedX ||
-        player.PositionY != player.LastReplicatedY ||
-        player.PositionZ != player.LastReplicatedZ ||
-        player.Pitch != player.LastReplicatedPitch ||
-        player.Yaw != player.LastReplicatedYaw ||
-        player.HeadYaw != player.LastReplicatedHeadYaw ||
-        player.IsOnGround != player.LastReplicatedOnGround;
+        player.PositionX != player.Replicated.X ||
+        player.PositionY != player.Replicated.Y ||
+        player.PositionZ != player.Replicated.Z ||
+        player.Pitch != player.Replicated.Pitch ||
+        player.Yaw != player.Replicated.Yaw ||
+        player.HeadYaw != player.Replicated.HeadYaw ||
+        player.IsOnGround != player.Replicated.OnGround;
 
     private static bool IsFlagsDirty(global::Zenith.Player.Player player) =>
-        player.IsSneaking != player.LastReplicatedSneaking ||
-        player.IsSprinting != player.LastReplicatedSprinting;
+        player.IsSneaking != player.Replicated.Sneaking ||
+        player.IsSprinting != player.Replicated.Sprinting;
 
     private static void RememberReplicatedPose(global::Zenith.Player.Player player)
     {
-        player.LastReplicatedX = player.PositionX;
-        player.LastReplicatedY = player.PositionY;
-        player.LastReplicatedZ = player.PositionZ;
-        player.LastReplicatedPitch = player.Pitch;
-        player.LastReplicatedYaw = player.Yaw;
-        player.LastReplicatedHeadYaw = player.HeadYaw;
-        player.LastReplicatedOnGround = player.IsOnGround;
+        player.Replicated.X = player.PositionX;
+        player.Replicated.Y = player.PositionY;
+        player.Replicated.Z = player.PositionZ;
+        player.Replicated.Pitch = player.Pitch;
+        player.Replicated.Yaw = player.Yaw;
+        player.Replicated.HeadYaw = player.HeadYaw;
+        player.Replicated.OnGround = player.IsOnGround;
     }
 
     private static void RememberReplicatedFlags(global::Zenith.Player.Player player)
     {
-        player.LastReplicatedSneaking = player.IsSneaking;
-        player.LastReplicatedSprinting = player.IsSprinting;
+        player.Replicated.Sneaking = player.IsSneaking;
+        player.Replicated.Sprinting = player.IsSprinting;
     }
 
     /// <summary>Void fall → death screen + Survival death loot (ADR §73). Creative keeps inventory.</summary>

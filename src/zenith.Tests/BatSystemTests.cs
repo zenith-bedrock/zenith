@@ -79,7 +79,7 @@ public sealed class BatSystemTests
 
         for (var i = 0; i < 2; i++)
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }

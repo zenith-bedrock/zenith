@@ -69,7 +69,7 @@ public sealed class VillagerSystemTests
 
         for (var i = 0; i < 5; i++) // 20 health / 4 damage-per-hit
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -127,7 +127,7 @@ public sealed class VillagerSystemTests
         player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:wheat"), 1);
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitInteractIntent(UniqueId(system, id));
+        player.Intents.SubmitInteractIntent(UniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.TradeCount);
@@ -148,10 +148,10 @@ public sealed class VillagerSystemTests
         player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:wheat"), 2);
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitInteractIntent(UniqueId(system, id));
+        player.Intents.SubmitInteractIntent(UniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         fx.Clock.AdvanceBy(1);
-        player.SubmitInteractIntent(UniqueId(system, id));
+        player.Intents.SubmitInteractIntent(UniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.TradeCount);
@@ -165,7 +165,7 @@ public sealed class VillagerSystemTests
         var system = new VillagerSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnVillager(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(UniqueId(system, id));
+        player.Intents.SubmitInteractIntent(UniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(0, system.TradeCount);
@@ -181,7 +181,7 @@ public sealed class VillagerSystemTests
         player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:wheat"), 1);
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitInteractIntent(UniqueId(system, id));
+        player.Intents.SubmitInteractIntent(UniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(0, system.TradeCount);

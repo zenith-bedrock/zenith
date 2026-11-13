@@ -140,7 +140,7 @@ sealed class ProjectileSystem : IGameSystem
     {
         foreach (var player in online)
         {
-            if (!player.IsInGame || player.IsDead || !player.TryConsumeProjectileIntent()) continue;
+            if (!player.IsInGame || player.IsDead || !player.Intents.TryConsumeProjectileIntent()) continue;
             var radians = player.Yaw * (MathF.PI / 180f);
             var velocityX = -MathF.Sin(radians) * LaunchSpeed;
             var velocityZ = MathF.Cos(radians) * LaunchSpeed;

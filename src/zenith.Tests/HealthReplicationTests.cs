@@ -51,14 +51,14 @@ public class HealthReplicationTests
     {
         var input = MovementInputState.From(0f, y, 0f, 0f, 0f);
         input.OnGround = false;
-        player.SubmitMovementInput(input);
+        player.Intents.SubmitMovementInput(input);
     }
 
     private static void SubmitLanding(Player.Player player, float y)
     {
         var input = MovementInputState.From(0f, y, 0f, 0f, 0f);
         input.OnGround = true;
-        player.SubmitMovementInput(input);
+        player.Intents.SubmitMovementInput(input);
     }
 
     private static void Drain(IntentTestFixture fx)

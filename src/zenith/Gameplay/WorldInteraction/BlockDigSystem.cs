@@ -23,11 +23,11 @@ sealed class BlockDigSystem : IGameSystem
         {
             if (!player.IsInGame)
             {
-                while (player.TryConsumeDig(out _)) { }
+                while (player.Dig.TryConsumeDig(out _)) { }
                 continue;
             }
 
-            while (player.TryConsumeDig(out var dig))
+            while (player.Dig.TryConsumeDig(out var dig))
                 ApplyDig(player, dig, clock, online);
             UpdateDigToolIfHeldChanged(player, clock, online);
             AbortIdleDigIfStale(player, clock, online);
@@ -48,32 +48,32 @@ sealed class BlockDigSystem : IGameSystem
 
         if (dig.IsActivity) { ApplyActivityPing(player, dig); return; }
         if (dig.IsAbort) { ApplyAbort(player, dig, online); return; }
-        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z)) return;
+        if (player.Dig.IsBreakTarget(dig.X, dig.Y, dig.Z)) return;
 
         ApplyNewBreak(player, dig, online);
     }
 
     private static void ApplyActivityPing(global::Zenith.Player.Player player, in DigIntent dig)
     {
-        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-            player.MarkDigActive(dig.StartedTick);
+        if (player.Dig.IsBreakTarget(dig.X, dig.Y, dig.Z))
+            player.Dig.MarkDigActive(dig.StartedTick);
     }
 
     private static void ApplyAbort(
         global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         BlockCrackFanout.Stop(online, player.Client, dig.X, dig.Y, dig.Z);
-        if (player.IsBreakTarget(dig.X, dig.Y, dig.Z))
-            player.AbortBreak();
+        if (player.Dig.IsBreakTarget(dig.X, dig.Y, dig.Z))
+            player.Dig.AbortBreak();
     }
 
     private void ApplyNewBreak(
         global::Zenith.Player.Player player, in DigIntent dig, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        if (player.TryGetBreakState(out var activeBreak))
+        if (player.Dig.TryGetBreakState(out var activeBreak))
             BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
 
-        player.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
+        player.Dig.BeginBreak(dig.X, dig.Y, dig.Z, dig.StartedTick, dig.RequiredTicks, dig.HeldStackId);
         if (dig.RequiredTicks > 0)
         {
             BlockCrackFanout.Start(online, player.Client, dig.X, dig.Y, dig.Z, dig.RequiredTicks);
@@ -90,7 +90,7 @@ sealed class BlockDigSystem : IGameSystem
         GameClock clock,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        if (!player.TryGetBreakState(out var activeBreak) || player.IsDead) return;
+        if (!player.Dig.TryGetBreakState(out var activeBreak) || player.IsDead) return;
         if (player.GameMode == GameMode.Creative) return;
 
         var held = player.Inventory.Get(player.SelectedHotbarSlot);
@@ -103,7 +103,7 @@ sealed class BlockDigSystem : IGameSystem
         if (newNeed < 0)
         {
             BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
-            player.AbortBreak();
+            player.Dig.AbortBreak();
             return;
         }
 
@@ -112,8 +112,8 @@ sealed class BlockDigSystem : IGameSystem
         var progress = oldNeed > 0 ? Math.Clamp(elapsed / (double)oldNeed, 0.0, 1.0) : 1.0;
         var newStarted = newNeed <= 0 ? now : now - (ulong)Math.Round(progress * newNeed);
 
-        player.RetargetBreakTiming(newStarted, newNeed, heldId);
-        player.MarkDigActive(now);
+        player.Dig.RetargetBreakTiming(newStarted, newNeed, heldId);
+        player.Dig.MarkDigActive(now);
 
         if (Blocks.CrackEventData(oldNeed) != Blocks.CrackEventData(newNeed) && newNeed > 0)
             BlockCrackFanout.UpdateSpeed(
@@ -128,15 +128,15 @@ sealed class BlockDigSystem : IGameSystem
         GameClock clock,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        if (!player.TryGetBreakState(out var activeBreak) || player.IsDead) return;
+        if (!player.Dig.TryGetBreakState(out var activeBreak) || player.IsDead) return;
         if (clock.CurrentTick < activeBreak.LastActivityTick) return;
 
         var digWindowEnd = activeBreak.StartedTick + (ulong)Math.Max(activeBreak.RequiredTicks, 0);
         if (clock.CurrentTick < digWindowEnd ||
-            clock.CurrentTick - activeBreak.LastActivityTick < Player.Player.DigIdleAbortTicks)
+            clock.CurrentTick - activeBreak.LastActivityTick < Player.PlayerDig.DigIdleAbortTicks)
             return;
 
         BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);
-        player.AbortBreak();
+        player.Dig.AbortBreak();
     }
 }

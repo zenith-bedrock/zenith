@@ -61,12 +61,12 @@ public class ChestPairTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("sneak");
         Assert.False(player.IsSneaking);
-        player.SubmitMovementInput(MovementInputState.FromClientAuthInput(
+        player.Intents.SubmitMovementInput(MovementInputState.FromClientAuthInput(
             0, Blocks.FlatSpawnY + Blocks.PlayerEyeHeight, 0, 0, 0, sneaking: true));
-        Assert.True(player.TryPeekMovementInput(out var pending));
+        Assert.True(player.Intents.TryPeekMovementInput(out var pending));
         Assert.True(pending.Sneaking);
         Assert.False(player.IsSneaking);
-        Assert.True(player.TryConsumeMovementInput(out _));
+        Assert.True(player.Intents.TryConsumeMovementInput(out _));
     }
 
     [Fact]
@@ -83,17 +83,17 @@ public class ChestPairTests
         player.PositionY = 64;
         player.PositionZ = 2.5f;
 
-        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
+        Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
-        Assert.NotNull(player.OpenChest);
-        Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
+        Assert.NotNull(player.Windows.OpenChest);
+        Assert.Equal(ChestStore.DoubleSize, player.Windows.OpenChest!.Value.SlotCount);
         Assert.Equal(1, fx.World.Chests.OpenerCount(2, 64, 2));
         Assert.Equal(1, fx.World.Chests.OpenerCount(3, 64, 2));
 
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 5));
         var partnerFlat = InventoryContainerMap.ChestBase + ChestStore.SingleSize;
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1, [
             InventoryStackAction.Transfer(
                 0, partnerFlat, 3,
                 new WireSlot(InventoryContainerMap.Hotbar, 0),
@@ -123,17 +123,17 @@ public class ChestPairTests
         Assert.True(fx.World.Chests.TrySet(2, 64, 2, 0, InventorySlot.OfBlock(Blocks.Dirt, 4)));
         Assert.True(fx.World.Chests.TrySet(3, 64, 2, 0, InventorySlot.OfBlock(Blocks.Stone, 2)));
 
-        Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 64, 2)));
+        Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 64, 2)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
+        Assert.Equal(ChestStore.DoubleSize, player.Windows.OpenChest!.Value.SlotCount);
 
         var need = Blocks.BreakTicks(south);
-        player.BeginBreak(2, 64, 2, fx.Clock.CurrentTick, need);
+        player.Dig.BeginBreak(2, 64, 2, fx.Clock.CurrentTick, need);
         if (need > 0)
             fx.Clock.AdvanceBy(need);
-        Assert.True(player.SubmitBlockEdit(
+        Assert.True(player.Intents.SubmitBlockEdit(
             need > 0
-                ? BlockEditIntent.BreakWithDig(2, 64, 2, player.BreakStartedTick, player.BreakRequiredTicks)
+                ? BlockEditIntent.BreakWithDig(2, 64, 2, player.Dig.BreakStartedTick, player.Dig.BreakRequiredTicks)
                 : BlockEditIntent.Set(2, 64, 2, Blocks.Air)));
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
@@ -142,7 +142,7 @@ public class ChestPairTests
         Assert.False(fx.World.Chests.TryGetSlots(2, 64, 2, out _));
         Assert.True(fx.World.Chests.TryGetSlots(3, 64, 2, out _));
         Assert.Equal(2, fx.World.Chests.Get(3, 64, 2, 0).Count);
-        Assert.Null(player.OpenChest);
+        Assert.Null(player.Windows.OpenChest);
         Assert.False(ChestPairing.TryResolve(fx.World, 3, 64, 2, out _));
     }
 

@@ -113,7 +113,7 @@ sealed class VillagerSystem : IGameSystem
             var dx = pos.X - player.PositionX;
             var dz = pos.Z - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
-            if (!player.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
+            if (!player.Intents.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
 
             if (TryTrade(state, player))
                 _villagers.GetRef(id).NextTradeTick = clock.CurrentTick + TradeCooldownTicks;

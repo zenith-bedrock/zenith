@@ -35,7 +35,7 @@ sealed class BlockEditSystem : IGameSystem
         updates.Clear();
         foreach (var player in online)
         {
-            while (player.TryConsumeBlockEdit(out var edit))
+            while (player.Intents.TryConsumeBlockEdit(out var edit))
             {
                 // The online list is captured once per tick. A disconnect can remove a player
                 // after that snapshot; its queued client edit must not mutate world state.
@@ -310,8 +310,8 @@ sealed class BlockEditSystem : IGameSystem
             // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
             BlockCrackFanout.Stop(online, player.Client, edit.X, edit.Y, edit.Z);
             BlockSoundFanout.Break(online, player.Client, edit.X, edit.Y, edit.Z, previous);
-            if (player.IsBreakTarget(edit.X, edit.Y, edit.Z))
-                player.AbortBreak();
+            if (player.Dig.IsBreakTarget(edit.X, edit.Y, edit.Z))
+                player.Dig.AbortBreak();
 
             if (wasChest)
             {
@@ -325,8 +325,8 @@ sealed class BlockEditSystem : IGameSystem
 
                 foreach (var peer in online)
                 {
-                    if (peer.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
-                        _ = peer.TryClearOpenContainer(out _);
+                    if (peer.Windows.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
+                        _ = peer.Windows.TryClearOpenContainer(out _);
                 }
 
                 if (lidBroken)
@@ -439,8 +439,8 @@ sealed class BlockEditSystem : IGameSystem
         int z)
     {
         BlockCrackFanout.Stop(online, player.Client, x, y, z);
-        if (player.IsBreakTarget(x, y, z))
-            player.AbortBreak();
+        if (player.Dig.IsBreakTarget(x, y, z))
+            player.Dig.AbortBreak();
         ResyncCellToBreaker(player, x, y, z);
     }
 

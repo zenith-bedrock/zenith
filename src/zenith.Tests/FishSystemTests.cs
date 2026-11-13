@@ -109,7 +109,7 @@ public sealed class FishSystemTests
         var system = new FishSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnFish(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online); // 3 health / 4 damage-per-hit — one hit kills
 
         Assert.Empty(system.Fish);

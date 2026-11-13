@@ -61,25 +61,25 @@ public class BreakTimingTests
     public void BeginBreak_same_cell_keeps_started_tick_when_not_restarted()
     {
         var player = new Player.Player("miner", session: null!, runtimeId: 1, uuid: Guid.NewGuid());
-        player.BeginBreak(1, 2, 3, tick: 100, requiredTicks: 60);
-        Assert.True(player.IsBreakTarget(1, 2, 3));
-        Assert.Equal(100ul, player.BreakStartedTick);
-        Assert.Equal(60, player.BreakRequiredTicks);
+        player.Dig.BeginBreak(1, 2, 3, tick: 100, requiredTicks: 60);
+        Assert.True(player.Dig.IsBreakTarget(1, 2, 3));
+        Assert.Equal(100ul, player.Dig.BreakStartedTick);
+        Assert.Equal(60, player.Dig.BreakRequiredTicks);
 
         // Same-cell continue must not call BeginBreak again (handler contract).
-        Assert.True(player.IsBreakTarget(1, 2, 3));
-        Assert.Equal(100ul, player.BreakStartedTick);
+        Assert.True(player.Dig.IsBreakTarget(1, 2, 3));
+        Assert.Equal(100ul, player.Dig.BreakStartedTick);
     }
 
     [Fact]
     public void BeginBreak_new_cell_replaces_target()
     {
         var player = new Player.Player("miner", session: null!, runtimeId: 1, uuid: Guid.NewGuid());
-        player.BeginBreak(1, 2, 3, tick: 10, requiredTicks: 15);
-        player.BeginBreak(4, 5, 6, tick: 20, requiredTicks: 150);
-        Assert.True(player.IsBreakTarget(4, 5, 6));
-        Assert.Equal(20ul, player.BreakStartedTick);
-        Assert.Equal(150, player.BreakRequiredTicks);
+        player.Dig.BeginBreak(1, 2, 3, tick: 10, requiredTicks: 15);
+        player.Dig.BeginBreak(4, 5, 6, tick: 20, requiredTicks: 150);
+        Assert.True(player.Dig.IsBreakTarget(4, 5, 6));
+        Assert.Equal(20ul, player.Dig.BreakStartedTick);
+        Assert.Equal(150, player.Dig.BreakRequiredTicks);
     }
 
 }

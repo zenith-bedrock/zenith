@@ -57,7 +57,7 @@ public sealed class EndermanSystemTests
         var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
         var maxHealth = Health(system, id).Maximum;
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(system.EndermanStates.TryGet(id, out var state));
@@ -77,7 +77,7 @@ public sealed class EndermanSystemTests
         var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         var pos = Pos(system, id);
@@ -138,7 +138,7 @@ public sealed class EndermanSystemTests
 
         for (var i = 0; i < 3; i++)
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -159,7 +159,7 @@ public sealed class EndermanSystemTests
         var id = system.SpawnEnderman(player.PositionX + 10, player.PositionY, player.PositionZ);
         var maxHealth = Health(system, id).Maximum;
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(maxHealth, Health(system, id).Current);

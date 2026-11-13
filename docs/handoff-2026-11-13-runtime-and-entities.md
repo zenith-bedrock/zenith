@@ -14,7 +14,7 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 - Tooling quirks: no `pkill` (use `taskkill //IM zenith.exe //F`); building while `zenith.exe` runs fails; Bash heredocs mixing quotes and code break (use the Write tool for files); run builds/tests from the repo root (`dotnet build zenith.sln -c Release`, `dotnet test src/zenith.Tests -c Release --no-build`, ~2 min); never `git stash` with untracked work you need; to compare against an older commit use a `git worktree` in the scratchpad and remove it afterwards.
 
 ## Git state
-- `origin/develop` = `938322e`. **Local, unpushed:** `03271bc` (tick pacing measured at loop priority), `4b2945e` (Bat/Villager/Projectile onto the shared ECS path), plus this handoff if committed afterwards. Ask the user before pushing.
+- `origin/develop` = `5a024fb`; the `Player` split is committed on top of it (ask before pushing).
 - Smoke bot untouched.
 
 ## What changed in this stretch (all verified by tests: 1341/1341 in `zenith.Tests`)
@@ -36,7 +36,7 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 - Remaining O(players) scans in the actor path: `DespawnLifecycle.EvaluateDespawn`, melee attack scan, `ReplicateMoves` (per peer over all actors), `Retire`, `Prune`. Roughly 1-2 ms/tick at 100 players / 1000 actors; a per-actor viewer structure would remove them.
 
 ## Open work (the user's weakness list, minus what is done)
-1. `Player` is 924 lines / ~115 public members: split responsibilities (item 5).
+1. ~~`Player` split~~ done: `Intents`/`Dig`/`Windows`/`Effects`/`Replicated` components (`docs/architecture.md` "Player").
 2. 252 "ADR §" references / 148+ ADRs and a ~2-minute test suite (item 6): consolidate, make the suite faster.
 3. Item 7: nothing validated with a retail client; night spawns never run live; `Consume`/`CraftResultsDeprecated` are no-ops; only chest/personal/crafting-table windows; `count==0` means whole stack; item/creative/biome/loot/trading catalogs not yet from the pack source (see the 2026-11-12 handoff, "Open work").
 4. Per-system tick-cost benchmark exists (`--runtime-load --mixed-roster`); extend it to bat/villager/fish/creeper/enderman/golem (it covers zombie, minecart, cow, spider, skeleton, projectile).

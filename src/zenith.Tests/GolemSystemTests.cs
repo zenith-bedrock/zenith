@@ -117,7 +117,7 @@ public sealed class GolemSystemTests
 
         for (var i = 0; i < 17; i++) // 100 health / 6 damage-per-hit
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }

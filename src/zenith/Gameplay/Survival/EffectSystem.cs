@@ -7,7 +7,7 @@ namespace Zenith.Gameplay.Survival;
 
 /// <summary>
 /// The first concrete effect slice (Phase XI.3): apply/refresh/clear via <see cref="EffectIntent"/>,
-/// periodic Poison damage and Regeneration healing, natural expiry. Owns <c>Player.Effects</c>; no
+/// periodic Poison damage and Regeneration healing, natural expiry. Owns <c>Player.Effects.Active</c>; no
 /// EffectFramework, ModifierSystem or generic gameplay-component pipeline — each effect type is one
 /// concrete branch below.
 /// </summary>
@@ -33,7 +33,7 @@ sealed class EffectSystem : IGameSystem
             if (!player.IsInGame) continue;
 
             ApplyPendingIntent(player, clock);
-            if (player.IsDead || player.Effects.Count == 0) continue;
+            if (player.IsDead || player.Effects.Active.Count == 0) continue;
 
             TickActiveEffects(player, clock, online);
         }
@@ -41,14 +41,14 @@ sealed class EffectSystem : IGameSystem
 
     private static void ApplyPendingIntent(Player.Player player, GameClock clock)
     {
-        if (!player.TryConsumeEffectIntent(out var intent)) return;
+        if (!player.Effects.TryConsumeEffectIntent(out var intent)) return;
 
         var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
 
         if (intent.ClearAll)
         {
-            if (!player.ClearEffects()) return;
+            if (!player.Effects.ClearEffects()) return;
             // Best-effort per-type Remove is unnecessary here — the client only ever learned about
             // types this player actually had, and Effects was just fully drained.
             return;
@@ -57,8 +57,8 @@ sealed class EffectSystem : IGameSystem
         var amplifier = Math.Clamp(intent.Amplifier, 0, 3);
         var durationTicks = Math.Max(1, intent.DurationTicks);
         var expiresAtTick = clock.CurrentTick + (ulong)durationTicks;
-        var wasActive = player.Effects.ContainsKey(intent.Type);
-        if (!player.ApplyOrRefreshEffect(intent.Type, amplifier, expiresAtTick, clock.CurrentTick))
+        var wasActive = player.Effects.Active.ContainsKey(intent.Type);
+        if (!player.Effects.ApplyOrRefreshEffect(intent.Type, amplifier, expiresAtTick, clock.CurrentTick))
             return; // a stronger or longer instance is already active — vanilla ignores the weaker one.
 
         entity.SendMobEffect(
@@ -75,7 +75,7 @@ sealed class EffectSystem : IGameSystem
         var expired = _expiredScratch;
         expired.Clear();
 
-        foreach (var (type, effect) in player.Effects)
+        foreach (var (type, effect) in player.Effects.Active)
         {
             if (effect.HasExpired(clock.CurrentTick))
             {
@@ -99,7 +99,7 @@ sealed class EffectSystem : IGameSystem
         var rid = (ulong)player.RuntimeId;
         foreach (var type in expired)
         {
-            player.RemoveEffect(type);
+            player.Effects.RemoveEffect(type);
             entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
         }
     }

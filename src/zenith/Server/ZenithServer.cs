@@ -369,6 +369,11 @@ class ZenithServer
         {
             await ShutdownAsync().ConfigureAwait(false);
         }
+
+        // A shutdown requested at the same moment the loop failed can complete a transport first, so `completed` above may not be the
+        // loop. Cleanup has awaited it by now; a fault must still reach the caller rather than be reported as a clean stop.
+        if (gameLoopTask.IsFaulted)
+            await gameLoopTask.ConfigureAwait(false);
     }
 
     /// <summary>

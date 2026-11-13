@@ -65,12 +65,12 @@ public class AutoCraftTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("book");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(20, Blocks.OakLog, 3));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(40, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(40, [
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 2),
             InventoryStackAction.CreateOutput(),
             InventoryStackAction.Transfer(
@@ -83,7 +83,7 @@ public class AutoCraftTests
         Assert.Equal(1, player.Inventory.Get(20).Count); // 3 logs - 2 crafts
         Assert.Equal(Blocks.OakPlanks, player.Inventory.Get(5).Id.Value);
         Assert.Equal(8, player.Inventory.Get(5).Count);
-        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Windows.CraftUi.Result.IsEmpty);
     }
 
     [Fact]
@@ -91,21 +91,21 @@ public class AutoCraftTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("gridfirst");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
-        Assert.True(player.CraftUi.TrySetGrid(2, Block(Blocks.OakLog, 1)));
+        Assert.True(player.Windows.CraftUi.TrySetGrid(2, Block(Blocks.OakLog, 1)));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.OakLog, 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(41, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(41, [
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 1),
             InventoryStackAction.CreateOutput(),
         ], requiresOpenContainer: true)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
-        Assert.True(player.CraftUi.GetGrid(2).IsEmpty);
+        Assert.True(player.Windows.CraftUi.GetGrid(2).IsEmpty);
         Assert.Equal(1, player.Inventory.Get(0).Count);
-        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(4, player.Windows.CraftUi.Result.Count);
     }
 
     [Fact]
@@ -113,19 +113,19 @@ public class AutoCraftTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("short");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.OakLog, 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(42, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(42, [
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 2),
             InventoryStackAction.CreateOutput(),
         ], requiresOpenContainer: true)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, player.Inventory.Get(0).Count);
-        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Windows.CraftUi.Result.IsEmpty);
     }
 
     [Fact]
@@ -133,25 +133,25 @@ public class AutoCraftTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stuck");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.OakLog, 4));
         var sys = fx.CreateInventorySystem();
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(43, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(43, [
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 1), InventoryStackAction.CreateOutput(),
         ], requiresOpenContainer: true)));
         sys.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(4, player.Windows.CraftUi.Result.Count);
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(44, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(44, [
             InventoryStackAction.CraftAuto(TestRecipes.OakLogToPlanks, 1), InventoryStackAction.CreateOutput(),
         ], requiresOpenContainer: true)));
         sys.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(3, player.Inventory.Get(0).Count); // only the first request consumed
-        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(4, player.Windows.CraftUi.Result.Count);
     }
 
     [Fact]
@@ -159,18 +159,18 @@ public class AutoCraftTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("notable");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.OakPlanks, 64));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(45, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(45, [
             InventoryStackAction.CraftAuto(TestRecipes.Chest, 1), InventoryStackAction.CreateOutput(),
         ], requiresOpenContainer: true)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(64, player.Inventory.Get(0).Count);
-        Assert.True(player.CraftUi.Result.IsEmpty);
+        Assert.True(player.Windows.CraftUi.Result.IsEmpty);
     }
 
     // ---- wire decode -----------------------------------------------------------------------------------------

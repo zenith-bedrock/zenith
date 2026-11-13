@@ -24,7 +24,7 @@ public sealed class CommandRuntimeExecuteTests
 
         Assert.Equal("Game mode", feedback.Title);
         Assert.Contains(player.Username, feedback.Message);
-        Assert.True(player.TryConsumeGameMode(out var mode));
+        Assert.True(player.Intents.TryConsumeGameMode(out var mode));
         Assert.Equal(GameMode.Creative, mode);
     }
 
@@ -38,8 +38,8 @@ public sealed class CommandRuntimeExecuteTests
         var feedback = fx.Context.Commands.Execute(source, $"/gamemode survival {target.Username}");
 
         Assert.Contains(target.Username, feedback.Message);
-        Assert.False(source.TryConsumeGameMode(out _));
-        Assert.True(target.TryConsumeGameMode(out var mode));
+        Assert.False(source.Intents.TryConsumeGameMode(out _));
+        Assert.True(target.Intents.TryConsumeGameMode(out var mode));
         Assert.Equal(GameMode.Survival, mode);
     }
 
@@ -88,7 +88,7 @@ public sealed class CommandRuntimeExecuteTests
         var feedback = fx.Context.Commands.Execute(player, "/effect give poison");
 
         Assert.Equal("Effect", feedback.Title);
-        Assert.True(player.TryConsumeEffectIntent(out var intent));
+        Assert.True(player.Effects.TryConsumeEffectIntent(out var intent));
         Assert.Equal(EffectType.Poison, intent.Type);
         Assert.Equal(0, intent.Amplifier);
         Assert.Equal(600, intent.DurationTicks);
@@ -102,7 +102,7 @@ public sealed class CommandRuntimeExecuteTests
 
         var feedback = fx.Context.Commands.Execute(player, "/effect give regeneration 200 2");
 
-        Assert.True(player.TryConsumeEffectIntent(out var intent));
+        Assert.True(player.Effects.TryConsumeEffectIntent(out var intent));
         Assert.Equal(EffectType.Regeneration, intent.Type);
         Assert.Equal(2, intent.Amplifier);
         Assert.Equal(200, intent.DurationTicks);
@@ -118,7 +118,7 @@ public sealed class CommandRuntimeExecuteTests
         var feedback = fx.Context.Commands.Execute(player, "/effect clear");
 
         Assert.Contains("Clearing effects", feedback.Message);
-        Assert.True(player.TryConsumeEffectIntent(out var intent));
+        Assert.True(player.Effects.TryConsumeEffectIntent(out var intent));
         Assert.Equal(EffectIntent.Clear, intent);
     }
 
@@ -131,8 +131,8 @@ public sealed class CommandRuntimeExecuteTests
 
         fx.Context.Commands.Execute(source, $"/effect give poison 100 0 {target.Username}");
 
-        Assert.False(source.TryConsumeEffectIntent(out _));
-        Assert.True(target.TryConsumeEffectIntent(out var intent));
+        Assert.False(source.Effects.TryConsumeEffectIntent(out _));
+        Assert.True(target.Effects.TryConsumeEffectIntent(out var intent));
         Assert.Equal(EffectType.Poison, intent.Type);
     }
 }
