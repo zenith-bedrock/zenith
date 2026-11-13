@@ -12,7 +12,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet publish src/zenith/zenith.csproj -c Release -o /out --no-self-contained
+# --use-current-runtime sets the RID of the build host (= the runtime image), which switches on ReadyToRun (see zenith.csproj).
+RUN dotnet publish src/zenith/zenith.csproj -c Release -o /out --use-current-runtime --no-self-contained
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 RUN mkdir -p /data/worlds /opt/zenith /home/container \

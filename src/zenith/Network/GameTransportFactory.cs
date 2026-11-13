@@ -9,6 +9,7 @@ using Zenith.Network.RakNet;
 using Zenith.Raknet;
 using Zenith.Logging;
 using Zenith.Server;
+using System.Globalization;
 
 namespace Zenith.Network;
 
@@ -113,7 +114,7 @@ internal static class GameTransportFactory
     {
         const string wildcard = "http://+:";
         if (listenUrl.StartsWith(wildcard, StringComparison.OrdinalIgnoreCase))
-            return new InternetAddress("0.0.0.0", int.Parse(listenUrl[wildcard.Length..].TrimEnd('/')), 4);
+            return new InternetAddress("0.0.0.0", int.Parse(listenUrl[wildcard.Length..].TrimEnd('/'), CultureInfo.InvariantCulture), 4);
 
         var uri = new Uri(listenUrl, UriKind.Absolute);
         var address = IPAddress.TryParse(uri.Host.Trim('[', ']'), out var literal)

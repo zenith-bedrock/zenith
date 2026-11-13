@@ -11,7 +11,7 @@ namespace Zenith.World;
 /// </summary>
 static class BlockLoot
 {
-    private static readonly object LoadGate = new();
+    private static readonly Lock LoadGate = new();
 
     /// <summary>Immutable table published by one reference write (see <c>Tools</c>): a reload never exposes a half-filled map.</summary>
     private static volatile FrozenDictionary<int, StackId>? _oreDrops;

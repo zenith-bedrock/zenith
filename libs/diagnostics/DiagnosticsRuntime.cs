@@ -66,6 +66,17 @@ public sealed class DiagnosticsRuntime
 
     internal int MetricCount => _definitions.Length;
 
+    internal MetricDefinition DefinitionAt(int index) => _definitions[index];
+
+    /// <summary>Current value of a counter or gauge, or the latest duration of a timing (stopwatch ticks).</summary>
+    internal long ReadValue(int index) => Interlocked.Read(ref _values[index]);
+
+    internal (long Count, long Total, long Maximum, long Last) ReadTiming(int index) => (
+        Interlocked.Read(ref _counts[index]),
+        Interlocked.Read(ref _totals[index]),
+        Interlocked.Read(ref _maximums[index]),
+        Interlocked.Read(ref _values[index]));
+
     internal void CopyRawValues(long[] values, long[] counts, long[] totals, long[] maximums)
     {
         for (var index = 0; index < _definitions.Length; index++)
@@ -117,7 +128,7 @@ public readonly struct TimingScope : IDisposable
 
 public sealed record DiagnosticsSnapshot(DateTimeOffset CapturedAt, long StopwatchFrequency, DiagnosticsMetricSnapshot[] Metrics)
 {
-    public string ToJson(bool indented = true) => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = indented });
+    public string ToJson(bool indented = true) => JsonSerializer.Serialize(this, indented ? JsonOptions.Indented : JsonOptions.Compact);
 
     public string ToConsole()
     {

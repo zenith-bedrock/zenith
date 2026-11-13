@@ -15,7 +15,7 @@ public interface IPacket
 
     public static T From<T>(ref BinaryStream stream) where T : IPacket
     {
-        var packet = (T) Activator.CreateInstance(typeof(T))!;
+        var packet = Activator.CreateInstance<T>();
         packet.Decode(ref stream);
         stream.Dispose();
         return packet;

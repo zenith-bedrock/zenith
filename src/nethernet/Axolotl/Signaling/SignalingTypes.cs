@@ -1,6 +1,7 @@
 using Zenith.NetherNet.Axolotl.Negotiation;
 using Zenith.NetherNet.Axolotl.Protocol;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Signaling;
 
@@ -71,7 +72,7 @@ public sealed record Signal(SignalType Type, string ConnectionId, string Data)
     }
 
     public static Signal Error(string connectionId, ErrorCode code) =>
-        new(SignalType.ConnectError, connectionId, ((int)code).ToString());
+        new(SignalType.ConnectError, connectionId, ((int)code).ToString(CultureInfo.InvariantCulture));
 
     public override string ToString() => Type.ToWire() + " " + ConnectionId + " " + Data;
 }

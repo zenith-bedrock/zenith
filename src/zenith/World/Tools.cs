@@ -42,7 +42,7 @@ readonly record struct ToolInfo(ToolKind Kind, ToolTier Tier)
 /// </summary>
 static class Tools
 {
-    private static readonly object LoadGate = new();
+    private static readonly Lock LoadGate = new();
 
     /// <summary>
     /// One immutable generation of the tool tables. A (re)load builds a whole new <see cref="Table"/> off to the side and publishes it

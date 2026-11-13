@@ -4,6 +4,7 @@ using Zenith.NetherNet.Axolotl.Info;
 using Zenith.NetherNet.Axolotl.Negotiation;
 using Zenith.NetherNet.Axolotl.Protocol;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Signaling.Http;
 
@@ -102,7 +103,7 @@ public sealed partial class JoinHandler(
 
     // The client reads the error code from the body of a 500.
     private static HttpResponse Failure(ErrorCode code) =>
-        new(HttpStatus.InternalServerError, ((int)code).ToString(), ContentTypeText);
+        new(HttpStatus.InternalServerError, ((int)code).ToString(CultureInfo.InvariantCulture), ContentTypeText);
 
     private HttpResponse Probe()
     {

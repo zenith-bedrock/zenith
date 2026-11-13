@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Zenith.BedrockData.Recipes;
+using System.Globalization;
 
 namespace Zenith.BedrockData.Commands;
 
@@ -49,22 +50,22 @@ internal sealed class RecipesCommand : Command<RecipesCommand.Settings>
             if (!seen.Add(r.Id)) throw new InvalidDataException($"duplicate recipe id {r.Id}");
 
         File.WriteAllBytes(settings.Output, RecipeJson.Write(recipes, "BDS behaviour packs (layered vanilla*)"));
-        AnsiConsole.MarkupLineInterpolated(
+        AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, 
             $"shaped={recipes.Count(r => r.IsShaped)} shapeless={recipes.Count(r => !r.IsShaped)} not emitted={string.Join(", ", pack.NotEmitted.Select(kv => $"{kv.Key}={kv.Value}"))}");
         foreach (var (reason, ids) in pack.Details.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            AnsiConsole.MarkupLineInterpolated($"  {reason}: {ids.Count} recipe(s), e.g. {ids[0]}");
+            AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, $"  {reason}: {ids.Count} recipe(s), e.g. {ids[0]}");
 
         if (settings.Verify is null) return 0;
         var names = states.ToDictionary(s => (int)s!["runtime_id"]!, s => (string)s!["name"]!);
         var report = WireOracle.Verify(settings.Verify, recipes, names);
-        AnsiConsole.MarkupLineInterpolated(
+        AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, 
             $"verify: {report.PlainWire} aux-free wire grid recipes; {report.Missing} have no equivalent here; {report.NeedAux} need an aux model not modelled yet, {report.NeedNbt} need stack NBT (skipped by design)");
-        AnsiConsole.MarkupLineInterpolated(
+        AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, 
             $"verify: {report.Extra.Count} emitted recipes have no aux-free equivalent on the wire{(report.Extra.Count > 0 ? ", e.g. " + string.Join(", ", report.Extra.Take(8)) : "")}");
         foreach (var (output, count) in report.AuxByOutput)
-            AnsiConsole.MarkupLineInterpolated($"   aux not modelled: {count} x {output}");
+            AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, $"   aux not modelled: {count} x {output}");
         foreach (var r in report.MissingRecipes.Take(settings.MaxMissing))
-            AnsiConsole.MarkupLineInterpolated($"   missing: {r.Id} {string.Join(",", r.Inputs.Select(c => c?.Name ?? c?.Tag ?? "_"))} -> {string.Join(",", r.Outputs.Select(o => $"{o.Name}x{o.Count}"))}");
+            AnsiConsole.MarkupLineInterpolated(CultureInfo.InvariantCulture, $"   missing: {r.Id} {string.Join(",", r.Inputs.Select(c => c?.Name ?? c?.Tag ?? "_"))} -> {string.Join(",", r.Outputs.Select(o => $"{o.Name}x{o.Count}"))}");
         return report.Missing == 0 ? 0 : 1;
     }
 }

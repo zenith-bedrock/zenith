@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using Xunit;
 using Zenith.Session;
+using System.Globalization;
 
 namespace Zenith.Tests;
 
@@ -24,6 +25,6 @@ public class InflateCapTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             NetworkSession.InflateToPooledBuffer(inflater, out _));
         Assert.Contains("maximum size", ex.Message);
-        Assert.Contains(NetworkSession.MaxDecompressedSize.ToString(), ex.Message);
+        Assert.Contains(NetworkSession.MaxDecompressedSize.ToString(CultureInfo.InvariantCulture), ex.Message);
     }
 }

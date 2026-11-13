@@ -13,3 +13,36 @@ indent_size = 2
 
 [*.{json,yml,yaml}]
 indent_size = 2
+
+# Analyzers that are on top of the default set, because each one catches a real defect class for this codebase:
+# culture-dependent formatting/parsing (generated code, protocol text and reports must not change with the machine's locale),
+# discarded ValueTasks, throw helpers (no allocation on the happy path), reused serializer options, specific exceptions.
+# TreatWarningsAsErrors (Directory.Build.props) turns a finding into a failed build.
+# Not enabled on purpose: CA1707 (underscored test names, protocol names), CA1051 (public fields on wire models),
+# CA1805 (explicit defaults document wire defaults), CA1859 (would replace seams like ILogger by concrete types),
+# CA1001 (types that are stopped explicitly rather than disposed; revisit per type), CA5351 (MD5 is mandated by the Bedrock offline UUID).
+[*.cs]
+dotnet_diagnostic.CA1304.severity = warning
+dotnet_diagnostic.CA1305.severity = warning
+dotnet_diagnostic.CA1311.severity = warning
+dotnet_diagnostic.CA1512.severity = warning
+dotnet_diagnostic.CA1513.severity = warning
+dotnet_diagnostic.CA1816.severity = warning
+dotnet_diagnostic.CA1826.severity = warning
+dotnet_diagnostic.CA1836.severity = warning
+dotnet_diagnostic.CA1861.severity = warning
+dotnet_diagnostic.CA1869.severity = warning
+dotnet_diagnostic.CA2012.severity = warning
+dotnet_diagnostic.CA2016.severity = warning
+dotnet_diagnostic.CA2201.severity = warning
+dotnet_diagnostic.CA2208.severity = warning
+dotnet_diagnostic.CA2263.severity = warning
+
+# Tests and benchmarks optimise for readability, not per-call allocation.
+[**.Tests/**.cs]
+dotnet_diagnostic.CA1836.severity = none
+dotnet_diagnostic.CA1861.severity = none
+
+[**.Benchmarks/**.cs]
+dotnet_diagnostic.CA1836.severity = none
+dotnet_diagnostic.CA1861.severity = none

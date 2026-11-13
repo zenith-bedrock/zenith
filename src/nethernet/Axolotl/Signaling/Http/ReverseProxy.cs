@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Signaling.Http;
 
@@ -108,7 +109,7 @@ public sealed partial class ReverseProxy
             address = parts[0];
             if (parts[1].Length == 0 || !parts[1].All(char.IsAsciiDigit))
                 throw new ArgumentException($"Network \"{network}\" has a non-numeric CIDR prefix length");
-            prefix = int.Parse(parts[1]);
+            prefix = int.Parse(parts[1], CultureInfo.InvariantCulture);
         }
 
         if (!TryPack(address, out var packed))

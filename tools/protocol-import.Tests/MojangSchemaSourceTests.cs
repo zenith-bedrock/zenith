@@ -20,6 +20,7 @@ public class MojangSchemaSourceTests : IDisposable
     {
         _source.Dispose();
         if (Directory.Exists(_cacheDir)) Directory.Delete(_cacheDir, recursive: true);
+        GC.SuppressFinalize(this);
     }
 
     private void WriteFile(string name, string json) =>

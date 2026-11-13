@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Zenith.NetherNet.Axolotl.Negotiation;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Signaling.Http;
 
@@ -335,7 +336,7 @@ public sealed partial class HttpConnection
     private static string DescribeBytes(byte[] data, int length, int limit = 96)
     {
         var sampleLength = Math.Min(length, limit);
-        var hex = string.Join(' ', data.Take(Math.Min(sampleLength, 16)).Select(b => b.ToString("x2")));
+        var hex = string.Join(' ', data.Take(Math.Min(sampleLength, 16)).Select(b => b.ToString("x2", CultureInfo.InvariantCulture)));
         var text = NonPrintable().Replace(Encoding.Latin1.GetString(data, 0, sampleLength), ".");
         return $"hex[{hex}] text[{text}]" + (length > limit ? "..." : "");
     }

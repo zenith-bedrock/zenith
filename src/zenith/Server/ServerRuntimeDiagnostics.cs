@@ -8,7 +8,7 @@ namespace Zenith.Server;
 /// Zenith's fixed diagnostics layout. This adapter owns names and sampled server facts while the
 /// leaf library remains domain-free; no gameplay state is retained or mutated here.
 /// </summary>
-sealed class ServerRuntimeDiagnostics
+sealed class ServerRuntimeDiagnostics : IDisposable
 {
     private readonly CounterMetric _overBudgetTicks;
     private readonly CounterMetric _packetsSent;
@@ -25,6 +25,7 @@ sealed class ServerRuntimeDiagnostics
     private readonly GaugeMetric _gen0;
     private readonly GaugeMetric _gen1;
     private readonly GaugeMetric _gen2;
+    private readonly GaugeMetric _gcPauseMilliseconds;
     private readonly GaugeMetric _datagramsSent;
     private readonly GaugeMetric _datagramsReceived;
     private readonly GaugeMetric _bandwidthOut;
@@ -55,6 +56,24 @@ sealed class ServerRuntimeDiagnostics
     private long _lastSentBytes;
     private long _lastReceivedBytes;
     private int _sampleTicks;
+
+    /// <summary>Units for the instruments the Meter publishes; metrics not listed are dimensionless counts.</summary>
+    private static readonly Dictionary<string, string> MetricUnits = new(StringComparer.Ordinal)
+    {
+        ["tick.tps"] = "{milli-tps}", // stored as tps x 1000
+        ["runtime.allocations.thread"] = "By",
+        ["runtime.managed-bytes"] = "By",
+        ["runtime.gc.pause-ms"] = "ms",
+        ["network.packet-bytes.sent"] = "By",
+        ["network.packet-bytes.received"] = "By",
+        ["network.bandwidth.out-bytes-per-second"] = "By/s",
+        ["network.bandwidth.in-bytes-per-second"] = "By/s",
+    };
+
+    private readonly DiagnosticsMeter _meter;
+
+    /// <summary>Stops publishing to <c>System.Diagnostics.Metrics</c> collectors; the runtime itself keeps working.</summary>
+    public void Dispose() => _meter.Dispose();
 
     public DiagnosticsRuntime Runtime { get; }
     public TimingMetric Tick { get; }
@@ -113,6 +132,7 @@ sealed class ServerRuntimeDiagnostics
         _gen0 = builder.Gauge("runtime.gc.gen0");
         _gen1 = builder.Gauge("runtime.gc.gen1");
         _gen2 = builder.Gauge("runtime.gc.gen2");
+        _gcPauseMilliseconds = builder.Gauge("runtime.gc.pause-ms");
         _packetsSent = builder.Counter("network.packets.sent");
         _packetsReceived = builder.Counter("network.packets.received");
         _packetBytesSent = builder.Counter("network.packet-bytes.sent");
@@ -145,6 +165,7 @@ sealed class ServerRuntimeDiagnostics
         _worldgenQueueDepth = builder.Gauge("gameplay.worldgen.queue.depth");
         _worldgenQueuePeak = builder.Gauge("gameplay.worldgen.queue.peak");
         Runtime = builder.Build();
+        _meter = new DiagnosticsMeter(Runtime, MetricUnits);
         Incidents = new DiagnosticsIncidentBuffer(Runtime);
         Worldgen = new WorldGenerationDiagnostics(
             Runtime,
@@ -201,6 +222,7 @@ sealed class ServerRuntimeDiagnostics
         Runtime.Set(_gen0, GC.CollectionCount(0));
         Runtime.Set(_gen1, GC.CollectionCount(1));
         Runtime.Set(_gen2, GC.CollectionCount(2));
+        Runtime.Set(_gcPauseMilliseconds, (long)GC.GetTotalPauseDuration().TotalMilliseconds);
         Runtime.Set(_datagramsSent, transport.SentDatagrams);
         Runtime.Set(_datagramsReceived, transport.ReceivedDatagrams);
 

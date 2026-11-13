@@ -13,7 +13,7 @@ namespace Zenith.Network;
 internal sealed class GameSessionHost(ServerContext context) : IGameTransportHost
 {
     private readonly Dictionary<IGameTransportConnection, NetworkSession> _sessions = new();
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private bool _accepting = true;
 
     public bool TryOpen(IGameTransportConnection connection)

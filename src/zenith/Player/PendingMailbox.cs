@@ -25,7 +25,7 @@ namespace Zenith.Player;
 /// <summary>Overwrite-latest boolean handoff — "this happened at least once since last tick".</summary>
 sealed class PendingSignal
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private bool _pending;
 
     public void Submit()
@@ -47,7 +47,7 @@ sealed class PendingSignal
 /// <summary>Overwrite-latest single-value handoff — a new submission replaces any unconsumed one.</summary>
 sealed class PendingValue<T>
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private T _pending = default!;
     private bool _hasPending;
 
@@ -113,7 +113,7 @@ sealed class PendingValue<T>
 /// </summary>
 sealed class PendingMailbox<T>
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly Queue<T> _queue = new();
     private readonly int _capacity;
 

@@ -17,7 +17,7 @@ readonly record struct DigProfile(
 /// <summary>Dig profile table — missing entry = Survival cannot dig (no silent default).</summary>
 static class DigProfiles
 {
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly Dictionary<int, DigProfile> ByBlockRuntimeId = new();
     private static bool _loaded;
 

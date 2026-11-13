@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Xunit;
 using Zenith.LevelDB;
+using System.Globalization;
 
 namespace leveldb.Tests;
 
@@ -833,7 +834,7 @@ public class LevelDbEdgeCaseTests
             Assert.Equal("2", count);
 
             Assert.True(db.GetProperty("zldb.approximate-memory-usage", out var mem));
-            Assert.True(int.Parse(mem) > 0);
+            Assert.True(int.Parse(mem, CultureInfo.InvariantCulture) > 0);
         }
         finally
         {

@@ -8,7 +8,7 @@ namespace Zenith.Player;
 /// </summary>
 sealed class PlayerChunkTracker
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly HashSet<(int X, int Z)> _known = new();
     private readonly Dictionary<(int X, int Z), int> _epoch = new();
     private readonly Queue<StreamCompletion> _completedStreams = new();

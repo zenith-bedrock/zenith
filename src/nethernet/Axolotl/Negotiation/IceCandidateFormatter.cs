@@ -1,6 +1,7 @@
 using Zenith.NetherNet.Axolotl.Protocol;
 using Zenith.NetherNet.Axolotl.Sdp;
 using Zenith.NetherNet.Axolotl.Utils;
+using System.Globalization;
 
 namespace Zenith.NetherNet.Axolotl.Negotiation;
 
@@ -70,7 +71,7 @@ public static class IceCandidateFormatter
             if (!ports.TryGetValue(address.Contains(':'), out var port) || matched.Contains(address))
                 continue;
             kept.Add(IceCandidate.ServerReflexive(
-                (AdvertisedFoundation + announced).ToString(),
+                (AdvertisedFoundation + announced).ToString(CultureInfo.InvariantCulture),
                 address,
                 port,
                 IceCandidate.ServerReflexivePriority - (announced << 8)).ToString());

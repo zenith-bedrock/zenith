@@ -17,7 +17,7 @@ sealed class PlayerDig(Func<bool> isDead)
     /// </summary>
     public const ulong DigIdleAbortTicks = 40;
 
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly Queue<DigIntent> _intents = new();
     private DigIntent? _provisional;
     private DigIntent? _suppressedAuthorization;

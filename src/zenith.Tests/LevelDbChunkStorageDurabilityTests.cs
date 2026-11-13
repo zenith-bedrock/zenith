@@ -1,5 +1,6 @@
 using Xunit;
 using Zenith.World;
+using System.Globalization;
 
 namespace Zenith.Tests;
 
@@ -29,7 +30,7 @@ public sealed class LevelDbChunkStorageDurabilityTests
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (storage.TryGetProperty("zldb.num-entries", out var raw) && int.Parse(raw) >= expected)
+            if (storage.TryGetProperty("zldb.num-entries", out var raw) && int.Parse(raw, CultureInfo.InvariantCulture) >= expected)
                 return;
             await Task.Delay(5);
         }
