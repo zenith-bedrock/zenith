@@ -43,7 +43,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("opener");
-        fx.World.Chests.Ensure(4, 64, 4);
+        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -66,7 +66,7 @@ public class ChestLidTests
         var fx = new IntentTestFixture();
         var a = fx.AddInGamePlayer("alice");
         var b = fx.AddInGamePlayer("bob");
-        fx.World.Chests.Ensure(2, 70, 2);
+        Assert.True(fx.World.Chests.TryEnsure(2, 70, 2));
 
         Assert.True(a.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 70, 2)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -100,7 +100,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("reopener");
-        fx.World.Chests.Ensure(4, 64, 4);
+        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -123,7 +123,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("quirky-close");
-        fx.World.Chests.Ensure(4, 64, 4);
+        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -156,7 +156,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stale-window-type");
-        fx.World.Chests.Ensure(7, 73, 33);
+        Assert.True(fx.World.Chests.TryEnsure(7, 73, 33));
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(7, 73, 33)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -200,7 +200,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("disconnect-opener");
-        fx.World.Chests.Ensure(6, 64, 6);
+        Assert.True(fx.World.Chests.TryEnsure(6, 64, 6));
         var inventory = fx.CreateInventorySystem();
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(6, 64, 6)));

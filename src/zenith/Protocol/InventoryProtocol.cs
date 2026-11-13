@@ -159,10 +159,6 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
 
     public void SendChestContent(ChestStore chests, in OpenChestView view)
     {
-        chests.Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
-        if (view.TryGetPartner(out var px, out var py, out var pz))
-            chests.Ensure(px, py, pz);
-
         var wire = new NetworkItemStack[view.SlotCount];
         for (var i = 0; i < view.SlotCount; i++)
         {

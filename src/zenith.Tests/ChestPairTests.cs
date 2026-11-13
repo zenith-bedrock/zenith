@@ -77,8 +77,8 @@ public class ChestPairTests
         var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
         fx.World.SetBlock(2, 64, 2, south);
         fx.World.SetBlock(3, 64, 2, south);
-        fx.World.Chests.Ensure(2, 64, 2);
-        fx.World.Chests.Ensure(3, 64, 2);
+        Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
+        Assert.True(fx.World.Chests.TryEnsure(3, 64, 2));
         player.PositionX = 2.5f;
         player.PositionY = 64;
         player.PositionZ = 2.5f;
@@ -118,8 +118,8 @@ public class ChestPairTests
         var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
         fx.World.SetBlock(2, 64, 2, south);
         fx.World.SetBlock(3, 64, 2, south);
-        fx.World.Chests.Ensure(2, 64, 2);
-        fx.World.Chests.Ensure(3, 64, 2);
+        Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
+        Assert.True(fx.World.Chests.TryEnsure(3, 64, 2));
         Assert.True(fx.World.Chests.TrySet(2, 64, 2, 0, InventorySlot.OfBlock(Blocks.Dirt, 4)));
         Assert.True(fx.World.Chests.TrySet(3, 64, 2, 0, InventorySlot.OfBlock(Blocks.Stone, 2)));
 
@@ -154,8 +154,8 @@ public class ChestPairTests
         var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
         world.SetBlock(10, 64, 10, south);
         world.SetBlock(11, 64, 10, south);
-        world.Chests.Ensure(10, 64, 10);
-        world.Chests.Ensure(11, 64, 10);
+        Assert.True(world.Chests.TryEnsure(10, 64, 10));
+        Assert.True(world.Chests.TryEnsure(11, 64, 10));
         Assert.True(world.Chests.TrySet(10, 64, 10, 1, InventorySlot.OfBlock(Blocks.Dirt, 9)));
         Assert.True(world.Chests.TrySet(11, 64, 10, 2, InventorySlot.OfBlock(Blocks.Sand, 3)));
         world.PersistChest(10, 64, 10);
@@ -174,8 +174,8 @@ public class ChestPairTests
     public void GetOpen_concatenates_primary_then_partner()
     {
         var store = new ChestStore();
-        store.Ensure(0, 1, 0);
-        store.Ensure(1, 1, 0);
+        Assert.True(store.TryEnsure(0, 1, 0));
+        Assert.True(store.TryEnsure(1, 1, 0));
         Assert.True(store.TrySet(0, 1, 0, 0, InventorySlot.OfBlock(Blocks.Dirt, 1)));
         Assert.True(store.TrySet(1, 1, 0, 0, InventorySlot.OfBlock(Blocks.Stone, 2)));
         var view = OpenChestView.Double(new ChestPair(0, 1, 0, 1, 1, 0));

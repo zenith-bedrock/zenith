@@ -99,16 +99,20 @@ sealed class ChestStore
             return false;
         }
 
+        CreateCell(key);
+        return true;
+    }
+
+    /// <summary>Creates an empty cell, no SoftCap check: <see cref="TryEnsure"/> checks it first, hydrate (<see cref="TryLoadFromBlob"/>) never does.</summary>
+    private InventorySlot[] CreateCell((int X, int Y, int Z) key)
+    {
         var slots = new InventorySlot[SingleSize];
         for (var i = 0; i < SingleSize; i++)
             slots[i] = InventorySlot.Empty;
         _chests[key] = slots;
-        AddToChunkIndex(x, z, key);
-        return true;
+        AddToChunkIndex(key.X, key.Z, key);
+        return slots;
     }
-
-    /// <summary>Fire-and-forget <see cref="TryEnsure"/>: a SoftCap refusal is ignored, so use <see cref="TryEnsure"/> when the caller must react to it.</summary>
-    public void Ensure(int x, int y, int z) => _ = TryEnsure(x, y, z);
 
     public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots) =>
         _chests.TryGetValue((x, y, z), out slots!);
@@ -158,12 +162,10 @@ sealed class ChestStore
         return copy;
     }
 
+    /// <summary>Rolls the open view back to a <see cref="CaptureOpenSnapshot"/>; cells are never created here, a cell that no longer exists stays gone.</summary>
     public void RestoreOpenSnapshot(in OpenChestView view, InventorySlot[] snapshot)
     {
         if (snapshot.Length != view.SlotCount) return;
-        Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
-        if (view.TryGetPartner(out var px, out var py, out var pz))
-            Ensure(px, py, pz);
         for (var i = 0; i < view.SlotCount; i++)
             TrySetOpen(view, i, snapshot[i]);
     }
@@ -232,13 +234,6 @@ sealed class ChestStore
         return copy;
     }
 
-    public void RestoreSnapshot(int x, int y, int z, InventorySlot[] snapshot)
-    {
-        if (snapshot.Length != SingleSize) return;
-        Ensure(x, y, z);
-        Array.Copy(snapshot, _chests[(x, y, z)], SingleSize);
-    }
-
     public byte[]? PackBlob(int x, int y, int z)
     {
         if (!_chests.TryGetValue((x, y, z), out var slots))
@@ -251,8 +246,9 @@ sealed class ChestStore
         Span<InventorySlot> slots = stackalloc InventorySlot[SingleSize];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
-        Ensure(x, y, z);
-        slots.CopyTo(_chests[(x, y, z)]);
+        var key = (x, y, z);
+        var cell = _chests.TryGetValue(key, out var existing) ? existing : CreateCell(key);
+        slots.CopyTo(cell);
         return true;
     }
 }

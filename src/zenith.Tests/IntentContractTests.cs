@@ -772,7 +772,7 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("creachest", GameMode.Creative);
         StandNear(player, 5, 64, 5);
         fx.World.SetBlock(5, 64, 5, Blocks.Chest);
-        fx.World.Chests.Ensure(5, 64, 5);
+        Assert.True(fx.World.Chests.TryEnsure(5, 64, 5));
         Assert.True(fx.World.Chests.TrySet(5, 64, 5, 0, InventorySlot.OfBlock(Blocks.Dirt, 7)));
 
         Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
@@ -2708,7 +2708,7 @@ public class IntentContractTests
         var north = Blocks.ChestForFacing(Blocks.CardinalNorth);
         Assert.NotEqual(Blocks.Chest, north);
         fx.World.SetBlock(5, 64, 5, north);
-        fx.World.Chests.Ensure(5, 64, 5);
+        Assert.True(fx.World.Chests.TryEnsure(5, 64, 5));
 
         // Starter kit already has chests in hotbar slot 5 — merge target.
         var before = player.Inventory.Get(5).Count;
@@ -2728,7 +2728,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("loot");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        fx.World.Chests.Ensure(1, 64, 1);
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         StandNear(player, 1, 64, 1);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
@@ -2752,7 +2752,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("farloot");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        fx.World.Chests.Ensure(1, 64, 1);
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         player.PositionX = 100;
         player.PositionY = 64;
@@ -2775,8 +2775,8 @@ public class IntentContractTests
         var player = fx.AddInGamePlayer("stale-window");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
         fx.World.SetBlock(3, 64, 1, Blocks.Chest);
-        fx.World.Chests.Ensure(1, 64, 1);
-        fx.World.Chests.Ensure(3, 64, 1);
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        Assert.True(fx.World.Chests.TryEnsure(3, 64, 1));
         StandNear(player, 3, 64, 1);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
@@ -2854,7 +2854,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("open-chest-then-transfer");
         fx.World.SetBlock(2, 64, 2, Blocks.Chest);
-        fx.World.Chests.Ensure(2, 64, 2);
+        Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
         StandNear(player, 2, 64, 2);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 2));
 
@@ -3086,7 +3086,7 @@ public class IntentContractTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stalechest");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        fx.World.Chests.Ensure(1, 64, 1);
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         StandNear(player, 1, 64, 1);
         fx.World.SetBlock(1, 64, 1, Blocks.Air);
@@ -3109,8 +3109,8 @@ public class IntentContractTests
         var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
         fx.World.SetBlock(1, 64, 1, south);
         fx.World.SetBlock(2, 64, 1, south);
-        fx.World.Chests.Ensure(1, 64, 1);
-        fx.World.Chests.Ensure(2, 64, 1);
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        Assert.True(fx.World.Chests.TryEnsure(2, 64, 1));
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Double(new ChestPair(1, 64, 1, 2, 64, 1)));
         StandNear(player, 1, 64, 1);
         fx.World.SetBlock(2, 64, 1, Blocks.Air);
