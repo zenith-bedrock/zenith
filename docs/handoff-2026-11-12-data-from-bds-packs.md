@@ -1,5 +1,7 @@
 # Handoff — data from BDS packs, crafting, inventory audit (2026-11-12)
 
+> Git state and open work here are superseded by [`handoff-2026-11-13-runtime-and-entities.md`](handoff-2026-11-13-runtime-and-entities.md). The BDS learnings below remain valid.
+
 Read first: `AGENTS.md`, `docs/inventory-audit.md`, ADR §146 in `docs/decisions.md`, `tools/bedrock-data/README.md`.
 User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 
