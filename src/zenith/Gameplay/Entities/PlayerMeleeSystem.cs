@@ -42,7 +42,7 @@ sealed class PlayerMeleeSystem : IGameSystem
             // candidate, so consumption still happens at most once and only for a target this
             // system actually owns (a player) — an untargeted or mob-targeted intent is left
             // exactly as before for its real consumer.
-            if (!attacker.TryConsumeTargetedAttackIntent(
+            if (!attacker.Intents.TryConsumeTargetedAttackIntent(
                     id => _players.GetByRuntimeId(id) is not null,
                     out var targetRuntimeId))
             {

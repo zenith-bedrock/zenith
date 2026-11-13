@@ -689,14 +689,14 @@ internal static class RuntimeLoadHarness
             foreach (var player in _players)
             {
                 var phase = (tick + player.RuntimeId) & 1;
-                player.SubmitMovementInput(MovementInputState.From(
+                player.Intents.SubmitMovementInput(MovementInputState.From(
                     player.PositionX + (phase == 0 ? 0.05f : -0.05f), player.PositionY, player.PositionZ,
                     pitch: 0, yaw: phase == 0 ? 90 : -90));
 
                 // A valid two-slot swap every ten ticks exercises the authoritative inventory
                 // transaction system without creating/destroying resources.
                 if (tick % 10 == 0)
-                    player.SubmitInventoryStack(InventoryStackIntent.Create(tick * 10000 + (int)player.RuntimeId,
+                    player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(tick * 10000 + (int)player.RuntimeId,
                         [InventoryStackAction.Swap(0, 9)]));
             }
         }
@@ -974,7 +974,7 @@ internal static class RuntimeLoadHarness
                 if ((tick & 1) == 0)
                 {
                     player.SelectedHotbarSlot = 0;
-                    if (!player.SubmitBlockEdit(BlockEditIntent.Set(x, y, 0, Blocks.Stone, hotbarSlot: 0)))
+                    if (!player.Intents.SubmitBlockEdit(BlockEditIntent.Set(x, y, 0, Blocks.Stone, hotbarSlot: 0)))
                         throw new InvalidOperationException("World-loop placement queue refused.");
                 }
                 else
@@ -984,7 +984,7 @@ internal static class RuntimeLoadHarness
                     var started = Loop.Clock.CurrentTick > (ulong)Math.Max(need, 0)
                         ? Loop.Clock.CurrentTick - (ulong)Math.Max(need, 0)
                         : 0;
-                    if (!player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, 0, started, need)))
+                    if (!player.Intents.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, 0, started, need)))
                         throw new InvalidOperationException("World-loop break queue refused.");
                 }
 

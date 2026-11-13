@@ -9,14 +9,14 @@ alwaysApply: false
 ## Handler rules
 
 - Decode + validate (NaN/Inf, bounds, rate limits).
-- Write **pending intent only** (`SubmitMovementInput`, `SubmitBlockEdit`, `SubmitChat`, …).
+- Write **pending intent only** (`player.Intents.SubmitMovementInput`, `SubmitBlockEdit`, `SubmitChat`, …; dig and window intents via `player.Dig` / `player.Windows`).
 - **Never** call `peer.Session.Protocol.*` for fan-out from the receive thread.
 - **Never** call `World.SetBlock` / inventory mutate as authority here.
 
 ## System rules
 
 - Mutate domain on the single-threaded GameLoop tick.
-- Drain **queues** for discrete actions (`while (TryConsumeBlockEdit)`); one slot only for continuous state (movement).
+- Drain **queues** for discrete actions (`while (player.Intents.TryConsumeBlockEdit)`); one slot only for continuous state (movement).
 - Block-edit capacity is `Player.MaxPendingBlockEdits` (8); overflow = reject newest + debug log.
 - Bake identifiers needed at apply time into the intent (e.g. hotbar slot for place) — do not re-read raced network fields.
 

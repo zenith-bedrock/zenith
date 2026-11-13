@@ -446,7 +446,7 @@ Zombie/Spider's shape, so that duplication honestly remains at two instances, no
 
 ### Interaction (new this phase)
 
-`Player.SubmitInteractIntent`/`TryConsumeInteractIntent(long expectedTargetRuntimeId)` — a new
+`Player.Intents.SubmitInteractIntent`/`TryConsumeInteractIntent(long expectedTargetRuntimeId)` — a new
 `PendingValue<long>` mailbox — plus a small, genuinely generic addition to the shared primitive
 itself, `PendingValue<T>.TryConsumeIf(Predicate<T>, out T)`, needed because several candidate
 systems must each ask "is this pending interact mine?" before one claims it. `VillagerSystem`

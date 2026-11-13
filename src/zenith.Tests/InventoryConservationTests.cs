@@ -35,7 +35,7 @@ public class InventoryConservationTests
 
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++) Add(p.Inventory.Get(i));
         for (var i = 0; i < PlayerInventory.ArmorSize; i++) Add(p.Inventory.GetArmor(i));
-        for (var i = 0; i < PlayerCraftUi.GridSize; i++) Add(p.CraftUi.GetGrid(i));
+        for (var i = 0; i < PlayerCraftUi.GridSize; i++) Add(p.Windows.CraftUi.GetGrid(i));
         Add(p.Inventory.Cursor);
         Add(p.Inventory.Offhand);
         foreach (var slot in extra ?? []) Add(slot);
@@ -59,7 +59,7 @@ public class InventoryConservationTests
         var sb = new System.Text.StringBuilder();
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++) sb.Append(p.Inventory.Get(i)).Append(';');
         for (var i = 0; i < PlayerInventory.ArmorSize; i++) sb.Append(p.Inventory.GetArmor(i)).Append(';');
-        for (var i = 0; i < PlayerCraftUi.GridSize; i++) sb.Append(p.CraftUi.GetGrid(i)).Append(';');
+        for (var i = 0; i < PlayerCraftUi.GridSize; i++) sb.Append(p.Windows.CraftUi.GetGrid(i)).Append(';');
         foreach (var slot in extra ?? []) sb.Append(slot).Append(';');
         return sb.Append(p.Inventory.Cursor).Append(';').Append(p.Inventory.Offhand).ToString();
     }
@@ -101,7 +101,7 @@ public class InventoryConservationTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer($"conserve-{seed}");
         var system = fx.CreateInventorySystem();
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
 
@@ -124,9 +124,9 @@ public class InventoryConservationTests
             player.PositionX = 2.5f;
             player.PositionY = 64;
             player.PositionZ = 2.5f;
-            Assert.True(player.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
+            Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
             system.Tick(fx.Clock, fx.Players.Online);
-            Assert.Equal(ChestStore.DoubleSize, player.OpenChest!.Value.SlotCount);
+            Assert.Equal(ChestStore.DoubleSize, player.Windows.OpenChest!.Value.SlotCount);
             // A few stacks already in the chest, in both halves.
             Assert.True(fx.World.Chests.TrySet(2, 64, 2, 0, new InventorySlot(Kinds[0], 20)));
             Assert.True(fx.World.Chests.TrySet(3, 64, 2, 1, new InventorySlot(Kinds[3], 7)));
@@ -158,7 +158,7 @@ public class InventoryConservationTests
             }
 
             var layoutBefore = Layout(player, Chest());
-            Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(1000 + request, actions.ToArray())));
+            Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1000 + request, actions.ToArray())));
             system.Tick(fx.Clock, fx.Players.Online);
 
             if (Layout(player, Chest()) != layoutBefore) moved++;

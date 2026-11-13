@@ -61,7 +61,7 @@ public sealed class MinecartSystemTests
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.MountCount);
@@ -94,11 +94,11 @@ public sealed class MinecartSystemTests
         var movement = new MovementSystem(fx.Players);
         var id = minecarts.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(ActorUniqueId(minecarts, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(minecarts, id));
         minecarts.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(player.RidingEntityId);
 
-        player.SubmitMovementInput(MovementInputState.From(
+        player.Intents.SubmitMovementInput(MovementInputState.From(
             player.PositionX, player.PositionY, player.PositionZ, pitch: 12f, yaw: 90f));
         movement.Tick(fx.Clock, fx.Players.Online);
 
@@ -115,11 +115,11 @@ public sealed class MinecartSystemTests
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(player.RidingEntityId);
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.DismountCount);
@@ -145,12 +145,12 @@ public sealed class MinecartSystemTests
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         player.Session.Transport.FlushOutgoing();
         var afterMountBytes = BytesSentTo(fx, player); // baseline: just SetActorLink(Rider)
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         player.Session.Transport.FlushOutgoing();
         var dismountTickBytes = BytesSentTo(fx, player) - afterMountBytes;
@@ -179,8 +179,8 @@ public sealed class MinecartSystemTests
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         var uniqueId = ActorUniqueId(system, id);
-        player.SubmitInteractIntent(uniqueId);
-        player.SubmitInteractIntent(uniqueId); // overwrite-latest mailbox — still just one pending interact
+        player.Intents.SubmitInteractIntent(uniqueId);
+        player.Intents.SubmitInteractIntent(uniqueId); // overwrite-latest mailbox — still just one pending interact
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(1, system.MountCount);
@@ -199,11 +199,11 @@ public sealed class MinecartSystemTests
         var id = system.SpawnMinecart(first.PositionX + 1, first.PositionY, first.PositionZ);
         var uniqueId = ActorUniqueId(system, id);
 
-        first.SubmitInteractIntent(uniqueId);
+        first.Intents.SubmitInteractIntent(uniqueId);
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(first.RuntimeId, Occupant(system, id));
 
-        second.SubmitInteractIntent(uniqueId);
+        second.Intents.SubmitInteractIntent(uniqueId);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(first.RuntimeId, Occupant(system, id));
@@ -219,7 +219,7 @@ public sealed class MinecartSystemTests
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(Occupant(system, id));
 
@@ -242,13 +242,13 @@ public sealed class MinecartSystemTests
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(rider.PositionX + 1, rider.PositionY, rider.PositionZ);
 
-        rider.SubmitInteractIntent(ActorUniqueId(system, id));
+        rider.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(rider.RidingEntityId);
 
         for (var i = 0; i < 2; i++) // 6 health / 4 damage-per-hit
         {
-            attacker.SubmitAttackIntent();
+            attacker.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -268,7 +268,7 @@ public sealed class MinecartSystemTests
         var player = fx.AddInGamePlayer("rider");
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
-        player.SubmitInteractIntent(ActorUniqueId(system, id));
+        player.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(Occupant(system, id));
 
@@ -292,7 +292,7 @@ public sealed class MinecartSystemTests
 
         for (var i = 0; i < 2; i++) // 6 health / 4 damage-per-hit
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -357,7 +357,7 @@ public sealed class MinecartSystemTests
         rider.Chunks.RememberMany([(0, 0), (0, -1)]);
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(rider.PositionX + 1, rider.PositionY, rider.PositionZ);
-        rider.SubmitInteractIntent(ActorUniqueId(system, id));
+        rider.Intents.SubmitInteractIntent(ActorUniqueId(system, id));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotNull(Occupant(system, id));
         var before = fx.Transport.Captured.Count;

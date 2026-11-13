@@ -62,9 +62,9 @@ public class ItemWearTests
         Assert.True(player.Inventory.TrySet(0, StackId.FromItem(Pickaxe, damage: 20), 1));
         player.SelectedHotbarSlot = 0;
         var need = Blocks.BreakTicks(Blocks.Dirt, StackId.FromItem(Pickaxe, damage: 20));
-        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, StackId.FromItem(Pickaxe, damage: 20));
+        player.Dig.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, StackId.FromItem(Pickaxe, damage: 20));
         fx.Clock.AdvanceBy(need);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.Dig.BreakStartedTick, player.Dig.BreakRequiredTicks)));
 
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
@@ -87,9 +87,9 @@ public class ItemWearTests
         Assert.True(player.Inventory.TrySet(0, nearlyGone, 1));
         player.SelectedHotbarSlot = 0;
         var need = Blocks.BreakTicks(Blocks.Dirt, nearlyGone);
-        player.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, nearlyGone);
+        player.Dig.BeginBreak(0, 90, 0, fx.Clock.CurrentTick, need, nearlyGone);
         fx.Clock.AdvanceBy(need);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.BreakStartedTick, player.BreakRequiredTicks)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.BreakWithDig(0, 90, 0, player.Dig.BreakStartedTick, player.Dig.BreakRequiredTicks)));
 
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 

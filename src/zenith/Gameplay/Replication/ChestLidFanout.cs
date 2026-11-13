@@ -35,15 +35,15 @@ static class ChestLidFanout
 
     /// <summary>
     /// Drop opener ref for <paramref name="player"/> if they have a chest UI open.
-    /// Fans close when last viewer leaves. Clears <see cref="Player.Player.OpenChest"/>.
+    /// Fans close when last viewer leaves. Clears <see cref="Player.Player.Windows.OpenChest"/>.
     /// </summary>
     public static void ReleaseOpener(
         IReadOnlyList<Player.Player> online,
         World.World world,
         Player.Player player)
     {
-        if (player.OpenChest is not { } view) return;
-        _ = player.TryClearOpenContainer(out _);
+        if (player.Windows.OpenChest is not { } view) return;
+        _ = player.Windows.TryClearOpenContainer(out _);
 
         var primaryClosed = world.Chests.TryRemoveOpener(
             view.PrimaryX, view.PrimaryY, view.PrimaryZ, player.RuntimeId);

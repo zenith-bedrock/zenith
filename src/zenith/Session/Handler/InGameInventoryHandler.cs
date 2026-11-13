@@ -29,7 +29,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        if (!player.SubmitWindowIntent(InventoryWindowIntent.OpenInventory()))
+        if (!player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenInventory()))
             session.Context.Logger.Debug($"Dropped inventory open from {player.Username}: window queue full.");
     }
 
@@ -40,7 +40,7 @@ partial class InGameSessionHandler
         var player = session.Player;
         if (player is null) return;
 
-        if (!player.SubmitWindowIntent(InventoryWindowIntent.Close(packet.WindowId, packet.WindowType)))
+        if (!player.Windows.SubmitWindowIntent(InventoryWindowIntent.Close(packet.WindowId, packet.WindowType)))
             session.Context.Logger.Debug($"Dropped container close from {player.Username}: window queue full.");
     }
 
@@ -142,12 +142,12 @@ partial class InGameSessionHandler
                 // A just-received Interact(OpenInventory) is still only a mailbox entry here;
                 // retain the request when its latest pending window will establish the required
                 // target, then let InventorySystem open it before resolving this request.
-                if (player.TryGetOpenContainerSession(out var openContainer) &&
+                if (player.Windows.TryGetOpenContainerSession(out var openContainer) &&
                     (requiredTarget is null || openContainer.Target == requiredTarget))
                 {
                     expectedOpenContainerGeneration = openContainer.Generation;
                 }
-                else if (!player.HasPendingContainerOpen(requiredTarget))
+                else if (!player.Windows.HasPendingContainerOpen(requiredTarget))
                 {
                     RejectIsr(session, player, request.RequestId);
                     continue;
@@ -160,7 +160,7 @@ partial class InGameSessionHandler
                 expectedOpenContainerGeneration,
                 requiresSession,
                 requiredTarget);
-            if (!player.SubmitInventoryStack(intent))
+            if (!player.Intents.SubmitInventoryStack(intent))
             {
                 session.Context.Logger.Debug($"Dropped ISR from {player.Username}: inventory-stack queue full.");
                 RejectIsr(session, player, request.RequestId);
@@ -495,7 +495,7 @@ partial class InGameSessionHandler
 
                 if (packet.ActorActionType == InventoryTransactionPacket.ActorAttack)
                 {
-                    player.SubmitAttackIntent(packet.TargetActorRuntimeId);
+                    player.Intents.SubmitAttackIntent(packet.TargetActorRuntimeId);
                     session.Context.Logger.Debug(
                         $"Queued actor attack from {player.Username} -> {packet.TargetActorRuntimeId} (slot {packet.HotbarSlot})");
                     PlayerVisibility.RelaySwingArm(
@@ -505,7 +505,7 @@ partial class InGameSessionHandler
                 }
                 else if (packet.ActorActionType == InventoryTransactionPacket.ActorInteract)
                 {
-                    player.SubmitInteractIntent(packet.TargetActorRuntimeId);
+                    player.Intents.SubmitInteractIntent(packet.TargetActorRuntimeId);
                 }
                 break;
 
@@ -580,7 +580,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        if (!player.SubmitInventoryStack(intent))
+        if (!player.Intents.SubmitInventoryStack(intent))
         {
             session.Protocol.Inventory.SendItemStackResponseError(packet.LegacyRequestId);
             session.Protocol.Inventory.ResyncActiveInventoryView(player);

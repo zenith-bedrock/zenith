@@ -117,7 +117,7 @@ sealed class ChunkStreamSystem : IGameSystem
         global::Zenith.Player.Player player,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        if (!player.TryConsumeSpawnReady())
+        if (!player.Intents.TryConsumeSpawnReady())
             return;
 
         if (!player.IsSpawning || player.IsInGame || player.Session.IsClosed)

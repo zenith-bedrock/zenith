@@ -33,10 +33,10 @@ public class MiningProgressionTests
 
         var need = Blocks.BreakTicks(blockRuntimeId, StackId.FromItem(toolNetworkId));
         Assert.True(need >= 0);
-        player.BeginBreak(x, y, z, tick: fx.Clock.CurrentTick, requiredTicks: need, heldStackId: StackId.FromItem(toolNetworkId));
+        player.Dig.BeginBreak(x, y, z, tick: fx.Clock.CurrentTick, requiredTicks: need, heldStackId: StackId.FromItem(toolNetworkId));
         if (need > 0)
             fx.Clock.AdvanceBy(need);
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, z, player.BreakStartedTick, player.BreakRequiredTicks)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.BreakWithDig(x, y, z, player.Dig.BreakStartedTick, player.Dig.BreakRequiredTicks)));
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(x, y, z));

@@ -81,7 +81,7 @@ Violations to reject in review:
 
 ```csharp
 // Handler
-HandleAuthInput → SubmitMovementInput / SubmitDigStart / MarkDigActive
+HandleAuthInput → Intents.SubmitMovementInput / Dig.SubmitDigStart / Dig.MarkDigActive
 
 // System
 ApplyDig → BlockCrackFanout.Start

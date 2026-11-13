@@ -58,7 +58,7 @@ public class InGameInventoryHandlerItemStackRequestTests
         var stream = new BinaryStream(batch);
         player.Session.HandleGamePacket(ref stream);
 
-        Assert.True(player.TryConsumeInventoryStack(out var intent));
+        Assert.True(player.Intents.TryConsumeInventoryStack(out var intent));
         Assert.Equal(7, intent.RequestId);
         var action = Assert.Single(intent.Actions);
         Assert.Equal(Zenith.Player.InventoryStackActionKind.Mine, action.Kind);
@@ -77,6 +77,6 @@ public class InGameInventoryHandlerItemStackRequestTests
         var stream = new BinaryStream(batch);
         player.Session.HandleGamePacket(ref stream);
 
-        Assert.False(player.TryConsumeInventoryStack(out _));
+        Assert.False(player.Intents.TryConsumeInventoryStack(out _));
     }
 }

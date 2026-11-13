@@ -17,26 +17,26 @@ static class InventorySlotResolver
         switch (reference.Area)
         {
             case InventorySlotArea.OpenContainer:
-                if (player.OpenContainer is not { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view })
+                if (player.Windows.OpenContainer is not { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view })
                     return InventorySlot.Empty;
                 if (reference.Index < 0 || reference.Index >= view.SlotCount) return InventorySlot.Empty;
                 return world.Chests.GetOpen(view, reference.Index);
 
             case InventorySlotArea.CraftGrid:
                 return reference.Index is >= 0 and < PlayerCraftUi.GridSize
-                    ? player.CraftUi.GetGrid(reference.Index)
+                    ? player.Windows.CraftUi.GetGrid(reference.Index)
                     : InventorySlot.Empty;
 
             case InventorySlotArea.TableCraftGrid:
                 // Only readable while a crafting table is actually the open container (ADR §139) —
                 // same "structural decode, authoritative-state gate at resolve time" pattern Chest
                 // already uses above for its own Target check.
-                return player.IsAtCraftingTable && reference.Index is >= 0 and < PlayerTableCraftUi.GridSize
-                    ? player.TableCraftUi.GetGrid(reference.Index)
+                return player.Windows.IsAtCraftingTable && reference.Index is >= 0 and < PlayerTableCraftUi.GridSize
+                    ? player.Windows.TableCraftUi.GetGrid(reference.Index)
                     : InventorySlot.Empty;
 
             case InventorySlotArea.CraftResult:
-                return reference.Index == 0 ? player.CraftUi.Result : InventorySlot.Empty;
+                return reference.Index == 0 ? player.Windows.CraftUi.Result : InventorySlot.Empty;
 
             case InventorySlotArea.Cursor:
                 return reference.Index == 0 ? player.Inventory.Cursor : InventorySlot.Empty;
@@ -62,22 +62,22 @@ static class InventorySlotResolver
         switch (reference.Area)
         {
             case InventorySlotArea.OpenContainer:
-                if (player.OpenContainer is not { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view })
+                if (player.Windows.OpenContainer is not { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view })
                     return false;
                 return reference.Index >= 0 && reference.Index < view.SlotCount &&
                        world.Chests.TrySetOpen(view, reference.Index, value);
 
             case InventorySlotArea.CraftGrid:
                 return reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize &&
-                       player.CraftUi.TrySetGrid(reference.Index, value);
+                       player.Windows.CraftUi.TrySetGrid(reference.Index, value);
 
             case InventorySlotArea.TableCraftGrid:
-                return player.IsAtCraftingTable &&
+                return player.Windows.IsAtCraftingTable &&
                        reference.Index >= 0 && reference.Index < PlayerTableCraftUi.GridSize &&
-                       player.TableCraftUi.TrySetGrid(reference.Index, value);
+                       player.Windows.TableCraftUi.TrySetGrid(reference.Index, value);
 
             case InventorySlotArea.CraftResult:
-                return reference.Index == 0 && player.CraftUi.TrySetResult(value);
+                return reference.Index == 0 && player.Windows.CraftUi.TrySetResult(value);
 
             case InventorySlotArea.Cursor:
                 return reference.Index == 0 && player.Inventory.TrySet(

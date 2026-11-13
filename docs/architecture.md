@@ -91,6 +91,23 @@ Adding a system means adding it to its module (or a new `IGameplayModule` in `Ga
 parameter through static helpers. Things several modules share live on `ServerServices` and exist before any module runs, so no module
 depends on another having run first for an object to exist. (`RuntimeLoadHarness` in the benchmarks still composes its own subset.)
 
+## Player
+
+`Player` holds identity, session/client, pose, inventory and health/vitals. Everything else is a component it exposes as a property, so a
+call site says which responsibility it touches (`player.Dig.BeginBreak(...)`, not a flat member among ~140):
+
+| Component | Owns |
+|-----------|------|
+| `player.Intents` (`PlayerIntents`) | The network-to-tick mailboxes: movement input, attack/projectile/eat/interact, block edits, inventory stacks, chat, game mode, respawn, spawn-ready |
+| `player.Dig` (`PlayerDig`) | The break in progress and the dig intent queue; one lock because the decoder needs a coherent snapshot to authorise a same-packet Predict |
+| `player.Windows` (`PlayerWindows`) | The open container session, the 2x2 / 3x3 craft grids, window intents, and the bounded ledger of already-claimed inventory request ids |
+| `player.Effects` (`PlayerEffects`) | Active status effects (`Active`) and the pending effect command; `ApplyOrRefreshEffect` is stronger-wins |
+| `player.Replicated` (`PlayerReplicatedState`) | What peers were last told (held item, pose, flags, last emote tick) so replication systems send only diffs |
+
+Components that need to know whether the player is dead (a dead player accepts no dig, effect, game-mode or non-close window intent; a
+respawn intent needs a dead one) receive that as a `Func<bool>` from `Player`, so they never reference it. `Player.TryFinalizeDeath` and
+`CompleteRespawn` are the only places that reach across components (abort dig, close the container, drop the respawn intent, forget pose flags).
+
 ## GameLoop
 
 - Target **20 TPS**; advances `GameClock`; invokes `IGameSystem` in **registration order**.

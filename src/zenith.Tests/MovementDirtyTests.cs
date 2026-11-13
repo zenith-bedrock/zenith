@@ -87,7 +87,7 @@ public class MovementDirtyTests
         Flush(fx);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
-        mover.SubmitRespawn();
+        mover.Intents.SubmitRespawn();
         system.Tick(fx.Clock, fx.Players.Online);
         Flush(fx);
         Assert.False(mover.IsDead);
@@ -99,7 +99,7 @@ public class MovementDirtyTests
 
     private static void SubmitPose(Player.Player player, float x, float y, float z, float pitch, float yaw)
     {
-        player.SubmitMovementInput(MovementInputState.From(x, y, z, pitch, yaw));
+        player.Intents.SubmitMovementInput(MovementInputState.From(x, y, z, pitch, yaw));
     }
 
     private static void Flush(IntentTestFixture fx)

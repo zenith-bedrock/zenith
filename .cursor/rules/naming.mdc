@@ -47,7 +47,7 @@ Early-return inside is fine; the name must still say what happens when the condi
 
 ## Quick examples
 
-- Handler: `HandleAuthInput` → `player.SubmitDigStart`
+- Handler: `HandleAuthInput` → `player.Dig.SubmitDigStart`
 - System: `ApplyDig`, `ApplyEdit`, `AbortIdleDigIfStale`
 - Protocol: `SendMoveAbsolute`, `SendLevelSoundEvent`
 - Fan-out: `BlockCrackFanout.Start`, `BlockSoundFanout.Place`

@@ -366,7 +366,7 @@ public class UiInventoryContentTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("cursorui");
         Assert.True(player.Inventory.TrySetBlock(PlayerInventory.CursorSlot, Blocks.Stone, 3));
-        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
+        Assert.True(player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 1)));
 
         var slots = player.Session.Protocol.Inventory.BuildUiInventorySlots(player);
 

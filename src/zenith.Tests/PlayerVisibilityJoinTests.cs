@@ -28,12 +28,12 @@ public class PlayerVisibilityJoinTests
         alice.Yaw = 90f;
         alice.HeadYaw = 90f;
         // Standing still after ADR §44 dirty-check — LastReplicated matches current pose.
-        alice.LastReplicatedX = alice.PositionX;
-        alice.LastReplicatedY = alice.PositionY;
-        alice.LastReplicatedZ = alice.PositionZ;
-        alice.LastReplicatedPitch = alice.Pitch;
-        alice.LastReplicatedYaw = alice.Yaw;
-        alice.LastReplicatedHeadYaw = alice.HeadYaw;
+        alice.Replicated.X = alice.PositionX;
+        alice.Replicated.Y = alice.PositionY;
+        alice.Replicated.Z = alice.PositionZ;
+        alice.Replicated.Pitch = alice.Pitch;
+        alice.Replicated.Yaw = alice.Yaw;
+        alice.Replicated.HeadYaw = alice.HeadYaw;
 
         var bob = fx.AddInGamePlayer("bob");
         bob.IsInGame = false; // AnnounceJoin runs before InGame OnEnable
@@ -57,7 +57,7 @@ public class PlayerVisibilityJoinTests
         // Standing alice still must not re-fan via MovementSystem alone.
         var system = new MovementSystem(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
-        alice.SubmitMovementInput(MovementInputState.From(
+        alice.Intents.SubmitMovementInput(MovementInputState.From(
             alice.PositionX, alice.PositionY, alice.PositionZ, alice.Pitch, alice.Yaw));
         system.Tick(fx.Clock, fx.Players.Online);
         foreach (var p in fx.Players.Online)

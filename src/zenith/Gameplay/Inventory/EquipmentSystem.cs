@@ -28,14 +28,14 @@ sealed class EquipmentSystem : IGameSystem
             var heldId = held.IsEmpty ? StackId.FromBlock(Blocks.Air) : held.Id;
             var count = held.IsEmpty ? 0 : held.Count;
 
-            if (slot == player.LastReplicatedHotbarSlot &&
-                heldId == player.LastReplicatedHeldStackId &&
-                count == player.LastReplicatedHeldCount)
+            if (slot == player.Replicated.HotbarSlot &&
+                heldId == player.Replicated.HeldStackId &&
+                count == player.Replicated.HeldCount)
                 continue;
 
-            player.LastReplicatedHotbarSlot = slot;
-            player.LastReplicatedHeldStackId = heldId;
-            player.LastReplicatedHeldCount = count;
+            player.Replicated.HotbarSlot = slot;
+            player.Replicated.HeldStackId = heldId;
+            player.Replicated.HeldCount = count;
 
             if (online.Count < 2) continue;
 

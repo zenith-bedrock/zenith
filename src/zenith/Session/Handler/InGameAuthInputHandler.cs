@@ -28,7 +28,7 @@ partial class InGameSessionHandler
                 packet.Pitch,
                 packet.Yaw);
             if (deadInput.IsSecure())
-                player.SubmitMovementInput(deadInput);
+                player.Intents.SubmitMovementInput(deadInput);
             return;
         }
 
@@ -50,7 +50,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        player.SubmitMovementInput(input);
+        player.Intents.SubmitMovementInput(input);
 
         if (packet.ItemInteraction is { } useItem)
             HandleUseItemInteraction(session, player, useItem);
@@ -68,7 +68,7 @@ partial class InGameSessionHandler
             if (action.Action != PlayerAuthInputPacket.ActionAbortBreak)
                 continue;
             // Dig abort on tick — crack Stop + AbortBreak (§54). Do not dequeue BlockEditIntent.
-            if (!player.SubmitDigAbort(action.BlockX, action.BlockY, action.BlockZ))
+            if (!player.Dig.SubmitDigAbort(action.BlockX, action.BlockY, action.BlockZ))
                 session.Context.Logger.Debug($"Dropped dig abort from {player.Username}: dig queue full.");
         }
 
@@ -112,13 +112,13 @@ partial class InGameSessionHandler
     {
         // Holding mine often sets MissedSwing and/or PerformBlockActions; crack_break can be sparse.
         if (packet.InputMissedSwing || packet.InputPerformBlockActions)
-            _ = player.SubmitDigActivityForActive(tick);
+            _ = player.Dig.SubmitDigActivityForActive(tick);
 
         foreach (var action in packet.BlockActions)
         {
-            if (player.IsBreakTarget(action.BlockX, action.BlockY, action.BlockZ))
+            if (player.Dig.IsBreakTarget(action.BlockX, action.BlockY, action.BlockZ))
             {
-                _ = player.SubmitDigActivity(action.BlockX, action.BlockY, action.BlockZ, tick);
+                _ = player.Dig.SubmitDigActivity(action.BlockX, action.BlockY, action.BlockZ, tick);
                 return;
             }
         }
@@ -133,7 +133,7 @@ partial class InGameSessionHandler
         if (packet.Action == PlayerActionPacket.ActionRespawn)
         {
             if (player.IsDead)
-                player.SubmitRespawn();
+                player.Intents.SubmitRespawn();
             return;
         }
 
@@ -163,7 +163,7 @@ partial class InGameSessionHandler
         if (packet.State != RespawnPacket.StateClientReadyToSpawn)
             return;
 
-        player.SubmitRespawn();
+        player.Intents.SubmitRespawn();
     }
 
     private static void HandleBreakProgress(
@@ -180,13 +180,13 @@ partial class InGameSessionHandler
         var tick = session.Context.Clock.CurrentTick;
 
         // Same-cell crack/continue: refresh activity only — do not re-Start crack.
-        if (player.IsBreakTarget(x, y, z))
+        if (player.Dig.IsBreakTarget(x, y, z))
         {
-            _ = player.SubmitDigActivity(x, y, z, tick);
+            _ = player.Dig.SubmitDigActivity(x, y, z, tick);
             return;
         }
 
-        if (player.TryGetDigAuth(x, y, z, out _, out _))
+        if (player.Dig.TryGetDigAuth(x, y, z, out _, out _))
             return;
 
         var block = session.Context.World.GetBlock(x, y, z);
@@ -201,7 +201,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        if (!player.SubmitDigStart(x, y, z, tick, need, heldId))
+        if (!player.Dig.SubmitDigStart(x, y, z, tick, need, heldId))
             session.Context.Logger.Debug($"Dropped dig start from {player.Username}: dig queue full.");
         else
         {
@@ -222,13 +222,13 @@ partial class InGameSessionHandler
 
         BlockEditIntent intent;
         if (player.GameMode != GameMode.Creative &&
-            player.TryGetDigAuth(x, y, z, out var started, out var need) &&
+            player.Dig.TryGetDigAuth(x, y, z, out var started, out var need) &&
             need > 0)
         {
             intent = BlockEditIntent.BreakWithDig(x, y, z, started, need);
             // Clear dig lock + cancel pending Start so same-AuthInput Continue can retarget (§27).
             // ApplyEdit must StopCrack on success AND reject — lock is already gone here.
-            player.CancelDigAuthorization(x, y, z);
+            player.Dig.CancelDigAuthorization(x, y, z);
         }
         else
         {
@@ -236,7 +236,7 @@ partial class InGameSessionHandler
         }
 
         if (!intent.IsInWorldBounds()) return;
-        if (!player.SubmitBlockEdit(intent))
+        if (!player.Intents.SubmitBlockEdit(intent))
             player.Session.Context.Logger.Debug($"Dropped break from {player.Username}: block-edit queue full.");
         else
         {

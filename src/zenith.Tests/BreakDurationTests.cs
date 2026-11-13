@@ -248,11 +248,11 @@ public class DigToolIntentTests
         var pickNeed = Blocks.BreakTicks(Blocks.Stone, StackId.FromItem(pick));
         Assert.True(pickNeed < handNeed);
 
-        Assert.True(player.SubmitDigStart(2, Blocks.FlatSpawnY, 2, startedTick: 10, pickNeed, StackId.FromItem(pick)));
+        Assert.True(player.Dig.SubmitDigStart(2, Blocks.FlatSpawnY, 2, startedTick: 10, pickNeed, StackId.FromItem(pick)));
         new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
-        Assert.True(player.IsBreakTarget(2, Blocks.FlatSpawnY, 2));
-        Assert.Equal(pickNeed, player.BreakRequiredTicks);
-        Assert.Equal(StackId.FromItem(pick), player.DigHeldStackId);
+        Assert.True(player.Dig.IsBreakTarget(2, Blocks.FlatSpawnY, 2));
+        Assert.Equal(pickNeed, player.Dig.BreakRequiredTicks);
+        Assert.Equal(StackId.FromItem(pick), player.Dig.DigHeldStackId);
     }
 
     [Fact]
@@ -270,7 +270,7 @@ public class DigToolIntentTests
         var y = Blocks.FlatSpawnY;
         fx.World.SetBlock(3, y, 3, Blocks.Stone);
         Assert.Equal(Blocks.Stone, fx.World.GetBlock(3, y, 3));
-        player.BeginBreak(3, y, 3, tick: fx.Clock.CurrentTick, requiredTicks: woodNeed, heldStackId: StackId.FromItem(wood));
+        player.Dig.BeginBreak(3, y, 3, tick: fx.Clock.CurrentTick, requiredTicks: woodNeed, heldStackId: StackId.FromItem(wood));
 
         // Halfway through wood dig.
         fx.Clock.AdvanceBy(woodNeed / 2);
@@ -279,10 +279,10 @@ public class DigToolIntentTests
         new BlockDigSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
 
         var ironNeed = Blocks.BreakTicks(Blocks.Stone, StackId.FromItem(iron));
-        Assert.Equal(StackId.FromItem(iron), player.DigHeldStackId);
-        Assert.Equal(ironNeed, player.BreakRequiredTicks);
+        Assert.Equal(StackId.FromItem(iron), player.Dig.DigHeldStackId);
+        Assert.Equal(ironNeed, player.Dig.BreakRequiredTicks);
         // Started tick adjusted so ~50% progress remains.
-        var elapsed = fx.Clock.CurrentTick - player.BreakStartedTick;
+        var elapsed = fx.Clock.CurrentTick - player.Dig.BreakStartedTick;
         Assert.InRange((int)elapsed, ironNeed / 2 - 1, ironNeed / 2 + 1);
     }
 
@@ -294,7 +294,7 @@ public class DigToolIntentTests
         Assert.Equal(-1, need);
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("nodig");
-        Assert.False(player.HasBreakTarget);
-        Assert.False(player.TryGetDigAuth(1, 1, 1, out _, out _));
+        Assert.False(player.Dig.HasBreakTarget);
+        Assert.False(player.Dig.TryGetDigAuth(1, 1, 1, out _, out _));
     }
 }

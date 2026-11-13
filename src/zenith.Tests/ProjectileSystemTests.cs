@@ -24,7 +24,7 @@ public sealed class ProjectileSystemTests
         owner.Yaw = -90f; // +X
         var system = CreateSystem(fx, out _, out _, out var spatial);
 
-        owner.SubmitProjectileIntent();
+        owner.Intents.SubmitProjectileIntent();
         Tick(system, spatial, fx);
 
         var id = Assert.Single(system.Projectiles);
@@ -45,7 +45,7 @@ public sealed class ProjectileSystemTests
         zombies.TryApplyDamage(zombieId, DamageSource.Generic, 14f, fx.Players.Online, fx.Clock.CurrentTick);
         fx.Clock.AdvanceBy(11); // past the hit-invulnerability window — the arrow is a distinct, later hit.
 
-        owner.SubmitProjectileIntent();
+        owner.Intents.SubmitProjectileIntent();
         Tick(system, spatial, fx);
 
         Assert.Empty(system.Projectiles);
@@ -184,7 +184,7 @@ public sealed class ProjectileSystemTests
         first.Chunks.RememberMany([(0, 0)]);
         first.Yaw = -90f;
         var system = CreateSystem(fx, out _, out _, out var spatial);
-        first.SubmitProjectileIntent();
+        first.Intents.SubmitProjectileIntent();
         Tick(system, spatial, fx);
         Assert.Single(system.Projectiles);
         var before = fx.Transport.Captured.Count;
@@ -239,7 +239,7 @@ public sealed class ProjectileSystemTests
         owner.Yaw = -90f;
         var system = CreateSystem(fx, out _, out _, out var spatial);
 
-        owner.SubmitProjectileIntent();
+        owner.Intents.SubmitProjectileIntent();
         Tick(system, spatial, fx);
         Assert.Equal(1, system.ReplicatedSpawnCount);
 

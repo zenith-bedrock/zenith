@@ -64,9 +64,12 @@ public sealed class ZenithServerLifecycleTests
     public async Task Game_loop_failure_and_external_shutdown_share_one_cleanup_operation()
     {
         var server = CreateServer(port: 0);
-        server.GameLoop.Register(new ThrowingSystem());
+        var failing = new ThrowingSystem();
+        server.GameLoop.Register(failing);
 
         var run = server.RunAsync();
+        // The loop runs on its own thread; shutting down before its first tick would cancel it before it ever fails.
+        await failing.Thrown.WaitAsync(TimeSpan.FromSeconds(10));
         var firstShutdown = server.ShutdownAsync();
         Task? secondShutdown = null;
         await Task.Run(() => secondShutdown = server.ShutdownAsync());
@@ -84,7 +87,14 @@ public sealed class ZenithServerLifecycleTests
 
     private sealed class ThrowingSystem : IGameSystem
     {
-        public void Tick(GameClock clock, IReadOnlyList<Player.Player> online) =>
+        private readonly TaskCompletionSource _thrown = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Thrown => _thrown.Task;
+
+        public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+        {
+            _thrown.TrySetResult();
             throw new InvalidOperationException("expected game-loop failure");
+        }
     }
 }

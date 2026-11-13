@@ -17,7 +17,7 @@ sealed class ChatSystem : IGameSystem
         {
             if (!player.IsInGame) continue;
 
-            while (player.TryConsumeChat(out var message))
+            while (player.Intents.TryConsumeChat(out var message))
             {
                 foreach (var peer in online)
                 {

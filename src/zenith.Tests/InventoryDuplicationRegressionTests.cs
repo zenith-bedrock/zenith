@@ -26,7 +26,7 @@ public class InventoryDuplicationRegressionTests
         // The second action must fail: a dirt transfer cannot overwrite this stone stack.
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Stone, 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(801, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(801, [
             InventoryStackAction.Drop(0, 4),
             InventoryStackAction.Transfer(0, 9, 1)
         ])));
@@ -51,7 +51,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySet(0, dirt, 4));
         var before = CountAuthoritativeQuantity(player, fx.World, dirt);
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(808, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(808, [
             InventoryStackAction.Drop(0, 4)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -72,7 +72,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(1, Blocks.Stone, 4));
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.OakLog, 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(802, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(802, [
             InventoryStackAction.Drop(0, 4),
             InventoryStackAction.Drop(1, 4),
             InventoryStackAction.Transfer(9, 2, 1)
@@ -97,7 +97,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(10, Blocks.Air, 0));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(803, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(803, [
             InventoryStackAction.Transfer(0, 9, 2),
             InventoryStackAction.Transfer(0, 10, 3)
         ])));
@@ -115,7 +115,7 @@ public class InventoryDuplicationRegressionTests
         var player = fx.AddInGamePlayer("same-slot");
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 4));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(804, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(804, [
             InventoryStackAction.Transfer(0, 0, 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -132,7 +132,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 1));
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Dirt, PlayerInventory.MaxStack));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(806, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(806, [
             InventoryStackAction.Transfer(0, 9, 1)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -152,7 +152,7 @@ public class InventoryDuplicationRegressionTests
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 4));
         Assert.True(player.Inventory.TrySetBlock(9, Blocks.Air, 0));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(807 + count, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(807 + count, [
             InventoryStackAction.Transfer(0, 9, count)
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -166,21 +166,21 @@ public class InventoryDuplicationRegressionTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("craft-replay");
-        Assert.True(player.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 2)));
+        Assert.True(player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakLog, 2)));
         var request = InventoryStackIntent.Create(805, [
             InventoryStackAction.Craft(TestRecipes.OakLogToPlanks),
             InventoryStackAction.CreateOutput()
         ]);
 
-        Assert.True(player.SubmitInventoryStack(request));
+        Assert.True(player.Intents.SubmitInventoryStack(request));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
-        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(1, player.Windows.CraftUi.GetGrid(0).Count);
+        Assert.Equal(4, player.Windows.CraftUi.Result.Count);
 
-        Assert.True(player.SubmitInventoryStack(request));
+        Assert.True(player.Intents.SubmitInventoryStack(request));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(1, player.CraftUi.GetGrid(0).Count);
-        Assert.Equal(4, player.CraftUi.Result.Count);
+        Assert.Equal(1, player.Windows.CraftUi.GetGrid(0).Count);
+        Assert.Equal(4, player.Windows.CraftUi.Result.Count);
     }
 
     private static int CountAuthoritativeQuantity(Player.Player player, World.World world, StackId id)
@@ -197,11 +197,11 @@ public class InventoryDuplicationRegressionTests
 
         for (var i = 0; i < PlayerCraftUi.GridSize; i++)
         {
-            var slot = player.CraftUi.GetGrid(i);
+            var slot = player.Windows.CraftUi.GetGrid(i);
             if (!slot.IsEmpty && slot.Id == id) total += slot.Count;
         }
 
-        var result = player.CraftUi.Result;
+        var result = player.Windows.CraftUi.Result;
         if (!result.IsEmpty && result.Id == id) total += result.Count;
 
         foreach (var drop in world.FloorDrops.Snapshot())

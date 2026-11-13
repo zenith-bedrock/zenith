@@ -207,8 +207,8 @@ static class FloorDropFanout
             return false;
         }
 
-        player.CraftUi.Clear();
-        player.TableCraftUi.Clear();
+        player.Windows.CraftUi.Clear();
+        player.Windows.TableCraftUi.Clear();
         player.Inventory.Clear();
         world.PersistInventory(player);
         world.PersistArmor(player);
@@ -224,7 +224,7 @@ static class FloorDropFanout
             PlayerCraftUi.GridSize + PlayerTableCraftUi.GridSize + PlayerInventory.FullInventorySize + PlayerInventory.ArmorSize + 3);
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
-            var slot = player.CraftUi.GetGrid(g);
+            var slot = player.Windows.CraftUi.GetGrid(g);
             if (!slot.IsEmpty)
                 requests.Add(new DepositRequest(slot.Id, slot.Count));
         }
@@ -233,12 +233,12 @@ static class FloorDropFanout
         // 3x3 grid too; same treatment as the personal grid right above.
         for (var g = 0; g < PlayerTableCraftUi.GridSize; g++)
         {
-            var slot = player.TableCraftUi.GetGrid(g);
+            var slot = player.Windows.TableCraftUi.GetGrid(g);
             if (!slot.IsEmpty)
                 requests.Add(new DepositRequest(slot.Id, slot.Count));
         }
 
-        var result = player.CraftUi.Result;
+        var result = player.Windows.CraftUi.Result;
         if (!result.IsEmpty)
             requests.Add(new DepositRequest(result.Id, result.Count));
 

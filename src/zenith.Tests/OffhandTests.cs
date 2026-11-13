@@ -101,13 +101,13 @@ public class OffhandTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("shield");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(4, Blocks.Dirt, 10));
         var before = Total(player);
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(60, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(60, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(4), InventorySlotReference.Offhand, 6),
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -122,7 +122,7 @@ public class OffhandTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("rollback");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySetBlock(4, Blocks.Dirt, 10));
@@ -130,7 +130,7 @@ public class OffhandTests
         var before = Total(player);
 
         // First action succeeds (offhand 2 -> 8), second cannot (slot 9 is empty), so the whole request must undo.
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(61, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(61, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(4), InventorySlotReference.Offhand, 6),
             InventoryStackAction.Transfer(InventorySlotReference.Player(9), InventorySlotReference.Offhand, 1),
         ])));
@@ -146,13 +146,13 @@ public class OffhandTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("aux");
-        player.OpenPlayerContainer(0, 0xff);
+        player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
         Assert.True(player.Inventory.TrySet(4, StackId.FromItem(300, aux: 1), 3));
         Assert.True(player.Inventory.TrySetOffhand(StackId.FromItem(300, aux: 2), 1));
 
-        Assert.True(player.SubmitInventoryStack(InventoryStackIntent.Create(62, [
+        Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(62, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(4), InventorySlotReference.Offhand, 1),
         ])));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);

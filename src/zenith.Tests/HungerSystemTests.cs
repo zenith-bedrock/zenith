@@ -20,7 +20,7 @@ public class HungerSystemTests
         player.Hunger = 10f;
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitEatIntent();
+        player.Intents.SubmitEatIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(14f, player.Hunger); // apple nutrition = 4
@@ -36,7 +36,7 @@ public class HungerSystemTests
         player.Inventory.TrySetItem(0, Apple(fx), 1);
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitEatIntent();
+        player.Intents.SubmitEatIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, player.Hunger);
@@ -53,7 +53,7 @@ public class HungerSystemTests
         player.Hunger = 10f;
         player.SelectedHotbarSlot = 0;
 
-        player.SubmitEatIntent();
+        player.Intents.SubmitEatIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(14f, player.Hunger);

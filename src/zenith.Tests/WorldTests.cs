@@ -21,14 +21,14 @@ public class BlockEditQueueTests
     public void Submit_drains_in_fifo_order()
     {
         var player = new Player.Player("queue", null!, runtimeId: 1, Guid.NewGuid());
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 0, 1)));
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 0, 1)));
-        Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(3, 64, 0, 1)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(1, 64, 0, 1)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(2, 64, 0, 1)));
+        Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(3, 64, 0, 1)));
 
-        Assert.True(player.TryConsumeBlockEdit(out var a));
-        Assert.True(player.TryConsumeBlockEdit(out var b));
-        Assert.True(player.TryConsumeBlockEdit(out var c));
-        Assert.False(player.TryConsumeBlockEdit(out _));
+        Assert.True(player.Intents.TryConsumeBlockEdit(out var a));
+        Assert.True(player.Intents.TryConsumeBlockEdit(out var b));
+        Assert.True(player.Intents.TryConsumeBlockEdit(out var c));
+        Assert.False(player.Intents.TryConsumeBlockEdit(out _));
 
         Assert.Equal(1, a.X);
         Assert.Equal(2, b.X);
@@ -39,18 +39,18 @@ public class BlockEditQueueTests
     public void Submit_rejects_when_queue_full_preserving_accepted()
     {
         var player = new Player.Player("full", null!, runtimeId: 1, Guid.NewGuid());
-        for (var i = 0; i < Player.Player.MaxPendingBlockEdits; i++)
-            Assert.True(player.SubmitBlockEdit(BlockEditIntent.Set(i, 64, 0, 1)));
+        for (var i = 0; i < Player.PlayerIntents.MaxPendingBlockEdits; i++)
+            Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(i, 64, 0, 1)));
 
-        Assert.False(player.SubmitBlockEdit(BlockEditIntent.Set(99, 64, 0, 1)));
+        Assert.False(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(99, 64, 0, 1)));
 
-        for (var i = 0; i < Player.Player.MaxPendingBlockEdits; i++)
+        for (var i = 0; i < Player.PlayerIntents.MaxPendingBlockEdits; i++)
         {
-            Assert.True(player.TryConsumeBlockEdit(out var edit));
+            Assert.True(player.Intents.TryConsumeBlockEdit(out var edit));
             Assert.Equal(i, edit.X);
         }
 
-        Assert.False(player.TryConsumeBlockEdit(out _));
+        Assert.False(player.Intents.TryConsumeBlockEdit(out _));
     }
 }
 

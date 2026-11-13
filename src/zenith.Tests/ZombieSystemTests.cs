@@ -119,13 +119,13 @@ public sealed class ZombieSystemTests
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(16f, Health(system, id).Current);
 
         for (var i = 0; i < 4; i++)
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             fx.Clock.AdvanceBy(11);
             system.Tick(fx.Clock, fx.Players.Online);
         }
@@ -136,7 +136,7 @@ public sealed class ZombieSystemTests
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:rotten_flesh"), loot.Id.Value);
         Assert.True(loot.Id.IsItem);
         Assert.Equal(1, loot.Count);
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Empty(system.Zombies);
     }
@@ -149,7 +149,7 @@ public sealed class ZombieSystemTests
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(player.PositionX + 10, player.PositionY, player.PositionZ);
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         var health = Health(system, id);
@@ -167,7 +167,7 @@ public sealed class ZombieSystemTests
         var second = system.SpawnZombie(player.PositionX + 2, player.PositionY, player.PositionZ);
         Assert.True(system.Stores.Identities.TryGet(second, out var secondIdentity));
 
-        player.SubmitAttackIntent(checked((long)secondIdentity.ActorRuntimeId));
+        player.Intents.SubmitAttackIntent(checked((long)secondIdentity.ActorRuntimeId));
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, Health(system, first).Current);
@@ -253,7 +253,7 @@ public sealed class ZombieSystemTests
         var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
         var beforeX = Pos(system, id).X;
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         // Knocked further from the player (+X direction) than a chase step alone would move it.

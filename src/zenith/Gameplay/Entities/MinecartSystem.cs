@@ -183,7 +183,7 @@ sealed class MinecartSystem : IGameSystem
             var dz = pos.Z - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
             if (!_stores.Identities.TryGet(id, out var identity)) return;
-            if (!player.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
+            if (!player.Intents.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
 
             _minecarts.TryGet(id, out var occupancy);
             if (occupancy.OccupantPlayerRuntimeId is null)

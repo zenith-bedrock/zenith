@@ -139,7 +139,7 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         for (var g = 0; g < PlayerCraftUi.GridSize; g++)
         {
             wire[InventoryContainerMap.CraftingGridWireOffset + g] =
-                DescribeForWire(InventorySlotReference.CraftGrid(g), player.CraftUi.GetGrid(g));
+                DescribeForWire(InventorySlotReference.CraftGrid(g), player.Windows.CraftUi.GetGrid(g));
         }
 
         // Always reported, same as the personal grid above — harmless (all-empty) when no crafting
@@ -148,11 +148,11 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         for (var g = 0; g < PlayerTableCraftUi.GridSize; g++)
         {
             wire[InventoryContainerMap.CraftingTableGridWireOffset + g] =
-                DescribeForWire(InventorySlotReference.TableCraftGrid(g), player.TableCraftUi.GetGrid(g));
+                DescribeForWire(InventorySlotReference.TableCraftGrid(g), player.Windows.TableCraftUi.GetGrid(g));
         }
 
         wire[InventoryContainerMap.CraftingResultWireSlot] =
-            DescribeForWire(InventorySlotReference.CraftResult, player.CraftUi.Result);
+            DescribeForWire(InventorySlotReference.CraftResult, player.Windows.CraftUi.Result);
 
         return wire;
     }
@@ -189,7 +189,7 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
     {
         SendInventoryContent(player.Inventory);
         SendUiInventoryContent(player);
-        if (player.OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest })
+        if (player.Windows.OpenContainer is { Target: OpenContainerSession.TargetKind.Chest, Chest: { } chest })
             SendChestContent(_session.Context.World.Chests, chest);
     }
 

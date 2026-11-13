@@ -49,7 +49,7 @@ internal static class DamageableActorCombatCore
             var dx = view.X - player.PositionX;
             var dz = view.Z - player.PositionZ;
             if (dx * dx + dz * dz > reachSquared) continue;
-            if (!player.TryConsumeAttackIntent(checked((long)view.RuntimeId))) continue;
+            if (!player.Intents.TryConsumeAttackIntent(checked((long)view.RuntimeId))) continue;
             if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) return true;
         }
         return false;

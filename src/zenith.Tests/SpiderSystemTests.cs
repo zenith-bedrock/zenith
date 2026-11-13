@@ -65,7 +65,7 @@ public sealed class SpiderSystemTests
 
         for (var i = 0; i < 8; i++) // 16 health / 2 damage-per-hit
         {
-            player.SubmitAttackIntent();
+            player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
             fx.Clock.AdvanceBy(11);
         }
@@ -87,7 +87,7 @@ public sealed class SpiderSystemTests
         var id = system.SpawnSpider(player.PositionX + 10, player.PositionY, player.PositionZ);
         var maxHealth = Health(system, id).Maximum;
 
-        player.SubmitAttackIntent();
+        player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(maxHealth, Health(system, id).Current);
@@ -181,7 +181,7 @@ public sealed class SpiderSystemTests
         }
 
         Assert.True(system.PoisonInflictedCount > 0);
-        Assert.True(player.Effects.ContainsKey(EffectType.Poison));
+        Assert.True(player.Effects.Active.ContainsKey(EffectType.Poison));
     }
 
     [Fact]
@@ -195,6 +195,6 @@ public sealed class SpiderSystemTests
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(0, system.PoisonInflictedCount);
-        Assert.False(player.Effects.ContainsKey(EffectType.Poison));
+        Assert.False(player.Effects.Active.ContainsKey(EffectType.Poison));
     }
 }
