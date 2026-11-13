@@ -123,6 +123,53 @@ public sealed class FranchiseTokenValidatorTests
     }
 
     [Theory]
+    [InlineData(1, true)]    // exp one second ahead of the clock
+    [InlineData(0, false)]   // exp == now is already expired
+    [InlineData(-1, false)]
+    public void Expiry_is_judged_against_the_injected_clock_to_the_second(int expiresInSeconds, bool accepted)
+    {
+        using var key = RSA.Create(2048);
+        var clock = new FakeClock();
+        var claims = ValidClaims();
+        claims["exp"] = clock.GetUtcNow().AddSeconds(expiresInSeconds).ToUnixTimeSeconds();
+
+        var verdict = FranchiseTokenValidator.Validate(
+            CreateToken(key, claims), [key.ExportParameters(false)], time: clock);
+
+        Assert.Equal(accepted, verdict);
+    }
+
+    [Theory]
+    [InlineData(60, true)]   // nbf may be up to 60 s ahead (clock skew allowance)
+    [InlineData(61, false)]
+    public void Not_before_allows_exactly_sixty_seconds_of_skew(int notBeforeInSeconds, bool accepted)
+    {
+        using var key = RSA.Create(2048);
+        var clock = new FakeClock();
+        var claims = ValidClaims();
+        claims["exp"] = clock.GetUtcNow().AddHours(1).ToUnixTimeSeconds();
+        claims["nbf"] = clock.GetUtcNow().AddSeconds(notBeforeInSeconds).ToUnixTimeSeconds();
+
+        Assert.Equal(accepted, FranchiseTokenValidator.Validate(
+            CreateToken(key, claims), [key.ExportParameters(false)], time: clock));
+    }
+
+    [Fact]
+    public void A_token_accepted_now_is_rejected_once_the_clock_passes_its_expiry()
+    {
+        using var key = RSA.Create(2048);
+        var clock = new FakeClock();
+        var claims = ValidClaims();
+        claims["exp"] = clock.GetUtcNow().AddMinutes(10).ToUnixTimeSeconds();
+        var token = CreateToken(key, claims);
+        var keys = new[] { key.ExportParameters(false) };
+
+        Assert.True(FranchiseTokenValidator.Validate(token, keys, time: clock));
+        clock.Advance(TimeSpan.FromMinutes(10));
+        Assert.False(FranchiseTokenValidator.Validate(token, keys, time: clock));
+    }
+
+    [Theory]
     [InlineData("[]")]
     [InlineData("{\"authenticationKeys\":[]}")]
     [InlineData("{\"keys\":[]}")]

@@ -11,19 +11,19 @@ internal static class FranchiseTokenValidator
     private const string Issuer = "https://authorization.franchise.minecraft-services.net/";
     private const string Audience = "api://auth-minecraft-services/multiplayer";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
-    private static readonly SemaphoreSlim RefreshGate = new(1, 1);
-    private static IReadOnlyList<RSAParameters>? _keys;
-    private static DateTimeOffset _keysExpireAt;
+    private static readonly FranchiseKeyCache Cache = new(FetchKeysAsync, TimeSpan.FromHours(6));
 
     public static Task<bool> ValidateAsync(
         string token, CancellationToken cancellationToken, Action<string>? onFailure = null) =>
         ValidateAsync(token, GetKeysAsync, cancellationToken, onFailure);
 
     /// <summary>Validates against an already loaded key set, without any I/O.</summary>
-    public static bool Validate(string token, IReadOnlyList<RSAParameters>? keys, Action<string>? onFailure = null)
+    public static bool Validate(
+        string token, IReadOnlyList<RSAParameters>? keys, Action<string>? onFailure = null, TimeProvider? time = null)
     {
         string? failure;
-        var accepted = TryParse(token, out var signed, out failure) && VerifySignature(signed, keys, out failure);
+        var accepted = TryParse(token, (time ?? TimeProvider.System).GetUtcNow(), out var signed, out failure) &&
+                       VerifySignature(signed, keys, out failure);
         if (!accepted)
             onFailure?.Invoke(failure ?? "GameServerToken rejected.");
         return accepted;
@@ -33,10 +33,11 @@ internal static class FranchiseTokenValidator
         string token,
         Func<CancellationToken, Task<IReadOnlyList<RSAParameters>?>> getKeys,
         CancellationToken cancellationToken,
-        Action<string>? onFailure = null)
+        Action<string>? onFailure = null,
+        TimeProvider? time = null)
     {
         string? failure;
-        if (!TryParse(token, out var signed, out failure))
+        if (!TryParse(token, (time ?? TimeProvider.System).GetUtcNow(), out var signed, out failure))
         {
             onFailure?.Invoke(failure!);
             return false;
@@ -67,7 +68,7 @@ internal static class FranchiseTokenValidator
     private readonly record struct SignedToken(byte[] Data, byte[] Signature);
 
     /// <summary>Everything that can be decided without the signing keys: shape, algorithm, issuer, audience and lifetime.</summary>
-    private static bool TryParse(string token, out SignedToken signed, out string? failure)
+    private static bool TryParse(string token, DateTimeOffset now, out SignedToken signed, out string? failure)
     {
         signed = default;
         try
@@ -88,11 +89,11 @@ internal static class FranchiseTokenValidator
             if (!HasAudience(claims))
                 return Fail("GameServerToken audience does not include Minecraft multiplayer.", out failure);
             if (!claims.TryGetProperty("exp", out var exp) || exp.ValueKind != JsonValueKind.Number || !exp.TryGetInt64(out var expires) ||
-                expires <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+                expires <= now.ToUnixTimeSeconds())
                 return Fail("GameServerToken is expired or has an invalid exp claim.", out failure);
             if (claims.TryGetProperty("nbf", out var nbf) &&
                 (nbf.ValueKind != JsonValueKind.Number || !nbf.TryGetInt64(out var notBefore) ||
-                 notBefore > DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 60))
+                 notBefore > now.ToUnixTimeSeconds() + 60))
                 return Fail("GameServerToken is not yet valid or has an invalid nbf claim.", out failure);
 
             signed = new SignedToken(Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), Decode(parts[2]));
@@ -137,31 +138,17 @@ internal static class FranchiseTokenValidator
             .Any(entry => entry.ValueKind == JsonValueKind.String && entry.GetString() == Audience);
     }
 
-    internal static async Task<IReadOnlyList<RSAParameters>?> GetKeysAsync(CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<RSAParameters>?> GetKeysAsync(CancellationToken cancellationToken) =>
+        await Cache.GetAsync(cancellationToken).ConfigureAwait(false);
+
+    private static async Task<IReadOnlyList<RSAParameters>> FetchKeysAsync(CancellationToken cancellationToken)
     {
-        if (_keys is not null && _keysExpireAt > DateTimeOffset.UtcNow)
-            return _keys;
-
-        await RefreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (_keys is not null && _keysExpireAt > DateTimeOffset.UtcNow)
-                return _keys;
-
-            using var response = await Http.GetAsync(KeySetUrl, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            using var body = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-            var keys = ReadKeys(body.RootElement);
-            _keys = keys;
-            _keysExpireAt = DateTimeOffset.UtcNow.AddHours(6);
-            return keys;
-        }
-        finally
-        {
-            RefreshGate.Release();
-        }
+        using var response = await Http.GetAsync(KeySetUrl, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        using var body = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return ReadKeys(body.RootElement);
     }
 
     internal static IReadOnlyList<RSAParameters> ReadKeys(JsonElement root)
