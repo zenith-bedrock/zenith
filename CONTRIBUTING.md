@@ -31,7 +31,7 @@ Unless an ADR says otherwise: Scheduler, Actor/ECS, VisibilitySystem, DI contain
 - Contributors using coding agents may also use the repository's optional agent checks:
   - skill **`zenith-post-impl-audit`** — audit `git status`/`diff` against architecture, freeze list, DX
   - skill **`zenith-unit-tests`** — add/extend leaf tests when the diff warrants them  
-  Skills are mirrored for Cursor / Claude Code / OpenCode: [`.cursor/skills/`](.cursor/skills/), [`.claude/skills/`](.claude/skills/), [`.opencode/skills/`](.opencode/skills/).
+  Agent skills live once, in [`.claude/skills/`](.claude/skills/); the tools read `AGENTS.md` for everything else.
 - Run before requesting review:
 
 ```bash
