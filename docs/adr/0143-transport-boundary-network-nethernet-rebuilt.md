@@ -14,3 +14,12 @@
 **Config (breaking, pre-release):** `network.transport` gains `both`; `maximum-fragment-size` removed; `max-message-size` capped at 262144; new `tls-certificate`, `tls-private-key`, `reverse-proxy-header/-networks`, `lan-discovery`, `ice-udp-mux`, `advertise-addresses`, `mtu`. ICE range defaults start at `server.port + 1` when RakNet also runs.
 
 **Open:** retail-client validation over the new library; protocol bump 2193 → 2225 for 26.60+ clients; `BinaryStream` still lives in the RakNet assembly and is used by `Packets/` (candidate for a neutral shared library).
+
+**Interoperability correction (2026-11-13):** Subscribe to native data-channel messages during
+announcement, before the next runner poll, so immediate first packets are retained. A native
+integration regression gates polling while the client opens/sends. FULL game login remains
+bound to the exact authenticated SDP token; self-signed offline SDP and game tokens may differ,
+subject to `auth.accept`, and authenticated SDP cannot downgrade to self-signed game login.
+The installed Cinnabar core completed login, 81-column delivery and a 27-slot chest interaction
+over NetherNet in an isolated world. This is a core probe, not a rendered-client acceptance test.
+See [interoperability evidence](../cinnabar-interoperability.md).

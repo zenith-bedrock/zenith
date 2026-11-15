@@ -163,4 +163,20 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 
 | 150 | [Prepare required resources before starting runtime](0150-prepare-required-resources-before-runtime.md) |
 
+| 151 | [Use one ordered lane for Bedrock batches](0151-use-one-ordered-bedrock-lane.md) |
+
+| 152 | [Bound transport receive windows and admission](0152-bound-transport-receive-windows.md) |
+
+| 153 | [Verify login proof and gate movement after teleports](0153-verify-login-proof-and-gate-teleport-movement.md) |
+| 154 | [Ground loot, table-grid admission and player melee reach](0154-ground-loot-table-grid-and-melee-reach.md) |
+| 155 | [Preserve inventory cleanup before window close](0155-preserve-inventory-cleanup-before-window-close.md) |
+| 156 | [Expose registered recipes and vanilla creative content](0156-expose-registered-recipes-and-vanilla-creative-content.md) |
+| 157 | [Drop preconditions and food-use lifecycle](0157-drop-preconditions-and-food-use-lifecycle.md) |
+| 158 | [Conserve crafting outputs and transient inventory](0158-conserve-crafting-outputs-and-transient-inventory.md) |
+| 159 | [Attacker-owned melee and effect removal](0159-attacker-melee-and-effect-removal.md) |
+| 160 | [Item stack capacity](0160-item-stack-capacity.md) |
+| 161 | [Solid building block families](0161-solid-building-block-families.md) |
+| 162 | [Owner-applied chest hydration](0162-owner-applied-chest-hydration.md) |
+| 163 | [Authoritative player-drop toss](0163-authoritative-player-drop-toss.md) |
+
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

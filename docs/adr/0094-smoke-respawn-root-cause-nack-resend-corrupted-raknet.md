@@ -2,6 +2,8 @@
 
 > Part of the [decision log](README.md). Code and docs cite this record as `ADR §94`.
 
+**November 2026:** ADR §151 supersedes the channel split only: real Cinnabar-core testing showed missing post-spawn columns on channel 1. The retransmission correction below remains in force.
+
 **Choice:** Root-cause the `smoke:respawn` timeout the roadmap had flagged (Yes-next priority 2) as "root-caused, not a wire/Cereal bug — looks like a RakNet transport-layer delivery issue." Confirmed and fixed the actual defect; it was neither Cereal nor a transport-layer *delivery* issue in the sense of packet loss — it was Zenith's own retransmission code corrupting reliability metadata on every resend.
 
 1. **Confirmed server-side send is correct first.** Temporary logging showed `MovementSystem.BeginVoidDeath` firing, `Player.BeginDeath` returning `true`, and `DeathInfoPacket`/`RespawnPacket` being handed to `NetworkSession.SendDataPacket` with no exception — ruling out a domain/logic bug before touching transport code.

@@ -73,3 +73,11 @@ shape grammar the engine doesn't have).
 `InventoryProtocol.cs`, `RecipeRegistry.cs`, `CreativeCatalog.cs`, `CraftingDataBuilder.cs`,
 `Blocks.cs`, `DigProfiles.cs`, `InGameUseItemHandler.cs`, `InventorySystem.cs`,
 `FloorDropFanout.cs`.
+
+**November 2026 follow-up (ADR 154):** Normal table-slot transfers now pass admission and bind to the matching table session/generation. Handler-to-tick tests cover filling the grid and taking a crafted chest; direct grid seeding had missed this admission gap.
+
+**Close ordering (ADR 155):** Window lifecycle and inventory requests now share one
+FIFO. Client ingredient/cursor returns and overflow drops commit before the
+following close, preserving their reserved session generation. Zenith does not
+perform a second automatic return. A bare close without cleanup is still separate
+from this supported client-driven return sequence.

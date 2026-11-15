@@ -2,6 +2,12 @@
 
 > Part of the [decision log](README.md). Code and docs cite this record as `ADR §91`.
 
+**Validation follow-up (2026-11-14, protocol 2225):** ResourcePackClientResponse validates its
+uint32 union tag before reducing it to byte. Downloading ID count is bounded by 65535 and by
+remaining payload bytes before allocation; complete responses require EOF. Malformed input
+closes this session before the bootstrap sequence. The existing status-name string and
+conditional array representation are preserved.
+
 **Choice:** Continue closing the roadmap's Cereal migration debt table. Same method as §88–§90: cross-check against `minecraft-data`'s live `protocol.json`, corroborate with `endstone-bedrock-protocol`'s versioned Python schema when the field in question isn't purely mechanical.
 
 1. **`PlayerSkinPacket` had a phantom top-level trailing bool** (`IsVerified` read/written as the packet's last field) **that doesn't exist on the wire**, and was missing two real fields that live *inside* the `skin` sub-structure instead: a name-coded `trusted_skin_flag` enum (`Unset`/`False`/`True`, spelled as its member name on the wire, not a raw bool) and a `profile_hash` string, both positioned right after the skin's `overrides_player_appearance` and before the packet's own `skin_name`/`old_skin_name`. Confirmed via `endstone-bedrock-protocol`'s two `SerializedSkinRef` declarations — the hand-written one (`@type(cereal=False)`, used nowhere in Zenith) explicitly lacks these two fields with a docstring explaining PlayerList writes trust as "a trailing run of its own" instead; the default (Cereal) one, which is what `PlayerSkinPacket` references, has them. Fixed **locally in `PlayerSkinPacket`** rather than in the shared `SerializedSkin.Write`/`Read` (also used by `PlayerListPacket`, which needs a different, not-yet-touched trust encoding — see non-goals) so this fix doesn't silently break the packet it wasn't scoped to touch.

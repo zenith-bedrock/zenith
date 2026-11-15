@@ -13,3 +13,8 @@
 **Verification:** `CommandCatalogTests`, `BedrockCommandAdapterTests`, and the real-client smoke that decoded `AvailableCommands` and exercised `/gamemode`; future commands must retain the same core/adapter split.
 
 **Status (Aug 2026):** Policy recorded; the first small core/Bedrock slice is implemented and tested. Plugin-facing registration and discovery remain deferred.
+
+**Wire follow-up (2026-11-14, protocol 2225):** The adapter maps domain Operator to the textual
+Bedrock token `gamedirectors`; fixed enum parse symbols carry both Valid and Enum bits.
+Tests read complete metadata through EOF with literal symbol bytes corroborated by our BDS
+capture. Domain permissions and registration remain unchanged.

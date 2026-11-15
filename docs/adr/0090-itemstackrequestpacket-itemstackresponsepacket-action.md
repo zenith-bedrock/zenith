@@ -2,6 +2,12 @@
 
 > Part of the [decision log](README.md). Code and docs cite this record as `ADR §90`.
 
+**2225 follow-up (2026-11-14):** CraftResultsDeprecated must decode the same four descriptor
+variants as AutoCraft ingredients: Empty, Name, Molang (string + int16) and Tag (string only).
+Sharing that payload reader prevents the following action from being displaced. Reject unknown
+action variants before narrowing to byte, so 256/257 cannot alias Take/Place. Tests distinguish
+the compact union index from the separate legacy enum (e.g. AutoCraft 11/13, results 18/20).
+
 **Choice:** Close the last row of the §89 "do together" grouping. Cross-checked both packets against `zenith-smoke-bot`'s own `bedrock-protocol` dependency's bundled `minecraft-data` `protocol.json` (1.26.40) — the same source that byte-verified §88/§89 — and found the actual bugs were **not** the Cereal double-optional pattern this grouping was opened to investigate, but two independent, more basic correctness bugs plus one genuine optional-field miss on the response side:
 
 1. **`ItemStackRequestPacket`'s action-type numbering was simply wrong**, unrelated to any protocol-version boundary: Zenith's constants included `ActionPlaceInContainer = 7` and `ActionTakeOutContainer = 8`, two action kinds that **do not exist** in the real `ItemStackRequestActionType` mapper (`take=0, place=1, swap=2, drop=3, destroy=4, consume=5, create=6, lab_table_combine=7, beacon_payment=8, mine_block=9, craft_recipe=10, craft_recipe_auto=11, craft_creative=12, optional=13, craft_grindstone_request=14, craft_loom_request=15, non_implemented=16, results_deprecated=17`). Every action from `lab_table_combine` onward was consequently read as the wrong case — e.g. a real `lab_table_combine` (7) action byte was decoded as `ActionPlaceInContainer`, triggering a `count + 2×StackRequestSlotInfo` read that doesn't exist on the wire for that action, corrupting every action after it in the same request. Renumbered to match; the two invented actions are gone.

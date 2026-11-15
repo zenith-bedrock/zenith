@@ -2,6 +2,12 @@
 
 > Part of the [decision log](README.md). Code and docs cite this record as `ADR §148`.
 
+**Protocol review (2026-11-14):** AddPlayer's carried stack and AddItemActor's dropped stack
+must preserve the same user-data buffer as inventory/equipment, including Damage NBT and the
+shield blocking tick. Their SerializedData writer now delegates to the complete descriptor writer.
+Golden tests pin the damaged-pickaxe and shield bodies; air still carries all fixed fields with
+an empty user-data buffer.
+
 **Problem:** durability needs a per-stack wear value. ADR 147 had called aux "damage/variant", which would have put wear in `StackId` and made two pickaxes with different wear different *kinds* of item.
 
 **Evidence (captured from the stock BDS, `bds-reference/capture-damage.ts`, console `give <player> <item> 1 <data>`; raw packets in `out/damage/raw.jsonl`):**
@@ -10,6 +16,12 @@
 - Item extra data on the wire is never empty. Plain items carry 10 bytes (`i16 0` = no NBT, `i32 0` can-place-on, `i32 0` can-destroy); a damaged tool carries `i16 -1, u8 1, <little-endian NBT compound>, i32 0, i32 0`; a shield carries 8 more bytes (blocking ticks), 36 in all. Zenith's writers send a zero-length blob, which this build of BDS never does.
 
 **Choice:** `StackId` is (kind, value, aux, **`ItemUserData`**): the user data (today only `Damage`; item NBT later: enchantments, custom name, firework colours) is a value type of its own, never folded into aux, and it is part of the stack key because stacks merge, swap and compare only when everything that makes them the same stack is equal, as BDS's own stack matching does. It lives in `StackId` rather than beside it in `InventorySlot` because `StackId` is what every path that moves a stack already carries (ISR, floor drops, death loot, chests, blobs); a parallel field would be dropped by the first path that rebuilds a stack from its id, which is a repair/duplication exploit. `ItemDurability` (max damage per item name, from the open-source `item_durability.json`) says which items wear; a stack that is not durable cannot carry damage. Persistence and the wire encode user data as the NBT the client expects; `MineBlock` (and later melee, bows, shields) mutate it server-side, and a tool at max damage breaks.
+
+**Catalog follow-up (ADR §156):** ItemUserData now also retains immutable NBT
+metadata, distinct from modeled wear and auxiliary variants. Creative book/banner/
+firework tags survive grants, transfers, protocol projection and v5 slot blobs.
+Ordinary stacks retain v4 encoding; v1-v4 remain readable. Preserving enchantment
+metadata does not implement enchantment effects.
 
 **Not verified:** how BDS converts a pre-NBT saved aux into `Damage` when loading old worlds, and wear amounts per action (read from vanilla behaviour, not captured). A retail client was not used.
 

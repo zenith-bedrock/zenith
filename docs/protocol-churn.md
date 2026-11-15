@@ -1,5 +1,50 @@
 # Protocol churn checklist
 
+**Login/teleport follow-up (2026-11-14, §153):** FULL login uses the existing Franchise issuer
+validator plus ES384 ClientData proof bound to cpk; keys are loaded outside receive callbacks.
+Unknown authentication alternatives and malformed Login windows are rejected before identity
+acceptance. Connection Request uses its unsigned byte length. Respawn/dismount suspend predicted
+positions until HandledTeleport; the existing movement mailbox preserves the acknowledgement
+across overwrite-latest inputs. Initial spawn retains its separate initialization barrier.
+
+**Packet projection follow-up (2026-11-14):** Resource-pack responses validate the full union
+tag and bounded ID count before conversion/allocation, reject trailing bytes, and close malformed
+negotiation without bootstrap. Command metadata uses `gamedirectors` and Valid|Enum symbols.
+New viewers receive current player health and an already-fusing creeper's Ignited state.
+Player attributes project saturation/exhaustion from gameplay; exhaustion is clamped only for
+the wire range, with periodic refresh at one second and immediate food/saturation updates.
+See [the third audit](../plans/protocol-packets-audit-3-2026-11-14.md).
+
+**Transport follow-up (2026-11-14):** Exact bounded ACK/NACK ranges; bounded RakNet gaps and
+ordered receive queues; circular inner 24-bit windows; stop dispatch after closing; reject
+terminal varint overflow and return inflate buffers on failure. NetherNet applies shared
+receive/channel admission before copying, including negotiation, and sizes segments to the
+remote SDP limit. Native integration covers a 4096-byte peer limit with a 40000-byte payload.
+See ADR §152 and the [second audit](../plans/protocol-transport-audit-2026-11-14.md).
+
+**Current review (2026-11-14, still 2225 / Bedrock 1.26.62):** Corrected the complete skin family
+(numeric arm/color/persona fields, collection counts, compressed animation enums and four-color
+tints), unsigned MobEffect runtime IDs, and processed-input ticks in player effects/motion.
+AddPlayer/AddItemActor now preserve the same durability/shield extra data as inventory.
+ISR result descriptors cover Empty/Name/Molang/Tag; unknown action variants cannot truncate to
+known actions. Text/block-action limits reject before allocation or continued decode. Complete
+Text/AuthInput/InventoryTransaction/PlayerSkin DTOs reject trailing payload bytes.
+
+Evidence includes our own BDS PlayerList captures consumed to exact EOF and byte-identically
+re-encoded (293338 bytes each, including a 256px persona, animation, nine pieces and three tints),
+an independent pass through 3287 captured grid recipes / 16055 ingredients, and independent
+golden/bounds tests. No Cinnabar code or assets were imported. JSON `required`/`default` alone
+does not determine wire presence: correlate effective serialization and raw bytes before changing gates.
+See [the audit and current status](../plans/protocol-2225-audit.md).
+
+**Correction (2026-11-13):** The historical 2193 migration below removed too much from the
+legacy-slot gate. Protocol 2225 retains one optional-array presence byte after the legacy
+request ID, in both standalone InventoryTransaction and AuthInput's packed transaction.
+Restore that gate without restoring obsolete markers around required fields. The untouched
+live client body and predicted/non-predicted placement regressions cover it; the user also
+confirmed placement, chest opening and correct inventory counts against isolated official BDS.
+See [Cinnabar interoperability](cinnabar-interoperability.md) for evidence and limits.
+
 **Last review:** 2026-11-11 — target is stable Bedrock 1.26.62 / protocol 2225 (section "2193 → 2225" below). Earlier review: 2026-10-12 — target was stable Bedrock 1.26.52 / protocol 2193. The Mojang 1.26.51 schema tag and Endstone protocol-docs r26_u5 (1.26.52.3) both identify stable protocol 2193. This update applies the v2193 `Hand` field to item-use transactions, reads AuthInput's required Input Data array directly, removes redundant Cereal accessor-presence bytes in InventoryTransaction and PlayerAuthInput decoding, writes the single optional-presence bytes required by ItemStackResponse, and updates `PlaySoundPacket`'s field order and optional fields. Endstone's version-aware `input.py`, `item_stack.py`, and `sound.py` schemas confirm the reviewed 2193 field gates. A follow-up login fix sends the StartGame `SpawnBiomeType::Default` enum instead of treating biome network IDs as that enum. The full solution suite passes (1407/1407); the focused StartGame wire test passes, and smoke-bot reaches `join`, `start_game`, and `spawn` against protocol 2193. The bot does not render the client UI, so the reported Bedrock error screen remains unverified in a graphical client. The 2193 changelog was checked against Zenith's implemented packet subset; unsupported packet payloads are not being claimed as implemented.
 
 Cadence: ~trimestral, or whenever the team targets a newer Bedrock client. **Manual** — no remote schema scraper.
@@ -63,4 +108,4 @@ Applied (pinned by `Protocol2225WireTests` and `StartGameWireTests`):
 
 Checked, no payload change needed: `ModalFormResponse` (JSON/cancel are optional — already decoded so), `FullContainerName` dynamic id (already optional), `LevelSoundEvent` fire position (already optional), `SerializedSkin.GeometryData` (JSON value → string; same wire), enum additions (`ActorType`, `ContainerType`, `LevelSoundEvent`, `DisconnectFailReason`, new packet ids). Packets Zenith does not implement (cursor drag, matchmaking, audio content, stonecutter recipe, passenger-of-block, camera/attribute-layer changes) remain unimplemented and are quiet-ACKed.
 
-**Not done — embedded data is still BDS 1.26.52.3 / 2193.** Block states and hashed network ids, the item registry, creative content, biome definitions and the jigsaw blob must be re-extracted from BDS 1.26.60+ (`tools/bedrock-data/README.md`). `BiomeDefinitionData.chunk gen data` and `tags` became optional in 2225, so the stale biome blob must be regenerated before relying on a 2225 client. The smoke bot now speaks 2225 natively (`bedrock-protocol` ^3.61, schema 1.26.60; bot commit `7e1d7ca`): `smoke:first10` (join, place, break, inventory, chests, dig timing, two-client) and `smoke:reconnect-pose` pass against this build on a fresh world. `smoke:zombie` and `smoke:projectile` (first run on a fresh world) fail **identically against the pre-2225 build `27a9498`**, so they are pre-existing (timing/cooldown assertions), not 2225 regressions. Wire facts the bot had to learn: Input Data is a flag array, an empty `ItemV4` still carries every field, item-use carries `Hand`, and the library's `legacy_transactions` option adds a stray byte (patched in the bot). No retail 2225 client has joined this build.
+**Not done — embedded data is still BDS 1.26.52.3 / 2193.** Block states and hashed network ids, the item registry, creative content, biome definitions and the jigsaw blob must be re-extracted from BDS 1.26.60+ (`tools/bedrock-data/README.md`). The biome schema marks chunk-generation and tags optional in 2225, but the current blob already contains those gates: the 2026-11-14 structural test consumes all 7667 bytes. Its older provenance alone does not imply a wire mismatch. The smoke bot now speaks 2225 natively (`bedrock-protocol` ^3.61, schema 1.26.60; bot commit `7e1d7ca`): `smoke:first10` (join, place, break, inventory, chests, dig timing, two-client) and `smoke:reconnect-pose` pass against this build on a fresh world. `smoke:zombie` and `smoke:projectile` (first run on a fresh world) fail **identically against the pre-2225 build `27a9498`**, so they are pre-existing (timing/cooldown assertions), not 2225 regressions. Wire facts the bot had to learn: Input Data is a flag array, an empty `ItemV4` still carries every field, item-use carries `Hand`, and the library's `legacy_transactions` option adds a stray byte (patched in the bot). No retail 2225 client has joined this build.
