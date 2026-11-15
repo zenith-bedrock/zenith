@@ -21,9 +21,8 @@ static class ColumnSend
     /// view radius, small spawn-ready radius) can be seconds before this actually sends, sitting in
     /// a bounded channel / worker queue the whole time. A block edited by another player in that
     /// window would silently never reach this joining client for this cell — a real, reproducible
-    /// ghost-block desync on any populated server, not a hypothetical (found via a reference-parity
-    /// audit; <see cref="EmitFloorDropsInColumn"/> right below already reads floor drops live at
-    /// send time for exactly the same reason, which is why only this overlay path had the bug).
+    /// ghost-block desync on any populated server, not a hypothetical. Floor items are published
+    /// separately on the owner after this worker acknowledges column transmission (ADR §163).
     /// Overlays are re-read live, right before sending, so this always reflects the true current
     /// RAM state — the same freshness guarantee <see cref="EmitOverlaysToSession"/>'s join-catchup
     /// path already had.
@@ -46,7 +45,7 @@ static class ColumnSend
             sendUpdateBlock: (x, y, z, runtimeId) =>
                 session.Protocol.World.SendUpdateBlock(x, y, z, runtimeId, orderChannel: orderChannel));
 
-        EmitFloorDropsInColumn(session, world, column.Base.Coord.X, column.Base.Coord.Z);
+        // Item catch-up follows the worker's publication acknowledgement on the tick (ADR §163).
     }
 
     /// <summary>Re-send current overlays for known columns (join catch-up, §14).</summary>
@@ -80,21 +79,22 @@ static class ColumnSend
     /// <summary>AddItemActor for floor drops in one column (late join / stream catch-up, §26 wire).</summary>
     public static void EmitFloorDropsInColumn(NetworkSession session, World.World world, int chunkX, int chunkZ)
     {
-        foreach (var (pos, stackId, count, entityId, _, _) in world.FloorDrops.Snapshot())
+        foreach (var drop in world.FloorDrops.SnapshotViews())
         {
-            if (PlayerChunkTracker.BlockToChunk(pos.X) != chunkX ||
-                PlayerChunkTracker.BlockToChunk(pos.Z) != chunkZ)
+            if (PlayerChunkTracker.BlockToChunk(drop.Pose.X) != chunkX ||
+                PlayerChunkTracker.BlockToChunk(drop.Pose.Z) != chunkZ)
                 continue;
-            if (entityId == 0) continue;
+            if (drop.EntityRuntimeId == 0) continue;
 
-            var item = session.Protocol.Inventory.DescribeStack(stackId, count);
+            var item = session.Protocol.Inventory.DescribeStack(drop.Id, drop.Count);
             if (item.NetworkId == 0) continue; // invalid/air — do not spawn AddItemActor
             session.Protocol.Entity.SendAddItemActor(
-                entityId,
+                drop.EntityRuntimeId,
                 item,
-                pos.X + 0.5f,
-                pos.Y + 0.125f,
-                pos.Z + 0.5f);
+                drop.Pose.X,
+                drop.Pose.Y + EntityHitboxes.ItemNetworkOffset,
+                drop.Pose.Z,
+                drop.Pose.VelocityX, drop.Pose.VelocityY, drop.Pose.VelocityZ);
         }
     }
 }

@@ -129,7 +129,10 @@ partial class InGameSessionHandler
             }
 
             uint expectedOpenContainerGeneration = 0;
-            if (!TryGetSessionRequirement(baked, out var requiresSession, out var requiredTarget))
+            var hasSession = player.Windows.TryGetInventoryAdmissionSession(out var admittedSession);
+            var craftingTarget = hasSession && admittedSession.Target == OpenContainerSession.TargetKind.CraftingTable
+                ? OpenContainerSession.TargetKind.CraftingTable : OpenContainerSession.TargetKind.PlayerInventory;
+            if (!TryGetSessionRequirement(baked, craftingTarget, out var requiresSession, out var requiredTarget))
             {
                 RejectIsr(session, player, request.RequestId);
                 continue;
@@ -137,21 +140,14 @@ partial class InGameSessionHandler
 
             if (requiresSession)
             {
-                // Bind this wire action to the session visible at decode time. The tick owns the
-                // state and rejects the intent if close/reopen changed that generation meanwhile.
-                // A just-received Interact(OpenInventory) is still only a mailbox entry here;
-                // retain the request when its latest pending window will establish the required
-                // target, then let InventorySystem open it before resolving this request.
-                if (player.Windows.TryGetOpenContainerSession(out var openContainer) &&
-                    (requiredTarget is null || openContainer.Target == requiredTarget))
-                {
-                    expectedOpenContainerGeneration = openContainer.Generation;
-                }
-                else if (!player.Windows.HasPendingContainerOpen(requiredTarget))
+                // Bind to the session after earlier queued windows, including reserved generations
+                // for opens not yet applied. Failed opens cannot redirect this action to an old view.
+                if (!hasSession || (requiredTarget is not null && admittedSession.Target != requiredTarget))
                 {
                     RejectIsr(session, player, request.RequestId);
                     continue;
                 }
+                expectedOpenContainerGeneration = admittedSession.Generation;
             }
 
             var intent = InventoryStackIntent.Create(
@@ -210,13 +206,7 @@ partial class InGameSessionHandler
 
         if (action.ActionType == ItemStackRequestPacket.ActionCreate)
         {
-            if (action.ResultSlot != 0)
-            {
-                baked = default;
-                return false;
-            }
-
-            baked = InventoryStackAction.CreateOutput();
+            baked = InventoryStackAction.CreateOutput(action.ResultSlot);
             return true;
         }
 
@@ -321,6 +311,7 @@ partial class InGameSessionHandler
     /// </summary>
     private static bool TryGetSessionRequirement(
         IReadOnlyList<InventoryStackAction> actions,
+        OpenContainerSession.TargetKind craftingTarget,
         out bool requiresSession,
         out OpenContainerSession.TargetKind? requiredTarget)
     {
@@ -335,12 +326,12 @@ partial class InGameSessionHandler
                 InventoryStackActionKind.Create or
                 InventoryStackActionKind.Destroy)
             {
-                if (!TryRequireTarget(OpenContainerSession.TargetKind.PlayerInventory, ref requiresSession, ref requiredTarget))
+                if (!TryRequireTarget(craftingTarget, ref requiresSession, ref requiredTarget))
                     return false;
             }
 
-            if (!TryApplyReferenceRequirement(action.From, ref requiresSession, ref requiredTarget) ||
-                !TryApplyReferenceRequirement(action.To, ref requiresSession, ref requiredTarget))
+            if (!TryApplyReferenceRequirement(action.From, craftingTarget, ref requiresSession, ref requiredTarget) ||
+                !TryApplyReferenceRequirement(action.To, craftingTarget, ref requiresSession, ref requiredTarget))
             {
                 return false;
             }
@@ -351,6 +342,7 @@ partial class InGameSessionHandler
 
     private static bool TryApplyReferenceRequirement(
         in InventorySlotReference reference,
+        OpenContainerSession.TargetKind craftingTarget,
         ref bool requiresSession,
         ref OpenContainerSession.TargetKind? requiredTarget)
     {
@@ -358,8 +350,12 @@ partial class InGameSessionHandler
         {
             InventorySlotArea.OpenContainer =>
                 TryRequireTarget(OpenContainerSession.TargetKind.Chest, ref requiresSession, ref requiredTarget),
-            InventorySlotArea.CraftGrid or InventorySlotArea.CraftResult =>
+            InventorySlotArea.CraftGrid =>
                 TryRequireTarget(OpenContainerSession.TargetKind.PlayerInventory, ref requiresSession, ref requiredTarget),
+            InventorySlotArea.TableCraftGrid =>
+                TryRequireTarget(OpenContainerSession.TargetKind.CraftingTable, ref requiresSession, ref requiredTarget),
+            InventorySlotArea.CraftResult =>
+                TryRequireTarget(craftingTarget, ref requiresSession, ref requiredTarget),
             InventorySlotArea.Cursor => TryRequireAnySession(ref requiresSession),
             _ => true
         };
@@ -517,10 +513,9 @@ partial class InGameSessionHandler
                     break;
                 }
 
-                // The current food/projectile slices commit from their initiating item-use
-                // intent. Release only refreshes the selected input slot; treating it as a
-                // second use would double-consume food or spawn a duplicate projectile.
+                // Release cancels food use; it never starts another use or projectile.
                 _ = TryApplyTransactionHeldStack(session, player, packet.HotbarSlot, packet.HeldItem, "ItemRelease");
+                _ = player.Intents.SubmitCancelFoodUse();
                 break;
         }
     }
@@ -541,11 +536,17 @@ partial class InGameSessionHandler
         // The hotbar index and ItemV4 descriptor are client claims. Resolve both against the
         // last authoritative view before creating an attack, block edit, eating or release intent.
         // A mismatch is a client/server desync, not a reason to guess a mutation.
-        if (!MatchesCurrentStack(session, player, hotbarSlot, heldItem) ||
-            !session.Protocol.Inventory.MatchesAdvertisedStackNetId(
-                InventorySlotReference.Player(hotbarSlot), heldItem.StackNetworkId))
+        var expected = session.Protocol.Inventory.DescribeSlot(player.Inventory, hotbarSlot);
+        var stackMatches = MatchesWireStack(heldItem, expected);
+        var advertisedIdMatches = session.Protocol.Inventory.MatchesAdvertisedStackNetId(
+            InventorySlotReference.Player(hotbarSlot), heldItem.StackNetworkId);
+        if (!stackMatches || !advertisedIdMatches)
         {
-            session.Context.Logger.Debug($"Rejected {transactionKind}: held stack mismatch in hotbar {hotbarSlot}.");
+            session.Context.Logger.Debug(
+                $"Rejected {transactionKind}: held stack mismatch in hotbar {hotbarSlot}; " +
+                $"claimed item/count/meta/block={heldItem.NetworkId}/{heldItem.Count}/{heldItem.Meta}/{heldItem.BlockRuntimeId}, " +
+                $"expected={expected.NetworkId}/{expected.Count}/{expected.Meta}/{expected.BlockRuntimeId}, " +
+                $"stackNetId={heldItem.StackNetworkId} advertisedIdMatches={advertisedIdMatches}.");
             session.Protocol.Inventory.ResyncActiveInventoryView(player);
             return false;
         }
@@ -566,11 +567,10 @@ partial class InGameSessionHandler
         Player.Player player,
         InventoryTransactionPacket packet)
     {
-        // A correlatable legacy ID is required to make the tick-side replay ledger meaningful.
-        // Without it, duplicated UDP input could apply two otherwise-valid drops before either
-        // one changes the authoritative slot.
-        if (!packet.HasLegacySetItemSlots ||
-            !IsCorrelatableLegacyRequest(packet.LegacyRequestId) ||
+        // Emptying the source may carry no legacy ID. Snapshot preconditions protect that
+        // operation on tick; nonempty remainders still use the correlatable legacy form.
+        if ((packet.LegacyRequestId != 0 &&
+                (!packet.HasLegacySetItemSlots || !IsCorrelatableLegacyRequest(packet.LegacyRequestId))) ||
             !TryBakeLegacyDrop(session, player, packet, out var intent))
         {
             if (IsCorrelatableLegacyRequest(packet.LegacyRequestId))
@@ -654,10 +654,13 @@ partial class InGameSessionHandler
                 slot) with { Count = checked((ushort)(actual.Count - dropCount)) };
         if (!MatchesWireStack(slotAction.NewItem, expectedRemainder))
             return false;
+        if (packet.LegacyRequestId == 0 && dropCount != actual.Count) return false;
 
         intent = InventoryStackIntent.Create(
             packet.LegacyRequestId,
-            [InventoryStackAction.Drop(InventorySlotReference.Player(slot), dropCount, default)]);
+            [InventoryStackAction.Drop(InventorySlotReference.Player(slot), dropCount,
+                new WireSlot(InventoryContainerMap.Inventory, (byte)slot, slotAction.OldItem.StackNetworkId)) with
+                { ExpectedSourceStack = actual }]) with { UncorrelatedLegacyDrop = packet.LegacyRequestId == 0 };
         return true;
     }
 

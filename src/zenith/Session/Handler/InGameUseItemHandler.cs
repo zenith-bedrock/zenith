@@ -12,6 +12,10 @@ namespace Zenith.Session.Handler;
 /// <summary>Partial: see <see cref="InGameSessionHandler"/>.</summary>
 partial class InGameSessionHandler
 {
+    // Eating particles/progress are client presentation. They never complete a use or mutate food.
+    private static void HandleActorEvent(NetworkSession session, ref BinaryStream stream) =>
+        _ = TryDecode<ActorEventPacket>(session, ref stream, "ActorEvent", out _);
+
     private static void HandleUseItemInteraction(
         NetworkSession session,
         Player.Player player,
@@ -49,6 +53,8 @@ partial class InGameSessionHandler
         int clickedBlockRuntimeId,
         in DecodedTransactionItem heldItem)
     {
+        session.Context.Logger.Debug(
+            $"UseItem received from {player.Username}: action={useActionType} block={blockX},{blockY},{blockZ} face={blockFace} slot={hotbarSlot}");
         if (useActionType is < InventoryTransactionPacket.UseClickBlock or > InventoryTransactionPacket.UseAsAttack)
         {
             session.Context.Logger.Debug($"Rejected UseItem: unknown action {useActionType} from {player.Username}.");
@@ -71,7 +77,8 @@ partial class InGameSessionHandler
             var heldStack = player.Inventory.Get(hotbarSlot);
             if (heldStack.Count > 0 && FoodItems.TryGetNutrition(session.Context.ItemPalette, heldStack.Id, out _))
             {
-                player.Intents.SubmitEatIntent();
+                if (!player.Intents.SubmitEatIntent(hotbarSlot, heldStack))
+                    session.Context.Logger.Debug($"Dropped food start from {player.Username}: use queue full.");
                 return;
             }
 

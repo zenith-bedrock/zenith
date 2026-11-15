@@ -32,6 +32,8 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
             AllowSynchronousContinuations = false
         });
     private readonly CancellationTokenSource _worldStreamShutdown = new();
+    private readonly Channel<ChunkCoord> _publishedWorldColumns = Channel.CreateBounded<ChunkCoord>(
+        new BoundedChannelOptions(WorldStreamQueueCapacity) { SingleReader = true, SingleWriter = true });
     private readonly Task _worldStreamWorker;
     private int _pendingWorldStreamColumns;
     private long _nextWorldStreamSequence;
@@ -111,6 +113,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
 
     internal bool WorldStreamIdle => Volatile.Read(ref _pendingWorldStreamColumns) == 0;
     internal long WorldStreamCompletedThrough => Volatile.Read(ref _completedWorldStreamSequence);
+    internal bool TryConsumePublishedColumn(out ChunkCoord coord) => _publishedWorldColumns.Reader.TryRead(out coord);
 
     private async Task ProcessWorldStreamAsync()
     {
@@ -123,6 +126,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
                 try
                 {
                     ColumnSend.EmitToSession(this, work.Column, work.OrderChannel);
+                    await _publishedWorldColumns.Writer.WriteAsync(work.Column.Base.Coord, _worldStreamShutdown.Token).ConfigureAwait(false);
                     Volatile.Write(ref _completedWorldStreamSequence, work.Sequence);
                 }
                 finally
@@ -177,20 +181,11 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
     internal const byte DefaultOrderChannel = 0;
 
     /// <summary>
-    /// Bulk post-spawn world streaming (<c>ChunkStreamSystem</c>'s ring, one <c>LevelChunkPacket</c>
-    /// per column). RakNet's Reliable Ordered guarantee is per-channel, not global — sharing channel 0
-    /// with this meant a single dropped chunk in a multi-column burst held up every later-queued
-    /// gameplay packet (Death/Respawn included) behind it client-side until retransmission filled the
-    /// gap, even though nothing about those packets actually depended on chunk delivery order. Root
-    /// cause of the <c>smoke:respawn</c> timeout (roadmap Yes-next priority 2) — found by confirming
-    /// server-side send genuinely happens (no exception, no logic bug) while the client-side wait
-    /// never resolves. Zenith's own <c>RakNetSession</c> already tracks up to 32 independent ordered
-    /// channels (<c>Frame.MAX_ORDER_CHANNELS</c>) — this was simply never used. No ordering constraint
-    /// requires this stream to share a channel with anything else: by the time it runs, the client
-    /// already has its hash-flag context from PreSpawn's channel-0 batch.
+    /// Bulk terrain retains its bounded worker/budgets but shares Bedrock's ordered lane (ADR §151).
+    /// A client with a single RakNet ordering queue otherwise discards channel-1 columns whose
+    /// independent order indexes collide with the already-consumed channel-0 stream.
     /// </summary>
-    internal const byte WorldStreamOrderChannel = 1;
-
+    internal const byte WorldStreamOrderChannel = DefaultOrderChannel;
     /// <summary>Envelope de envio usado apenas pelos módulos <c>*Protocol</c> nesta assembly.</summary>
     internal void SendDataPacket(params DataPacket[] packets) =>
         SendDataPacket(GameTransportPriority.Normal, CompressionAlgorithm, DefaultOrderChannel, packets);
@@ -325,6 +320,11 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
     /// </summary>
     public bool HandleGamePacket(ref BinaryStream stream)
     {
+        if (IsClosed)
+        {
+            stream.Dispose();
+            return false;
+        }
         var compressionType = stream.PeekByte();
 
         switch (compressionType)
@@ -371,7 +371,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
             // client-controlled; ReadSubstream itself rejects a declared length exceeding what's
             // actually left in the batch before creating the window, so a malformed length cannot
             // read into whatever follows.
-            while (!stream.IsEndOfFile)
+            while (!IsClosed && !stream.IsEndOfFile)
             {
                 var length = stream.ReadUnsignedVarInt();
                 var subpacket = stream.ReadSubstream(length);
@@ -397,33 +397,36 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
     /// buffer retornado ao pool (<see cref="ArrayPool{T}.Return"/>) depois de terminar de
     /// usar o <see cref="BinaryStream"/> que o envolve.
     /// </summary>
-    internal static byte[] InflateToPooledBuffer(DeflateStream inflater, out int length)
+    internal static byte[] InflateToPooledBuffer(DeflateStream inflater, out int length, ArrayPool<byte>? pool = null)
     {
-        var buffer = ArrayPool<byte>.Shared.Rent(4096);
+        pool ??= ArrayPool<byte>.Shared;
+        var buffer = pool.Rent(4096);
         length = 0;
 
-        int read;
-        while ((read = inflater.Read(buffer, length, buffer.Length - length)) > 0)
+        try
         {
-            length += read;
-
-            if (length > MaxDecompressedSize)
+            int read;
+            while ((read = inflater.Read(buffer, length, buffer.Length - length)) > 0)
             {
-                ArrayPool<byte>.Shared.Return(buffer);
-                throw new InvalidOperationException(
-                    $"Decompressed data exceeds maximum size ({MaxDecompressedSize} bytes).");
+                length += read;
+                if (length > MaxDecompressedSize)
+                    throw new InvalidOperationException(
+                        $"Decompressed data exceeds maximum size ({MaxDecompressedSize} bytes).");
+                if (length == buffer.Length)
+                {
+                    var bigger = pool.Rent(buffer.Length * 2);
+                    System.Buffer.BlockCopy(buffer, 0, bigger, 0, length);
+                    pool.Return(buffer);
+                    buffer = bigger;
+                }
             }
-
-            if (length == buffer.Length)
-            {
-                var bigger = ArrayPool<byte>.Shared.Rent(buffer.Length * 2);
-                System.Buffer.BlockCopy(buffer, 0, bigger, 0, length);
-                ArrayPool<byte>.Shared.Return(buffer);
-                buffer = bigger;
-            }
+            return buffer;
         }
-
-        return buffer;
+        catch
+        {
+            pool.Return(buffer);
+            throw;
+        }
     }
 
     private void HandleDataPacket(ref BinaryStream stream)

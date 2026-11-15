@@ -42,6 +42,7 @@ class PlayerAuthInputPacket : DataPacket
     public const int InputFlagStartSprinting = 25;
     public const int InputFlagStopSprinting = 26;
     public const int InputFlagMissedSwing = 39;
+    public const int InputFlagHandledTeleport = 37;
     public const int InputFlagVerticalCollision = 50;
 
     public const int ActionStartBreak = 0;
@@ -57,6 +58,7 @@ class PlayerAuthInputPacket : DataPacket
     public float PositionX { get; set; }
     public float PositionY { get; set; }
     public float PositionZ { get; set; }
+    public ulong InputTick { get; set; }
     public PlayerBlockAction[] BlockActions { get; set; } = [];
     public AuthItemInteraction? ItemInteraction { get; set; }
     /// <summary>Optional ItemStackRequest carried by PlayerAuthInput (no outer request count).</summary>
@@ -68,6 +70,7 @@ class PlayerAuthInputPacket : DataPacket
     public bool InputStartSprinting { get; set; }
     public bool InputStopSprinting { get; set; }
     public bool InputMissedSwing { get; set; }
+    public bool InputHandledTeleport { get; set; }
     /// <summary>AuthInput VerticalCollision (flag 50) — peer Absolute ON_GROUND.</summary>
     public bool InputOnGround { get; set; }
     /// <summary>Block action list present — client is performing block interactions this tick.</summary>
@@ -93,6 +96,7 @@ class PlayerAuthInputPacket : DataPacket
         InputStartSprinting = false;
         InputStopSprinting = false;
         InputMissedSwing = false;
+        InputHandledTeleport = false;
         InputOnGround = false;
         var flagCount = stream.ReadUnsignedVarInt();
         for (var i = 0; i < flagCount; i++)
@@ -104,6 +108,7 @@ class PlayerAuthInputPacket : DataPacket
                 case InputFlagStartSprinting: InputStartSprinting = true; break;
                 case InputFlagStopSprinting: InputStopSprinting = true; break;
                 case InputFlagMissedSwing: InputMissedSwing = true; break;
+                case InputFlagHandledTeleport: InputHandledTeleport = true; break;
                 case InputFlagVerticalCollision: InputOnGround = true; break;
             }
         }
@@ -113,7 +118,7 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadVarInt(); // interaction_model (zigzag32)
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // interact_pitch
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // interact_yaw
-        _ = stream.ReadUnsignedVarLong(); // tick
+        InputTick = (ulong)stream.ReadUnsignedVarLong();
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // pos_delta
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
@@ -144,6 +149,9 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // raw_move_vector
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+
+        if (!stream.IsEndOfFile)
+            throw new InvalidDataException("AuthInput has trailing payload bytes.");
     }
 
     /// <summary>
@@ -153,7 +161,8 @@ class PlayerAuthInputPacket : DataPacket
     private static PlayerBlockAction[] ReadBlockActions(ref BinaryStream stream)
     {
         var count = stream.ReadUnsignedVarInt();
-        if (count is < 0 or > 100) return [];
+        if (count is < 0 or > 100)
+            throw new InvalidDataException($"AuthInput block action count {count} exceeds 100.");
         var list = new PlayerBlockAction[count];
         for (var i = 0; i < count; i++)
         {
@@ -181,8 +190,8 @@ class PlayerAuthInputPacket : DataPacket
     /// </summary>
     private static AuthItemInteraction ReadTransaction(ref BinaryStream stream)
     {
-        var legacyRequestId = stream.ReadVarInt();
-        if (legacyRequestId != 0)
+        _ = stream.ReadVarInt(); // legacy request ID
+        if (stream.ReadBool()) // optional legacy slot array, independent wire presence gate
             InventoryTransactionPacket.SkipLegacySetItemSlots(ref stream);
 
         var actionCount = stream.ReadUnsignedVarInt();

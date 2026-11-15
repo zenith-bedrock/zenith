@@ -51,7 +51,11 @@ sealed class ChunkStreamSystem : IGameSystem
         {
             StartPendingPreSpawn(player);
             PumpPreSpawnPublication(player);
+            while (player.Session.TryConsumePublishedColumn(out var published))
+                if (player.Chunks.Knows(published.X, published.Z))
+                    ColumnSend.EmitFloorDropsInColumn(player.Session, _world, published.X, published.Z);
             ApplySpawnReady(player, online);
+            player.Chunks.ApplyPendingRadius();
             DrainCompletedStreams(player);
             if (!player.IsInGame && !player.IsSpawning) continue;
             // A pre-spawn publication release early (ADR §111 spawn-ready barrier) sets IsSpawning
@@ -252,6 +256,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 var orderChannel = publication.SpawnReleased
                     ? NetworkSession.WorldStreamOrderChannel
                     : NetworkSession.DefaultOrderChannel;
+                _world.ApplyChunkHydration(publication.PendingColumn.Base.Coord.X, publication.PendingColumn.Base.Coord.Z);
                 if (!session.QueueWorldColumn(publication.PendingColumn, orderChannel, out var sequence))
                     return;
 
@@ -279,7 +284,7 @@ sealed class ChunkStreamSystem : IGameSystem
             if (load.Error is not null)
             {
                 player.Session.Context.Logger.Error(
-                    $"PreSpawn chunk load failed for {player.Username}: {load.Error.Message}");
+                    $"PreSpawn chunk load failed for {player.Username}: {load.Error}");
                 if (!publication.SpawnReleased)
                 {
                     load.Cancel();
@@ -456,6 +461,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 continue;
             }
 
+            _world.ApplyChunkHydration(completion.ChunkX, completion.ChunkZ);
             if (!player.Session.QueueWorldColumn(completion.Column, NetworkSession.WorldStreamOrderChannel))
             {
                 if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))

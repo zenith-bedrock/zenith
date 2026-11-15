@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Zenith.Packets;
 
 namespace Zenith.Session;
@@ -45,8 +46,9 @@ static class ClientSkinParser
             var geometryVersion = TryDecodeUtf8(root, "SkinGeometryDataEngineVersion") ?? "";
             var animationData = TryDecodeUtf8(root, "SkinAnimationData") ?? "";
             var capeId = ReadString(root, "CapeId") ?? "";
-            var armSize = ReadString(root, "ArmSize") ?? "wide";
-            var skinColor = ReadString(root, "SkinColor") ?? "#0";
+            var armSize = string.Equals(ReadString(root, "ArmSize"), "slim", StringComparison.OrdinalIgnoreCase)
+                ? SkinArmSize.Slim : SkinArmSize.Wide;
+            var skinColor = ReadColor(ReadString(root, "SkinColor") ?? "#0");
 
             var cape = ReadCape(root);
             var animations = ReadAnimations(root);
@@ -175,7 +177,7 @@ static class ClientSkinParser
         {
             if (list.Count >= SerializedSkin.MaxPersonaPieces) break;
             var pieceId = ReadString(el, "PieceId") ?? "";
-            var pieceType = ReadString(el, "PieceType") ?? "";
+            var pieceType = ReadPieceType(ReadString(el, "PieceType"));
             var packId = ReadString(el, "PackId") ?? Guid.Empty.ToString("D");
             if (!Guid.TryParse(packId, out _))
                 packId = Guid.Empty.ToString("D");
@@ -204,25 +206,39 @@ static class ClientSkinParser
         {
             if (list.Count >= SerializedSkin.MaxTintPieces) break;
             var type = ReadString(el, "PieceType") ?? "";
-            var colors = Array.Empty<string>();
+            if (type.StartsWith("persona_", StringComparison.OrdinalIgnoreCase)) type = type[8..];
+            var colors = Array.Empty<int>();
             if (el.TryGetProperty("Colors", out var cols) && cols.ValueKind == JsonValueKind.Array)
             {
-                var tmp = new List<string>();
+                var tmp = new List<int>();
                 foreach (var c in cols.EnumerateArray())
                 {
                     if (tmp.Count >= SerializedSkin.MaxTintColors) break;
                     if (c.ValueKind == JsonValueKind.String && c.GetString() is { } s)
-                        tmp.Add(s);
+                        tmp.Add(ReadColor(s));
                 }
 
                 colors = tmp.ToArray();
             }
 
-            list.Add(new SkinPersonaTintPiece { Type = type, Colors = colors });
+            if (colors.Length == SerializedSkin.MaxTintColors)
+                list.Add(new SkinPersonaTintPiece { Type = type, Colors = colors });
         }
 
         return list.ToArray();
     }
+
+    private static SkinPieceType ReadPieceType(string? value)
+    {
+        if (value?.StartsWith("persona_", StringComparison.OrdinalIgnoreCase) == true)
+            value = value[8..];
+        value = value?.Replace("_", "", StringComparison.Ordinal);
+        return Enum.TryParse<SkinPieceType>(value, ignoreCase: true, out var type) && Enum.IsDefined(type)
+            ? type : SkinPieceType.Unknown;
+    }
+
+    private static int ReadColor(string value) =>
+        unchecked((int)uint.Parse(value.AsSpan().TrimStart('#'), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
 
     private static JsonDocument ReadPayload(string jwt)
     {

@@ -111,7 +111,7 @@ sealed class ServerConfig
         [YamlIgnore]
         public bool AllowsOfflineFallback => _modes.Contains(ModeOffline);
 
-        /// <summary>True when accept is exactly xbox — strict chain signature checks.</summary>
+        /// <summary>True when accept is exactly xbox; FULL login requires issuer and client key proof.</summary>
         [YamlIgnore]
         public bool RequireStrictXbox =>
             _modes.Count == 1 && _modes.Contains(ModeXbox);

@@ -13,6 +13,55 @@ internal static class FranchiseTokenValidator
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private static readonly FranchiseKeyCache Cache = new(FetchKeysAsync, TimeSpan.FromHours(6));
 
+    public static bool ValidateCachedLogin(string token, string clientData) =>
+        ValidateLogin(token, clientData, Cache.Fresh());
+
+    internal static bool ValidateLogin(string token, string clientData, IReadOnlyList<RSAParameters>? keys)
+    {
+        if (!Validate(token, keys)) return false;
+        try
+        {
+            using var claims = JsonDocument.Parse(Decode(token.Split('.')[1]));
+            var root = claims.RootElement;
+            // FULL identity must come from issuer-authenticated claims, never certificate/client fallbacks.
+            if (!root.TryGetProperty("xname", out var name) || name.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(name.GetString()) ||
+                !root.TryGetProperty("cpk", out var cpk) || cpk.ValueKind != JsonValueKind.String)
+                return false;
+            var der = Convert.FromBase64String(cpk.GetString()!);
+            using var clientKey = ECDsa.Create();
+            clientKey.ImportSubjectPublicKeyInfo(der, out var consumed);
+            if (consumed != der.Length || clientKey.ExportParameters(false).Curve.Oid.Value != "1.3.132.0.34") return false;
+            var parts = clientData.Split('.');
+            if (parts.Length != 3) return false;
+            using var header = JsonDocument.Parse(Decode(parts[0]));
+            if (!header.RootElement.TryGetProperty("alg", out var alg) || alg.GetString() != "ES384") return false;
+            return clientKey.VerifyData(Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]), Decode(parts[2]),
+                HashAlgorithmName.SHA384, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException or CryptographicException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    internal static async Task KeepKeysFreshAsync(Action<string> onFailure, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var delay = TimeSpan.FromHours(1);
+            try { await GetKeysAsync(cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or FormatException or CryptographicException)
+            {
+                onFailure($"Franchise keys unavailable ({ex.GetType().Name}); FULL logins require valid cached keys.");
+                delay = TimeSpan.FromSeconds(30);
+            }
+            try { await Task.Delay(delay, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+        }
+    }
+
     public static Task<bool> ValidateAsync(
         string token, CancellationToken cancellationToken, Action<string>? onFailure = null) =>
         ValidateAsync(token, GetKeysAsync, cancellationToken, onFailure);

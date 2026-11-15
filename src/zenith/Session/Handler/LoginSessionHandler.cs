@@ -4,6 +4,7 @@ using Zenith.Packets;
 using Zenith.Protocol;
 using Zenith.Server;
 using Zenith.Session;
+using Zenith.Network;
 
 namespace Zenith.Session.Handler;
 
@@ -12,6 +13,18 @@ namespace Zenith.Session.Handler;
 /// </summary>
 class LoginSessionHandler : ISessionHandler
 {
+    /// <summary>
+    /// Issuer-authenticated SDP identity must match FULL login exactly. Offline SDP assertions and
+    /// SELF_SIGNED game logins use independent keys/tokens and cannot establish an Xbox identity.
+    /// </summary>
+    internal static bool MatchesTransportAuthentication(TransportIdentity? identity, int authenticationType, string loginToken)
+    {
+        if (authenticationType == LoginPacket.AuthenticationInfo.TypeFull)
+            return identity?.Authenticated == true &&
+                   string.Equals(identity.GameServerToken, loginToken, StringComparison.Ordinal);
+        return authenticationType == LoginPacket.AuthenticationInfo.TypeSelfSigned && identity?.Authenticated != true;
+    }
+
     public bool HandleDataPacket(NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
     {
         switch (header.Id)
@@ -46,7 +59,14 @@ class LoginSessionHandler : ISessionHandler
 
     private static void HandleLogin(NetworkSession session, ref BinaryStream stream)
     {
-        var packet = DataPacket.From<LoginPacket>(ref stream);
+        LoginPacket packet;
+        try { packet = DataPacket.From<LoginPacket>(ref stream); }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException)
+        {
+            session.Context.Logger.Debug($"Login payload rejected: {ex.GetType().Name}.");
+            session.Disconnect();
+            return;
+        }
         session.Context.Logger.Debug($"LoginPacket: {packet.Protocol}");
 
         if (!TryAcceptProtocol(session, packet.Protocol, stage: "Login"))
@@ -54,6 +74,12 @@ class LoginSessionHandler : ISessionHandler
 
         var auth = session.Context.Config.Auth;
         var authType = packet.AuthInfo.AuthenticationType;
+        if (authType is < LoginPacket.AuthenticationInfo.TypeFull or > LoginPacket.AuthenticationInfo.TypeSelfSigned)
+        {
+            session.Context.Logger.Warning("Rejected login: unknown authentication type.");
+            session.Disconnect();
+            return;
+        }
         if (authType == LoginPacket.AuthenticationInfo.TypeGuest)
         {
             session.Context.Logger.Warning("Rejected login: guest authentication is not supported.");
@@ -79,19 +105,9 @@ class LoginSessionHandler : ISessionHandler
 
         if (session.RequiresTransportIdentityBinding)
         {
-            var transportIdentity = session.TransportIdentity;
-            var matchesTransportIdentity = transportIdentity is not null &&
-                string.Equals(transportIdentity.GameServerToken, packet.AuthInfo.Token, StringComparison.Ordinal);
-            if (transportIdentity is not null && !matchesTransportIdentity)
+            if (!MatchesTransportAuthentication(session.TransportIdentity, authType, packet.AuthInfo.Token))
             {
-                session.Context.Logger.Warning("Rejected NetherNet login: Login token differs from the SDP identity token.");
-                session.Disconnect();
-                return;
-            }
-            if (authType == LoginPacket.AuthenticationInfo.TypeFull &&
-                (!matchesTransportIdentity || transportIdentity?.Authenticated != true))
-            {
-                session.Context.Logger.Warning("Rejected NetherNet FULL login: GameServerToken was not authenticated during signaling.");
+                session.Context.Logger.Warning("Rejected NetherNet login: authenticated SDP and game authentication do not match.");
                 session.Disconnect();
                 return;
             }
@@ -100,11 +116,21 @@ class LoginSessionHandler : ISessionHandler
         LoginIdentity.ParsedIdentity identity;
         try
         {
-            if (!string.IsNullOrWhiteSpace(packet.AuthInfo.Certificate))
-                LoginIdentity.ValidateIdentityChain(packet.AuthInfo.Certificate, auth.RequireStrictXbox);
+            if (authType == LoginPacket.AuthenticationInfo.TypeFull)
+            {
+                if (!FranchiseTokenValidator.ValidateCachedLogin(packet.AuthInfo.Token, packet.ClientDataJwt))
+                    throw new FormatException("FULL login issuer signature or client key proof was rejected.");
+                // A legacy certificate is not the source of modern FULL identity.
+                packet.AuthInfo.Certificate = null;
+            }
+            else if (!string.IsNullOrWhiteSpace(packet.AuthInfo.Certificate))
+                LoginIdentity.ValidateIdentityChain(packet.AuthInfo.Certificate, requireStrictXbox: false);
 
             identity = LoginIdentity.ParseIdentityToken(
-                packet.AuthInfo.Token, packet.AuthInfo.Certificate, packet.ClientDataJwt, auth);
+                packet.AuthInfo.Token, packet.AuthInfo.Certificate, packet.ClientDataJwt,
+                authType == LoginPacket.AuthenticationInfo.TypeFull
+                    ? new ServerConfig.AuthSection { Accept = [ServerConfig.AuthSection.ModeXbox] }
+                    : auth);
         }
         catch (Exception ex)
         {
@@ -162,7 +188,7 @@ class LoginSessionHandler : ISessionHandler
         // (inventory, armor, position, gamemode, vitals) on this still-private object first, so a
         // concurrent GameLoop tick can never observe a half-initialized player. TryAdd moves to
         // just before PlayerLoginEvent publishes, once the object is actually tick-ready.
-        var loaded = session.Context.World.TryLoadInventory(player.Uuid, player.Inventory);
+        var loaded = session.Context.World.TryLoadInventory(player);
         session.Context.Logger.Info(
             loaded
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"

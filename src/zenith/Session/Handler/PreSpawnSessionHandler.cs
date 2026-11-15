@@ -25,12 +25,13 @@ class PreSpawnSessionHandler : ISessionHandler
         switch (header.Id)
         {
             case (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET:
-                HandleRequestChunkRadius(session, ref stream);
+                ChunkRadiusNegotiation.HandleRequest(session, ref stream, startPreSpawn: true);
                 return true;
 
             case (int)ProtocolInfo.CLIENT_CACHE_STATUS_PACKET:
             case (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET:
             case (int)ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET:
+            case (int)ProtocolInfo.CLIENT_CAMERA_AIM_ASSIST_PACKET:
                 return true;
 
             case (int)ProtocolInfo.DISCONNECT_PACKET:
@@ -45,29 +46,4 @@ class PreSpawnSessionHandler : ISessionHandler
         }
     }
 
-    private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)
-    {
-        var request = DataPacket.From<RequestChunkRadiusPacket>(ref stream);
-        var cap = session.Context.Config.World.SpawnChunkRadius;
-        var radius = Math.Min(request.Radius, cap);
-
-        session.Context.Logger.Debug($"RequestChunkRadiusPacket: requested={request.Radius}, using={radius}");
-
-        session.Protocol.World.SendChunkRadiusUpdated(radius);
-
-        if (Interlocked.Exchange(ref session.PreSpawnLoadStarted, 1) != 0)
-        {
-            session.Context.Logger.Debug("Ignoring duplicate RequestChunkRadius during PreSpawn load.");
-            return;
-        }
-
-        if (session.Player is null || !session.Player.Chunks.TrySubmitPreSpawn(radius))
-        {
-            session.Context.Logger.Debug("Ignored PreSpawn request after session/player state changed.");
-            return;
-        }
-
-        // The gameplay owner captures Player state and starts storage I/O on its next tick.
-        // This handler only accepts protocol input and publishes the protocol-only radius reply.
-    }
 }

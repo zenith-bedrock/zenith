@@ -41,18 +41,20 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
         _session.SendDataPacket(CraftingDataBuilder.Build(_session.Context.Recipes, _session.Context.ItemPalette));
 
     /// <summary>
-    /// The recipe book a new player starts with: what stock BDS unlocks, kept only where this server has the recipe (an id the
-    /// client has no definition for would be an inert entry). Progressive unlocking is not modelled, so this is all a player ever has.
+    /// Expose all registered grid recipes until progressive discovery is modeled (ADR §156).
+    /// This affects book visibility; ingredient/station validation still happens on the tick.
     /// </summary>
     public void SendInitiallyUnlockedRecipes()
     {
-        var recipes = _session.Context.Recipes;
-        _session.SendDataPacket(new UnlockedRecipesPacket
+        _session.SendDataPacket(BuildInitiallyUnlockedRecipes(_session.Context.Recipes));
+    }
+
+    internal static UnlockedRecipesPacket BuildInitiallyUnlockedRecipes(RecipeRegistry recipes) =>
+        new()
         {
             UnlockType = UnlockedRecipesPacket.InitiallyUnlocked,
-            RecipeIds = UnlockedRecipesPacket.InitialRecipeIdsOfBds.Where(id => recipes.TryGetNetId(id, out _)).ToArray(),
-        });
-    }
+            RecipeIds = recipes.Recipes.Select(recipe => recipe.Id).ToArray(),
+        };
 
 
     /// <summary>Façade — see <see cref="CreativeContentBuilder"/>.</summary>
@@ -350,7 +352,8 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
                 int? damage = _session.Context.Durability.TryGetMax(slot.Id, out _) ? slot.Id.Damage : null;
                 return new NetworkItemStack(
                     (short)slot.Id.Value, (ushort)slot.Count, BlockRuntimeId: 0, Meta: slot.Id.Aux,
-                    StackNetworkId: stackNetworkId, IsShield: itemName == NetworkItemStack.ShieldName, Damage: damage);
+                    StackNetworkId: stackNetworkId, IsShield: itemName == NetworkItemStack.ShieldName, Damage: damage,
+                    TagBase64: slot.Id.Data.TagBase64);
             }
             WarnUnknownStackOnce(slot.Id.Value);
             var airId = palette.Require("minecraft:air");

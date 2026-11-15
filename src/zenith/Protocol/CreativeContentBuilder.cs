@@ -27,15 +27,16 @@ static class CreativeContentBuilder
             }
             else
             {
-                if (!Tools.TryGetName(snap.StackTypeId, out name!))
-                    throw new InvalidOperationException($"CreativeContent: unknown tool network id {snap.StackTypeId}.");
+                if (!palette.TryGetName(snap.StackTypeId, out name!))
+                    throw new InvalidOperationException($"CreativeContent: unknown item network id {snap.StackTypeId}.");
                 networkId = palette.Require(name);
                 wireBlockRid = 0;
             }
 
             items[i] = new CreativeItemEntry(
                 snap.NetId,
-                new NetworkItemStack(networkId, (ushort)snap.BaseCount, wireBlockRid),
+                new NetworkItemStack(networkId, (ushort)snap.BaseCount, wireBlockRid, Meta: snap.Id.Aux,
+                    IsShield: name == NetworkItemStack.ShieldName, TagBase64: snap.Id.Data.TagBase64),
                 GroupIndex: (uint)snap.GroupIndex);
         }
 
@@ -70,7 +71,8 @@ static class CreativeContentBuilder
         }
 
         return palette.TryGetName(icon.Value, out var itemName)
-            ? new NetworkItemStack(palette.Require(itemName), 1, 0)
+            ? new NetworkItemStack(palette.Require(itemName), 1, 0, Meta: icon.Aux,
+                IsShield: itemName == NetworkItemStack.ShieldName, TagBase64: icon.Data.TagBase64)
             : NetworkItemStack.Empty;
     }
 }

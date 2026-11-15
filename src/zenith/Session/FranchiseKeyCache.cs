@@ -40,6 +40,6 @@ internal sealed class FranchiseKeyCache(
         }
     }
 
-    private IReadOnlyList<RSAParameters>? Fresh() =>
+    internal IReadOnlyList<RSAParameters>? Fresh() =>
         _current is { } snapshot && snapshot.ExpiresAt > _time.GetUtcNow() ? snapshot.Keys : null;
 }

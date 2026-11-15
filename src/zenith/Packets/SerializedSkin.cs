@@ -2,15 +2,17 @@ using Zenith.Binary;
 
 namespace Zenith.Packets;
 
+enum SkinArmSize : byte { Slim = 0, Wide = 1 }
+
 readonly struct SerializedSkin
 {
-    /// <summary>Max skin / cape edge (classic 64, HD up to 128 is common).</summary>
-    public const uint MaxImageEdge = 128;
+    /// <summary>Protocol 2225 SkinImage limit; persona skins from BDS can exceed classic 128px.</summary>
+    public const uint MaxImageEdge = 4096;
 
     public const uint MaxAnimations = 8;
     public const uint MaxPersonaPieces = 64;
     public const uint MaxTintPieces = 64;
-    public const uint MaxTintColors = 8;
+    public const uint MaxTintColors = 4;
 
     public string Id { get; init; }
     public string ResourcePatch { get; init; }
@@ -22,8 +24,8 @@ readonly struct SerializedSkin
     public string AnimationData { get; init; }
     public string CapeId { get; init; }
     public string FullId { get; init; }
-    public string ArmSize { get; init; }
-    public string SkinColor { get; init; }
+    public SkinArmSize ArmSize { get; init; }
+    public int SkinColor { get; init; }
     public SkinPersonaPiece[] PersonaPieces { get; init; }
     public SkinPersonaTintPiece[] TintPieces { get; init; }
     public bool IsPremium { get; init; }
@@ -39,8 +41,8 @@ readonly struct SerializedSkin
         var image = SkinImage.Read(ref stream);
         ValidateImageOrThrow(image, "skin", allowEmpty: true);
 
-        var animCount = stream.ReadUInt(BinaryStream.Endianess.Little);
-        if (animCount > MaxAnimations)
+        var animCount = stream.ReadUnsignedVarInt();
+        if ((uint)animCount > MaxAnimations)
             throw new InvalidOperationException($"Skin animation count {animCount} exceeds cap {MaxAnimations}.");
         var animations = new SkinAnimation[animCount];
         for (var i = 0; i < animCount; i++)
@@ -57,22 +59,22 @@ readonly struct SerializedSkin
         var animationData = stream.ReadVarString();
         var capeId = stream.ReadVarString();
         var fullId = stream.ReadVarString();
-        var armSize = stream.ReadVarString();
-        var skinColor = stream.ReadVarString();
+        var armSize = (SkinArmSize)stream.ReadByte();
+        var skinColor = stream.ReadInt(BinaryStream.Endianess.Little);
 
-        var personaCount = stream.ReadUInt(BinaryStream.Endianess.Little);
-        if (personaCount > MaxPersonaPieces)
+        var personaCount = stream.ReadUnsignedVarInt();
+        if ((uint)personaCount > MaxPersonaPieces)
             throw new InvalidOperationException($"Persona piece count {personaCount} exceeds cap {MaxPersonaPieces}.");
         var personaPieces = new SkinPersonaPiece[personaCount];
         for (var i = 0; i < personaCount; i++)
             personaPieces[i] = SkinPersonaPiece.Read(ref stream);
 
-        var tintCount = stream.ReadUInt(BinaryStream.Endianess.Little);
-        if (tintCount > MaxTintPieces)
+        var tintCount = stream.ReadUnsignedVarInt();
+        if ((uint)tintCount > MaxTintPieces)
             throw new InvalidOperationException($"Tint piece count {tintCount} exceeds cap {MaxTintPieces}.");
         var tintPieces = new SkinPersonaTintPiece[tintCount];
         for (var i = 0; i < tintCount; i++)
-            tintPieces[i] = SkinPersonaTintPiece.Read(ref stream, MaxTintColors);
+            tintPieces[i] = SkinPersonaTintPiece.Read(ref stream);
 
         var isPremium = stream.ReadBool();
         var isPersona = stream.ReadBool();
@@ -111,7 +113,7 @@ readonly struct SerializedSkin
         Image.Write(ref writer);
 
         var anims = Animations ?? [];
-        writer.WriteUInt((uint)anims.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(anims.Length);
         foreach (var a in anims)
             a.Write(ref writer);
 
@@ -122,16 +124,16 @@ readonly struct SerializedSkin
         writer.WriteVarString(AnimationData);
         writer.WriteVarString(CapeId);
         writer.WriteVarString(FullId);
-        writer.WriteVarString(ArmSize);
-        writer.WriteVarString(SkinColor);
+        writer.WriteByte((byte)ArmSize);
+        writer.WriteInt(SkinColor, BinaryStream.Endianess.Little);
 
         var personas = PersonaPieces ?? [];
-        writer.WriteUInt((uint)personas.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(personas.Length);
         foreach (var p in personas)
             p.Write(ref writer);
 
         var tints = TintPieces ?? [];
-        writer.WriteUInt((uint)tints.Length, BinaryStream.Endianess.Little);
+        writer.WriteUnsignedVarInt(tints.Length);
         foreach (var t in tints)
             t.Write(ref writer);
 
@@ -183,8 +185,8 @@ readonly struct SerializedSkin
         AnimationData = "",
         CapeId = "",
         FullId = "",
-        ArmSize = "wide",
-        SkinColor = "#0",
+        ArmSize = SkinArmSize.Wide,
+        SkinColor = 0,
         PersonaPieces = [],
         TintPieces = [],
         IsPremium = false,

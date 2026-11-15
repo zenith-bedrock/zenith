@@ -40,6 +40,7 @@ class ZenithServer
     private Task? _runTask;
     private Task? _shutdownTask;
     private Task? _gameLoopTask;
+    private Task? _franchiseKeysTask;
     private LifecycleState _lifecycleState;
 
     /// <summary>The transports clients can connect through (see <c>network.transport</c>).</summary>
@@ -90,6 +91,7 @@ class ZenithServer
             };
             _logger = serverLogger;
             serverLogger.Info($"Zenith {ServerIdentity.ProductVersion} (protocol {ServerIdentity.ProtocolVersion} / {ServerIdentity.VersionName})");
+            serverLogger.Info($"build: {typeof(ZenithServer).Assembly.ManifestModule.ModuleVersionId} at {AppContext.BaseDirectory}");
             serverLogger.Info($"config: {configPath}");
             var dataDir = ServerConfigPaths.ResolveDataDirectory();
             if (dataDir is not null)
@@ -365,11 +367,30 @@ class ZenithServer
 
     private async Task RunCoreAsync()
     {
-        var gameLoopTask = _gameLoopTask = GameLoop.RunAsync(_lifetime.Token);
-        var transportTasks = _transports.Select(transport => transport.RunAsync(_lifetime.Token)).ToArray();
-        var completed = await Task.WhenAny(transportTasks.Append(gameLoopTask)).ConfigureAwait(false);
+        var lifetime = _lifetime.Token;
+        Task? gameLoopTask = null;
         try
         {
+            if (Config.Auth.AllowsXbox)
+            {
+                // Receive callbacks only use fresh cached keys. No key fetch blocks the GameLoop.
+                try { await FranchiseTokenValidator.GetKeysAsync(lifetime).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return; }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or FormatException or System.Security.Cryptography.CryptographicException)
+                {
+                    _logger.Warning($"Franchise keys unavailable ({ex.GetType().Name}); FULL login will fail closed until refresh succeeds.");
+                }
+            }
+            Task[] transportTasks;
+            lock (_lifecycleGate)
+            {
+                if (_lifecycleState != LifecycleState.Running) return;
+                if (Config.Auth.AllowsXbox)
+                    _franchiseKeysTask = FranchiseTokenValidator.KeepKeysFreshAsync(_logger.Warning, lifetime);
+                gameLoopTask = _gameLoopTask = GameLoop.RunAsync(lifetime);
+                transportTasks = _transports.Select(transport => transport.RunAsync(lifetime)).ToArray();
+            }
+            var completed = await Task.WhenAny(transportTasks.Append(gameLoopTask)).ConfigureAwait(false);
             await completed.ConfigureAwait(false);
         }
         finally
@@ -379,7 +400,7 @@ class ZenithServer
 
         // A shutdown requested at the same moment the loop failed can complete a transport first, so `completed` above may not be the
         // loop. Cleanup has awaited it by now; a fault must still reach the caller rather than be reported as a clean stop.
-        if (gameLoopTask.IsFaulted)
+        if (gameLoopTask?.IsFaulted == true)
             await gameLoopTask.ConfigureAwait(false);
     }
 
@@ -404,6 +425,8 @@ class ZenithServer
         try
         {
             _lifetime.Cancel();
+            if (_franchiseKeysTask is { } keyRefresh)
+                await keyRefresh.ConfigureAwait(false);
             _sessionHost.StopAccepting();
             foreach (var transport in _transports)
                 transport.StopAccepting();

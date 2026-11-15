@@ -5,6 +5,7 @@ namespace Zenith.Packets;
 /// <summary>Text (0x09) — chat / tip / system / etc.</summary>
 class TextPacket : DataPacket
 {
+    public const int MaxParameters = 4;
     public const byte TypeRaw = 0;
     public const byte TypeChat = 1;
     public const byte TypeTranslation = 2;
@@ -93,6 +94,8 @@ class TextPacket : DataPacket
             case TypeJukeboxPopup:
                 Message = stream.ReadVarString();
                 var count = stream.ReadUnsignedVarInt();
+                if ((uint)count > MaxParameters)
+                    throw new InvalidDataException($"Text parameter count {count} exceeds {MaxParameters}.");
                 Parameters = new string[count];
                 for (var i = 0; i < count; i++)
                     Parameters[i] = stream.ReadVarString();
@@ -108,6 +111,9 @@ class TextPacket : DataPacket
             FilteredMessage = stream.ReadVarString();
         else
             FilteredMessage = null;
+
+        if (!stream.IsEndOfFile)
+            throw new InvalidDataException("Text has trailing payload bytes.");
     }
 
     private static byte CategoryFor(byte type) => type switch

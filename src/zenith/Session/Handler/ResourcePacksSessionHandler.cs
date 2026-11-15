@@ -18,7 +18,17 @@ class ResourcePacksSessionHandler : ISessionHandler
 
         if (header.Id != (int)ProtocolInfo.RESOURCE_PACK_CLIENT_RESPONSE_PACKET) return false;
 
-        var response = DataPacket.From<ResourcePackClientResponsePacket>(ref stream);
+        ResourcePackClientResponsePacket response;
+        try
+        {
+            response = DataPacket.From<ResourcePackClientResponsePacket>(ref stream);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
+        {
+            session.Context.Logger.Debug($"Resource pack response rejected: {ex.Message}");
+            session.Disconnect();
+            return true;
+        }
         session.Context.Logger.Debug($"ResourcePackClientResponsePacket: {response.Status}");
 
         switch (response.Status)

@@ -30,6 +30,8 @@ sealed class PlayerSkinPacket : DataPacket
         _ = stream.ReadVarString(); // profile_hash — unused
         SkinName = stream.ReadVarString();
         OldSkinName = stream.ReadVarString();
+        if (!stream.IsEndOfFile)
+            throw new InvalidDataException("PlayerSkin has trailing payload bytes.");
     }
 
     public override Span<byte> Encode()

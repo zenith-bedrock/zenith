@@ -22,6 +22,7 @@ partial class InGameSessionHandler : ISessionHandler
     private static bool TryDecode<T>(NetworkSession session, ref BinaryStream stream, string label, out T packet, bool warnOnFailure = false)
         where T : DataPacket, new()
     {
+        var payloadStart = stream.Offset;
         try
         {
             packet = DataPacket.From<T>(ref stream);
@@ -31,6 +32,13 @@ partial class InGameSessionHandler : ISessionHandler
         {
             if (warnOnFailure) session.Context.Logger.Warning($"{label} decode rejected: {ex.Message}");
             else session.Context.Logger.Debug($"{label} decode rejected: {ex.Message}");
+            if (typeof(T) == typeof(InventoryTransactionPacket) && session.Context.Logger.IsDebugEnabled)
+            {
+                var length = Math.Min(stream.Length - payloadStart, 96);
+                session.Context.Logger.Debug(
+                    $"InventoryTransaction rejected payload: bytes={stream.Length - payloadStart}, " +
+                    $"prefix={Convert.ToHexString(stream.Buffer.AsSpan(payloadStart, length))}");
+            }
             packet = new T();
             return false;
         }
@@ -83,6 +91,7 @@ partial class InGameSessionHandler : ISessionHandler
         ProtocolInfo.SERVER_SETTINGS_REQUEST_PACKET,
         ProtocolInfo.SERVERBOUND_LOADING_SCREEN_PACKET,
         ProtocolInfo.SET_PLAYER_INVENTORY_OPTIONS_PACKET,
+        ProtocolInfo.CLIENT_CAMERA_AIM_ASSIST_PACKET,
     ];
 
     private static readonly FrozenDictionary<int, PacketHandler> Handlers = BuildHandlers();
@@ -102,7 +111,8 @@ partial class InGameSessionHandler : ISessionHandler
             { (int)ProtocolInfo.RESPAWN_PACKET, HandleRespawn },
             { (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET, HandleInventoryTransaction },
             { (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET, HandleItemStackRequest },
-            { (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET, HandleRequestChunkRadius },
+            { (int)ProtocolInfo.ACTOR_EVENT_PACKET, HandleActorEvent },
+            { (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET, HandleChunkRadiusRequest },
             { (int)ProtocolInfo.MOB_EQUIPMENT_PACKET, HandleMobEquipment },
             { (int)ProtocolInfo.INTERACT_PACKET, HandleInteract },
             { (int)ProtocolInfo.CONTAINER_CLOSE_PACKET, HandleContainerClose },
@@ -123,26 +133,13 @@ partial class InGameSessionHandler : ISessionHandler
         return true;
     }
 
-    private static void HandleRequestChunkRadius(NetworkSession session, ref BinaryStream stream)
-    {
-        var request = DataPacket.From<RequestChunkRadiusPacket>(ref stream);
-        var player = session.Player;
-        if (player is null) return;
-
-        var cap = session.Context.Config.World.SpawnChunkRadius;
-        var radius = Math.Min(request.Radius, cap);
-        player.Chunks.Radius = radius;
-        // A radius change alone never crosses a chunk boundary, so ChunkStreamSystem's own
-        // PublisherCenterChanged check would otherwise never re-fire — force it to republish at the
-        // new radius next tick (see ForcePublisherRefresh's doc comment).
-        player.Chunks.ForcePublisherRefresh();
-        session.Protocol.World.SendChunkRadiusUpdated(radius);
-        session.Context.Logger.Debug($"In-game chunk radius updated for {player.Username}: {radius}");
-    }
+    private static void HandleChunkRadiusRequest(NetworkSession session, ref BinaryStream stream) =>
+        ChunkRadiusNegotiation.HandleRequest(session, ref stream);
 
     private static void HandleText(NetworkSession session, ref BinaryStream stream)
     {
-        var packet = DataPacket.From<TextPacket>(ref stream);
+        if (!TryDecode<TextPacket>(session, ref stream, "Text", out var packet))
+            return;
         var player = session.Player;
         if (player is null) return;
 

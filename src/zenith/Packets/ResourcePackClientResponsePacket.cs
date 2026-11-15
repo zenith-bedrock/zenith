@@ -17,6 +17,7 @@ sealed class ResourcePackClientResponsePacket : DataPacket
     public const byte STATUS_SEND_PACKS = 1;
     public const byte STATUS_HAVE_ALL_PACKS = 2;
     public const byte STATUS_COMPLETED = 3;
+    public const int MaxPackIds = 65535;
 
     public override int Id => (int)ProtocolInfo.RESOURCE_PACK_CLIENT_RESPONSE_PACKET;
 
@@ -27,12 +28,19 @@ sealed class ResourcePackClientResponsePacket : DataPacket
 
     public override void Decode(ref BinaryStream stream)
     {
-        Status = (byte)stream.ReadUnsignedVarInt();
+        var status = stream.ReadUnsignedVarInt();
+        if (status is < STATUS_REFUSED or > STATUS_COMPLETED)
+            throw new InvalidDataException($"Unknown resource pack response {status}.");
+        Status = (byte)status;
         _ = stream.ReadVarString(); // response_status_name — unused, always present
 
         if (Status == STATUS_SEND_PACKS)
         {
             var count = stream.ReadUnsignedVarInt();
+            // Even an empty ID needs a length byte. Bound allocation by both the contract
+            // and this packet's actual payload, not merely the surrounding batch budget.
+            if (count is < 0 or > MaxPackIds || count > stream.Length - stream.Offset)
+                throw new InvalidDataException($"Invalid resource pack ID count {count}.");
             var ids = new string[count];
             for (var i = 0; i < count; i++)
                 ids[i] = stream.ReadVarString();
@@ -42,5 +50,7 @@ sealed class ResourcePackClientResponsePacket : DataPacket
         {
             ResourcePackIds = [];
         }
+        if (!stream.IsEndOfFile)
+            throw new InvalidDataException("Trailing bytes after resource pack response.");
     }
 }

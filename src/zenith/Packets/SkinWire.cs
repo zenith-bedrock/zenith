@@ -15,43 +15,26 @@ static class SkinWire
     public static void Write(
         ref BinaryStream writer,
         string skinId,
-        ReadOnlySpan<byte> rgba,
+        byte[] rgba,
         uint width,
         uint height)
     {
-        if (rgba.IsEmpty || width == 0 || height == 0 || rgba.Length != width * height * 4)
+        if (rgba.Length == 0 || width == 0 || height == 0 ||
+            width > SerializedSkin.MaxImageEdge || height > SerializedSkin.MaxImageEdge ||
+            rgba.Length != (long)width * height * 4)
         {
             rgba = WhitePixels;
             width = Width;
             height = Height;
         }
 
-        writer.WriteVarString(skinId);
-        writer.WriteVarString("""{"geometry":{"default":"geometry.humanoid.custom"}}""");
-        WriteImage(ref writer, width, height, rgba);
-        writer.WriteUInt(0, BinaryStream.Endianess.Little);
-        WriteImage(ref writer, 0, 0, ReadOnlySpan<byte>.Empty);
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString("");
-        writer.WriteVarString(skinId);
-        writer.WriteVarString("wide");
-        writer.WriteVarString("#0");
-        writer.WriteUInt(0, BinaryStream.Endianess.Little);
-        writer.WriteUInt(0, BinaryStream.Endianess.Little);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(false);
-        writer.WriteBool(true);
-        writer.WriteBool(true);
-    }
-
-    private static void WriteImage(ref BinaryStream writer, uint width, uint height, ReadOnlySpan<byte> pixels)
-    {
-        writer.WriteUInt(width, BinaryStream.Endianess.Little);
-        writer.WriteUInt(height, BinaryStream.Endianess.Little);
-        writer.WriteByteArray(pixels);
+        var skin = SerializedSkin.Default with
+        {
+            Id = skinId,
+            FullId = skinId,
+            Image = new SkinImage { Width = width, Height = height, Data = rgba }
+        };
+        skin.Write(ref writer);
     }
 
     private static byte[] CreateWhiteRgba()

@@ -161,7 +161,10 @@ sealed class ItemStackRequestPacket : DataPacket
 
     private static DecodedStackRequestAction ReadAction(ref BinaryStream stream)
     {
-        var type = (byte)stream.ReadUnsignedVarInt();
+        var variant = stream.ReadUnsignedVarInt();
+        if ((uint)variant > ActionCraftResultsDeprecated)
+            throw new InvalidDataException($"Unknown item stack action variant {variant}.");
+        var type = (byte)variant;
         _ = stream.ReadByte(); // legacy_type_id — always present, unused
 
         switch (type)
@@ -350,8 +353,17 @@ sealed class ItemStackRequestPacket : DataPacket
     /// </summary>
     private static void SkipRecipeIngredient(ref BinaryStream stream)
     {
+        SkipItemDescriptor(ref stream);
+        stream.ReadUShort(BinaryStream.Endianess.Little); // count (lu16)
+    }
+
+    private static void SkipItemDescriptor(ref BinaryStream stream)
+    {
         var type = stream.ReadUnsignedVarInt();
-        _ = stream.ReadByte(); // legacy_type
+        if ((uint)type > 3)
+            throw new InvalidDataException($"Unknown item descriptor variant {type}.");
+        if (stream.ReadByte() != type)
+            throw new InvalidDataException("Item descriptor type does not match its variant.");
         switch (type)
         {
             case 0: // invalid — void
@@ -368,26 +380,17 @@ sealed class ItemStackRequestPacket : DataPacket
                 stream.ReadVarString(); // tag
                 break;
         }
-
-        stream.ReadUShort(BinaryStream.Endianess.Little); // count (lu16)
     }
 
     /// <summary>
     /// ItemStackRequestInstanceDescriptor (results_deprecated entries): type(mapper varint) +
-    /// legacy_type(u8) + switch{invalid:void, default:{name,metadata}} + count(li16) +
+    /// descriptor-type(u8) + the Empty/Name/Molang/Tag payload + count(lu16) +
     /// block_runtime_id(varint) + extra(varint-length blob).
     /// </summary>
     private static void SkipInstanceDescriptor(ref BinaryStream stream)
     {
-        var type = stream.ReadUnsignedVarInt();
-        _ = stream.ReadByte(); // legacy_type
-        if (type != 0) // not "invalid"
-        {
-            stream.ReadVarString(); // name
-            stream.ReadVarInt(); // metadata (zigzag32)
-        }
-
-        stream.ReadShort(BinaryStream.Endianess.Little); // count (li16)
+        SkipItemDescriptor(ref stream);
+        stream.ReadUShort(BinaryStream.Endianess.Little); // count (lu16)
         stream.ReadUnsignedVarInt(); // block_runtime_id
         var extraLen = stream.ReadUnsignedVarInt();
         if (extraLen > 0)

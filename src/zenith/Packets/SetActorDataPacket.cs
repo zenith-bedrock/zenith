@@ -18,6 +18,7 @@ sealed class SetActorDataPacket : DataPacket
 
     public bool Sneaking { get; set; }
     public bool Sprinting { get; set; }
+    public bool UsingItem { get; set; }
 
     /// <summary>
     /// Non-player FLAGS-only override (e.g. Creeper Ignited/Powered) — when set, <see cref="FlagsOnly"/>
@@ -34,7 +35,7 @@ sealed class SetActorDataPacket : DataPacket
         if (FlagsOnly)
             EntityMetadataWriter.WriteFlagsOnly(
                 ref writer,
-                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting));
+                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting, UsingItem));
         else
             EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Name, Sneaking, Sprinting);
 

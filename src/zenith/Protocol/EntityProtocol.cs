@@ -173,7 +173,8 @@ sealed partial class EntityProtocol : IEntityChannel
         bool sprinting = false,
         string platformChatId = "",
         string deviceId = "",
-        int buildPlatform = -1)
+        int buildPlatform = -1,
+        bool usingItem = false)
     {
         _session.SendDataPacket(new AddPlayerPacket
         {
@@ -191,6 +192,7 @@ sealed partial class EntityProtocol : IEntityChannel
             GameMode = gameMode,
             Sneaking = sneaking,
             Sprinting = sprinting,
+            UsingItem = usingItem,
             DeviceId = deviceId,
             BuildPlatform = buildPlatform
         });
@@ -242,13 +244,13 @@ sealed partial class EntityProtocol : IEntityChannel
     {
         _session.SendDataPacket(new MobEffectPacket
         {
-            TargetRuntimeId = (long)actorRuntimeId,
+            TargetRuntimeId = actorRuntimeId,
             EventId = eventId,
             EffectId = effectId,
             EffectAmplifier = amplifier,
             ShowParticles = showParticles,
             EffectDurationTicks = durationTicks,
-            Tick = 0,
+            Tick = ProcessedInputTick(actorRuntimeId),
             Ambient = false
         });
     }
@@ -314,9 +316,14 @@ sealed partial class EntityProtocol : IEntityChannel
             ActorRuntimeId = actorRuntimeId,
             VelocityX = velocityX,
             VelocityY = velocityY,
-            VelocityZ = velocityZ
+            VelocityZ = velocityZ,
+            Tick = ProcessedInputTick(actorRuntimeId)
         });
     }
+
+    private ulong ProcessedInputTick(ulong actorRuntimeId) => actorRuntimeId <= long.MaxValue
+        ? _session.Context.PlayerManager.GetByRuntimeId((long)actorRuntimeId)?.LastProcessedInputTick ?? 0
+        : 0;
 
     /// <summary>Falling-block actor (ADR §95). <paramref name="y"/> is block-anchored, no eye offset.</summary>
     public void SendAddFallingBlock(long entityUniqueId, ulong entityRuntimeId, int blockRuntimeId, float x, float y, float z)
@@ -388,7 +395,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:skeleton", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.6f, 1.9f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Skeleton.Dimensions
         });
     }
 
@@ -400,7 +407,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:cow", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.9f, 1.3f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Cow.Dimensions
         });
     }
 
@@ -412,7 +419,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:creeper", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.6f, 1.8f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Creeper.Dimensions
         });
     }
 
@@ -424,7 +431,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:enderman", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.6f, 2.9f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Enderman.Dimensions
         });
     }
 
@@ -448,7 +455,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:spider", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (1.4f, 0.9f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Spider.Dimensions
         });
     }
 
@@ -460,7 +467,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:villager", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.6f, 1.9f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Villager.Dimensions
         });
     }
 
@@ -472,7 +479,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:iron_golem", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (1.4f, 2.7f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Golem.Dimensions
         });
     }
 
@@ -508,7 +515,7 @@ sealed partial class EntityProtocol : IEntityChannel
             EntityUniqueId = entityUniqueId, EntityRuntimeId = entityRuntimeId,
             EntityType = "minecraft:cod", PositionX = x, PositionY = y, PositionZ = z,
             Yaw = yaw, HeadYaw = yaw, BodyYaw = yaw,
-            Dimensions = (0.5f, 0.3f)
+            Dimensions = Zenith.Gameplay.Entities.MobDefinitions.Fish.Dimensions
         });
     }
 
@@ -601,12 +608,13 @@ sealed partial class EntityProtocol : IEntityChannel
     }
 
     /// <summary>Peer pose FLAGS-only update (sneak/sprint) — §53.</summary>
-    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting)
+    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false)
     {
         _session.SendDataPacket(new SetActorDataPacket
         {
             ActorRuntimeId = actorRuntimeId,
             FlagsOnly = true,
+            UsingItem = usingItem,
             Sneaking = sneaking,
             Sprinting = sprinting,
             Tick = 0
@@ -666,10 +674,11 @@ sealed partial class EntityProtocol : IEntityChannel
 
     /// <summary>Attributes from Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
     public void SendDefaultAttributes(
-        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f)
+        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f,
+        float saturation = 5f, float exhaustion = 0f)
     {
         _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(
-            actorRuntimeId, health, hunger, experienceLevel, experienceProgress));
+            actorRuntimeId, health, hunger, experienceLevel, experienceProgress, saturation, exhaustion));
     }
 
     /// <summary>
@@ -682,7 +691,8 @@ sealed partial class EntityProtocol : IEntityChannel
     public void SendPlayerAttributes(global::Zenith.Player.Player player) =>
         SendDefaultAttributes(
             (ulong)player.RuntimeId, player.Health, player.Hunger,
-            player.ExperienceLevel, PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints));
+            player.ExperienceLevel, PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints),
+            player.Saturation, Math.Clamp(player.Exhaustion, 0f, 5f));
 
     /// <summary>Replicates only the current health of an already-spawned actor.</summary>
     public void SendHealth(ulong actorRuntimeId, float health, float maximum)

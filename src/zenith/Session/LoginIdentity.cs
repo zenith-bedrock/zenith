@@ -297,13 +297,14 @@ static class LoginIdentity
     }
 
     /// <summary>
-    /// Valida estrutura da chain. Com <paramref name="requireStrictXbox"/>, exige
-    /// verificação estrutural de assinaturas presentes.
-    /// Sem a flag (LAN), só valida formato — NÃO é segurança.
+    /// Valida apenas estrutura legacy no modo LAN. Strict Xbox exige a prova moderna
+    /// de emissor/chave do cliente em FranchiseTokenValidator, nunca esta checagem.
     /// Offline modern clients may send a dummy empty JWT in the chain — skipped when soft.
     /// </summary>
     public static void ValidateIdentityChain(string identityChainJson, bool requireStrictXbox)
     {
+        if (requireStrictXbox)
+            throw new FormatException("Legacy certificate structure cannot establish Xbox authentication.");
         using var doc = JsonDocument.Parse(identityChainJson);
         if (!doc.RootElement.TryGetProperty("chain", out var chain) || chain.ValueKind != JsonValueKind.Array)
             throw new FormatException("Identity chain missing chain array.");
@@ -311,46 +312,11 @@ static class LoginIdentity
         if (chain.GetArrayLength() == 0)
             throw new FormatException("Identity chain is empty.");
 
-        var sawJwt = false;
-        foreach (var el in chain.EnumerateArray())
-        {
-            var jwt = el.GetString();
-            if (string.IsNullOrWhiteSpace(jwt))
-            {
-                if (requireStrictXbox)
-                    throw new FormatException("Empty JWT in identity chain.");
-                continue;
-            }
-
-            _ = ReadPayload(jwt);
-            sawJwt = true;
-        }
-
-        if (!sawJwt && requireStrictXbox)
-            throw new FormatException("Identity chain has no verifiable JWT.");
-
-        if (!requireStrictXbox) return;
-
-        ValidateChainSignatures(chain);
-    }
-
-    private static void ValidateChainSignatures(JsonElement chain)
-    {
         foreach (var el in chain.EnumerateArray())
         {
             var jwt = el.GetString();
             if (string.IsNullOrWhiteSpace(jwt)) continue;
-
-            var parts = jwt.Split('.');
-            if (parts.Length != 3) throw new FormatException("Malformed JWT in chain.");
-
-            var headerJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[0]));
-            using var header = JsonDocument.Parse(headerJson);
-            if (!header.RootElement.TryGetProperty("x5u", out _))
-                throw new FormatException("Chain JWT missing x5u; cannot verify.");
-
-            var sig = Base64UrlDecode(parts[2]);
-            if (sig.Length == 0) throw new FormatException("Empty JWT signature.");
+            using var payload = ReadPayload(jwt);
         }
     }
 

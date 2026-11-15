@@ -28,6 +28,9 @@ class SpawnResponseSessionHandler : ISessionHandler
     {
         switch (header.Id)
         {
+            case (int)ProtocolInfo.REQUEST_CHUNK_RADIUS_PACKET:
+                ChunkRadiusNegotiation.HandleRequest(session, ref stream);
+                return true;
             case (int)ProtocolInfo.SET_LOCAL_PLAYER_AS_INITIALIZED_PACKET:
                 HandleSetLocalPlayerAsInitialized(session, ref stream);
                 return true;
@@ -38,6 +41,7 @@ class SpawnResponseSessionHandler : ISessionHandler
             case (int)ProtocolInfo.MOB_EQUIPMENT_PACKET:
             case (int)ProtocolInfo.INTERACT_PACKET:
             case (int)ProtocolInfo.EMOTE_LIST_PACKET:
+            case (int)ProtocolInfo.CLIENT_CAMERA_AIM_ASSIST_PACKET:
                 return true;
 
             default:

@@ -41,6 +41,14 @@ sealed class ActorEventPacket : DataPacket
 
     public override void Decode(ref BinaryStream stream)
     {
-        // Server-authoritative; no incoming dispatch registers this id.
+        ActorRuntimeId = (ulong)stream.ReadUnsignedVarLong();
+        EventId = stream.ReadByte();
+        EventData = stream.ReadVarInt();
+        if (stream.ReadBool())
+        {
+            _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+            _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+            _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+        }
     }
 }

@@ -19,7 +19,7 @@ sealed class PlayerInputModule : IGameplayModule
         // player positions. See PlayerSpatialIndexSystem.
         s.Register(new PlayerSpatialIndexSystem(s.PlayerSpatial), "player-spatial-index");
         // ItemUseOnActor player targets are resolved after movement established this tick's pose.
-        s.Register(new PlayerMeleeSystem(s.Players), "player-melee");
+        s.Register(new PlayerMeleeSystem(s.Players, s.ItemPalette), "player-melee");
         s.Register(new ChatSystem(), "chat");
         s.Register(new GameModeSystem(), "game-mode");
     }

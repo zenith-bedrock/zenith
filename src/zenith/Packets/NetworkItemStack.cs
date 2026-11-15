@@ -9,7 +9,7 @@ namespace Zenith.Packets;
 /// durable item (ADR §148): null for an item that does not wear, otherwise the <c>Damage</c> NBT tag of the extra
 /// data — written even at 0, as the stock BDS does.
 /// </summary>
-readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0, bool IsShield = false, int? Damage = null)
+readonly record struct NetworkItemStack(short NetworkId, ushort Count, int BlockRuntimeId, int Meta = 0, int StackNetworkId = 0, bool IsShield = false, int? Damage = null, string? TagBase64 = null)
 {
     /// <summary>The one item whose wire extra data has the trailing blocking tick.</summary>
     public const string ShieldName = "minecraft:shield";
@@ -51,17 +51,9 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     /// </summary>
     public void WriteSerializedNetworkItemStackDescriptor(ref BinaryStream writer)
     {
-        writer.WriteShort(NetworkId, BinaryStream.Endianess.Little);
-        writer.WriteUShort(Count, BinaryStream.Endianess.Little);
-        writer.WriteUnsignedVarInt(Meta);
-
-        var hasNetId = StackNetworkId != 0;
-        writer.WriteBool(hasNetId);
-        if (hasNetId)
-            writer.WriteVarInt(StackNetworkId);
-
-        writer.WriteUnsignedVarInt(BlockRuntimeId);
-        writer.WriteUnsignedVarInt(0); // user_data_buffer — empty (no NBT / can-place / can-break tracked)
+        // The 2225 struct carries the same complete descriptor as inventory/equipment.
+        // AddPlayer/AddItemActor must retain durability NBT and the shield blocking tick too.
+        WriteNetworkItemStackDescriptor(ref writer);
     }
 
     /// <summary>
@@ -73,10 +65,11 @@ readonly record struct NetworkItemStack(short NetworkId, ushort Count, int Block
     private void WriteExtraData(ref BinaryStream writer)
     {
         var extra = new List<byte>(36);
-        if (Damage is { } damage)
+        if (Damage.HasValue || TagBase64 is not null)
         {
-            var root = new NbtCompound();
-            root.Set("Damage", NbtTag.Int(damage));
+            var root = TagBase64 is null ? new NbtCompound()
+                : NbtCodec.Decode(Convert.FromBase64String(TagBase64), NbtEncoding.LittleEndian).Root.Tag.AsCompound();
+            if (Damage is { } damage) root.Set("Damage", NbtTag.Int(damage));
             extra.AddRange(new byte[] { 0xFF, 0xFF, 1 });
             var nbt = new NbtWriter(NbtEncoding.LittleEndian);
             nbt.WriteNamedTag(string.Empty, NbtTag.Compound(root));

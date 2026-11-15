@@ -14,7 +14,7 @@ readonly record struct AttributeEntry(
 
 /// <summary>
 /// UpdateAttributes (0x1d) — spawn HUD attributes (ADR §34 / §40).
-/// Health/hunger values come from domain; remaining attrs still constant seed.
+/// Player vitals and experience come from domain; movement remains a constant seed.
 /// </summary>
 sealed class UpdateAttributesPacket : DataPacket
 {
@@ -30,7 +30,8 @@ sealed class UpdateAttributesPacket : DataPacket
 
     /// <summary>Spawn/update attributes using Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
     public static UpdateAttributesPacket CreateDefaults(
-        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f) =>
+        ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f,
+        float saturation = 5f, float exhaustion = 0f) =>
         new()
         {
             ActorRuntimeId = actorRuntimeId,
@@ -40,8 +41,8 @@ sealed class UpdateAttributesPacket : DataPacket
                 Entry("minecraft:health", 0f, 20f, health),
                 Entry("minecraft:movement", 0f, float.MaxValue, 0.1f),
                 Entry("minecraft:player.hunger", 0f, 20f, hunger),
-                Entry("minecraft:player.saturation", 0f, 20f, 20f),
-                Entry("minecraft:player.exhaustion", 0f, 5f, 0f),
+                Entry("minecraft:player.saturation", 0f, 20f, saturation),
+                Entry("minecraft:player.exhaustion", 0f, 5f, exhaustion),
                 Entry("minecraft:player.level", 0f, 24791f, experienceLevel),
                 Entry("minecraft:player.experience", 0f, 1f, experienceProgress)
             ]

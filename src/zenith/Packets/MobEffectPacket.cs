@@ -11,7 +11,7 @@ sealed partial class MobEffectPacket : DataPacket
     public const byte EventRemove = 3;
 
     [WireVar]
-    public long TargetRuntimeId { get; set; }
+    public ulong TargetRuntimeId { get; set; }
 
     [Wire]
     public byte EventId { get; set; }

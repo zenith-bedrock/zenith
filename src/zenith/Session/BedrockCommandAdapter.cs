@@ -26,7 +26,7 @@ static class BedrockCommandAdapter
             var overloads = definition.Overloads.Select(overload => new AvailableCommandOverload(
                 overload.Arguments.Select(argument => ProjectArgument(packet, argument)).ToArray())).ToArray();
             packet.Commands.Add(new AvailableCommand(definition.Name, definition.Description,
-                definition.RequiredPermission == CommandPermission.Operator ? "operator" : "any", aliasIndex, overloads));
+                definition.RequiredPermission == CommandPermission.Operator ? "gamedirectors" : "any", aliasIndex, overloads));
         }
         return packet;
     }
@@ -35,7 +35,7 @@ static class BedrockCommandAdapter
     {
         var type = argument switch
         {
-            EnumCommandArgument commandEnum => Enum | (uint)AddFixedEnum(packet, argument.Name, commandEnum.Values.Keys),
+            EnumCommandArgument commandEnum => Valid | Enum | (uint)AddFixedEnum(packet, argument.Name, commandEnum.Values.Keys),
             IntegerCommandArgument => Valid | Int,
             PlayerCommandArgument => Valid | Target,
             StringCommandArgument => Valid | String,

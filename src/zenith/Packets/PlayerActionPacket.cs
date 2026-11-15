@@ -14,6 +14,7 @@ sealed partial class PlayerActionPacket : DataPacket
     public const int ActionStartItemUseOn = 28;
     /// <summary>Bedrock STOP_ITEM_USE_ON — expected noise; not logged at Debug.</summary>
     public const int ActionStopItemUseOn = 29;
+    public const int ActionHandledTeleport = 30;
 
     [WireVar]
     public ulong ActorRuntimeId { get; set; }

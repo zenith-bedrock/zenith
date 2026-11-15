@@ -82,7 +82,8 @@ sealed partial class EntityProtocol
             sprinting: subject.IsSprinting,
             platformChatId: profile.PlatformChatId,
             deviceId: profile.DeviceId,
-            buildPlatform: profile.BuildPlatform);
+            buildPlatform: profile.BuildPlatform,
+            usingItem: subject.FoodUse.HasValue);
 
         // PlayerList immediately preceding AddPlayer already carries the complete SerializedSkin.
         // Do not replay it as PlayerSkin while the recipient constructs the peer actor: PlayerSkin
@@ -90,6 +91,7 @@ sealed partial class EntityProtocol
         // needs one initial equipment projection before later armor deltas can apply.
         var inventory = subject.Inventory;
         var runtimeId = (ulong)subject.RuntimeId;
+        SendHealth(runtimeId, subject.Health, subject.MaxHealth);
         if (!inventory.GetArmor(PlayerInventory.ArmorHelmetSlot).IsEmpty ||
             !inventory.GetArmor(PlayerInventory.ArmorChestplateSlot).IsEmpty ||
             !inventory.GetArmor(PlayerInventory.ArmorLeggingsSlot).IsEmpty ||

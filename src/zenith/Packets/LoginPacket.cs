@@ -45,8 +45,7 @@ class LoginPacket : DataPacket
         var writer = new BinaryStream();
         writer.WriteUnsignedVarInt(Id);
         writer.WriteInt(Protocol);
-        // Decode uses ReadVarInt (zigzag) for the connection-request length — mirror it.
-        writer.WriteVarInt(bodyBytes.Length);
+        writer.WriteUnsignedVarInt(bodyBytes.Length);
         writer.Write(bodyBytes);
         return writer.GetBufferDisposing();
     }
@@ -54,13 +53,18 @@ class LoginPacket : DataPacket
     public override void Decode(ref BinaryStream stream)
     {
         Protocol = stream.ReadInt();
-        var _ = stream.ReadVarInt();
-
-        var chainDataJsonLength = stream.ReadInt(BinaryStream.Endianess.Little);
-        var x = Encoding.UTF8.GetString(stream.ReadSpan(chainDataJsonLength));
-        AuthInfo = JsonSerializer.Deserialize<AuthenticationInfo>(x)!;
-
-        var clientDataJwtLength = stream.ReadInt(BinaryStream.Endianess.Little);
-        ClientDataJwt = Encoding.UTF8.GetString(stream.ReadSpan(clientDataJwtLength));
+        var request = stream.ReadSubstream(stream.ReadUnsignedVarInt());
+        try
+        {
+            var chainDataJsonLength = request.ReadInt(BinaryStream.Endianess.Little);
+            var json = Encoding.UTF8.GetString(request.ReadSpan(chainDataJsonLength));
+            AuthInfo = JsonSerializer.Deserialize<AuthenticationInfo>(json)
+                ?? throw new InvalidDataException("Login authentication object is null.");
+            var clientDataJwtLength = request.ReadInt(BinaryStream.Endianess.Little);
+            ClientDataJwt = Encoding.UTF8.GetString(request.ReadSpan(clientDataJwtLength));
+            if (!request.IsEndOfFile || !stream.IsEndOfFile)
+                throw new InvalidDataException("Trailing bytes after Login connection request.");
+        }
+        finally { request.Dispose(); }
     }
 }

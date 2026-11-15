@@ -26,7 +26,8 @@ partial class InGameSessionHandler
                 packet.PositionY,
                 packet.PositionZ,
                 packet.Pitch,
-                packet.Yaw);
+                packet.Yaw,
+                inputTick: packet.InputTick);
             if (deadInput.IsSecure())
                 player.Intents.SubmitMovementInput(deadInput);
             return;
@@ -42,7 +43,8 @@ partial class InGameSessionHandler
             sprintStart: packet.InputStartSprinting,
             sprintStop: packet.InputStopSprinting,
             missedSwing: packet.InputMissedSwing,
-            onGround: packet.InputOnGround);
+            onGround: packet.InputOnGround,
+            inputTick: packet.InputTick);
 
         if (!input.IsSecure())
         {
@@ -50,6 +52,7 @@ partial class InGameSessionHandler
             return;
         }
 
+        input.HandledTeleport = packet.InputHandledTeleport;
         player.Intents.SubmitMovementInput(input);
 
         if (packet.ItemInteraction is { } useItem)
@@ -129,6 +132,12 @@ partial class InGameSessionHandler
         var packet = DataPacket.From<PlayerActionPacket>(ref stream);
         var player = session.Player;
         if (player is null) return;
+
+        if (packet.Action == PlayerActionPacket.ActionHandledTeleport)
+        {
+            player.Intents.SubmitHandledTeleport();
+            return;
+        }
 
         if (packet.Action == PlayerActionPacket.ActionRespawn)
         {

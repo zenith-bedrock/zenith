@@ -95,7 +95,9 @@ class InventoryTransactionPacket : DataPacket
     public override void Decode(ref BinaryStream stream)
     {
         LegacyRequestId = stream.ReadVarInt();
-        HasLegacySetItemSlots = LegacyRequestId != 0;
+        // Legacy slots are an optional Cereal array, with one presence byte even for request 0.
+        // The request ID describes correlation; it does not replace the wire presence gate.
+        HasLegacySetItemSlots = stream.ReadBool();
         if (HasLegacySetItemSlots)
             SkipLegacySetItemSlots(ref stream);
 
@@ -122,6 +124,8 @@ class InventoryTransactionPacket : DataPacket
                 SkipItemReleaseAction(ref stream);
                 break;
         }
+        if (!stream.IsEndOfFile)
+            throw new InvalidDataException("InventoryTransaction has trailing payload bytes.");
     }
 
     internal static void SkipLegacySetItemSlots(ref BinaryStream stream)

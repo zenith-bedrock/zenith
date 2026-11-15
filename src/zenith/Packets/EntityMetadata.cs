@@ -30,6 +30,7 @@ static class EntityFlag
 {
     public const int Sneaking = 1;
     public const int Sprinting = 3;
+    public const int UsingItem = 4;
     /// <summary>Creeper charged-by-lightning state — confirmed against bedrock-protocol's <c>EntityMetadataFlags::POWERED</c> and gophertunnel's <c>EntityDataFlagPowered</c>.</summary>
     public const int Powered = 9;
     /// <summary>Creeper fuse-lit state — drives the vanilla swell/flash animation. Same sources as <see cref="Powered"/>.</summary>
@@ -190,18 +191,19 @@ static class EntityMetadataWriter
     }
 
     /// <summary>FLAGS long for dirty pose updates (seed bits + sneak/sprint).</summary>
-    public static long BuildPoseFlags(bool sneaking, bool sprinting) =>
-        BuildSpawnFlags(sneaking, sprinting);
+    public static long BuildPoseFlags(bool sneaking, bool sprinting, bool usingItem = false) =>
+        BuildSpawnFlags(sneaking, sprinting) | (usingItem ? EntityFlag.Bit(EntityFlag.UsingItem) : 0);
 
     /// <summary>FLAGS(+Breathing) + visible-name entries used by peer AddPlayer and local SetActorData.</summary>
     public static void WriteVisibleNameMetadata(
         ref BinaryStream writer,
         string name,
         bool sneaking = false,
-        bool sprinting = false)
+        bool sprinting = false,
+        bool usingItem = false)
     {
         new EntityMetadataBuilder()
-            .Flags(BuildSpawnFlags(sneaking, sprinting))
+            .Flags(BuildPoseFlags(sneaking, sprinting, usingItem))
             .Byte(EntityMetaKey.ColorIndex, 0)
             .String(EntityMetaKey.Name, name)
             .Int(EntityMetaKey.EffectColor, 0)
