@@ -1,16 +1,16 @@
 {
-  "note": "Hand-authored species data (vanilla parity as the original systems documented it); not generated from a BDS capture.",
+  "note": "Hand-authored species data (vanilla parity as the original systems documented it); not generated from a BDS capture. lootTable: the table in loot_tables.json a kill rolls. deathAnimationTicks: how long the corpse stays visible after a kill so the client plays its death animation (default 20, the client animation length; 0 = removed at once, as for a minecart). melee: the species' contact attack on a player (damage, reach in blocks, ticks between hits); absent = no melee attack. knockback: the horizontal push a landed hit gives (strength in blocks/tick, decayPerTick multiplier, resistance 0..1 where 1 is immune); absent = the species is not pushed (it owns its movement: minecart, fish, bat).",
   "mobs": [
-    { "name": "Zombie",   "maxHealth": 20,  "lootItem": "minecraft:rotten_flesh", "killExperience": 5 },
-    { "name": "Cow",      "maxHealth": 10,  "lootItem": "minecraft:beef",         "killExperience": 1 },
-    { "name": "Creeper",  "maxHealth": 20,  "lootItem": "minecraft:gunpowder",    "killExperience": 5 },
-    { "name": "Spider",   "maxHealth": 16,  "lootItem": "minecraft:string",       "killExperience": 5 },
-    { "name": "Skeleton", "maxHealth": 20,  "lootItem": "minecraft:bone",         "killExperience": 5 },
-    { "name": "Golem",    "maxHealth": 100, "lootItem": "minecraft:iron_ingot",   "killExperience": 25 },
-    { "name": "Enderman", "maxHealth": 20,  "lootItem": "minecraft:ender_pearl",  "killExperience": 5 },
-    { "name": "Fish",     "maxHealth": 3,   "lootItem": "minecraft:cod",          "killExperience": 1 },
-    { "name": "Minecart", "maxHealth": 6,   "lootItem": "minecraft:minecart",     "killExperience": 1 },
-    { "name": "Bat",      "maxHealth": 6,   "lootItem": "minecraft:feather",      "killExperience": 1 },
-    { "name": "Villager", "maxHealth": 20,  "lootItem": "minecraft:emerald",      "killExperience": 1 }
+    { "name": "Zombie",   "maxHealth": 20,  "lootTable": "zombie", "killExperience": 5,  "melee": { "damage": 4, "reach": 2.25, "cooldownTicks": 20 }, "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Cow",      "maxHealth": 10,  "lootTable": "cow",         "killExperience": 1,  "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Creeper",  "maxHealth": 20,  "lootTable": "creeper",    "killExperience": 5,  "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Spider",   "maxHealth": 16,  "lootTable": "spider",       "killExperience": 5,  "melee": { "damage": 2, "reach": 2.25, "cooldownTicks": 20 }, "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Skeleton", "maxHealth": 20,  "lootTable": "skeleton",         "killExperience": 5,  "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Golem",    "maxHealth": 100, "lootTable": "iron_golem",   "killExperience": 25, "melee": { "damage": 6, "reach": 2.5,  "cooldownTicks": 20 }, "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 1 } },
+    { "name": "Enderman", "maxHealth": 20,  "lootTable": "enderman",  "killExperience": 5,  "melee": { "damage": 7, "reach": 2.25, "cooldownTicks": 20 }, "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } },
+    { "name": "Fish",     "maxHealth": 3,   "lootTable": "fish",          "killExperience": 1 },
+    { "name": "Minecart", "maxHealth": 6,   "lootTable": "minecart",     "killExperience": 1,  "deathAnimationTicks": 0 },
+    { "name": "Bat",      "maxHealth": 6,   "lootTable": "bat",      "killExperience": 1 },
+    { "name": "Villager", "maxHealth": 20,  "lootTable": "villager",      "killExperience": 1,  "knockback": { "strength": 0.3, "decayPerTick": 0.5, "resistance": 0 } }
   ]
 }

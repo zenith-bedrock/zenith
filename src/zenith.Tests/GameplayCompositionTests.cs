@@ -40,9 +40,9 @@ public sealed class GameplayCompositionTests
             // player input
             typeof(TimeSyncSystem), typeof(MovementSystem), typeof(PlayerSpatialIndexSystem), typeof(PlayerMeleeSystem), typeof(ChatSystem), typeof(GameModeSystem),
             // entities
-            typeof(ZombieSystem), typeof(MinecartSystem), typeof(ProjectileSystem), typeof(SkeletonSystem), typeof(CowSystem), typeof(CreeperSystem),
+            typeof(KnockbackSystem), typeof(ZombieSystem), typeof(MinecartSystem), typeof(ProjectileSystem), typeof(SkeletonSystem), typeof(CowSystem), typeof(CreeperSystem),
             typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem),
-            typeof(MobSpawner), typeof(NaturalSpawnSystem),
+            typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
             typeof(GameRuleSyncSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(GravitySystem), typeof(FloorDropSystem),
             typeof(InventorySystem), typeof(HungerSystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem)

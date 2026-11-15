@@ -34,7 +34,6 @@ sealed class SkeletonSystem : IGameSystem
     private const float RetreatBelowRange = MinimumRange;
     private const float ApproachAboveRange = MinimumRange * 2f;
     private const float MovePerTick = 0.07f; // Slower than Zombie's chase (0.08) — repositioning, not pursuit.
-    private const float AttackDistance = 2.25f;
     private const float AttackDamage = 4f;
     private const float ShotSpeed = 0.45f;
     private const int ShotCooldownTicks = 30;
@@ -50,12 +49,12 @@ sealed class SkeletonSystem : IGameSystem
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
 
-    public SkeletonSystem(World.World world, PlayerManager players, EntityRuntime stores, ProjectileSystem projectiles, ItemPalette itemPalette)
+    public SkeletonSystem(World.World world, PlayerManager players, EntityRuntime stores, ProjectileSystem projectiles, ItemPalette itemPalette, Random? random = null)
     {
         _world = world;
         _players = players;
         _stores = stores;
-        _mob = new MobCore(MobDefinitions.Skeleton, world, players, stores, itemPalette);
+        _mob = new MobCore(MobDefinitions.Skeleton, world, players, stores, itemPalette, random: random);
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
         _skeletons = new ComponentStore<SkeletonState>(stores.Entities);
@@ -211,7 +210,7 @@ sealed class SkeletonSystem : IGameSystem
         _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
 
     /// <summary>Concrete Skeleton health/removal operation shared by the Projectile vertical slice.</summary>
     internal bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>

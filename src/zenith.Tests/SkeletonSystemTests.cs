@@ -59,13 +59,14 @@ public sealed class SkeletonSystemTests
     }
 
     [Fact]
-    public void MeleeDeath_createsConcreteBoneLootExactlyOnce()
+    public void MeleeDeath_rollsTheSkeletonTableExactlyOnce()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var stores = new EntityRuntime();
         var projectileSystem = CreateProjectileSystem(fx, stores);
-        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette);
+        var system = new SkeletonSystem(fx.World, fx.Players, stores, projectileSystem, fx.Context.ItemPalette, new Random(3));
         var id = system.SpawnSkeleton(player.PositionX + 1, player.PositionY, player.PositionZ);
 
         for (var i = 0; i < 5; i++)
@@ -77,10 +78,8 @@ public sealed class SkeletonSystemTests
 
         Assert.Empty(system.Skeletons);
         Assert.False(stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:bone"), loot.Id.Value);
-        Assert.True(loot.Id.IsItem);
-        Assert.Equal(1, loot.Count);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "skeleton");
+        var loot = fx.World.FloorDrops.Snapshot().First(); // the seeded roll above always leaves at least one stack
 
         // The item entity is placed at the skeleton cell; move the player into its pickup AABB.
         player.PositionX = loot.Pos.X + 0.5f;
@@ -95,7 +94,7 @@ public sealed class SkeletonSystemTests
         Assert.Empty(fx.World.FloorDrops.Snapshot());
         Assert.Contains(
             Enumerable.Range(0, PlayerInventory.FullInventorySize).Select(player.Inventory.Get),
-            slot => slot.Id == loot.Id && slot.Count == 1);
+            slot => slot.Id == loot.Id && slot.Count == loot.Count);
     }
 
     /// <summary>Phase XXIII — Skeleton previously never moved after spawn; this proves the spacing mechanism, not tuned distances.</summary>

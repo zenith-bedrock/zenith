@@ -133,6 +133,7 @@ public sealed class EndermanSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("slayer");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -145,8 +146,7 @@ public sealed class EndermanSystemTests
 
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Endermen);
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:ender_pearl"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "enderman");
         Assert.Equal(5, player.ExperiencePoints);
     }
 

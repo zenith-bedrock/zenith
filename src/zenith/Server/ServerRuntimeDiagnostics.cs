@@ -110,6 +110,8 @@ sealed class ServerRuntimeDiagnostics : IDisposable
             ["golem"] = builder.Timing("tick.system.golem", "tick"),
             ["minecart"] = builder.Timing("tick.system.minecart", "tick"),
             ["fish"] = builder.Timing("tick.system.fish", "tick"),
+            ["death-animation"] = builder.Timing("tick.system.death-animation", "tick"),
+            ["knockback"] = builder.Timing("tick.system.knockback", "tick"),
             ["block-dig"] = builder.Timing("tick.system.block-dig", "tick"),
             ["block-edit"] = builder.Timing("tick.system.block-edit", "tick"),
             ["gravity"] = builder.Timing("tick.system.gravity", "tick"),

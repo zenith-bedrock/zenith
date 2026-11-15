@@ -1,6 +1,7 @@
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.Gameplay.Survival;
+using Zenith.World;
 
 namespace Zenith.Gameplay.Entities;
 
@@ -25,19 +26,17 @@ namespace Zenith.Gameplay.Entities;
 /// </summary>
 sealed class PlayerMeleeSystem : IGameSystem
 {
-    private const float AttackDistance = 2.25f;
-    private const float AttackDamage = 4f;
-
     private readonly PlayerManager _players;
+    private readonly ItemPalette _itemPalette;
 
-    public PlayerMeleeSystem(PlayerManager players) => _players = players;
+    public PlayerMeleeSystem(PlayerManager players, ItemPalette itemPalette) { _players = players; _itemPalette = itemPalette; }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        var reachSquared = AttackDistance * AttackDistance;
-
         foreach (var attacker in online)
         {
+            var reach = EntityHitboxes.MeleeReach(attacker.GameMode);
+            var reachSquared = reach * reach;
             // The predicate resolves against the current player index rather than pre-selecting a
             // candidate, so consumption still happens at most once and only for a target this
             // system actually owns (a player) — an untargeted or mob-targeted intent is left
@@ -58,14 +57,15 @@ sealed class PlayerMeleeSystem : IGameSystem
 
             var dx = target.PositionX - attacker.PositionX;
             var dz = target.PositionZ - attacker.PositionZ;
-            if (dx * dx + dz * dz > reachSquared)
+            if (EntityHitboxes.PlayerStanding(target.PositionX, target.PositionY, target.PositionZ)
+                .DistanceSquaredTo(attacker.PositionX, attacker.PositionY + Blocks.PlayerEyeHeight, attacker.PositionZ) > reachSquared)
                 continue;
 
             PlayerDamage.ApplyCore(
                 target,
                 _players,
                 DamageSource.MeleeFrom(attacker.RuntimeId),
-                AttackDamage,
+                PlayerMeleeDamage.Resolve(attacker, _itemPalette),
                 clock.CurrentTick,
                 dx, dz).Conclude(online);
         }

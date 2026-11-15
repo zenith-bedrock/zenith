@@ -66,6 +66,7 @@ public sealed class CowSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("rancher");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new CowSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnCow(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -78,9 +79,7 @@ public sealed class CowSystemTests
 
         Assert.Empty(system.Cows);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:beef"), loot.Id.Value);
-        Assert.Equal(1, loot.Count);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "cow");
         Assert.Equal(1, player.ExperiencePoints);
     }
 

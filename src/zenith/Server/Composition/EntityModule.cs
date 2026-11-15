@@ -45,6 +45,8 @@ sealed class EntityModule : IGameplayModule
         damage.Register(bat.Owns, bat.TryApplyDamage);
         damage.Register(villager.Owns, villager.TryApplyDamage);
 
+        // Pushes move actors before any species ticks, so a push is replicated by that species' move batch.
+        s.Register(new KnockbackSystem(world, entities), "knockback");
         s.Register(zombie, "zombie");
         s.Register(minecart, "minecart");
         s.Register(projectile, "projectile");
@@ -57,6 +59,7 @@ sealed class EntityModule : IGameplayModule
         s.Register(villager, "villager");
         s.Register(golem, "golem");
         s.Register(fish, "fish");
+        s.Register(new DeathAnimationSystem(entities), "death-animation");
 
         var spawner = s.Spawner;
         spawner.Register("zombie", (x, y, z) => zombie.SpawnZombie(x, y, z), () => zombie.Zombies.Count);

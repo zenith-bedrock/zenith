@@ -13,6 +13,42 @@ namespace Zenith.Tests;
 /// </summary>
 public sealed class CreeperSystemTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Late_viewer_receives_current_fuse_after_spawn_without_resending_to_existing_viewer(bool fusing)
+    {
+        var fx = new IntentTestFixture();
+        var first = fx.AddInGamePlayer("first-fuse");
+        first.Chunks.Radius = -1;
+        var firstClient = new RecordingClientChannel(); first.AttachClient(firstClient);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnCreeper(first.PositionX, first.PositionY, first.PositionZ + (fusing ? 1f : 10f));
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(fusing, IsFusing(system, id));
+        firstClient.Calls.Clear();
+
+        var second = fx.AddInGamePlayer("late-fuse");
+        second.Chunks.Radius = -1;
+        var secondClient = new RecordingClientChannel(); second.AttachClient(secondClient);
+        fx.Clock.AdvanceBy(1);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.True(system.Stores.Identities.TryGet(id, out var identity));
+        var spawnIndex = secondClient.Calls.FindIndex(c => c.Call == "SendAddMob");
+        Assert.True(spawnIndex >= 0);
+        var ignited = secondClient.Calls.Where(c => c.Call == "SendActorIgnited").ToArray();
+        if (fusing)
+        {
+            var call = Assert.Single(ignited);
+            Assert.Equal(identity.ActorRuntimeId, Assert.IsType<ulong>(call.Args[0]));
+            Assert.True(Assert.IsType<bool>(call.Args[1]));
+            Assert.True(secondClient.Calls.FindIndex(c => c.Call == "SendActorIgnited") > spawnIndex);
+        }
+        else Assert.Empty(ignited);
+        Assert.DoesNotContain(firstClient.Calls, c => c.Call == "SendActorIgnited");
+    }
+
     private static long? Target(CreeperSystem system, EntityId id)
     {
         Assert.True(system.CreeperStates.TryGet(id, out var state));
@@ -61,8 +97,7 @@ public sealed class CreeperSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Creepers);
         Assert.Equal(1, system.ExplosionCount);
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:gunpowder"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "creeper");
         Assert.True(player.Health < 20f); // caught in the blast at 1 block away
         // Self-explosion has no attacker to attribute XP to — DamageSource.Generic carries no owner.
         Assert.Equal(0, player.ExperiencePoints);
@@ -106,8 +141,7 @@ public sealed class CreeperSystemTests
 
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Creepers);
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:gunpowder"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "creeper");
         Assert.Equal(5, player.ExperiencePoints); // player-caused kill *does* credit XP, unlike self-explosion
         Assert.Equal(0, system.ExplosionCount);
     }

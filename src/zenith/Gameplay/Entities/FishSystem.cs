@@ -99,8 +99,7 @@ sealed class FishSystem : IGameSystem
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        const float attackDistance = 2.25f;
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, attackDistance, 4f, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
     }
 
     /// <summary>Concrete Fish health/removal operation — same shape as every other migrated actor's, one loot item, no retaliation.</summary>

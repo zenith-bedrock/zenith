@@ -11,7 +11,4 @@ struct ZombieState
 {
     /// <summary>Retained target identity — cleared by <c>ZombieSystem</c> when the player becomes invalid, same semantics as the pre-ECS <c>Zombie.TargetPlayerRuntimeId</c>.</summary>
     public long? TargetPlayerRuntimeId;
-
-    /// <summary>Next tick a melee swing may land.</summary>
-    public ulong NextAttackTick;
 }

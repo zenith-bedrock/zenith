@@ -70,10 +70,11 @@ public sealed class BatSystemTests
     }
 
     [Fact]
-    public void Melee_kill_drops_feather_and_awards_experience()
+    public void Melee_kill_rolls_the_empty_bat_table_and_awards_experience()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("hunter");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new BatSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnBat(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -86,8 +87,7 @@ public sealed class BatSystemTests
 
         Assert.Empty(system.Bats);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:feather"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "bat");
         Assert.Equal(1, player.ExperiencePoints);
     }
 

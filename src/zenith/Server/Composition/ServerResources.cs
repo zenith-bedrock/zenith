@@ -32,6 +32,7 @@ sealed record ServerResources(
                 "sand", "gravel", "bedrock", "water", "cobblestone", "deepslate", "chest"];
             foreach (var name in required) palette.Require($"minecraft:{name}");
             Tools.Load(palette);
+            ItemStackLimits.Load(palette);
             DigProfiles.EnsureLoaded();
             BlockLoot.Load(palette);
             return palette;

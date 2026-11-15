@@ -27,10 +27,8 @@ sealed class SpiderSystem : IGameSystem
 {
     private const float SpawnDistance = 6f;
     private const float DetectionDistance = 20f;
-    private const float AttackDistance = 2.25f;
+    private float AttackDistance => _mob.Definition.Melee!.Reach;
     private const float MovePerTick = 0.11f; // Faster than Zombie's 0.08 — a real behavioral difference, not just renaming.
-    private const float AttackDamage = 2f; // Weaker per hit than Zombie, to keep overall threat comparable to a faster mob.
-    private const int AttackCooldownTicks = 20;
     private const float DespawnRadius = 64f;
     private const float PoisonChance = 0.3f;
     private const int PoisonDurationTicks = 100; // 5s @ 20 TPS — same cadence EffectSystem already ticks Poison at.
@@ -114,28 +112,14 @@ sealed class SpiderSystem : IGameSystem
         _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
 
     private void TryAttackPlayer(EntityId id, Player.Player? target, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _spiders.GetRef(id);
-        if (state.NextAttackTick > clock.CurrentTick) return;
-        if (target is null) return;
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        if (!GroundMobBody.IsTargetValid(pos, target, DetectionDistance, out var distanceSquared) || distanceSquared > AttackDistance * AttackDistance)
-            return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage,
-            clock.CurrentTick, target.PositionX - pos.X, target.PositionZ - pos.Z);
-        result.Conclude(online);
-        if (result.Applied)
-        {
-            state.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
+        if (target is null || !_mob.IsMeleeReady(id, clock.CurrentTick)) return;
+        if (!_stores.Positions.TryGet(id, out var pos) || !GroundMobBody.IsTargetValid(pos, target, DetectionDistance, out _)) return;
+        if (_mob.TryMeleeAttack(id, target, clock.CurrentTick, online))
             TryApplyPoison(target, clock);
-            foreach (var peer in online)
-                if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                    peer.Client.Entity.SendAttackSwing(identity.ActorRuntimeId);
-        }
     }
 
     /// <summary>

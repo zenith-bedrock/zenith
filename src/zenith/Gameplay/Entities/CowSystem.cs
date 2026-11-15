@@ -197,7 +197,7 @@ sealed class CowSystem : IGameSystem
         _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, 2.25f, AttackDamage, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
 
     /// <summary>Concrete Cow health/removal operation — same shape as Zombie/Minecart's, one loot item, no retaliation.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>

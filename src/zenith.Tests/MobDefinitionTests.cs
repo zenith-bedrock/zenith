@@ -11,13 +11,11 @@ public class MobDefinitionTests
     private static Stream Json(string text) => new MemoryStream(Encoding.UTF8.GetBytes(text));
 
     [Fact]
-    public void Boot_validation_identifies_the_species_and_missing_loot_item()
+    public void Boot_validation_names_the_file_and_the_missing_loot_item()
     {
-        var definition = MobDefinitions.All.First();
         var error = Assert.Throws<InvalidDataException>(() => MobDefinitions.ValidateLoot(new ItemPalette([])));
-        Assert.Contains(MobDefinitions.ResourceName, error.Message);
-        Assert.Contains(definition.Name, error.Message);
-        Assert.Contains(definition.LootItemName, error.Message);
+        Assert.Contains("loot_tables.json", error.Message);
+        Assert.Contains("awards unknown item", error.Message);
     }
 
     [Fact]
@@ -28,7 +26,7 @@ public class MobDefinitionTests
         Assert.Superset(
             new HashSet<string> { "Zombie", "Cow", "Creeper", "Spider", "Skeleton", "Golem", "Minecart" }, names);
         Assert.Equal(20f, MobDefinitions.Zombie.MaxHealth);
-        Assert.Equal("minecraft:rotten_flesh", MobDefinitions.Zombie.LootItemName);
+        Assert.Equal("zombie", MobDefinitions.Zombie.LootTable);
         Assert.Equal(25, MobDefinitions.Golem.KillExperience);
     }
 
@@ -37,8 +35,9 @@ public class MobDefinitionTests
     {
         var palette = ItemPaletteLoader.FromEmbeddedResource();
 
+        MobDefinitions.ValidateLoot(palette); // every species' table exists and every item any table awards is real
         foreach (var definition in MobDefinitions.All)
-            Assert.True(palette.TryGet(definition.LootItemName, out _), $"{definition.Name} drops unknown item {definition.LootItemName}.");
+            Assert.True(Zenith.Gameplay.Loot.LootTables.Contains(definition.LootTable), $"{definition.Name} rolls missing table {definition.LootTable}.");
     }
 
     [Fact]
@@ -48,12 +47,12 @@ public class MobDefinitionTests
     }
 
     [Theory]
-    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":0,"lootItem":"x","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"x","killExperience":-1}]}""")]
-    [InlineData("""{"mobs":[{"name":"","maxHealth":5,"lootItem":"x","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootItem":"x","killExperience":1},{"name":"Zombie","maxHealth":6,"lootItem":"x","killExperience":1}]}""")]
-    [InlineData("""{"mobs":[{"name":"Dragon","maxHealth":5,"lootItem":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":0,"lootTable":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootTable":"","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootTable":"x","killExperience":-1}]}""")]
+    [InlineData("""{"mobs":[{"name":"","maxHealth":5,"lootTable":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Zombie","maxHealth":5,"lootTable":"x","killExperience":1},{"name":"Zombie","maxHealth":6,"lootTable":"x","killExperience":1}]}""")]
+    [InlineData("""{"mobs":[{"name":"Dragon","maxHealth":5,"lootTable":"x","killExperience":1}]}""")]
     public void A_bad_entry_fails_to_load(string json)
     {
         Assert.Throws<InvalidDataException>(() => MobDefinitions.Parse(Json(json)));

@@ -25,6 +25,9 @@ sealed class EntityRuntime
     public ComponentStore<HealthComponent> Health { get; }
     public ComponentStore<ActorIdentity> Identities { get; }
     public ComponentStore<DespawnTracking> Despawn { get; }
+    public ComponentStore<DeathAnimation> Corpses { get; }
+    public ComponentStore<MeleeCooldown> MeleeCooldowns { get; }
+    public ComponentStore<Knockback> Knockbacks { get; }
 
     public EntityRuntime()
     {
@@ -33,6 +36,9 @@ sealed class EntityRuntime
         Health = new ComponentStore<HealthComponent>(Entities);
         Identities = new ComponentStore<ActorIdentity>(Entities);
         Despawn = new ComponentStore<DespawnTracking>(Entities);
+        Corpses = new ComponentStore<DeathAnimation>(Entities);
+        MeleeCooldowns = new ComponentStore<MeleeCooldown>(Entities);
+        Knockbacks = new ComponentStore<Knockback>(Entities);
     }
 
     /// <summary>
@@ -76,6 +82,24 @@ sealed class EntityRuntime
     }
 
     /// <summary>
+    /// Leaves a corpse entity behind for a killed actor so its viewers keep seeing it for <paramref name="animationTicks"/> while the
+    /// client plays the death animation. The corpse is a new entity carrying only <see cref="DeathAnimation"/>; it is not registered by
+    /// runtime id, so nothing can target or damage it.
+    /// </summary>
+    public EntityId LeaveCorpse(ActorIdentity dead, long[] viewerRuntimeIds, ulong currentTick, int animationTicks)
+    {
+        var id = Entities.Create();
+        Corpses.Set(id, new DeathAnimation
+        {
+            ActorUniqueId = dead.ActorUniqueId,
+            ActorRuntimeId = dead.ActorRuntimeId,
+            RemoveAtTick = currentTick + (ulong)animationTicks,
+            ViewerRuntimeIds = viewerRuntimeIds,
+        });
+        return id;
+    }
+
+    /// <summary>
     /// Debug/diagnostics only — never called from hot gameplay paths. Answers "what do we know
     /// about this entity" without reflection: alive state plus presence in each shared store this
     /// object owns. Feature-specific component presence isn't visible here since this type has no
@@ -90,6 +114,9 @@ sealed class EntityRuntime
         if (Health.Has(id)) parts.Add(nameof(HealthComponent));
         if (Identities.Has(id)) parts.Add(nameof(ActorIdentity));
         if (Despawn.Has(id)) parts.Add(nameof(DespawnTracking));
+        if (Corpses.Has(id)) parts.Add(nameof(DeathAnimation));
+        if (MeleeCooldowns.Has(id)) parts.Add(nameof(MeleeCooldown));
+        if (Knockbacks.Has(id)) parts.Add(nameof(Knockback));
         return $"{id} alive, components=[{string.Join(", ", parts)}]";
     }
 }

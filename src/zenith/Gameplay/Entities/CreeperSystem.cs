@@ -38,9 +38,7 @@ sealed class CreeperSystem : IGameSystem
     /// creeper standing at exactly ~3 blocks flicker its Ignited flag on/off every tick.
     /// </summary>
     private const float DefuseDistance = 7f;
-    private const float AttackDistance = 2.25f;
     /// <summary>Damage a player's weapon deals per hit — unrelated to <see cref="ExplosionDamage"/>.</summary>
-    private const float PlayerAttackDamage = 4f;
     private const float MovePerTick = 0.08f;
     private const int FuseDurationTicks = 30; // 1.5s @ 20 TPS, vanilla-parity.
     private const float ExplosionRadius = 3f;
@@ -141,10 +139,14 @@ sealed class CreeperSystem : IGameSystem
         _replication.TryDespawn(id, clock, online, DespawnRadius);
 
     private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online);
+        _replication.Reconcile(id, online, (peer, identity) =>
+        {
+            if (_creepers.TryGet(id, out var state) && state.IsFusing)
+                peer.Client.Entity.SendActorIgnited(identity.ActorRuntimeId, true);
+        });
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, PlayerAttackDamage, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
 
     /// <summary>Player kills it with a weapon before the fuse completes — ordinary shared bookkeeping.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>

@@ -130,8 +130,7 @@ sealed class MinecartSystem : IGameSystem
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        const float attackDistance = 2.25f;
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, attackDistance, AttackDamage, currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
     }
 
     /// <summary>
@@ -242,6 +241,7 @@ sealed class MinecartSystem : IGameSystem
     private static void SendDismountTeleport(Player.Player? occupant)
     {
         if (occupant is null || !occupant.IsInGame || occupant.IsDead) return;
+        occupant.BeginTeleport();
         occupant.Client.Entity.SendMovePlayerTeleport(
             entityRuntimeId: (ulong)occupant.RuntimeId,
             x: occupant.PositionX,

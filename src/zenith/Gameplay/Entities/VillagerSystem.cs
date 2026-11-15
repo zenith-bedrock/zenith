@@ -18,7 +18,6 @@ sealed class VillagerSystem : IGameSystem
     private const int MinWanderTicks = 60;
     private const int MaxWanderTicks = 140;
     private const float AttackDamage = 4f;
-    private const float AttackDistance = 2.25f;
     private const float InteractDistance = 2.25f; // Same reach as melee: no separate "interact range" concept exists yet.
     private const int TradeCooldownTicks = 200; // 10s @ 20 TPS: stops a held right-click from redeeming the same ware repeatedly.
     private const float DespawnRadius = 64f;
@@ -44,8 +43,8 @@ sealed class VillagerSystem : IGameSystem
         _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
         _villagers = new ComponentStore<VillagerState>(stores.Entities);
-        // The ware is the same emerald a kill drops: one concrete item, two paths to it.
-        _ware = StackId.FromItem(itemPalette.Require(MobDefinitions.Villager.LootItemName));
+        // The ware a trade gives back; independent of what a kill drops (the loot table).
+        _ware = StackId.FromItem(itemPalette.Require("minecraft:emerald"));
         _requestedWare = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
         _random = random ?? new Random();
     }
@@ -82,7 +81,7 @@ sealed class VillagerSystem : IGameSystem
             if (!_stores.Entities.IsAlive(id)) continue;
             if (_replication.TryDespawn(id, clock, online, DespawnRadius)) continue;
             _replication.Reconcile(id, online);
-            DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, clock.CurrentTick, TryApplyDamage);
+            _mob.ApplyPlayerAttacks(id, online, clock.CurrentTick, TryApplyDamage);
             if (!_stores.Entities.IsAlive(id)) continue;
             TryHandleInteraction(id, online, clock);
             Wander(id, clock);

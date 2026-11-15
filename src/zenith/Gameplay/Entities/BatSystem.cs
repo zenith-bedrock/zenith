@@ -19,7 +19,6 @@ sealed class BatSystem : IGameSystem
     private const int MaxWanderTicks = 80;
     private const float WanderVerticalBias = 0.5f; // Keeps the random heading from drifting mostly sideways.
     private const float AttackDamage = 4f;
-    private const float AttackDistance = 2.25f;
     private const float DespawnRadius = 64f;
 
     private readonly World.World _world;
@@ -71,7 +70,7 @@ sealed class BatSystem : IGameSystem
             if (!_stores.Entities.IsAlive(id)) continue;
             if (_replication.TryDespawn(id, clock, online, DespawnRadius)) continue;
             _replication.Reconcile(id, online);
-            DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, clock.CurrentTick, TryApplyDamage);
+            _mob.ApplyPlayerAttacks(id, online, clock.CurrentTick, TryApplyDamage);
             if (!_stores.Entities.IsAlive(id)) continue;
             Wander(id, clock);
             _replication.Reconcile(id, online);

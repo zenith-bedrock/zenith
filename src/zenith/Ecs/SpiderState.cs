@@ -9,5 +9,4 @@ namespace Zenith.Ecs;
 struct SpiderState
 {
     public long? TargetPlayerRuntimeId;
-    public ulong NextAttackTick;
 }

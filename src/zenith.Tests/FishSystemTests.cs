@@ -106,6 +106,7 @@ public sealed class FishSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("fisher");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new FishSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnFish(player.PositionX + 1, player.PositionY, player.PositionZ);
 

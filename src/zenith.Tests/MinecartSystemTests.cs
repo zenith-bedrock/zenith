@@ -237,6 +237,7 @@ public sealed class MinecartSystemTests
         var fx = new IntentTestFixture();
         var rider = fx.AddInGamePlayer("rider");
         var attacker = fx.AddInGamePlayer("attacker");
+        Assert.True(attacker.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:wooden_axe"), 1));
         attacker.PositionX = rider.PositionX;
         attacker.PositionZ = rider.PositionZ;
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
@@ -287,6 +288,7 @@ public sealed class MinecartSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new MinecartSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnMinecart(player.PositionX + 1, player.PositionY, player.PositionZ);
 

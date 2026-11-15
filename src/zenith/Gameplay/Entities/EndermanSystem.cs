@@ -27,9 +27,7 @@ namespace Zenith.Gameplay.Entities;
 sealed class EndermanSystem : IGameSystem
 {
     private const float SpawnDistance = 5f;
-    private const float AttackDistance = 2.25f;
-    private const float AttackDamage = 7f;
-    private const int AttackCooldownTicks = 20;
+    private float AttackDistance => _mob.Definition.Melee!.Reach;
     private const int AggroDurationTicks = 100; // 5s @ 20 TPS since the last hit landed.
     private const int MinPassiveTeleportTicks = 60;
     private const int MaxPassiveTeleportTicks = 140;
@@ -125,7 +123,7 @@ sealed class EndermanSystem : IGameSystem
 
     /// <summary>A landed player hit both damages the Enderman and provokes it — the one place aggro is triggered.</summary>
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, currentTick,
+        _mob.ApplyPlayerAttacks(id, online, currentTick,
             (eid, source, amount, peers, tick) => TryApplyDamageAndProvoke(eid, source, amount, peers, tick));
 
     private bool TryApplyDamageAndProvoke(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
@@ -181,10 +179,9 @@ sealed class EndermanSystem : IGameSystem
         ref var p = ref _stores.Positions.GetRef(id);
         p.Yaw = LookMath.YawTowards(dx, dz);
 
-        if (distanceSquared > AttackDistance * AttackDistance && clock.CurrentTick >= state.NextAttackTick)
+        if (distanceSquared > AttackDistance * AttackDistance && _mob.IsMeleeReady(id, clock.CurrentTick))
         {
-            ref var s = ref _endermen.GetRef(id);
-            s.NextAttackTick = clock.CurrentTick + (ulong)AggroTeleportCooldownTicks;
+            _mob.DelayMelee(id, clock.CurrentTick, AggroTeleportCooldownTicks);
             var angle = _random.NextSingle() * MathF.PI * 2f;
             TryTeleport(
                 id,
@@ -194,17 +191,8 @@ sealed class EndermanSystem : IGameSystem
             return;
         }
 
-        if (distanceSquared <= AttackDistance * AttackDistance && clock.CurrentTick >= state.NextAttackTick)
-        {
-            if (!_stores.Identities.TryGet(id, out var identity)) return;
-            var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage, clock.CurrentTick, dx, dz);
-            result.Conclude(online);
-            if (result.Applied)
-            {
-                ref var s = ref _endermen.GetRef(id);
-                s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
-            }
-        }
+        if (distanceSquared <= AttackDistance * AttackDistance)
+            _mob.TryMeleeAttack(id, target, clock.CurrentTick, online);
     }
 
     /// <summary>

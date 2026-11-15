@@ -116,6 +116,7 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:wooden_axe"), 1));
         var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -132,10 +133,7 @@ public sealed class ZombieSystemTests
 
         Assert.Empty(system.Zombies);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:rotten_flesh"), loot.Id.Value);
-        Assert.True(loot.Id.IsItem);
-        Assert.Equal(1, loot.Count);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "zombie");
         player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Empty(system.Zombies);
@@ -171,7 +169,7 @@ public sealed class ZombieSystemTests
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, Health(system, first).Current);
-        Assert.Equal(16f, Health(system, second).Current);
+        Assert.Equal(19f, Health(system, second).Current);
     }
 
     /// <summary>
@@ -249,12 +247,16 @@ public sealed class ZombieSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("puncher");
-        var system = new ZombieSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var stores = new EntityRuntime();
+        var system = new ZombieSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
+        var knockback = new KnockbackSystem(fx.World, stores); // the push is moved by the shared system, which runs before the species
         var id = system.SpawnZombie(player.PositionX + 1, player.PositionY, player.PositionZ);
         var beforeX = Pos(system, id).X;
 
         player.Intents.SubmitAttackIntent();
         system.Tick(fx.Clock, fx.Players.Online);
+        fx.Clock.AdvanceBy(1);
+        knockback.Tick(fx.Clock, fx.Players.Online);
 
         // Knocked further from the player (+X direction) than a chase step alone would move it.
         Assert.True(Pos(system, id).X > beforeX);

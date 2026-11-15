@@ -10,6 +10,5 @@ struct GolemState
 {
     public bool IsEnraged;
     public ulong NextSlamTick;
-    public ulong NextAttackTick;
     public long? TargetPlayerRuntimeId;
 }

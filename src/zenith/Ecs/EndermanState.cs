@@ -10,5 +10,4 @@ struct EndermanState
     public long? AggroTargetRuntimeId;
     public int AggroTicksRemaining;
     public ulong NextPassiveTeleportTick;
-    public ulong NextAttackTick;
 }

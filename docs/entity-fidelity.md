@@ -86,6 +86,23 @@ both bedrock-protocol PHP, which names it `ARM_SWING`, and gophertunnel, which n
 Zombie/Spider/Golem's `TryAttackPlayer` at the moment a melee hit lands on a player (mirrors the
 hurt/death seam: gameplay decides, protocol projects).
 
+**Shared melee (supersedes the per-system copies):** a species' contact attack is data (`melee` in
+`data/mobs.json`: damage, reach, cooldownTicks) plus one behaviour, `MobCore.TryMeleeAttack`, with the cooldown in the
+shared `MeleeCooldown` component. It checks the cooldown and reach, applies damage with knockback, and swings to every viewer, so
+Zombie, Spider, Golem and Enderman behave the same by construction. The Enderman used to hit without a swing; it now swings.
+A species adds only its own consequence (spider poison) and its targeting/movement. `MobCore.ApplyPlayerAttacks` is the same
+single path for players attacking any actor. Verified on the wire with `smoke:melee-swing`.
+
+## Knockback (shared)
+
+A hit that leaves a mob alive pushes it away from whoever dealt it (`MobCore.TryApplyDamage` → `MobCore.ApplyKnockback`), for
+every species whose definition in `data/mobs.json` has a `knockback` profile (strength, decayPerTick, resistance). The push is a
+`Knockback` component moved and faded by `KnockbackSystem`, which runs before the species so their move batch replicates it.
+Before this only the Zombie recoiled, with its own copy of the code. The iron golem is immune by data (`resistance: 1`); the
+minecart, fish and bat have no profile because they own their movement. Horizontal only: there is no vertical hop yet, since the
+ground-mob fall model has no jump. Player knockback (`PlayerDamage`, fixed 0.4/0.4 as a client impulse) is a separate path and
+still hard-coded. Verified on the wire with `smoke:knockback`.
+
 ## Hurt / death feedback
 
 Added Phase XXIII. `ActorEventPacket` (`0x1b`) with `EventHurt = 2` / `EventDeath = 3`, wire shape
@@ -98,10 +115,26 @@ PocketMine's `HurtAnimation.php`/`DeathAnimation.php`.
   `DamageableActorCombat` (ECS: Zombie/Minecart/Cow/Skeleton/Spider) and `GroundMobCombat` (legacy:
   Creeper/Enderman/Bat/Villager/Golem/Fish).
 - Player-vs-player damage: `PlayerVisibility.RelayHurt`/`RelayDeath`, called from `PlayerDamage.Apply`.
-- Death event is sent immediately before `SendRemoveActor` — no "dying" visual-lifecycle state was
-  introduced. PocketMine's reference behavior treats `DeathAnimation` as a one-shot event that
-  tolerates immediate removal; Zenith's ECS `DestroyActor` therefore stays immediate (Part 21's
-  question resolved without new lifecycle states).
+- **Death animation (supersedes the Phase XXIII "immediate removal" decision, which was wrong):** the client plays the
+  tip-over/red tint/poof for 20 ticks *while it still has the actor*, so sending `RemoveActor` in the same tick as the death
+  event cancelled it (every mob just vanished). A kill now sends the death event, destroys the actor for gameplay at once (loot,
+  XP, no AI, no targeting, no further damage) and leaves a corpse entity (`DeathAnimation` component, `EntityRuntime.LeaveCorpse`)
+  that `DeathAnimationSystem` removes from the witnessing peers after `deathAnimationTicks` (`data/mobs.json`, default 20; the
+  minecart has 0 and is removed with the kill). The corpse has no gameplay components, so no species system or damage query sees it.
+  Verified on the wire with `smoke:death-animation` (death event, one `remove_entity` ~1000 ms later, no moves after death);
+  not yet verified with a rendering client.
+- **Mob loot is data, separate from the floor-drop store:** a species' `lootTable` (`data/mobs.json`) names a table in
+  `data/loot_tables.json`, in the BDS behavior-pack shape (pools / rolls / conditions / weighted entries / `set_count`
+  min-max). `Gameplay/Loot` only *generates* awards (item + count) from a `LootContext` (killed by a player) and a `Random`;
+  it knows nothing of where they land. `MobLoot.Drop` is the single seam that places each award on the floor with a small pop
+  through `FloorDropFanout` (fresh moving item actors, no merge); a full floor drops the award silently and never vetoes the
+  kill (ADR §135). `FloorDropStore` stays the specialized runtime for items (custody cells, merge, pickup delay, despawn,
+  replication); ECS remains for mobs/projectiles/vehicles. The loader rejects any field, condition or function it cannot honour
+  (looting/enchant functions, `killed_by_entity`, smelting, nested tables), so a table never carries silently ignored behaviour.
+  Deliberate divergences from the pack until the backing feature exists: no looting, no burning-cow cooked beef, no creeper
+  records. Bat and villager tables are empty, as in the pack (they used to drop a feather and an emerald). The villager's trade
+  ware (emerald) is its own constant, no longer its loot item. Verified on the wire with `smoke:loot` (cow kill → 2 item
+  actors, each popping upward); not yet verified with a rendering client.
 
 ### Protocol id correction
 

@@ -60,6 +60,7 @@ public sealed class SpiderSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnSpider(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -72,9 +73,7 @@ public sealed class SpiderSystemTests
 
         Assert.Empty(system.Spiders);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:string"), loot.Id.Value);
-        Assert.Equal(1, loot.Count);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "spider");
         Assert.Equal(5, player.ExperiencePoints);
     }
 
@@ -189,6 +188,7 @@ public sealed class SpiderSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("safe-attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(2));
         system.SpawnSpider(player.PositionX + 10, player.PositionY, player.PositionZ);
 

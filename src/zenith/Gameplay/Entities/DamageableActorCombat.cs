@@ -1,4 +1,5 @@
 using Zenith.Ecs;
+using Zenith.Gameplay.Loot;
 using Zenith.Player;
 using Zenith.World;
 
@@ -19,15 +20,15 @@ static class DamageableActorCombat
         EntityId id,
         EntityRuntime stores,
         IReadOnlyList<Player.Player> online,
-        float attackDistance,
-        float attackDamage,
+        MobDefinition definition,
+        ItemPalette itemPalette,
         ulong currentTick,
         Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
     {
         if (!TryBuildView(id, stores, out var view)) return;
 
         DamageableActorCombatCore.TryApplyPlayerMeleeAttack(
-            view, online, attackDistance, attackDamage, currentTick,
+            view, online, definition, itemPalette, currentTick,
             (source, amount, peers, tick) => tryApplyDamage(id, source, amount, peers, tick));
     }
 
@@ -45,20 +46,24 @@ static class DamageableActorCombat
         World.World world,
         PlayerManager players,
         HashSet<(long EntityId, long PlayerId)> replicated,
-        StackId lootItem,
+        LootTable lootTable,
+        Random random,
         int killExperience,
+        ItemPalette itemPalette,
         string actorName,
         ulong currentTick,
         Action<EntityId> destroyActor,
-        Action<Player.Player>? onDeathReplicatedToPeer = null)
+        Action<Player.Player>? onDeathReplicatedToPeer = null,
+        int deathAnimationTicks = 0,
+        Action<long[]>? leaveCorpse = null)
     {
         if (!TryBuildView(id, stores, out var view)) return false;
 
         return DamageableActorCombatCore.TryApplyDamage(
-            view, source, amount, online, world, players, replicated, lootItem, killExperience, actorName,
+            view, source, amount, online, world, players, replicated, lootTable, random, killExperience, itemPalette, actorName,
             currentTick,
             destroy: () => destroyActor(id),
-            onDeathReplicatedToPeer);
+            onDeathReplicatedToPeer, deathAnimationTicks, leaveCorpse);
     }
 
     private static bool TryBuildView(EntityId id, EntityRuntime stores, out DamageableActorView view)

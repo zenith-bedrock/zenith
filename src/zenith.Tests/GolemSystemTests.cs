@@ -112,6 +112,7 @@ public sealed class GolemSystemTests
         // through 17 rounds, silently truncating the kill — Creative sidesteps that without changing
         // what this test is actually proving.
         var player = fx.AddInGamePlayer("attacker", GameMode.Creative);
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new GolemSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnGolem(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -124,8 +125,7 @@ public sealed class GolemSystemTests
 
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Golems);
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:iron_ingot"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "iron_golem");
         // 25 raw XP from level 0 crosses two level-up thresholds (7, then 9) — same
         // PlayerExperience.AddPoints math every other kill-XP path already goes through.
         Assert.Equal((2, 9), (player.ExperienceLevel, player.ExperiencePoints));

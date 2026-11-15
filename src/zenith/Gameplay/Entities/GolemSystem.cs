@@ -35,10 +35,8 @@ sealed class GolemSystem : IGameSystem
 {
     private const float SpawnDistance = 6f;
     private const float DetectionDistance = 20f;
-    private const float AttackDistance = 2.5f;
+    private float AttackDistance => _mob.Definition.Melee!.Reach;
     private const float MovePerTick = 0.07f;
-    private const float AttackDamage = 6f;
-    private const int AttackCooldownTicks = 20;
     private const float EnrageHealthFraction = 0.5f;
     private const int SlamCooldownTicks = 100; // 5s @ 20 TPS.
     private const float SlamRadius = 4f;
@@ -143,7 +141,7 @@ sealed class GolemSystem : IGameSystem
         _replication.Reconcile(id, online);
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
-        DamageableActorCombat.ApplyPlayerMeleeAttacks(id, _stores, online, AttackDistance, AttackDamage, _currentTick, TryApplyDamage);
+        _mob.ApplyPlayerAttacks(id, online, _currentTick, TryApplyDamage);
 
     /// <summary>Concrete Golem health/removal operation — same shape as every other migrated actor's. A player attacker provokes retaliation (self-defense — vanilla golems always fight back).</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
@@ -221,26 +219,8 @@ sealed class GolemSystem : IGameSystem
 
 
 
-    private void TryAttackPlayer(EntityId id, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        ref var state = ref _golems.GetRef(id);
-        if (clock.CurrentTick < state.NextAttackTick) return;
-        if (!_stores.Positions.TryGet(id, out var pos)) return;
-        var dx = target.PositionX - pos.X;
-        var dz = target.PositionZ - pos.Z;
-        if (dx * dx + dz * dz > AttackDistance * AttackDistance) return;
-        if (!_stores.Identities.TryGet(id, out var identity)) return;
-        var result = PlayerDamage.ApplyCore(target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), AttackDamage, clock.CurrentTick, dx, dz);
-        result.Conclude(online);
-        if (result.Applied)
-        {
-            ref var s = ref _golems.GetRef(id);
-            s.NextAttackTick = clock.CurrentTick + AttackCooldownTicks;
-            foreach (var peer in online)
-                if (_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId)))
-                    peer.Client.Entity.SendAttackSwing(identity.ActorRuntimeId);
-        }
-    }
+    private void TryAttackPlayer(EntityId id, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online) =>
+        _mob.TryMeleeAttack(id, target, clock.CurrentTick, online);
 
     /// <summary>
     /// Area ability, only reachable once enraged: damages every player within <see cref="SlamRadius"/>

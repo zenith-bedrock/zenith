@@ -60,10 +60,11 @@ public sealed class VillagerSystemTests
     }
 
     [Fact]
-    public void Melee_kill_drops_emerald_and_awards_experience()
+    public void Melee_kill_rolls_the_empty_villager_table_and_awards_experience()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("attacker");
+        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
         var system = new VillagerSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnVillager(player.PositionX + 1, player.PositionY, player.PositionZ);
 
@@ -76,8 +77,7 @@ public sealed class VillagerSystemTests
 
         Assert.Empty(system.Villagers);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:emerald"), loot.Id.Value);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "villager");
         Assert.Equal(1, player.ExperiencePoints);
     }
 

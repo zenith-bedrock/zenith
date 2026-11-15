@@ -1,5 +1,7 @@
+using Zenith.Gameplay.Loot;
 using Zenith.Player;
 using Zenith.World;
+using Zenith.Geometry;
 
 using Zenith.Gameplay.Survival;
 using Zenith.Gameplay.Replication;
@@ -37,20 +39,22 @@ internal static class DamageableActorCombatCore
     public static bool TryApplyPlayerMeleeAttack(
         DamageableActorView view,
         IReadOnlyList<Player.Player> online,
-        float attackDistance,
-        float attackDamage,
+        MobDefinition definition,
+        ItemPalette itemPalette,
         ulong currentTick,
         Func<DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage)
     {
-        var reachSquared = attackDistance * attackDistance;
+        var (width, height) = definition.Dimensions;
+        var bounds = Aabb.FromCenterSize(view.X, view.Y, view.Z, width, height);
         foreach (var player in online)
         {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = view.X - player.PositionX;
-            var dz = view.Z - player.PositionZ;
-            if (dx * dx + dz * dz > reachSquared) continue;
-            if (!player.Intents.TryConsumeAttackIntent(checked((long)view.RuntimeId))) continue;
-            if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), attackDamage, online, currentTick)) return true;
+            var reach = EntityHitboxes.MeleeReach(player.GameMode);
+            var reachSquared = reach * reach;
+            var inReach = bounds.DistanceSquaredTo(player.PositionX, player.PositionY + Blocks.PlayerEyeHeight,
+                player.PositionZ) <= reachSquared;
+            if (!player.Intents.TryConsumeAttackIntent(checked((long)view.RuntimeId), allowUntargeted: inReach)) continue;
+            if (!player.IsInGame || player.IsDead || !inReach) continue;
+            if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), PlayerMeleeDamage.Resolve(player, itemPalette), online, currentTick)) return true;
         }
         return false;
     }
@@ -63,12 +67,16 @@ internal static class DamageableActorCombatCore
         World.World world,
         PlayerManager players,
         HashSet<(long EntityId, long PlayerId)> replicated,
-        StackId lootItem,
+        LootTable lootTable,
+        Random random,
         int killExperience,
+        ItemPalette itemPalette,
         string actorName,
         ulong currentTick,
         Action destroy,
-        Action<Player.Player>? onDeathReplicatedToPeer = null)
+        Action<Player.Player>? onDeathReplicatedToPeer = null,
+        int deathAnimationTicks = 0,
+        Action<long[]>? leaveCorpse = null)
     {
         var health = view.Health;
         var result = health.Apply(source, amount, currentTick);
@@ -89,18 +97,24 @@ internal static class DamageableActorCombatCore
         // mismatched/full stack) — the loot silently does not drop rather than leaving the mob
         // perpetually just-above-zero HP server-wide until unrelated drops elsewhere despawn.
         // FloorDropStore already logs once when SoftCap refuses a cell (TryAddOrMerge).
-        _ = FloorDropFanout.TryDeposit(
-            world, players, online, (int)MathF.Floor(view.X), (int)MathF.Floor(view.Y), (int)MathF.Floor(view.Z), lootItem, 1);
+        MobLoot.Drop(lootTable, MobLoot.ContextOf(source, online), random, world, players, online, view.X, view.Y, view.Z, itemPalette);
 
         MobKillReward.AwardExperience(source, killExperience, online);
 
+        // With an animation, peers keep the actor for deathAnimationTicks and the corpse entity removes it then
+        // (DeathAnimationSystem); without one it goes at once.
+        var animate = deathAnimationTicks > 0 && leaveCorpse is not null;
+        List<long>? witnesses = null;
         foreach (var peer in online)
             if (replicated.Remove((view.EntityKey, peer.RuntimeId)))
             {
                 peer.Client.Entity.SendDeath(view.RuntimeId);
-                peer.Client.Entity.SendRemoveActor(view.EntityKey);
+                if (animate) (witnesses ??= []).Add(peer.RuntimeId);
+                else peer.Client.Entity.SendRemoveActor(view.EntityKey);
                 onDeathReplicatedToPeer?.Invoke(peer);
             }
+
+        if (witnesses is not null) leaveCorpse!([.. witnesses]);
 
         destroy();
         return true;

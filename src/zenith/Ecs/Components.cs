@@ -66,3 +66,40 @@ struct DespawnTracking
 {
     public ulong LastSeenNearPlayerTick;
 }
+
+/// <summary>
+/// What is left of a killed actor while its clients play the death animation: the ids the clients know it by, the peers that were
+/// told about it, and the tick it is removed. A corpse is its own entity, with none of the dead actor's gameplay components, so no
+/// species system, targeting query or damage dispatch can ever see it: it is only presentation, owned by
+/// <c>DeathAnimationSystem</c>.
+/// </summary>
+struct DeathAnimation
+{
+    public long ActorUniqueId;
+    public ulong ActorRuntimeId;
+    public ulong RemoveAtTick;
+    /// <summary>Runtime ids of the peers that saw the actor die and so must be told to remove it.</summary>
+    public long[] ViewerRuntimeIds;
+}
+
+/// <summary>
+/// When a species with a melee attack (<c>MobDefinition.Melee</c>) may hit again. Shared data: the attack itself is
+/// <c>MobCore.TryMeleeAttack</c>, so every melee species cools down, hits and swings the same way.
+/// </summary>
+struct MeleeCooldown
+{
+    public ulong NextAttackTick;
+}
+
+/// <summary>
+/// The horizontal push a hit left on an actor, blocks per tick, fading each tick (<c>KnockbackSystem</c>). Separate from
+/// <see cref="Velocity"/>, which a species may own for its own movement (a minecart's rolling, a ground mob's fall speed), so a hit
+/// never fights a species' own motion model. Only species whose definition has a <c>knockback</c> profile carry it.
+/// </summary>
+struct Knockback
+{
+    public float X;
+    public float Z;
+    /// <summary>Multiplier the push fades by each tick, from the species' <c>KnockbackProfile</c>.</summary>
+    public float DecayPerTick;
+}
