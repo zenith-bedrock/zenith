@@ -8,7 +8,7 @@ User writes Portuguese; reply in Portuguese. Use they/them for unknown pronouns.
 ## Standing rules from the user
 - **Zenith is not assumed correct.** Containers/inventory/etc. have known bugs; a passing test or smoke is not proof. Always say what was verified vs not.
 - Priorities: separation of responsibilities, decoupling, DX; deep refactors are welcome. **No legacy/gambiarra**: data must be coherent, derived from the real source, no silently dropped or inert entries.
-- Work directly on `develop` (zenith) / `main` (smoke bot). Commit trailers: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` + the session's `Claude-Session:` line. **Push only with explicit approval.**
+- Work directly on `develop` (zenith) / `main` (smoke bot). No attribution trailers on commits (no Co-Authored-By, no Claude-Session). **Push only with explicit approval.**
 - e2e is set aside for now; focus on Zenith itself. Smoke bot is a real-ish client reference, not an oracle for Zenith correctness.
 - Workspace `G:\zenith-workspace`: `zenith` (C#), `zenith-smoke-bot` (Bun; user has uncommitted WIP in `src/zombie.ts`, do not commit it; `floorPickup.ts` is line-ending noise), `essential-reference` (PHP, untrusted, never run), `cinnabar-reference` (PolyForm Noncommercial: behaviour reference only, never copy code/data), `mojang-protocol-docs`, `bds-reference`.
 - Tooling quirks: no `pkill` (use PowerShell `Get-Process zenith|bedrock_server | Stop-Process -Force`); building while `zenith.exe` runs fails; Bash heredocs with quotes/C# are fragile, prefer Write/Edit; tooling is C# only (the Endstone plugin is the one unavoidable Python file).
