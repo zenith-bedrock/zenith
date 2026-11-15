@@ -5,6 +5,61 @@ namespace binary.Tests;
 
 public class BinaryStreamTests
 {
+    [Theory]
+    [InlineData("8280808010", false)]
+    [InlineData("FFFFFFFF1F", false)]
+    [InlineData("82808080808080808002", true)]
+    [InlineData("FFFFFFFFFFFFFFFFFF7F", true)]
+    public void Varints_reject_bits_above_the_declared_width(string hex, bool wide)
+    {
+        var bytes = Convert.FromHexString(hex);
+        Assert.Throws<InvalidOperationException>(() => ReadInteger(bytes, wide));
+    }
+
+    [Theory]
+    [InlineData("FFFFFFFF0F", false)]
+    [InlineData("FFFFFFFFFFFFFFFFFF01", true)]
+    public void Unsigned_maximum_preserves_all_bits(string hex, bool wide)
+    {
+        var r = new BinaryStream(Convert.FromHexString(hex));
+        if (wide) Assert.Equal(ulong.MaxValue, (ulong)r.ReadUnsignedVarLong());
+        else Assert.Equal(uint.MaxValue, (uint)r.ReadUnsignedVarInt());
+        Assert.True(r.IsEndOfFile);
+    }
+
+    private static void ReadInteger(byte[] bytes, bool wide)
+    {
+        var r = new BinaryStream(bytes);
+        if (wide) _ = r.ReadUnsignedVarLong(); else _ = r.ReadUnsignedVarInt();
+    }
+    [Theory]
+    [InlineData(int.MinValue)]
+    [InlineData(int.MaxValue)]
+    [InlineData(-1073741825)]
+    [InlineData(1073741824)]
+    public void Signed_varint_preserves_the_high_bit(int value)
+    {
+        var writer = new BinaryStream();
+        writer.WriteVarInt(value);
+        var reader = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.Equal(value, reader.ReadVarInt());
+        Assert.True(reader.IsEndOfFile);
+    }
+
+    [Theory]
+    [InlineData(long.MinValue)]
+    [InlineData(long.MaxValue)]
+    [InlineData(-4611686018427387905L)]
+    [InlineData(4611686018427387904L)]
+    public void Signed_varlong_preserves_the_high_bit(long value)
+    {
+        var writer = new BinaryStream();
+        writer.WriteVarLong(value);
+        var reader = new BinaryStream(writer.GetBufferDisposing().ToArray());
+        Assert.Equal(value, reader.ReadVarLong());
+        Assert.True(reader.IsEndOfFile);
+    }
+
     [Fact]
     public void Default_constructor_starts_empty()
     {

@@ -8,6 +8,48 @@ using Zenith.NetherNet.Axolotl.Utils;
 
 namespace Zenith.NetherNet.Axolotl.Transport.WebRtc;
 
+/// <summary>Shared admission accounting, active from the first native callback, before session creation.</summary>
+internal sealed class WebRtcReceiveBudget(ConnectionBudgetConfiguration limits)
+{
+    private readonly Lock _gate = new();
+    private long _bytes;
+    private int _messages;
+    private int _channels;
+    private int _failed;
+    public bool Failed => Volatile.Read(ref _failed) != 0;
+    public void Fail() => Volatile.Write(ref _failed, 1);
+
+    public bool TryAddChannel()
+    {
+        lock (_gate)
+        {
+            if (Failed) return false;
+            if (_channels >= limits.MaxPendingDataChannels) { Fail(); return false; }
+            _channels++;
+            return true;
+        }
+    }
+
+    public bool TryReserve(int bytes)
+    {
+        lock (_gate)
+        {
+            if (Failed) return false;
+            if (bytes > limits.MaxMessageSize || _messages >= limits.MaxReceiveQueueMessages ||
+                bytes > limits.MaxReceiveQueueSize - _bytes)
+            { Fail(); return false; }
+            _bytes += bytes;
+            _messages++;
+            return true;
+        }
+    }
+
+    public void Release(int bytes)
+    {
+        lock (_gate) { _bytes -= bytes; _messages--; }
+    }
+}
+
 /// <summary>A STUN or TURN server for ICE (port of the reference <c>NetherNetIceServer</c>).</summary>
 public sealed record IceServer(bool IsTurn, string Host, int Port, string Username = "", string Password = "")
 {
@@ -144,39 +186,59 @@ public sealed class WebRtcMessageChannel : IMessageChannel
 {
     private readonly IRtcDataChannel _channel;
     private readonly int _maxMessageSize;
+    private readonly WebRtcReceiveBudget _budget;
+    private readonly Lock _receiveGate = new();
     private readonly ConcurrentQueue<byte[]> _received = new();
     private long _queuedBytes;
     private int _queuedMessages;
     private int _closed;
+    private int _disposed;
 
     public WebRtcMessageChannel(IRtcDataChannel channel, int maxMessageSize)
+        : this(channel, maxMessageSize, new WebRtcReceiveBudget(new ConnectionBudgetConfiguration(maxMessageSize: maxMessageSize))) { }
+
+    internal WebRtcMessageChannel(IRtcDataChannel channel, int maxMessageSize, WebRtcReceiveBudget budget)
     {
         _channel = channel;
         _maxMessageSize = maxMessageSize;
+        _budget = budget;
         channel.OnBinaryReceivedSafe += OnBinary;
         channel.OnClose += _ => Volatile.Write(ref _closed, 1);
     }
 
     private void OnBinary(IRtcDataChannel _, DataChannelDotnet.Events.RtcBinaryReceivedEventSafe message)
+        => AcceptMessage(message.Data);
+
+    internal void AcceptMessage(ReadOnlySpan<byte> message)
     {
-        var copy = message.Data.ToArray();
-        _received.Enqueue(copy);
-        Interlocked.Add(ref _queuedBytes, copy.Length);
-        Interlocked.Increment(ref _queuedMessages);
+        lock (_receiveGate)
+        {
+            if (Volatile.Read(ref _closed) != 0 || !_budget.TryReserve(message.Length)) return;
+            try
+            {
+                var copy = message.ToArray();
+                _received.Enqueue(copy);
+                Interlocked.Add(ref _queuedBytes, copy.Length);
+                Interlocked.Increment(ref _queuedMessages);
+            }
+            catch { _budget.Release(message.Length); throw; }
+        }
     }
 
     public string Label => _channel.Label;
 
     public Reliability? Reliability => ReliabilityExtensions.FromChannelLabel(Label);
 
-    public bool IsOpen => Volatile.Read(ref _closed) == 0 && _channel.IsOpen;
+    public bool IsOpen => !_budget.Failed && Volatile.Read(ref _closed) == 0 && _channel.IsOpen;
 
-    public bool IsClosed => Volatile.Read(ref _closed) != 0 || _channel.IsClosed;
+    public bool IsClosed => _budget.Failed || Volatile.Read(ref _closed) != 0 || _channel.IsClosed;
 
     public int MaxMessageSize => _maxMessageSize;
 
     public void Send(ReadOnlySpan<byte> message)
     {
+        if (message.Length > _maxMessageSize)
+            throw new TransportException("Message exceeds the peer's negotiated maximum.");
         try
         {
             _channel.Send(message);
@@ -189,11 +251,14 @@ public sealed class WebRtcMessageChannel : IMessageChannel
 
     public byte[]? Receive()
     {
-        if (!_received.TryDequeue(out var message))
-            return null;
-        Interlocked.Add(ref _queuedBytes, -message.Length);
-        Interlocked.Decrement(ref _queuedMessages);
-        return message;
+        lock (_receiveGate)
+        {
+            if (!_received.TryDequeue(out var message)) return null;
+            _budget.Release(message.Length);
+            Interlocked.Add(ref _queuedBytes, -message.Length);
+            Interlocked.Decrement(ref _queuedMessages);
+            return message;
+        }
     }
 
     // The native library does not report its send buffer.
@@ -205,8 +270,16 @@ public sealed class WebRtcMessageChannel : IMessageChannel
 
     public void Close()
     {
-        if (Interlocked.Exchange(ref _closed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
+        lock (_receiveGate)
+        {
+            Volatile.Write(ref _closed, 1);
+            _channel.OnBinaryReceivedSafe -= OnBinary;
+            while (_received.TryDequeue(out var message)) _budget.Release(message.Length);
+            Interlocked.Exchange(ref _queuedBytes, 0);
+            Interlocked.Exchange(ref _queuedMessages, 0);
+        }
         try
         {
             (_channel as IDisposable)?.Dispose();
@@ -222,21 +295,40 @@ public sealed class WebRtcMessageChannel : IMessageChannel
 public sealed class WebRtcPeerTransport : IPeerTransport
 {
     private readonly RtcPeerConnection _peer;
-    private readonly int _maxMessageSize;
-    private readonly ConcurrentQueue<IRtcDataChannel> _channels = new();
+    private int _maxMessageSize;
+    private readonly int _localMaxMessageSize;
+    private readonly WebRtcReceiveBudget _receiveBudget;
+    private readonly Lock _channelGate = new();
+    private readonly List<WebRtcMessageChannel> _admittedChannels = new();
+    private readonly ConcurrentQueue<IMessageChannel> _channels = new();
     private readonly ConcurrentQueue<string> _localCandidates = new();
     private int _gatheringComplete;
     private int _failed;
-    private bool _closed;
+    private volatile bool _closed;
     private bool _lostConnectivity;
     private InternetAddress? _remoteAddress;
 
     public WebRtcPeerTransport(RtcPeerConnection peer, int maxMessageSize)
+        : this(peer, new ConnectionBudgetConfiguration(maxMessageSize: maxMessageSize)) { }
+
+    public WebRtcPeerTransport(RtcPeerConnection peer, ConnectionBudgetConfiguration budget)
     {
         _peer = peer;
-        _maxMessageSize = maxMessageSize;
+        _localMaxMessageSize = _maxMessageSize = budget.MaxMessageSize;
+        _receiveBudget = new WebRtcReceiveBudget(budget);
         // Handlers are attached before any description is set: channels can arrive immediately after the offer.
-        peer.OnDataChannel += (_, channel) => _channels.Enqueue(channel);
+        // Subscribe while the channel is announced, before its first message can arrive.
+        // Waiting for the server's next poll loses fast clients' first reliable packet.
+        peer.OnDataChannel += (_, channel) =>
+        {
+            lock (_channelGate)
+            {
+                if (_closed || !_receiveBudget.TryAddChannel()) return;
+                var wrapper = new WebRtcMessageChannel(channel, Volatile.Read(ref _maxMessageSize), _receiveBudget);
+                _admittedChannels.Add(wrapper);
+                _channels.Enqueue(wrapper);
+            }
+        };
         peer.OnCandidateSafe += (_, candidate) => _localCandidates.Enqueue(candidate.Content);
         peer.OnGatheringStateChange += (_, state) =>
         {
@@ -254,6 +346,8 @@ public sealed class WebRtcPeerTransport : IPeerTransport
     {
         try
         {
+            var remoteMax = Sdp.SessionDescription.Parse(sdp).GetMaxMessageSize();
+            Volatile.Write(ref _maxMessageSize, (int)Math.Min(_localMaxMessageSize, remoteMax));
             _peer.SetRemoteDescription(new RtcDescription { Type = RtcDescriptionType.Offer, Sdp = sdp });
             // Auto-negotiation is disabled so the answer is created only after the data-channel handler is attached.
             _peer.SetLocalDescription(RtcDescriptionType.Answer);
@@ -306,7 +400,7 @@ public sealed class WebRtcPeerTransport : IPeerTransport
     {
         var result = new List<IMessageChannel>();
         while (_channels.TryDequeue(out var channel))
-            result.Add(new WebRtcMessageChannel(channel, _maxMessageSize));
+            result.Add(channel);
         return result;
     }
 
@@ -316,6 +410,8 @@ public sealed class WebRtcPeerTransport : IPeerTransport
         {
             if (_closed)
                 return TransportState.Closed;
+            if (_receiveBudget.Failed)
+                return TransportState.Failed;
             return SafeGet(() => _peer.ConnectionState switch
             {
                 rtcState.RTC_NEW or rtcState.RTC_CONNECTING => TransportState.Connecting,
@@ -352,11 +448,19 @@ public sealed class WebRtcPeerTransport : IPeerTransport
 
     public void Close()
     {
-        if (_closed)
-            return;
-        _lostConnectivity = HasLostConnectivity;
+        WebRtcMessageChannel[] channels;
+        if (_closed) return;
+        var lostConnectivity = HasLostConnectivity;
         _ = RemoteAddress;
-        _closed = true;
+        lock (_channelGate)
+        {
+            if (_closed) return;
+            _lostConnectivity = lostConnectivity;
+            _closed = true;
+            _receiveBudget.Fail();
+            channels = _admittedChannels.ToArray();
+        }
+        foreach (var channel in channels) channel.Close();
         try
         {
             _peer.Dispose();
@@ -441,7 +545,7 @@ public sealed class WebRtcTransportFactory : IPeerTransportFactory
 
         try
         {
-            return new WebRtcPeerTransport(new RtcPeerConnection(configuration), budget.MaxMessageSize);
+            return new WebRtcPeerTransport(new RtcPeerConnection(configuration), budget);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {

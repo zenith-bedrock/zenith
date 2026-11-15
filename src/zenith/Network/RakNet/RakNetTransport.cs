@@ -94,7 +94,8 @@ internal sealed class RakNetTransport : IGameTransport, IRakNetSessionListener
 
     private static GameTransportCloseReason Map(DisconnectReason reason) => reason switch
     {
-        DisconnectReason.ServerDisconnect => GameTransportCloseReason.ServerDisconnect,
+        DisconnectReason.ServerDisconnect or DisconnectReason.OutputBacklogExceeded or DisconnectReason.InputBacklogExceeded
+            => GameTransportCloseReason.ServerDisconnect,
         DisconnectReason.Timeout => GameTransportCloseReason.Timeout,
         _ => GameTransportCloseReason.ClientDisconnect
     };

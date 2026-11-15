@@ -8,6 +8,7 @@ public abstract class AcknowledgePacket : IPacket
 
     public const byte RECORD_TYPE_RANGE = 0;
     public const byte RECORD_TYPE_SINGLE = 1;
+    public const int MaxSequences = 4096;
 
     public List<uint> Sequences = new();
 
@@ -74,27 +75,31 @@ public abstract class AcknowledgePacket : IPacket
 
     public void Decode(ref BinaryStream stream)
     {
-        var count = stream.ReadShort();
-
-        for (var i = 0; i < count && !stream.IsEndOfFile && Sequences.Count < 4096; ++i)
+        Sequences.Clear();
+        var count = stream.ReadUShort();
+        if (count > MaxSequences)
+            throw new InvalidDataException("Too many acknowledgement records.");
+        for (var i = 0; i < count; ++i)
         {
-            if (stream.ReadByte() == RECORD_TYPE_RANGE)
+            var type = stream.ReadByte();
+            if (type == RECORD_TYPE_RANGE)
             {
                 var start = stream.ReadTriad(BinaryStream.Endianess.Little);
                 var end = stream.ReadTriad(BinaryStream.Endianess.Little);
-                if (end + start > 512)
-                {
-                    end = start + 512;
-                }
+                if (end < start || end - start + 1 > MaxSequences - Sequences.Count)
+                    throw new InvalidDataException("Invalid or oversized acknowledgement range.");
                 for (var c = start; c <= end; ++c)
                 {
                     Sequences.Add(c);
                 }
             }
-            else
+            else if (type == RECORD_TYPE_SINGLE)
             {
+                if (Sequences.Count == MaxSequences)
+                    throw new InvalidDataException("Too many acknowledged sequences.");
                 Sequences.Add(stream.ReadTriad(BinaryStream.Endianess.Little));
             }
+            else throw new InvalidDataException("Unknown acknowledgement record type.");
         }
     }
 }

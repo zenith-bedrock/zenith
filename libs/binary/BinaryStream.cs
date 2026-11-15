@@ -525,6 +525,8 @@ public ref struct BinaryStream : IDisposable
                 throw new InvalidOperationException("Not enough bytes to read unsigned varint.");
 
             byteRead = ReadSpan(1)[0];
+            if (shift == 28 && (byteRead & 0xF0) != 0)
+                throw new InvalidOperationException("Unsigned varint exceeds 32 bits.");
             result |= (byteRead & 0x7F) << shift;
             shift += 7;
         } while ((byteRead & 0x80) != 0);
@@ -556,6 +558,8 @@ public ref struct BinaryStream : IDisposable
                 throw new InvalidOperationException("Not enough bytes to read unsigned varlong.");
 
             byteRead = ReadSpan(1)[0];
+            if (shift == 63 && (byteRead & 0xFE) != 0)
+                throw new InvalidOperationException("Unsigned varlong exceeds 64 bits.");
             result |= (long)(byteRead & 0x7F) << shift;
             shift += 7;
         } while ((byteRead & 0x80) != 0);
@@ -585,9 +589,9 @@ public ref struct BinaryStream : IDisposable
 
     private static long ZigzagEncode(long value) => (value << 1) ^ (value >> 63);
 
-    private static int ZigzagDecode(int value) => (value >> 1) ^ -(value & 1);
+    private static int ZigzagDecode(int value) => (int)((uint)value >> 1) ^ -(value & 1);
 
-    private static long ZigzagDecode(long value) => (value >> 1) ^ -(value & 1);
+    private static long ZigzagDecode(long value) => (long)((ulong)value >> 1) ^ -(value & 1);
 
     public void Dispose()
     {

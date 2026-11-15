@@ -26,6 +26,7 @@ public sealed class AxolotlServerIntegrationTests
     private sealed class Listener : IServerEventListener
     {
         public readonly TaskCompletionSource<int> Opened = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource<byte[]> EarlyReliable = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<(byte[] Payload, Reliability Reliability)> Reliable = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<(byte[] Payload, Reliability Reliability)> Unreliable = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<DisconnectReason> Closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -42,6 +43,11 @@ public sealed class AxolotlServerIntegrationTests
 
         public void OnPacketReceive(int sessionId, byte[] payload, Reliability reliability)
         {
+            if (payload.AsSpan().SequenceEqual(new byte[] { 0xE1, 0x01 }))
+            {
+                EarlyReliable.TrySetResult(payload);
+                return;
+            }
             (reliability == Reliability.Reliable ? Reliable : Unreliable).TrySetResult((payload, reliability));
         }
 
@@ -56,8 +62,10 @@ public sealed class AxolotlServerIntegrationTests
         return ((IPEndPoint)probe.Client.LocalEndPoint!).Port;
     }
 
-    [Fact]
-    public async Task Port_serves_status_negotiates_over_http_and_exchanges_framed_packets()
+    [Theory]
+    [InlineData(262144)]
+    [InlineData(4096)]
+    public async Task Port_serves_status_negotiates_over_http_and_exchanges_framed_packets(int clientMaxMessageSize)
     {
         var listener = new Listener();
         var serverIcePort = FreeUdpPort();
@@ -75,11 +83,12 @@ public sealed class AxolotlServerIntegrationTests
         server.Start();
 
         using var cts = new CancellationTokenSource();
+        var allowServerTick = 1;
         var pump = Task.Run(async () =>
         {
             while (!cts.IsCancellationRequested)
             {
-                server.Tick();
+                if (Volatile.Read(ref allowServerTick) != 0) server.Tick();
                 await Task.Delay(10);
             }
         });
@@ -88,7 +97,7 @@ public sealed class AxolotlServerIntegrationTests
         {
             IceServers = [],
             BindAddress = "127.0.0.1",
-            MaxMessageSize = Segmenter.MaxSegmentPayloadSize + 1,
+            MaxMessageSize = clientMaxMessageSize,
             DisableAutoNegotiation = true,
             EnableIceUdpMux = false,
             PortRangeBegin = (ushort)clientIcePort,
@@ -120,11 +129,21 @@ public sealed class AxolotlServerIntegrationTests
                 MaxRetransmits = 0,
             });
             var clientAssembler = new Assembler(true);
+            var largestReceivedSegment = 0;
+            var receivedSegments = 0;
             var clientReceived = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-            reliable.OnOpen += _ => MarkOpen(1);
+            reliable.OnOpen += _ =>
+            {
+                MarkOpen(1);
+                // Send before waiting for the server's polling loop to accept either channel.
+                foreach (var segment in new Segmenter(16 * 1024).Segment(new byte[] { 0xE1, 0x01 }))
+                    reliable.Send(segment);
+            };
             unreliable.OnOpen += _ => MarkOpen(2);
             reliable.OnBinaryReceivedSafe += (_, data) =>
             {
+                largestReceivedSegment = Math.Max(largestReceivedSegment, data.Data.Length);
+                receivedSegments++;
                 var payload = clientAssembler.Accept(data.Data);
                 if (payload is not null)
                     clientReceived.TrySetResult(payload);
@@ -142,6 +161,9 @@ public sealed class AxolotlServerIntegrationTests
             Assert.NotNull(answerDescription.GetIdentity());
             Assert.True(answerDescription.CountCandidates() > 0);
 
+            // A busy gameplay tick must not lose messages received by the native transport.
+            Volatile.Write(ref allowServerTick, 0);
+
             client.SetRemoteDescription(new RtcDescription
             {
                 Type = RtcDescriptionType.Answer,
@@ -149,12 +171,15 @@ public sealed class AxolotlServerIntegrationTests
             });
 
             await channelsOpen.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            await Task.Delay(100);
+            Volatile.Write(ref allowServerTick, 1);
             var sessionId = await listener.Opened.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("12345", listener.NetworkId);
+            Assert.Equal(new byte[] { 0xE1, 0x01 }, await listener.EarlyReliable.Task.WaitAsync(TimeSpan.FromSeconds(10)));
 
             // Client to server: one reliable fragmented message and one unreliable message.
             var big = Enumerable.Range(0, 40000).Select(i => (byte)(i % 251)).ToArray();
-            foreach (var segment in new Segmenter(16 * 1024).Segment(big))
+            foreach (var segment in new Segmenter(Math.Min(16 * 1024, clientMaxMessageSize - 1)).Segment(big))
                 reliable.Send(segment);
             unreliable.Send([0, 0xB1, 0x02]);
 
@@ -164,8 +189,10 @@ public sealed class AxolotlServerIntegrationTests
             Assert.Equal([0xB1, 0x02], unreliablePayload);
 
             // Server to client.
-            server.SendPacket(sessionId, [0xC1, 0x03]);
-            Assert.Equal([0xC1, 0x03], await clientReceived.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+            server.SendPacket(sessionId, big);
+            Assert.Equal(big, await clientReceived.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.InRange(largestReceivedSegment, 1, clientMaxMessageSize);
+            Assert.True(receivedSegments >= (big.Length - 1) / (clientMaxMessageSize - 1) + 1);
 
             server.CloseSession(sessionId);
             reliable.Dispose();

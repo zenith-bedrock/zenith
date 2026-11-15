@@ -4,7 +4,7 @@ namespace Zenith.Raknet.Network.Protocol;
 
 public class Disconnect : IPacket
 {
-    public byte Id => (byte)Enumerator.MessageIdentifier.ConnectedPong;
+    public byte Id => (byte)Enumerator.MessageIdentifier.Disconnect;
 
     public Span<byte> Encode()
     {

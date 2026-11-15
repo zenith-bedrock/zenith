@@ -46,10 +46,11 @@ internal interface IGameTransportConnection
     bool HasGameIdentity { get; set; }
 
     /// <summary>
-    /// Non-null when the transport authenticated the peer before the Bedrock login. A session whose
-    /// <see cref="RequiresTransportIdentityBinding"/> is true must reject logins that do not match it.
+    /// Identity presented before Bedrock login. Only Authenticated=true proves an issuer-backed identity;
+    /// self-signed SDP assertions are independent of SELF_SIGNED game-login tokens.
     /// </summary>
     TransportIdentity? TransportIdentity { get; }
+    /// <summary>FULL game login must match an issuer-authenticated transport identity; reject authentication downgrade.</summary>
     bool RequiresTransportIdentityBinding { get; }
 
     /// <summary>True when game batches carry the leading 0xFE RakNet game identifier.</summary>

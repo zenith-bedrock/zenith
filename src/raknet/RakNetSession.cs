@@ -44,6 +44,12 @@ public class RakNetSession
 
     protected readonly uint[] InputOrderIndex = new uint[32];
     protected readonly Dictionary<byte, Dictionary<uint, Frame>> InputOrderingQueue = new();
+    internal const int MaxPendingDatagrams = AcknowledgePacket.MaxSequences;
+    internal const int MaxOrderedFrames = 2048;
+    internal const uint MaxOrderDistance = 4096;
+    internal const long MaxOrderedBytes = 8 * 1024 * 1024;
+    private int _orderedFrames;
+    private long _orderedBytes;
     protected int LastInputSequence = -1;
 
     // Janela deslizante de dedup para qualquer frame reliable (Reliable, ReliableOrdered,
@@ -290,11 +296,11 @@ public class RakNetSession
         if (Frame.IsSequenced(frame.Reliability))
         {
             frame.OrderIndex = OutputOrderIndex[frame.OrderChannel];
-            frame.SequenceIndex = OutputSequenceIndex[frame.OrderChannel]++;
+            frame.SequenceIndex = TakeSequence(ref OutputSequenceIndex[frame.OrderChannel]);
         }
         else if (Frame.IsOrdered(frame.Reliability))
         {
-            frame.OrderIndex = OutputOrderIndex[frame.OrderChannel]++;
+            frame.OrderIndex = TakeSequence(ref OutputOrderIndex[frame.OrderChannel]);
             OutputSequenceIndex[frame.OrderChannel] = 0;
         }
 
@@ -324,7 +330,7 @@ public class RakNetSession
                 var newFrame = new Frame
                 {
                     Reliability = frame.Reliability,
-                    MessageIndex = OutputReliableIndex++,
+                    MessageIndex = TakeSequence(ref OutputReliableIndex),
                     SequenceIndex = frame.SequenceIndex,
                     OrderIndex = frame.OrderIndex,
                     OrderChannel = frame.OrderChannel,
@@ -345,7 +351,7 @@ public class RakNetSession
         }
         else
         {
-            frame.MessageIndex = OutputReliableIndex++;
+            frame.MessageIndex = TakeSequence(ref OutputReliableIndex);
             QueueFrameLocked(frame, priority);
         }
     }
@@ -369,6 +375,7 @@ public class RakNetSession
 
     public void Incoming(byte[] buffer)
     {
+        if (_closed) return;
         LastSeen = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         Server.Logger?.Debug($"[{EndPoint} Incoming {buffer.Length} bytes.");
@@ -441,6 +448,13 @@ public class RakNetSession
     private const uint SequenceMask = 0xFFFFFF;
     private const uint SequenceHalfSpace = 0x800000;
 
+    private static uint TakeSequence(ref uint value)
+    {
+        var result = value & SequenceMask;
+        value = (result + 1) & SequenceMask;
+        return result;
+    }
+
     /// <summary>
     /// RFC1982-style circular "is `a` strictly newer than `b`" over the 24-bit wire sequence space.
     /// A plain numeric `&lt;`/`==` comparison (the pre-fix code) treats every FrameSet sent after a
@@ -474,6 +488,14 @@ public class RakNetSession
             // the very first FrameSet regardless of its wire value.
             if (LastInputSequence >= 0 && !IsSequenceNewer(frameSet.Sequence, (uint)LastInputSequence)) return;
 
+            var gapSize = LastInputSequence < 0 ? 1u : (frameSet.Sequence - (uint)LastInputSequence) & SequenceMask;
+            if (gapSize > MaxPendingDatagrams ||
+                LostFrameSequences.Count + gapSize - 1 > MaxPendingDatagrams ||
+                ReceivedFrameSequences.Count >= MaxPendingDatagrams)
+            {
+                Disconnect(DisconnectReason.InputBacklogExceeded);
+                return;
+            }
             ReceivedFrameSequences.Add(frameSet.Sequence);
 
             if (LastInputSequence >= 0)
@@ -510,7 +532,7 @@ public class RakNetSession
     /// </summary>
     private bool TryAcceptReliableMessage(uint messageIndex)
     {
-        if (messageIndex < ReliableWindowStart || messageIndex > ReliableWindowEnd || ReliableWindow.Contains(messageIndex))
+        if (((messageIndex - ReliableWindowStart) & SequenceMask) > RELIABLE_WINDOW_SIZE || ReliableWindow.Contains(messageIndex))
         {
             return false;
         }
@@ -521,8 +543,8 @@ public class RakNetSession
         {
             while (ReliableWindow.Remove(ReliableWindowStart))
             {
-                ReliableWindowStart++;
-                ReliableWindowEnd++;
+                ReliableWindowStart = (ReliableWindowStart + 1) & SequenceMask;
+                ReliableWindowEnd = (ReliableWindowStart + RELIABLE_WINDOW_SIZE) & SequenceMask;
             }
         }
 
@@ -696,6 +718,7 @@ public class RakNetSession
 
     private bool HandleFrame(Frame frame)
     {
+        if (_closed) return false;
         // OrderChannel vem do fio como um byte cru (0-255), mas os arrays de tracking
         // (InputOrderIndex, InputHighestSequenceIndex) têm exatamente Frame.MAX_ORDER_CHANNELS
         // slots. Sem essa validação, um frame malformado/hostil com OrderChannel >= 32 derruba
@@ -719,14 +742,16 @@ public class RakNetSession
     /// reliable já rodou (via <see cref="HandleFrame"/>) ou não se aplica (frame remontado).</summary>
     private bool DispatchFrame(Frame frame)
     {
+        if (_closed) return false;
         if (Frame.IsSequenced(frame.Reliability))
         {
-            if (frame.SequenceIndex < InputHighestSequenceIndex[frame.OrderChannel] || frame.OrderIndex < InputOrderIndex[frame.OrderChannel])
+            if (((frame.SequenceIndex - InputHighestSequenceIndex[frame.OrderChannel]) & SequenceMask) >= SequenceHalfSpace ||
+                ((frame.OrderIndex - InputOrderIndex[frame.OrderChannel]) & SequenceMask) >= SequenceHalfSpace)
             {
                 return false;
             }
 
-            InputHighestSequenceIndex[frame.OrderChannel] = frame.SequenceIndex + 1;
+            InputHighestSequenceIndex[frame.OrderChannel] = (frame.SequenceIndex + 1) & SequenceMask;
             return HandleIncomingBatch(frame.Buffer.ToArray());
         }
 
@@ -735,21 +760,19 @@ public class RakNetSession
         if (frame.OrderIndex == InputOrderIndex[frame.OrderChannel])
         {
             InputHighestSequenceIndex[frame.OrderChannel] = 0;
-            InputOrderIndex[frame.OrderChannel] = frame.OrderIndex + 1;
+            InputOrderIndex[frame.OrderChannel] = (frame.OrderIndex + 1) & SequenceMask;
 
             HandleIncomingBatch(frame.Buffer.ToArray());
             var index = InputOrderIndex[frame.OrderChannel];
 
             var outOfOrderQueue = InputOrderingQueue[frame.OrderChannel];
 
-            for (; outOfOrderQueue.ContainsKey(index); index++)
+            while (!_closed && outOfOrderQueue.Remove(index, out var queued))
             {
-                if (outOfOrderQueue.TryGetValue(index, out var frameQueue))
-                {
-                    HandleIncomingBatch(frameQueue.Buffer.ToArray());
-                    outOfOrderQueue.Remove(index);
-                }
-                else break;
+                _orderedFrames--;
+                _orderedBytes -= queued.Buffer.Length;
+                InputOrderIndex[frame.OrderChannel] = index = (index + 1) & SequenceMask;
+                HandleIncomingBatch(queued.Buffer.ToArray());
             }
 
             InputOrderingQueue[frame.OrderChannel] = outOfOrderQueue;
@@ -757,9 +780,19 @@ public class RakNetSession
             return true;
         }
 
-        if (frame.OrderIndex <= InputOrderIndex[frame.OrderChannel]) return false; // old/duplicate, discard
+        var distance = (frame.OrderIndex - InputOrderIndex[frame.OrderChannel]) & SequenceMask;
+        if (distance >= SequenceHalfSpace) return false; // old/duplicate across the 24-bit wrap too
         if (!InputOrderingQueue.TryGetValue(frame.OrderChannel, out var unordered)) return true;
+        if (unordered.ContainsKey(frame.OrderIndex)) return false;
+        if (distance > MaxOrderDistance || _orderedFrames >= MaxOrderedFrames ||
+            frame.Buffer.Length > MaxOrderedBytes - _orderedBytes)
+        {
+            Disconnect(DisconnectReason.InputBacklogExceeded);
+            return false;
+        }
         unordered[frame.OrderIndex] = frame; // out of order: hold it until the gap is filled, don't handle yet
+        _orderedFrames++;
+        _orderedBytes += frame.Buffer.Length;
         return true;
 
     }

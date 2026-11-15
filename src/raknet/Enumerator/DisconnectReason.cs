@@ -19,5 +19,7 @@ public enum DisconnectReason
 
     /// <summary>Fila de saída (pendente + aguardando ACK) excedeu o limite por sessão — o peer não
     /// está drenando rápido o bastante, seja por conexão lenta ou tráfego malicioso.</summary>
-    OutputBacklogExceeded
+    OutputBacklogExceeded,
+    /// <summary>Receive gap or retained ordered input exceeded the bounded connection window.</summary>
+    InputBacklogExceeded
 }
