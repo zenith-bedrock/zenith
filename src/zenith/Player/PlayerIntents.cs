@@ -8,7 +8,7 @@ namespace Zenith.Player;
 /// it on tick. Dig and window intents live with their state in <see cref="PlayerDig"/> / <see cref="PlayerWindows"/>, effects in
 /// <see cref="PlayerEffects"/>.
 /// </summary>
-sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
+sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, PlayerWindows windows)
 {
     public const int MaxPendingBlockEdits = 8;
     public const int MaxPendingInventoryStacks = 8;
@@ -16,15 +16,16 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
 
     private readonly Lock _movementInputLock = new();
     private MovementInputState _movementInput;
+    private bool _handledTeleport;
 
     // A target is present only for InventoryTransaction.ItemUseOnActor. AuthInput missed swings
     // and air use intentionally remain untargeted, so combat may resolve the first valid target.
     private readonly PendingValue<long?> _attack = new();
     private readonly PendingSignal _projectile = new();
-    private readonly PendingSignal _eat = new();
+    private readonly PendingMailbox<FoodUseIntent> _foodUse = new(8);
+    private readonly PendingSignal _cancelFoodUseOverflow = new();
     private readonly PendingValue<long> _interact = new();
     private readonly PendingMailbox<BlockEditIntent> _blockEdits = new(MaxPendingBlockEdits);
-    private readonly PendingMailbox<InventoryStackIntent> _inventoryStacks = new(MaxPendingInventoryStacks);
     private readonly PendingMailbox<string> _chat = new(MaxPendingChat);
     private readonly PendingValue<GameMode> _gameMode = new();
     private readonly PendingSignal _respawn = new();
@@ -33,7 +34,25 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     public void SubmitMovementInput(in MovementInputState input)
     {
         lock (_movementInputLock)
+        {
             _movementInput = input;
+            _handledTeleport |= input.HandledTeleport;
+        }
+    }
+
+    public void SubmitHandledTeleport()
+    {
+        lock (_movementInputLock) _handledTeleport = true;
+    }
+
+    /// <summary>GameLoop starts a new authoritative teleport; queued older movement/acks are stale.</summary>
+    internal void ClearMovementForTeleport()
+    {
+        lock (_movementInputLock)
+        {
+            _movementInput = default;
+            _handledTeleport = false;
+        }
     }
 
     /// <summary>Peek pending AuthInput without consuming; UseItem may need same-packet sneak (§56).</summary>
@@ -63,6 +82,8 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
             }
 
             input = _movementInput;
+            input.HandledTeleport |= _handledTeleport;
+            _handledTeleport = false;
             _movementInput = default;
             return true;
         }
@@ -74,9 +95,9 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     public bool TryConsumeBlockEdit(out BlockEditIntent intent) => _blockEdits.TryConsume(out intent);
 
     /// <summary>Queues a rearrange ISR (FIFO). Overflow rejects the newest.</summary>
-    public bool SubmitInventoryStack(in InventoryStackIntent intent) => _inventoryStacks.Submit(intent);
+    public bool SubmitInventoryStack(in InventoryStackIntent intent) => windows.SubmitInventoryStack(intent);
 
-    public bool TryConsumeInventoryStack(out InventoryStackIntent intent) => _inventoryStacks.TryConsume(out intent);
+    public bool TryConsumeInventoryStack(out InventoryStackIntent intent) => windows.TryConsumeInventoryStack(out intent);
 
     /// <summary>A message already validated by ChatProtocol; fanned out by ChatSystem (FIFO, overflow rejects the newest, §54).</summary>
     public bool SubmitChat(string message) => _chat.Submit(message);
@@ -128,8 +149,8 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     /// Consumes an attack only when it was untargeted or named this actor. A targeted wire attack must never be claimed by another
     /// nearby actor merely because that system ticks first.
     /// </summary>
-    public bool TryConsumeAttackIntent(long expectedTargetActorRuntimeId) =>
-        _attack.TryConsumeIf(target => target is null || target.Value == expectedTargetActorRuntimeId, out _);
+    public bool TryConsumeAttackIntent(long expectedTargetActorRuntimeId, bool allowUntargeted = true) =>
+        _attack.TryConsumeIf(target => target is null ? allowUntargeted : target.Value == expectedTargetActorRuntimeId, out _);
 
     /// <summary>
     /// Strict targeted variant for consumers whose candidate set contains players: an absent target can never be promoted into a hit.
@@ -155,9 +176,21 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode)
     public bool TryConsumeProjectileIntent() => _projectile.TryConsume();
 
     /// <summary>Network-to-gameplay handoff for eating the held food stack (Phase XI.1).</summary>
-    public void SubmitEatIntent() => _eat.Submit();
+    public bool SubmitEatIntent(int slot = -1, InventorySlot? stack = null) =>
+        _foodUse.Submit(new FoodUseIntent(slot, stack, false));
 
-    public bool TryConsumeEatIntent() => _eat.TryConsume();
+    public bool SubmitCancelFoodUse()
+    {
+        if (!_foodUse.Submit(new FoodUseIntent(-1, null, true))) _cancelFoodUseOverflow.Submit();
+        return true;
+    }
+    public bool TryConsumeFoodUse(out FoodUseIntent intent)
+    {
+        if (_foodUse.TryConsume(out intent)) return true;
+        if (!_cancelFoodUseOverflow.TryConsume()) return false;
+        intent = new FoodUseIntent(-1, null, true);
+        return true;
+    }
 
     /// <summary>
     /// Network-to-gameplay handoff for a non-attack actor interact (Phase XVIII): right-click on an entity. Carries only the target's

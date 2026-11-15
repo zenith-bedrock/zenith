@@ -148,16 +148,15 @@ public class InventoryPacketEncodeTests
     [Fact]
     public void AddPlayer_encode_carried_item_uses_serialized_network_item_stack_descriptor()
     {
-        // Protocol 2168+ (ADR §82): SerializedNetworkItemStackDescriptor has no air-item
-        // early-out, so an empty held item is the same byte count as a real one — the network
-        // id is a fixed i16, not the old VarInt that used to make air collapse to one byte.
+        // The fixed fields remain present for air. A non-air item additionally carries the
+        // ten-byte no-NBT/can-place/can-break user-data blob, like inventory descriptors.
         var air = new AddPlayerPacket { Username = "a", HeldItem = NetworkItemStack.Empty }.Encode().ToArray();
         var held = new AddPlayerPacket
         {
             Username = "a",
             HeldItem = new NetworkItemStack(1, 3, 50)
         }.Encode().ToArray();
-        Assert.Equal(air.Length, held.Length);
+        Assert.Equal(air.Length + 10, held.Length);
 
         var stream = new BinaryStream(held);
         Assert.Equal((int)ProtocolInfo.ADD_PLAYER_PACKET, stream.ReadUnsignedVarInt());
@@ -172,7 +171,7 @@ public class InventoryPacketEncodeTests
         Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // aux_value
         Assert.False(stream.ReadBool()); // net_id_variant has-flag
         Assert.Equal(50, (int)stream.ReadUnsignedVarInt()); // block_runtime_id
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // user_data_buffer length
+        Assert.Equal(new byte[10], stream.ReadByteArray()); // complete empty-NBT extra data
     }
 
     [Fact]

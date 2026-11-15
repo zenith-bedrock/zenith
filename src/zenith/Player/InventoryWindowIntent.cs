@@ -1,7 +1,7 @@
 namespace Zenith.Player;
 
 /// <summary>
-/// Inventory / chest window open-close — handler queues; applied on tick before ISR (§54).
+/// Inventory / chest window open-close — applied on tick in FIFO order with ISR (ADR §155).
 /// Same-session Protocol runs after decide.
 /// </summary>
 readonly struct InventoryWindowIntent
@@ -29,6 +29,7 @@ readonly struct InventoryWindowIntent
     public int Z { get; init; }
     public byte WindowId { get; init; }
     public byte WindowType { get; init; }
+    public uint Generation { get; init; }
 
     public static InventoryWindowIntent OpenInventory() => new()
     {

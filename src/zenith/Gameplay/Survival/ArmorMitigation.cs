@@ -12,10 +12,10 @@ static class ArmorMitigation
     private const float PointReduction = 0.04f;
     private const float MaxProtectionPoints = 20f;
 
-    /// <summary>Void, starvation and magic (e.g. Poison) bypass armor (vanilla parity); every other cause is reduced.</summary>
+    /// <summary>Fall, void, starvation and magic (e.g. Poison) bypass ordinary armor.</summary>
     public static float Apply(Player.Player player, DamageSource source, float amount)
     {
-        if (source.Cause is DamageCause.Void or DamageCause.Starve or DamageCause.Magic) return amount;
+        if (source.Cause is DamageCause.Fall or DamageCause.Void or DamageCause.Starve or DamageCause.Magic) return amount;
 
         var points = TotalProtectionPoints(player);
         if (points <= 0f) return amount;

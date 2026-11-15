@@ -9,6 +9,7 @@ namespace Zenith.World;
 /// v2: version + (u8 kind, i32 value, i32 count) per slot.
 /// v3 (ADR §147): version + (u8 kind, i32 value, i32 aux, i32 count) per slot; v1/v2 load with aux 0.
 /// v4 (ADR §148): version + (u8 kind, i32 value, i32 aux, i32 damage, i32 count) per slot; v1-v3 load with damage 0.
+/// v5 (ADR §156): v4 slot header + i32 tag byte length + LE NBT; emitted only when retained tags are present.
 /// </summary>
 static class SlotBlob
 {
@@ -16,12 +17,16 @@ static class SlotBlob
     public const byte Version2 = 2;
     public const byte Version3 = 3;
     public const byte Version4 = 4;
+    public const byte Version5 = 5;
     public const byte Version = Version4;
     private const int SlotBytesV3 = 13;
     private const int SlotBytesV4 = 17;
 
     public static byte[] Pack(ReadOnlySpan<InventorySlot> slots)
     {
+        foreach (var slot in slots)
+            if (!slot.IsEmpty && slot.Id.Data.TagBase64 is not null)
+                return PackWithTags(slots);
         var bytes = new byte[1 + slots.Length * SlotBytesV4];
         bytes[0] = Version4;
         for (var i = 0; i < slots.Length; i++)
@@ -45,11 +50,67 @@ static class SlotBlob
         return bytes;
     }
 
+    // v5 adds a length-prefixed LE NBT compound after each v4 slot header.
+    private static byte[] PackWithTags(ReadOnlySpan<InventorySlot> slots)
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        writer.Write(Version5);
+        foreach (var slot in slots)
+        {
+            var id = slot.IsEmpty ? StackId.FromBlock(Blocks.Air) : slot.Id;
+            var tag = id.Data.TagBase64 is { } encoded ? Convert.FromBase64String(encoded) : [];
+            writer.Write((byte)id.Kind);
+            writer.Write(id.Value);
+            writer.Write(id.Aux);
+            writer.Write(id.Damage);
+            writer.Write(slot.IsEmpty ? 0 : slot.Count);
+            writer.Write(tag.Length);
+            writer.Write(tag);
+        }
+        return stream.ToArray();
+    }
+
+    private static bool TryUnpackWithTags(ReadOnlySpan<byte> data, Span<InventorySlot> destination)
+    {
+        var slots = new InventorySlot[destination.Length];
+        var offset = 1;
+        try
+        {
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (data.Length - offset < SlotBytesV4 + 4) return false;
+                var header = data.Slice(offset, SlotBytesV4 + 4);
+                var kind = header[0];
+                var value = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(1, 4));
+                var aux = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(5, 4));
+                var damage = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(9, 4));
+                var count = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(13, 4));
+                var tagLength = BinaryPrimitives.ReadInt32LittleEndian(header.Slice(17, 4));
+                offset += SlotBytesV4 + 4;
+                if (kind is not ((byte)StackKind.Block or (byte)StackKind.Item) ||
+                    tagLength < 0 || tagLength > data.Length - offset) return false;
+                var tag = tagLength == 0 ? null : Convert.ToBase64String(data.Slice(offset, tagLength));
+                offset += tagLength;
+                var id = new StackId((StackKind)kind, value, aux, new ItemUserData(damage, tag));
+                slots[i] = count <= 0 || id.IsAirBlock ? InventorySlot.Empty : new InventorySlot(id, count);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or Zenith.Nbt.NbtException)
+        {
+            return false;
+        }
+        if (offset != data.Length) return false;
+        slots.CopyTo(destination);
+        return true;
+    }
+
     public static bool TryUnpack(ReadOnlySpan<byte> data, Span<InventorySlot> destination)
     {
         if (data.Length < 1) return false;
         return data[0] switch
         {
+            Version5 => TryUnpackWithTags(data, destination),
             Version4 => TryUnpackAuxLayout(data, destination, hasDamage: true),
             Version3 => TryUnpackAuxLayout(data, destination, hasDamage: false),
             Version2 => TryUnpackV2(data, destination),

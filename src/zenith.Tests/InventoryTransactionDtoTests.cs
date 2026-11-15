@@ -10,10 +10,33 @@ namespace Zenith.Tests;
 public class InventoryTransactionDtoTests
 {
     [Fact]
+    public void Captured_Cinnabar_item_use_body_decodes_without_modification()
+    {
+        // Raw body captured from the user's client; no bytes removed or synthesized.
+        var body = Convert.FromHexString(
+            "000002000002027700040C00020006000000B4D1C4F10D0A00000000000000000000F87C5D3D1C856DC288D9653D0000000000401A3BC4FA5C3FB4D1C4F10D0000");
+        var stream = new BinaryStream(body);
+        var packet = new InventoryTransactionPacket();
+        packet.Decode(ref stream);
+        Assert.Equal(InventoryTransactionPacket.TypeItemUse, packet.TransactionType);
+        Assert.Equal(0, packet.LegacyRequestId);
+        Assert.Empty(packet.Actions);
+        Assert.Equal(6, packet.HotbarSlot);
+        Assert.Equal(1, packet.BlockX);
+        Assert.Equal(-60, packet.BlockY);
+        Assert.Equal(0, packet.BlockZ);
+        Assert.Equal(2, packet.HeldItem.NetworkId);
+        Assert.Equal((ushort)6, packet.HeldItem.Count);
+        Assert.Equal(unchecked((int)3727763636U), packet.HeldItem.BlockRuntimeId);
+        Assert.True(stream.IsEndOfFile);
+    }
+
+    [Fact]
     public void InventoryTransaction_rejects_an_unbounded_action_count_before_allocation()
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
         writer.WriteUnsignedVarInt(InventoryTransactionPacket.MaxActions + 1);
 
@@ -26,6 +49,7 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(-2);
+        writer.WriteBool(true); // legacy slots present
         writer.WriteUnsignedVarInt(InventoryTransactionPacket.MaxLegacySetItemContainers + 1);
 
         var bytes = writer.GetBufferDisposing().ToArray();
@@ -47,6 +71,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0); // legacyRequestId
+        w.WriteBool(false); // legacy slots absent
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         w.WriteUnsignedVarInt(0); // no inventory actions
 
@@ -85,6 +110,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0);
+        w.WriteBool(false); // legacy slots absent
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         w.WriteUnsignedVarInt(0);
 
@@ -121,6 +147,7 @@ public class InventoryTransactionDtoTests
     {
         var w = new BinaryStream();
         w.WriteVarInt(0);
+        w.WriteBool(false); // legacy slots absent
         w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
         w.WriteUnsignedVarInt(0);
 
@@ -156,6 +183,7 @@ public class InventoryTransactionDtoTests
     {
         var writer = new BinaryStream();
         writer.WriteVarInt(-2); // legacy request id: even negative IDs carry slot sync metadata
+        writer.WriteBool(true); // legacy slots present
         writer.WriteUnsignedVarInt(0); // legacy slot sync entries
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
         writer.WriteUnsignedVarInt(2);
@@ -318,7 +346,7 @@ public class InventoryTransactionDtoTests
     private static void WriteActionHeader(ref BinaryStream writer, byte legacyActionId)
     {
         writer.WriteUnsignedVarInt(legacyActionId);
-        writer.WriteByte(legacyActionId);
+        writer.WriteByte((byte)(legacyActionId >= 7 ? legacyActionId + 2 : legacyActionId));
     }
 
     private static void DecodeInventoryTransaction(byte[] bytes)

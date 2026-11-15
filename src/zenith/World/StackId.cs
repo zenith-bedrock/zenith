@@ -49,7 +49,7 @@ readonly record struct StackId
     }
 
     /// <summary>The same stack kind with <paramref name="damage"/> points of wear.</summary>
-    public StackId WithDamage(int damage) => new(Kind, Value, Aux, new ItemUserData(damage));
+    public StackId WithDamage(int damage) => new(Kind, Value, Aux, new ItemUserData(damage, Data.TagBase64));
 
     public static StackId FromBlock(int blockRuntimeId) => new(StackKind.Block, blockRuntimeId);
 

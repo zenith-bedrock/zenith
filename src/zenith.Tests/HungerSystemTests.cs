@@ -8,6 +8,48 @@ namespace Zenith.Tests;
 /// <summary>Phase XI.1 — food consumption, exhaustion accrual, starvation and well-fed regen.</summary>
 public class HungerSystemTests
 {
+    [Fact]
+    public void Saturation_depletion_sends_attributes_even_when_hunger_does_not_change()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("saturation-sync");
+        var client = new RecordingClientChannel(); player.AttachClient(client);
+        player.Exhaustion = 4.1f;
+        fx.Clock.AdvanceBy(1); // not a periodic exhaustion refresh
+        new HungerSystem(fx.Context.ItemPalette, fx.Players).Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(20f, player.Hunger); Assert.Equal(4f, player.Saturation);
+        Assert.Single(client.Calls, c => c.Call == "SendPlayerAttributes");
+    }
+
+    [Fact]
+    public void Sprint_exhaustion_is_refreshed_once_per_second_instead_of_each_tick()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("exhaustion-cadence");
+        var client = new RecordingClientChannel(); player.AttachClient(client);
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.IsSprinting = true;
+        for (var tick = 1; tick <= 20; tick++)
+        {
+            fx.Clock.AdvanceBy(1);
+            system.Tick(fx.Clock, fx.Players.Online);
+            Assert.Equal(tick == 20 ? 1 : 0, client.Calls.Count(c => c.Call == "SendPlayerAttributes"));
+        }
+    }
+
+    [Fact]
+    public void Exhaustion_from_other_gameplay_is_included_in_periodic_refresh()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("external-exhaustion");
+        var client = new RecordingClientChannel(); player.AttachClient(client);
+        player.Exhaustion = 2f;
+        fx.Clock.AdvanceBy(20);
+        new HungerSystem(fx.Context.ItemPalette, fx.Players).Tick(fx.Clock, fx.Players.Online);
+        Assert.Single(client.Calls, c => c.Call == "SendPlayerAttributes");
+        Assert.Equal(2f, player.Exhaustion);
+    }
+
     private static short Apple(IntentTestFixture fx) => fx.Context.ItemPalette.Require("minecraft:apple");
 
     [Fact]
@@ -21,6 +63,10 @@ public class HungerSystemTests
         player.SelectedHotbarSlot = 0;
 
         player.Intents.SubmitEatIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(10f, player.Hunger);
+        fx.Clock.AdvanceBy(32);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(14f, player.Hunger); // apple nutrition = 4
@@ -54,6 +100,9 @@ public class HungerSystemTests
         player.SelectedHotbarSlot = 0;
 
         player.Intents.SubmitEatIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        fx.Clock.AdvanceBy(32);
         system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(14f, player.Hunger);

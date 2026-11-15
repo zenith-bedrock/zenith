@@ -5,15 +5,11 @@ namespace Zenith.Gameplay.Inventory;
 
 /// <summary>
 /// Creative palette SSOT (ADR §38/§142). Net ids reminted via CreativeContentPacket.
-/// Blocks use block runtime ids; curated tools use item network ids (ADR §27).
+/// Blocks use block runtime ids; items retain their network id, aux and user data.
 ///
 /// Backing data is the real vanilla catalog (<see cref="CreativeItemsLoader"/>, ADR §142) — every
-/// entry it offers is filtered through the same safety gate this catalog always used: a block is
-/// exposed only if it has a <see cref="Blocks"/> name AND a <see cref="DigProfiles"/> entry; an item
-/// is exposed only if it's one of <see cref="Tools"/>'s curated tools. This is unchanged from the
-/// pre-§142 hand-typed registration — the win is real names/icons/vanilla groups instead of one fake
-/// placeholder group, and every future <c>DigProfiles</c>/<c>Tools</c> addition is picked up here
-/// automatically, no more hand-typed <c>RegisterBlock</c> call per item.
+/// entry is retained with its real identity and category (ADR §156). Catalog visibility is
+/// independent of the server's support for each item's special interactions.
 ///
 /// The 25 <c>const uint</c> below are stable wire net ids pinned to specific vanilla items, not a
 /// sequential encoding of the real catalog's order — dozens of existing tests reference them as
@@ -56,9 +52,13 @@ sealed class CreativeCatalog
     private readonly List<GroupSnapshot> _groups = new();
     private bool _frozen;
 
-    readonly record struct Entry(uint NetId, int StackTypeId, int BaseCount, bool IsBlock, int GroupIndex);
+    readonly record struct Entry(uint NetId, StackId Id, int BaseCount, int GroupIndex);
 
-    public readonly record struct CatalogSnapshot(uint NetId, int StackTypeId, int BaseCount, bool IsBlock, int GroupIndex);
+    public readonly record struct CatalogSnapshot(uint NetId, StackId Id, int BaseCount, int GroupIndex)
+    {
+        public int StackTypeId => Id.Value;
+        public bool IsBlock => Id.IsBlock;
+    }
 
     public readonly record struct GroupSnapshot(int Category, string Name, StackId Icon);
 
@@ -81,12 +81,10 @@ sealed class CreativeCatalog
 
         foreach (var item in data.Items)
         {
-            if (!IsEligible(item.Id))
-                continue;
-
-            var netId = stableNetIds.TryGetValue(item.Id, out var pinned) ? pinned : nextAutoNetId++;
+            var netId = stableNetIds.TryGetValue(item.Id, out var pinned) && !catalog._byNetId.ContainsKey(pinned)
+                ? pinned : nextAutoNetId++;
             var groupIndex = catalog.RemapGroup(item.GroupIndex, data.Groups, groupRemap);
-            catalog.Register(netId, item.Id.Value, item.Id.IsBlock, groupIndex);
+            catalog.Register(netId, item.Id, groupIndex);
         }
 
         return catalog;
@@ -121,18 +119,7 @@ sealed class CreativeCatalog
         [StackId.FromItem(Tools.Require("minecraft:diamond_shovel"))] = DiamondShovel,
     };
 
-    /// <summary>
-    /// Safety gate (ADR §38, unchanged by §142): a block is exposed only once it has a real name
-    /// AND a curated <see cref="DigProfiles"/> row; a pure item is exposed only if it's one of
-    /// <see cref="Tools"/>'s curated tools. Keeps the ~1,800-item real catalog from exposing a
-    /// multi-state block (stairs/slabs/doors) with no defined physics.
-    /// </summary>
-    private static bool IsEligible(StackId id) =>
-        id.IsBlock
-            ? Blocks.TryGetName(id.Value, out _) && DigProfiles.TryGet(id.Value, out _)
-            : Tools.TryGetName(id.Value, out _);
-
-    /// <summary>Re-indexes source group indices to a dense 0-based range covering only groups an eligible item actually references.</summary>
+    /// <summary>Re-indexes referenced source groups to a dense 0-based range.</summary>
     private int RemapGroup(int sourceIndex, IReadOnlyList<CreativeGroupData> sourceGroups, Dictionary<int, int> remap)
     {
         if (remap.TryGetValue(sourceIndex, out var mapped))
@@ -145,13 +132,13 @@ sealed class CreativeCatalog
         return mapped;
     }
 
-    private void Register(uint netId, int stackTypeId, bool isBlock, int groupIndex)
+    private void Register(uint netId, StackId id, int groupIndex)
     {
         if (_frozen)
             throw new InvalidOperationException("CreativeCatalog is frozen; register before Freeze().");
         if (_byNetId.ContainsKey(netId))
             throw new InvalidOperationException($"Duplicate creative net id {netId}.");
-        _byNetId[netId] = new Entry(netId, stackTypeId, 1, isBlock, groupIndex);
+        _byNetId[netId] = new Entry(netId, id, 1, groupIndex);
     }
 
     /// <summary>
@@ -165,7 +152,7 @@ sealed class CreativeCatalog
     {
         var list = new List<CatalogSnapshot>(_byNetId.Count);
         foreach (var e in _byNetId.Values)
-            list.Add(new CatalogSnapshot(e.NetId, e.StackTypeId, e.BaseCount, e.IsBlock, e.GroupIndex));
+            list.Add(new CatalogSnapshot(e.NetId, e.Id, e.BaseCount, e.GroupIndex));
         list.Sort((a, b) => a.NetId.CompareTo(b.NetId));
         return list;
     }
@@ -179,7 +166,7 @@ sealed class CreativeCatalog
             return false;
         }
 
-        id = e.IsBlock ? StackId.FromBlock(e.StackTypeId) : StackId.FromItem(e.StackTypeId);
+        id = e.Id;
         baseCount = e.BaseCount;
         return true;
     }

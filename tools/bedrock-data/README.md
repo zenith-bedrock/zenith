@@ -72,3 +72,15 @@ dotnet run --project tools/bedrock-data -- durability <items.json> src/zenith/da
 ```
 
 Items are matched to our palette by name. Items the palette lacks are reported as omitted; items whose numeric id differs from the palette's (registered in another game version, currently the 7 spears of 1.26.60) are reported and **not written**, because their value cannot be vouched for. Current data: 79 items. Values are from 1.26.60 data, not from a retail capture of this build; the classic tools (wood 59, stone 131, iron 250, diamond 1561, ...) match vanilla.
+
+## Stack capacities
+
+Item stack capacities use the same [Bedrock 1.26.60 dataset](https://github.com/PrismarineJS/minecraft-data/blob/master/data/bedrock/1.26.60/items.json):
+
+```sh
+dotnet run --project tools/bedrock-data -- stack-sizes <items.json> src/zenith/data/item_stack_sizes.json --source "PrismarineJS/minecraft-data data/bedrock/1.26.60/items.json (MIT)"
+```
+
+This writes only exceptions to 64, keyed by names and with a source SHA-256. Numeric
+IDs from that dataset are never used as Zenith runtime IDs. Boot resolves item names
+through the current palette; block stack names use the full reverse block palette.

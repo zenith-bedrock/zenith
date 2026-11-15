@@ -7,6 +7,28 @@ namespace Zenith.Tests;
 
 public class LoginIdentityTests
 {
+    [Theory]
+    [InlineData(true, 0, "same", true)]
+    [InlineData(true, 0, "different", false)]
+    [InlineData(false, 0, "same", false)]
+    [InlineData(false, 0, "different", false)]
+    [InlineData(false, 2, "different", true)]
+    [InlineData(true, 2, "same", false)]
+    [InlineData(false, 1, "same", false)]
+    public void Transport_authentication_preserves_full_login_binding_without_equating_offline_tokens(
+        bool authenticated, int authenticationType, string token, bool accepted)
+    {
+        var identity = new Zenith.Network.TransportIdentity("same", authenticated);
+        Assert.Equal(accepted, Zenith.Session.Handler.LoginSessionHandler.MatchesTransportAuthentication(identity, authenticationType, token));
+    }
+
+    [Fact]
+    public void Identityless_transport_cannot_promote_a_full_login()
+    {
+        Assert.False(Zenith.Session.Handler.LoginSessionHandler.MatchesTransportAuthentication(null, 0, "token"));
+        Assert.True(Zenith.Session.Handler.LoginSessionHandler.MatchesTransportAuthentication(null, 2, "token"));
+    }
+
     private static ServerConfig.AuthSection Auth(params string[] modes)
     {
         var a = new ServerConfig.AuthSection { Accept = [.. modes] };
@@ -112,10 +134,13 @@ public class LoginIdentityTests
     public void ParseIdentityToken_xbox_only_marks_ephemeral_without_identity_or_xid()
     {
         var jwt = MakeJwt("""{"xname":"Steve"}""");
-        var parsed = LoginIdentity.ParseIdentityToken(jwt, auth: Auth("xbox"));
+        var untrustedId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var clientData = MakeJwt("{\"SelfSignedId\":\"" + untrustedId + "\"}");
+        var parsed = LoginIdentity.ParseIdentityToken(jwt, clientDataJwt: clientData, auth: Auth("xbox"));
         Assert.False(parsed.IdentityFromJwt);
         Assert.False(parsed.IdentityStable);
         Assert.NotEqual(Guid.Empty, parsed.Uuid);
+        Assert.NotEqual(untrustedId, parsed.Uuid);
     }
 
     [Fact]

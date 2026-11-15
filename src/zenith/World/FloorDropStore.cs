@@ -6,7 +6,7 @@ namespace Zenith.World;
 /// <summary>
 /// Floor drops with Bedrock item-entity wire (ADR §26 / §55): sparse cells holding a
 /// <see cref="StackId"/> + entity runtime id + pickup delay.
-/// Pickup = expanded player AABB ∩ item AABB at cell.
+/// Cell keys are custody handles; moving items carry a separate physical pose used for pickup.
 /// SoftCap refuses new cell keys (lossy vs entities — honest LAN bound).
 /// </summary>
 sealed class FloorDropStore
@@ -26,7 +26,48 @@ sealed class FloorDropStore
     private readonly ILogger? _logger;
     private int _capWarned;
 
-    internal readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks = 0);
+    internal readonly record struct DropSlot(StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks = 0, FloorDropMotion? Motion = null);
+
+    public readonly record struct DropView((int X, int Y, int Z) Key, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, FloorDropMotion Pose, bool HasMotion);
+
+    public List<DropView> SnapshotViews()
+    {
+        var result = new List<DropView>(_drops.Count);
+        CopyViews(result);
+        return result;
+    }
+
+    public void CopyViews(List<DropView> result)
+    {
+        result.Clear();
+        foreach (var (key, slot) in _drops)
+            result.Add(new(key, slot.Id, slot.Count, slot.EntityRuntimeId, slot.PickupDelayTicks,
+                slot.Motion ?? new FloorDropMotion(key.X + .5f, key.Y, key.Z + .5f, 0, 0, 0), slot.Motion.HasValue));
+    }
+
+    public bool HasEntitiesInChunk(int chunkX, int chunkZ)
+    {
+        foreach (var (key, slot) in _drops)
+        {
+            var x = slot.Motion?.X ?? key.X + .5f;
+            var z = slot.Motion?.Z ?? key.Z + .5f;
+            if (ChunkMath.BlockToChunk(x) == chunkX && ChunkMath.BlockToChunk(z) == chunkZ) return true;
+        }
+        return false;
+    }
+
+    public void UpdateMotion(in DropView drop, FloorDropMotion motion)
+    {
+        if (_drops.TryGetValue(drop.Key, out var slot) && slot.EntityRuntimeId == drop.EntityRuntimeId)
+            _drops[drop.Key] = slot with { Motion = motion };
+    }
+
+    public bool CanMergeAt(int x, int y, int z)
+    {
+        if (!_drops.TryGetValue((x, y, z), out var slot) || slot.Motion is not { } body) return true;
+        return body.VelocityX == 0 && body.VelocityY == 0 && body.VelocityZ == 0 &&
+            MathF.Abs(body.X - (x + .5f)) < .5f && MathF.Abs(body.Y - y) < .5f && MathF.Abs(body.Z - (z + .5f)) < .5f;
+    }
 
     /// <summary>
     /// GameLoop-local copy used only to restore an unexpected failed multi-drop commit. Normal
@@ -51,7 +92,8 @@ sealed class FloorDropStore
         int Count,
         long EntityRuntimeId,
         bool Created,
-        bool CountChanged);
+        bool CountChanged,
+        FloorDropMotion? Motion = null);
 
     public FloorDropStore(ILogger? logger = null) => _logger = logger;
 
@@ -78,23 +120,26 @@ sealed class FloorDropStore
         int count,
         long entityRuntimeIdIfNew,
         out DepositResult? deposit,
-        int pickupDelayTicks = DefaultPickupDelay)
+        int pickupDelayTicks = DefaultPickupDelay,
+        FloorDropMotion? motion = null)
     {
         deposit = null;
         if (count <= 0 || id.IsEmpty) return true;
-        if (count > MaxStack) return false;
+        var limit = ItemStackLimits.For(id);
+        if (count > limit) return false;
         var key = (x, y, z);
         if (_drops.TryGetValue(key, out var existing))
         {
             // One StackId per cell — different id must use another cell (FloorDropFanout spiral).
             if (existing.Id != id) return false;
-            if (existing.Count > MaxStack - count) return false;
+            if (motion.HasValue || !CanMergeAt(x, y, z)) return false;
+            if (existing.Count > limit - count) return false;
 
             var merged = existing.Count + count;
             var delay = Math.Max(existing.PickupDelayTicks, pickupDelayTicks);
             // Age is not reset by topping off an existing pile — a cell doesn't get to live forever.
-            _drops[key] = new DropSlot(id, merged, existing.EntityRuntimeId, delay, existing.AgeTicks);
-            deposit = new DepositResult(x, y, z, id, merged, existing.EntityRuntimeId, Created: false, CountChanged: merged != existing.Count);
+            _drops[key] = existing with { Count = merged, PickupDelayTicks = delay };
+            deposit = new DepositResult(x, y, z, id, merged, existing.EntityRuntimeId, Created: false, CountChanged: merged != existing.Count, existing.Motion);
             return true;
         }
 
@@ -111,9 +156,9 @@ sealed class FloorDropStore
 
         var entityId = entityRuntimeIdIfNew;
         var newCount = count;
-        _drops[key] = new DropSlot(id, newCount, entityId, Math.Max(0, pickupDelayTicks));
+        _drops[key] = new DropSlot(id, newCount, entityId, Math.Max(0, pickupDelayTicks), Motion: motion);
         deposit = new DepositResult(
-            x, y, z, id, newCount, entityId, Created: true, CountChanged: true);
+            x, y, z, id, newCount, entityId, Created: true, CountChanged: true, motion);
         return true;
     }
 
@@ -240,10 +285,10 @@ sealed class FloorDropStore
         }
 
         var left = slot.Count - taken;
-        _drops[key] = new DropSlot(slot.Id, left, slot.EntityRuntimeId, slot.PickupDelayTicks, slot.AgeTicks);
+        _drops[key] = slot with { Count = left };
         remainingPublish = new DepositResult(
             x, y, z, slot.Id, left, slot.EntityRuntimeId,
-            Created: false, CountChanged: true);
+            Created: false, CountChanged: true, slot.Motion);
         return true;
     }
 }

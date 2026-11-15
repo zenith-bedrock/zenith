@@ -59,6 +59,11 @@ class Player
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
     public long RuntimeId { get; }
 
+    /// <summary>Most recent client input processed by gameplay; never advanced by network receipt alone.</summary>
+    public ulong LastProcessedInputTick { get; private set; }
+
+    public void RecordProcessedInputTick(ulong tick) => LastProcessedInputTick = Math.Max(LastProcessedInputTick, tick);
+
     /// <summary>UUID de lista/AddPlayer.</summary>
     public Guid Uuid { get; }
 
@@ -75,6 +80,7 @@ class Player
 
     /// <summary>The open container, the crafting grids, the window intents and the inventory-request ledger.</summary>
     public PlayerWindows Windows { get; }
+    public FoodUseState? FoodUse { get; set; }
 
     /// <summary>Active status effects and the pending effect command.</summary>
     public PlayerEffects Effects { get; }
@@ -131,6 +137,17 @@ class Player
     /// persisted — a disconnect/reconnect starts unmounted (see phase findings).
     /// </summary>
     internal long? RidingEntityId { get; set; }
+
+    internal bool AwaitingTeleport { get; private set; }
+
+    /// <summary>GameLoop only, before publishing the authoritative reposition.</summary>
+    internal void BeginTeleport()
+    {
+        Intents.ClearMovementForTeleport();
+        AwaitingTeleport = true;
+    }
+
+    internal void CompleteTeleport() => AwaitingTeleport = false;
 
     /// <summary>
     /// Classic RGBA mirror of Session.Skin when dimensions match (PlayerList fallback /
@@ -226,9 +243,9 @@ class Player
         IdentityStable = identityStable;
         GameMode = gameMode;
         Inventory = new PlayerInventory(seedStarterHotbar: gameMode == GameMode.Survival);
-        Intents = new PlayerIntents(() => IsDead, () => GameMode);
-        Dig = new PlayerDig(() => IsDead);
         Windows = new PlayerWindows(() => IsDead);
+        Intents = new PlayerIntents(() => IsDead, () => GameMode, Windows);
+        Dig = new PlayerDig(() => IsDead);
         Effects = new PlayerEffects(() => IsDead);
     }
 
@@ -250,6 +267,8 @@ class Player
     {
         if (!IsDead || _deathTransitionFinalized) return false;
         _deathTransitionFinalized = true;
+        FoodUse = null;
+        while (Intents.TryConsumeFoodUse(out _)) { }
         IsSneaking = false;
         IsSprinting = false;
         Dig.AbortBreak();

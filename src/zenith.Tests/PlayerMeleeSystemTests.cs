@@ -7,7 +7,23 @@ namespace Zenith.Tests;
 
 public sealed class PlayerMeleeSystemTests
 {
-    private const float ExpectedDamage = 4f;
+    private const float ExpectedDamage = 1f;
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public void Player_target_uses_attacker_mode_reach(int mode, bool accepted)
+    {
+        var fx = new IntentTestFixture();
+        var attacker = fx.AddInGamePlayer("mode-attacker");
+        var target = fx.AddInGamePlayer("mode-target");
+        attacker.SetGameMode((Zenith.Player.GameMode)mode);
+        target.PositionX = attacker.PositionX + 4;
+        target.PositionZ = attacker.PositionZ;
+        attacker.Intents.SubmitAttackIntent(target.RuntimeId);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(target.MaxHealth - (accepted ? ExpectedDamage : 0), target.Health);
+    }
 
     [Fact]
     public void Explicit_runtime_target_damages_only_that_nearby_player()
@@ -22,9 +38,9 @@ public sealed class PlayerMeleeSystemTests
         bystander.PositionZ = attacker.PositionZ;
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(16f, target.Health);
+        Assert.Equal(19f, target.Health);
         Assert.Equal(bystander.MaxHealth, bystander.Health);
     }
 
@@ -37,7 +53,7 @@ public sealed class PlayerMeleeSystemTests
         target.PositionX = attacker.PositionX + 10;
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(target.MaxHealth, target.Health);
         Assert.False(attacker.Intents.TryConsumeAttackIntent());
@@ -49,11 +65,11 @@ public sealed class PlayerMeleeSystemTests
         var fx = new IntentTestFixture();
         var attacker = fx.AddInGamePlayer("attacker");
         var target = fx.AddInGamePlayer("edge-target");
-        target.PositionX = attacker.PositionX + 2.25f; // == AttackDistance
+        target.PositionX = attacker.PositionX + 3.3f; // Near face is 3 blocks from the attacker's eye.
         target.PositionZ = attacker.PositionZ;
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(target.MaxHealth - ExpectedDamage, target.Health);
     }
@@ -65,7 +81,7 @@ public sealed class PlayerMeleeSystemTests
         var attacker = fx.AddInGamePlayer("solo");
 
         attacker.Intents.SubmitAttackIntent(attacker.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(attacker.MaxHealth, attacker.Health);
     }
@@ -81,7 +97,7 @@ public sealed class PlayerMeleeSystemTests
         Assert.True(attacker.IsDead);
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(target.MaxHealth, target.Health);
     }
@@ -98,7 +114,7 @@ public sealed class PlayerMeleeSystemTests
         Assert.True(target.IsDead);
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         // Still dead, no further health mutation attempted (health is already floored at 0 by the
         // void hit above; this only proves PlayerDamage.Apply was never invoked a second time).
@@ -114,7 +130,7 @@ public sealed class PlayerMeleeSystemTests
         _ = fx.AddInGamePlayer("bystander");
 
         attacker.Intents.SubmitAttackIntent(999_999L);
-        var exception = Record.Exception(() => new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online));
+        var exception = Record.Exception(() => new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online));
 
         Assert.Null(exception);
         Assert.Equal(attacker.MaxHealth, attacker.Health);
@@ -131,7 +147,7 @@ public sealed class PlayerMeleeSystemTests
         var mobRuntimeId = fx.Players.AllocateRuntimeId();
 
         attacker.Intents.SubmitAttackIntent(mobRuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(attacker.Intents.TryConsumeAttackIntent(mobRuntimeId));
     }
@@ -145,7 +161,7 @@ public sealed class PlayerMeleeSystemTests
         target.PositionX = attacker.PositionX + 1;
 
         attacker.Intents.SubmitAttackIntent(target.RuntimeId);
-        var system = new PlayerMeleeSystem(fx.Players);
+        var system = new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette);
         system.Tick(fx.Clock, fx.Players.Online);
         system.Tick(fx.Clock, fx.Players.Online); // no new submission — must not re-apply
 
@@ -160,7 +176,7 @@ public sealed class PlayerMeleeSystemTests
         var b = fx.AddInGamePlayer("b");
         b.PositionX = a.PositionX + 1;
 
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(a.MaxHealth, a.Health);
         Assert.Equal(b.MaxHealth, b.Health);
@@ -185,7 +201,7 @@ public sealed class PlayerMeleeSystemTests
 
         // Deliberately reversed vs. insertion order.
         var reversed = new List<Player.Player> { bystander, target, attacker };
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, reversed);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, reversed);
 
         Assert.Equal(target.MaxHealth - ExpectedDamage, target.Health);
         Assert.Equal(bystander.MaxHealth, bystander.Health);
@@ -204,7 +220,7 @@ public sealed class PlayerMeleeSystemTests
 
         attackerOne.Intents.SubmitAttackIntent(targetOne.RuntimeId);
         attackerTwo.Intents.SubmitAttackIntent(targetTwo.RuntimeId);
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(targetOne.MaxHealth - ExpectedDamage, targetOne.Health);
         Assert.Equal(targetTwo.MaxHealth - ExpectedDamage, targetTwo.Health);

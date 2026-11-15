@@ -281,12 +281,12 @@ static class Blocks
     }
 
     /// <summary>
-    /// Curated placeables only (starter set + chest facings) — not “any palette rid” (§12).
+    /// Supported placeables and full-cube building families — not “any palette rid” (§12/§161).
     /// Air is never placeable.
     /// </summary>
     public static bool IsPlaceable(int runtimeId)
     {
-        return Current.PlaceableIds.Contains(runtimeId);
+        return Current.PlaceableIds.Contains(runtimeId) || SolidBuildingBlocks.TryGet(runtimeId, out _);
     }
 
     /// <summary>Sand / gravel — cell-tick gravity set (ADR §57). Not on DigProfiles.</summary>

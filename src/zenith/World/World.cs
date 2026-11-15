@@ -35,11 +35,11 @@ sealed class World
     /// </summary>
     private readonly ConcurrentDictionary<(int Cx, int Cz), ConcurrentDictionary<(int X, int Y, int Z), int>> _overlaysByChunk = new();
     /// <summary>
-    /// Chunks whose overlays/chests have been loaded from <see cref="_storage"/> into RAM (ADR §114).
+    /// Chunks read from storage; chest blobs remain pending until owner application (ADR §114/§162).
     /// Guarded against double-hydration races by <see cref="_generationBroker"/>'s existing
     /// single-flight coalescing for the same coordinate — no separate lock needed here.
     /// </summary>
-    private readonly ConcurrentDictionary<(int Cx, int Cz), byte> _hydratedChunks = new();
+    private readonly ConcurrentDictionary<(int Cx, int Cz), IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>> _hydratedChunks = new();
     private readonly ILogger? _logger;
 
     /// <summary>The server logger this world was built with (null in headless tests), for gameplay that reports about the world.</summary>
@@ -161,7 +161,7 @@ sealed class World
     public void PersistInventory(Player.Player player)
     {
         if (!player.IdentityStable) return;
-        PersistInventory(player.Uuid, player.Inventory);
+        WriteBehind(_storage.PutInventoryAsync(player.Uuid, PlayerInventorySave.Pack(player)), "PutInventory");
     }
 
     /// <summary>Raw Put for tests / loaders — prefer <see cref="PersistInventory(Player.Player)"/> on live sessions.</summary>
@@ -171,7 +171,13 @@ sealed class World
     public bool TryLoadInventory(Guid uuid, Player.PlayerInventory inventory)
     {
         var blob = _storage.GetInventoryAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && inventory.TryLoadMainFromBlob(blob);
+        return blob is not null && PlayerInventorySave.TryLoad(blob, inventory);
+    }
+
+    public bool TryLoadInventory(Player.Player player)
+    {
+        var blob = _storage.GetInventoryAsync(player.Uuid).AsTask().GetAwaiter().GetResult();
+        return blob is not null && PlayerInventorySave.TryLoad(blob, player.Inventory, player.Windows);
     }
 
     public void PersistArmor(Player.Player player)
@@ -328,10 +334,18 @@ sealed class World
             SeedOverlayIfAbsent(o.X, o.Y, o.Z, o.BlockRuntimeId);
 
         var chests = await _storage.LoadChestsForChunkAsync(chunkX, chunkZ, ct).ConfigureAwait(false);
-        foreach (var (x, y, z, blob) in chests)
-            Chests.TryLoadFromBlob(x, y, z, blob);
+        // Workers publish bytes only. ChestStore is mutated by the gameplay owner before send.
+        _hydratedChunks[key] = chests.ToArray();
+    }
 
-        _hydratedChunks[key] = 0;
+    /// <summary>Gameplay-owner seed before publishing a loaded column (ADR §162), never on the I/O continuation.</summary>
+    public void ApplyChunkHydration(int chunkX, int chunkZ)
+    {
+        var key = (chunkX, chunkZ);
+        if (!_hydratedChunks.TryGetValue(key, out var chests) || chests.Count == 0) return;
+        foreach (var (x, y, z, blob) in chests)
+            Chests.TrySeedFromBlob(x, y, z, blob);
+        _hydratedChunks.TryUpdate(key, Array.Empty<(int, int, int, byte[])>(), chests);
     }
 
     private async ValueTask<ColumnReadResult> GetOrCreateColumnCoreAsync(
@@ -580,7 +594,7 @@ sealed class World
     }
 
     /// <summary>
-    /// Evicts chunk (chunkX, chunkZ)'s overlays/chests from RAM if nobody currently has it in view
+    /// Evicts chunk (chunkX, chunkZ)'s overlays/chests from RAM if no viewer or live floor item needs it
     /// (ADR §114). Returns false without changing anything if the chunk has a viewer.
     /// Overlays are already fire-and-forget-persisted on every write (ADR §41 — GameLoop never waits
     /// on disk), so no explicit flush is needed here. Chests are NOT continuously persisted while
@@ -590,7 +604,7 @@ sealed class World
     /// </summary>
     public bool TryEvictChunk(int chunkX, int chunkZ)
     {
-        if (ChunkResidency.HasViewers(chunkX, chunkZ))
+        if (ChunkResidency.HasViewers(chunkX, chunkZ) || FloorDrops.HasEntitiesInChunk(chunkX, chunkZ))
             return false;
 
         foreach (var (x, y, z) in Chests.PositionsInChunk(chunkX, chunkZ).ToArray())

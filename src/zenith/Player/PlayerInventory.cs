@@ -20,7 +20,7 @@ readonly record struct InventorySlot(StackId Id, int Count)
 /// <summary>
 /// Inventário principal do jogador (36 slots) + cursor de drag.
 /// Hotbar 0–8: held / place / MobEquipment. Storage 9–35: storage + TryAdd.
-/// Cursor: efêmero (ISR take/place); fora do SnapshotMainInventory.
+/// Cursor: ISR take/place, saved with transient UI custody; outside SnapshotMainInventory.
 /// </summary>
 sealed class PlayerInventory
 {
@@ -88,6 +88,7 @@ sealed class PlayerInventory
     public bool TrySetArmor(int slot, StackId id, int count)
     {
         if (!IsValidArmorSlot(slot) || !IsValidStackCount(count)) return false;
+        if (!ItemStackLimits.CanReplace(_armor[slot], new InventorySlot(id, count))) return false;
         _armor[slot] = count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air)
             ? InventorySlot.Empty
             : new InventorySlot(id, count);
@@ -105,7 +106,7 @@ sealed class PlayerInventory
 
     public bool TryLoadArmorFromBlob(ReadOnlySpan<byte> data)
     {
-        Span<InventorySlot> slots = stackalloc InventorySlot[ArmorSize];
+        Span<InventorySlot> slots = new InventorySlot[ArmorSize];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
         slots.CopyTo(_armor);
@@ -120,6 +121,7 @@ sealed class PlayerInventory
     public bool TrySetOffhand(StackId id, int count)
     {
         if (!IsValidStackCount(count)) return false;
+        if (!ItemStackLimits.CanReplace(_offhand, new InventorySlot(id, count))) return false;
         _offhand = count == 0 || id.IsAirBlock || (id.IsBlock && id.Value == Blocks.Air)
             ? InventorySlot.Empty
             : new InventorySlot(id, count);
@@ -128,7 +130,7 @@ sealed class PlayerInventory
 
     public bool TryLoadOffhandFromBlob(ReadOnlySpan<byte> data)
     {
-        Span<InventorySlot> slots = stackalloc InventorySlot[1];
+        Span<InventorySlot> slots = new InventorySlot[1];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
         _offhand = slots[0];
@@ -151,6 +153,7 @@ sealed class PlayerInventory
 
     public bool TrySet(int slot, StackId id, int count)
     {
+        if (!IsValidStackCount(count) || !ItemStackLimits.CanReplace(Get(slot), new InventorySlot(id, count))) return false;
         if (slot == CursorSlot)
         {
             if (!IsValidStackCount(count)) return false;
@@ -257,13 +260,14 @@ sealed class PlayerInventory
 
         var mergeRid = Blocks.NormalizeMergeRuntimeId(id.Value);
         var mergeId = StackId.FromBlock(mergeRid);
+        var limit = ItemStackLimits.For(id);
         var remaining = count;
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             var s = _slots[i];
             if (s.IsEmpty || !s.Id.IsBlock || !Blocks.SameMergeItem(mergeRid, s.Id.Value))
                 continue;
-            var space = MaxStack - s.Count;
+            var space = limit - s.Count;
             if (space <= 0) continue;
             var add = Math.Min(space, remaining);
             _slots[i] = new InventorySlot(s.Id, s.Count + add);
@@ -273,7 +277,7 @@ sealed class PlayerInventory
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             if (!_slots[i].IsEmpty) continue;
-            var add = Math.Min(MaxStack, remaining);
+            var add = Math.Min(limit, remaining);
             _slots[i] = new InventorySlot(mergeId, add);
             remaining -= add;
         }
@@ -286,12 +290,13 @@ sealed class PlayerInventory
 
     private int TryAddUpToExact(StackId id, int count)
     {
+        var limit = ItemStackLimits.For(id);
         var remaining = count;
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             var s = _slots[i];
             if (s.IsEmpty || s.Id != id) continue;
-            var space = MaxStack - s.Count;
+            var space = limit - s.Count;
             if (space <= 0) continue;
             var add = Math.Min(space, remaining);
             _slots[i] = new InventorySlot(s.Id, s.Count + add);
@@ -301,7 +306,7 @@ sealed class PlayerInventory
         for (var i = 0; i < FullInventorySize && remaining > 0; i++)
         {
             if (!_slots[i].IsEmpty) continue;
-            var add = Math.Min(MaxStack, remaining);
+            var add = Math.Min(limit, remaining);
             _slots[i] = new InventorySlot(id, add);
             remaining -= add;
         }
@@ -321,7 +326,8 @@ sealed class PlayerInventory
         var dst = Get(to);
         if (!dst.IsEmpty && dst.Id != src.Id) return false;
 
-        var space = dst.IsEmpty ? MaxStack : MaxStack - dst.Count;
+        var limit = ItemStackLimits.For(src.Id);
+        var space = limit - (dst.IsEmpty ? 0 : dst.Count);
         if (count > space) return false;
 
         var newDstCount = (dst.IsEmpty ? 0 : dst.Count) + count;
@@ -339,6 +345,7 @@ sealed class PlayerInventory
 
         var sa = Get(a);
         var sb = Get(b);
+        if (!ItemStackLimits.CanReplace(sa, sb) || !ItemStackLimits.CanReplace(sb, sa)) return false;
         SetLocation(a, sb);
         SetLocation(b, sa);
         return true;
@@ -367,7 +374,7 @@ sealed class PlayerInventory
 
     public bool TryLoadMainFromBlob(ReadOnlySpan<byte> data)
     {
-        Span<InventorySlot> slots = stackalloc InventorySlot[FullInventorySize];
+        Span<InventorySlot> slots = new InventorySlot[FullInventorySize];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
         slots.CopyTo(_slots);

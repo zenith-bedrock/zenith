@@ -13,6 +13,7 @@ sealed class PlayerChunkTracker
     private readonly Dictionary<(int X, int Z), int> _epoch = new();
     private readonly Queue<StreamCompletion> _completedStreams = new();
     private PreSpawnRequest? _pendingPreSpawn;
+    private int? _pendingRadius;
     private readonly List<(int X, int Z)> _scratch = new();
     private int _nextEpoch = 1;
     private int _version;
@@ -25,6 +26,25 @@ sealed class PlayerChunkTracker
 
     /// <summary>Raio de view em chunks (confirmado ao cliente).</summary>
     public int Radius { get; set; }
+
+    /// <summary>Latest network radius request; changing streaming/residency state belongs to the gameplay tick.</summary>
+    public void SubmitRadius(int radius)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(radius);
+        lock (_gate) _pendingRadius = radius;
+    }
+
+    public void ApplyPendingRadius()
+    {
+        lock (_gate)
+        {
+            if (_pendingRadius is not { } radius) return;
+            _pendingRadius = null;
+            if (Radius == radius) return;
+            Radius = radius;
+            ForcePublisherRefresh();
+        }
+    }
 
     /// <summary>
     /// Network receives the requested view radius, but only the gameplay owner starts the

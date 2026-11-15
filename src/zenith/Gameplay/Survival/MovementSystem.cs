@@ -40,6 +40,7 @@ sealed class MovementSystem : IGameSystem
             // AuthInput must not move, kill, or otherwise mutate authoritative state.
             if (!player.IsInGame)
             {
+                player.CompleteTeleport();
                 _ = player.Intents.TryConsumeMovementInput(out _);
                 _ = player.Intents.TryConsumeRespawn();
                 continue;
@@ -47,8 +48,9 @@ sealed class MovementSystem : IGameSystem
 
             if (player.IsDead)
             {
-                // Drain stale AuthInput while on death screen; do not apply pose.
-                _ = player.Intents.TryConsumeMovementInput(out _);
+                // Process the input tick while on the death screen without applying pose.
+                if (player.Intents.TryConsumeMovementInput(out var deadInput))
+                    player.RecordProcessedInputTick(deadInput.InputTick);
                 if (player.Intents.TryConsumeRespawn())
                 {
                     ApplyRespawn(player, online);
@@ -73,6 +75,7 @@ sealed class MovementSystem : IGameSystem
                 // live-client bug report: exiting a vehicle left the player unable to act).
                 if (player.Intents.TryConsumeMovementInput(out var ridingInput))
                 {
+                    player.RecordProcessedInputTick(ridingInput.InputTick);
                     player.Pitch = ridingInput.Pitch;
                     player.Yaw = ridingInput.Yaw;
                     player.HeadYaw = ridingInput.Yaw;
@@ -81,6 +84,14 @@ sealed class MovementSystem : IGameSystem
             }
 
             if (!player.Intents.TryConsumeMovementInput(out var input)) continue;
+
+            if (player.AwaitingTeleport)
+            {
+                if (!input.HandledTeleport) continue;
+                player.CompleteTeleport();
+            }
+
+            player.RecordProcessedInputTick(input.InputTick);
 
             var wasOnGround = player.IsOnGround;
             player.PositionX = input.X;
@@ -142,7 +153,7 @@ sealed class MovementSystem : IGameSystem
                 peer.Client.Entity.SendActorFlags(
                     (ulong)mover.RuntimeId,
                     mover.IsSneaking,
-                    mover.IsSprinting);
+                    mover.IsSprinting, mover.FoodUse.HasValue);
             }
 
             foreach (var mover in _swing)
@@ -272,6 +283,7 @@ sealed class MovementSystem : IGameSystem
         player.PositionZ = 0f;
         player.Pitch = 0f;
         player.CompleteRespawn();
+        player.BeginTeleport();
 
         var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;

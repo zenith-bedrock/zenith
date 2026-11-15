@@ -183,7 +183,7 @@ public class AutoCraftTests
         writer.WriteVarInt(9);
         writer.WriteUnsignedVarInt(1);
         writer.WriteUnsignedVarInt(ItemStackRequestPacket.ActionCraftRecipeAuto);
-        writer.WriteByte(ItemStackRequestPacket.ActionCraftRecipeAuto);
+        writer.WriteByte(13); // legacy enum CraftRecipeAuto, distinct from union variant 11
         writer.WriteUnsignedVarInt(77); // recipe network id
         writer.WriteByte(3); // times crafted
         writer.WriteUnsignedVarInt(0); // no ingredient descriptors

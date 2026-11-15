@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../src/zenith/data/recipes.json.gz" LogicalName="recipes.json.gz" />
+  </ItemGroup>
+</Project>

@@ -20,6 +20,6 @@ internal static class TestRecipes
     public static uint OakLogToPlanks => Default.NetIdOf("minecraft:oak_planks");
     public static uint PlanksToStick => Default.NetIdOf("minecraft:stick");
     public static uint Chest => Default.NetIdOf("minecraft:Chest_recipeId");
-    public static uint CraftingTable => Default.NetIdOf("minecraft:crafting_table");
+    public static uint CraftingTable => Default.NetIdOf("minecraft:WorkBench_recipeId");
     public static uint WoodenPickaxe => Default.NetIdOf("minecraft:wooden_pickaxe");
 }

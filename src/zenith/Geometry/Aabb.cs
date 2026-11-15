@@ -42,6 +42,15 @@ readonly struct Aabb
         y >= MinY && y <= MaxY &&
         z >= MinZ && z <= MaxZ;
 
+    /// <summary>Squared distance from a point to the nearest point in/on this box.</summary>
+    public float DistanceSquaredTo(float x, float y, float z)
+    {
+        var dx = x - Math.Clamp(x, MinX, MaxX);
+        var dy = y - Math.Clamp(y, MinY, MaxY);
+        var dz = z - Math.Clamp(z, MinZ, MaxZ);
+        return dx * dx + dy * dy + dz * dz;
+    }
+
     /// <summary>Grows the box by <paramref name="x"/>/<paramref name="y"/>/<paramref name="z"/> on each side.</summary>
     public Aabb Expand(float x, float y, float z) =>
         new(MinX - x, MinY - y, MinZ - z, MaxX + x, MaxY + y, MaxZ + z);

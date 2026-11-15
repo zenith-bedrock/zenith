@@ -85,16 +85,18 @@ public class JoinSmallPacketsBdsGoldenTests
         Assert.Equal(captured.Body, Body(packet, (int)ProtocolInfo.UNLOCKED_RECIPES_PACKET));
     }
 
-    /// <summary>What a new player's book holds here: only recipes this server actually has (a handful of BDS's 20 are furnace recipes).</summary>
+    /// <summary>Zenith exposes every registered grid recipe until progressive discovery exists (ADR §156).</summary>
     [Fact]
-    public void The_initial_book_is_the_bds_list_kept_to_recipes_the_server_has()
+    public void The_initial_book_exposes_every_registered_recipe()
     {
         Zenith.World.Blocks.EnsureLoaded();
         var fx = new IntentTestFixture();
-        var known = UnlockedRecipesPacket.InitialRecipeIdsOfBds.Where(id => fx.Context.Recipes.TryGetNetId(id, out _)).ToArray();
-
-        Assert.Contains("minecraft:WorkBench_recipeId", known);
-        Assert.True(known.Length < UnlockedRecipesPacket.InitialRecipeIdsOfBds.Count);
-        Assert.All(known, id => Assert.True(fx.Context.Recipes.TryGetNetId(id, out _)));
+        var packet = Zenith.Protocol.InventoryProtocol.BuildInitiallyUnlockedRecipes(fx.Context.Recipes);
+        Assert.Equal(fx.Context.Recipes.Recipes.Select(r => r.Id), packet.RecipeIds);
+        Assert.True(packet.RecipeIds.Count > 3000);
+        var body = Body(packet, (int)ProtocolInfo.UNLOCKED_RECIPES_PACKET);
+        var stream = new BinaryStream(body);
+        var decoded = new UnlockedRecipesPacket(); decoded.Decode(ref stream); stream.Dispose();
+        Assert.Equal(packet.RecipeIds, decoded.RecipeIds);
     }
 }

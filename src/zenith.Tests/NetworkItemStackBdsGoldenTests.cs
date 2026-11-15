@@ -18,6 +18,22 @@ public class NetworkItemStackBdsGoldenTests
         return Convert.ToHexString(writer.GetBufferDisposing()).ToLowerInvariant();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Actor_item_descriptors_preserve_durability_and_shield_data(bool shield)
+    {
+        var stack = shield
+            ? new NetworkItemStack(358, 1, 0, StackNetworkId: 6, IsShield: true, Damage: 0)
+            : new NetworkItemStack(299, 1, 0, StackNetworkId: 4, Damage: 100);
+        var expected = shield
+            ? "6601010000010c0024ffff010a000003060044616d616765000000000000000000000000000000000000000000"
+            : "2b010100000108001cffff010a000003060044616d61676564000000000000000000000000";
+        var writer = new BinaryStream();
+        stack.WriteSerializedNetworkItemStackDescriptor(ref writer);
+        Assert.Equal(expected, Convert.ToHexString(writer.GetBufferDisposing()).ToLowerInvariant());
+    }
+
     [Fact]
     public void A_damaged_iron_pickaxe_matches_the_bytes_BDS_sent()
     {

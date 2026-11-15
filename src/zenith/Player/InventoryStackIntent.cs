@@ -36,6 +36,8 @@ readonly struct InventoryStackAction
     public uint RecipeNetId { get; init; }
     public byte CraftTimes { get; init; }
     public uint CreativeNetId { get; init; }
+    public byte ResultIndex { get; init; }
+    public InventorySlot? ExpectedSourceStack { get; init; }
 
     public static InventoryStackAction Transfer(InventorySlotReference from, InventorySlotReference to, int count, WireSlot fromWire, WireSlot toWire) => new()
     {
@@ -117,9 +119,10 @@ readonly struct InventoryStackAction
         CreativeNetId = creativeNetId
     };
 
-    public static InventoryStackAction CreateOutput() => new()
+    public static InventoryStackAction CreateOutput(byte resultIndex = 0) => new()
     {
-        Kind = InventoryStackActionKind.Create
+        Kind = InventoryStackActionKind.Create,
+        ResultIndex = resultIndex
     };
 
     public static InventoryStackAction ConsumeNoOp() => new()
@@ -132,6 +135,7 @@ readonly struct InventoryStackAction
 readonly struct InventoryStackIntent
 {
     public int RequestId { get; init; }
+    public bool UncorrelatedLegacyDrop { get; init; }
     public InventoryStackAction[] Actions { get; init; }
     /// <summary>
     /// Authoritative open-container session captured while decoding a wire request that touches

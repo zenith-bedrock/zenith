@@ -236,12 +236,10 @@ public class ItemStackRequestIntentTests
         Blocks.EnsureLoaded();
         var palette = ItemPaletteLoader.FromEmbeddedResource();
         var packet = InventoryProtocol.BuildCreativeContent(CreativeCatalog.CreateDefault(), palette);
-        // ADR §142: real vanilla catalog, filtered by the Blocks+DigProfiles/Tools safety gate —
-        // 33 blocks (13 pinned starter blocks + ores/cobblestone/deepslate/leaves/ground-cover, every
-        // other block with a real name and a curated DigProfiles row) + 12 curated tools.
-        Assert.Equal(33 + 12, packet.Items.Length);
+        var source = CreativeItemsLoader.FromEmbeddedResource(palette);
+        Assert.Equal(source.Items.Count, packet.Items.Length);
         Assert.Equal(CreativeCatalog.Stone, packet.Items[0].CreativeItemNetworkId);
-        Assert.Equal(19, packet.Groups.Length); // real vanilla groups the 45 eligible items span.
+        Assert.Equal(source.Items.Select(i => i.GroupIndex).Distinct().Count(), packet.Groups.Length);
         Assert.True(packet.Encode().Length > 16);
     }
 

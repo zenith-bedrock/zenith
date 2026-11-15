@@ -85,6 +85,7 @@ public sealed class ChunkResidencyEvictionTests
         Assert.False(world.Chests.TryGetSlots(1, 64, 2, out _));
 
         await world.GetOrCreateColumnAsync(0, 0); // rehydrate
+        world.ApplyChunkHydration(0, 0);
         Assert.True(world.Chests.TryGetSlots(1, 64, 2, out var slots));
         Assert.Equal(Blocks.Dirt, slots[0].Id.Value);
         Assert.Equal(5, slots[0].Count);

@@ -230,15 +230,13 @@ sealed class BlockEditSystem : IGameSystem
                 pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
 
             // A bounded floor store is part of the authoritative destination for a concrete
-            // block drop. Refuse before removing the source when neither the bag nor the floor
-            // can receive it; otherwise an accepted break could silently destroy its loot.
+            // block drop. Refuse before removing the source when the floor cannot receive it;
+            // accepted breaks publish ground loot before the ordinary pickup lifecycle.
             var shouldDrop = !creative && _world.Rules.DoTileDrops && ShouldDropBrokenBlock(previous, player);
             var dropId = default(StackId);
-            var inventoryCanReceiveDrop = false;
             if (wasChest)
             {
                 floorDropRequests = [];
-                var snapshot = player.Inventory.CaptureSnapshot();
                 if (_world.Chests.TryGetSlots(edit.X, edit.Y, edit.Z, out var chestSlots))
                 {
                     foreach (var stack in chestSlots)
@@ -247,20 +245,15 @@ sealed class BlockEditSystem : IGameSystem
                         var id = stack.Id.IsBlock
                             ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stack.Id.Value))
                             : stack.Id;
-                        var added = creative ? 0 : player.Inventory.TryAddUpTo(id, stack.Count);
-                        if (stack.Count > added)
-                            floorDropRequests.Add(new FloorDropFanout.DepositRequest(id, stack.Count - added));
+                        floorDropRequests.Add(new FloorDropFanout.DepositRequest(id, stack.Count));
                     }
                 }
 
                 if (shouldDrop)
                 {
                     dropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
-                    var added = player.Inventory.TryAddUpTo(dropId, 1);
-                    if (added < 1)
-                        floorDropRequests.Add(new FloorDropFanout.DepositRequest(dropId, 1));
+                    floorDropRequests.Add(new FloorDropFanout.DepositRequest(dropId, 1));
                 }
-                player.Inventory.RestoreSnapshot(snapshot);
 
                 if (floorDropRequests.Count > 0 &&
                     !FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, floorDropRequests))
@@ -270,17 +263,12 @@ sealed class BlockEditSystem : IGameSystem
                     RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                     return false;
                 }
-                floorDropRequests.Clear();
             }
             else if (shouldDrop)
             {
                 dropId = BlockLoot.DropFor(previous);
-                var snapshot = player.Inventory.CaptureSnapshot();
-                inventoryCanReceiveDrop = player.Inventory.TryAdd(dropId);
-                player.Inventory.RestoreSnapshot(snapshot);
-
-                if (!inventoryCanReceiveDrop &&
-                    !FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, 1))
+                floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, 1)];
+                if (!FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, 1))
                 {
                     player.Level.Logger?.Debug(
                         $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -334,50 +322,9 @@ sealed class BlockEditSystem : IGameSystem
                 if (lidPartner)
                     ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
 
-                var dumped = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
+                _ = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
                 _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
-                // Contents never void — Creative InstantBuild still dumps store to floor (§74).
-                foreach (var (stackId, count) in dumped)
-                {
-                    var id = stackId.IsBlock
-                        ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stackId.Value))
-                        : stackId;
-                    if (creative)
-                    {
-                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(id, count));
-                        continue;
-                    }
-
-                    var added = player.Inventory.TryAddUpTo(id, count);
-                    if (added > 0)
-                        inventoryChanged = true;
-                    var surplus = count - added;
-                    if (surplus > 0)
-                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(id, surplus));
-                }
-            }
-
-            if (shouldDrop)
-            {
-                if (wasChest)
-                {
-                    var chestDropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
-                    var added = player.Inventory.TryAddUpTo(chestDropId, 1);
-                    if (added > 0)
-                        inventoryChanged = true;
-                    if (added < 1)
-                        floorDropRequests!.Add(new FloorDropFanout.DepositRequest(chestDropId, 1));
-                }
-                else if (inventoryCanReceiveDrop)
-                {
-                    if (!player.Inventory.TryAdd(dropId))
-                        throw new InvalidOperationException("Prevalidated block-drop inventory commit failed.");
-                    inventoryChanged = true;
-                }
-                else
-                {
-                    floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, 1)];
-                }
+                // Contents and block loot are already in the prevalidated ground-drop plan.
             }
         }
 

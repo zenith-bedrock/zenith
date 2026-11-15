@@ -94,7 +94,11 @@ static class CreativeItemsLoader
             return default;
 
         if (!entry.TryGetProperty("block_state_b64", out var b64El))
-            return StackId.FromItem(itemPalette.Require(name));
+        {
+            var aux = entry.TryGetProperty("damage", out var variant) ? variant.GetInt32() : 0;
+            var tag = entry.TryGetProperty("nbt_b64", out var nbt) ? nbt.GetString() : null;
+            return new StackId(StackKind.Item, itemPalette.Require(name), aux, new ItemUserData(0, tag));
+        }
 
         var blob = Convert.FromBase64String(b64El.GetString()
             ?? throw new InvalidOperationException($"creative_items '{name}' has a null block_state_b64."));

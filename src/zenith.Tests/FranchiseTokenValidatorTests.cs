@@ -10,6 +10,42 @@ namespace Zenith.Tests;
 public sealed class FranchiseTokenValidatorTests
 {
     [Theory]
+    [InlineData("valid", true)]
+    [InlineData("wrong-client", false)]
+    [InlineData("wrong-curve", false)]
+    [InlineData("tampered-client", false)]
+    [InlineData("wrong-issuer-key", false)]
+    [InlineData("expired", false)]
+    [InlineData("missing-cpk", false)]
+    [InlineData("missing-name", false)]
+    [InlineData("missing-xuid", true)] // signed identity may use a UUID or remain ephemeral; cpk proof is still mandatory
+    [InlineData("no-keys", false)]
+    public void Full_login_requires_issuer_signature_and_client_proof(string scenario, bool accepted)
+    {
+        using var issuer = RSA.Create(2048);
+        using var otherIssuer = RSA.Create(2048);
+        using var client = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var otherClient = ECDsa.Create(scenario == "wrong-curve" ? ECCurve.NamedCurves.nistP256 : ECCurve.NamedCurves.nistP384);
+        var claims = ValidClaims();
+        claims["xname"] = "Synthetic Player"; claims["xid"] = "1234";
+        claims["cpk"] = Convert.ToBase64String(client.ExportSubjectPublicKeyInfo());
+        if (scenario == "wrong-curve") claims["cpk"] = Convert.ToBase64String(otherClient.ExportSubjectPublicKeyInfo());
+        if (scenario == "expired") claims["exp"] = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds();
+        if (scenario == "missing-cpk") claims.Remove("cpk");
+        if (scenario == "missing-name") claims.Remove("xname");
+        if (scenario == "missing-xuid") claims.Remove("xid");
+        var token = CreateToken(scenario == "wrong-issuer-key" ? otherIssuer : issuer, claims);
+        var input = Base64Url("{\"alg\":\"ES384\"}"u8) + "." + Base64Url("{\"DeviceOS\":7}"u8);
+        var signature = (scenario is "wrong-client" or "wrong-curve" ? otherClient : client).SignData(
+            Encoding.ASCII.GetBytes(input), HashAlgorithmName.SHA384, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        var clientData = input + "." + Base64Url(signature);
+        if (scenario == "tampered-client")
+            clientData = input.Split('.')[0] + "." + Base64Url("{\"DeviceOS\":8}"u8) + "." + Base64Url(signature);
+        Assert.Equal(accepted, FranchiseTokenValidator.ValidateLogin(token, clientData,
+            scenario == "no-keys" ? null : [issuer.ExportParameters(false)]));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Published_RSA_JWKS_authenticates_token_with_multiplayer_audience(bool audienceArray)

@@ -42,6 +42,9 @@
     <EmbeddedResource Include="data\item_durability.json">
       <LogicalName>item_durability.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\item_stack_sizes.json">
+      <LogicalName>item_stack_sizes.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\join_static.json">
       <LogicalName>join_static.json</LogicalName>
     </EmbeddedResource>
@@ -50,6 +53,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="data\mobs.json">
       <LogicalName>mobs.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="data\loot_tables.json">
+      <LogicalName>loot_tables.json</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="data\spawns.json">
       <LogicalName>spawns.json</LogicalName>

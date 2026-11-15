@@ -72,6 +72,7 @@ public class ArchitectureBoundaryTests
             ["IsOnGround"] = [Movement],
             ["IsSneaking"] = [Movement, PlayerType],
             ["IsSprinting"] = [Movement, PlayerType],
+            ["FoodUse"] = [Hunger, PlayerType],
             ["FallPeakY"] = [Movement, PlayerType],
             // Vitals: HungerSystem owns the food model; mining and damage are exhaustion sources it prices.
             ["Hunger"] = [Hunger, PlayerType],

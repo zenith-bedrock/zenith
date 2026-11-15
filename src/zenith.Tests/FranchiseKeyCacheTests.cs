@@ -69,10 +69,13 @@ public class FranchiseKeyCacheTests
             : Task.FromResult(NewKeys(1)), Lifetime, clock);
 
         await cache.GetAsync(default);
+        Assert.NotNull(cache.Fresh());
         clock.Advance(Lifetime);
+        Assert.Null(cache.Fresh());
         fail = true;
 
         await Assert.ThrowsAsync<HttpRequestException>(() => cache.GetAsync(default));
+        Assert.Null(cache.Fresh());
     }
 
     [Fact]

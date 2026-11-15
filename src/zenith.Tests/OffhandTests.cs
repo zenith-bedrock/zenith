@@ -52,7 +52,7 @@ public class OffhandTests
     public void The_offhand_blob_round_trips_and_a_bad_blob_changes_nothing()
     {
         var inv = new PlayerInventory();
-        Assert.True(inv.TrySetOffhand(StackId.FromItem(300, aux: 4), 2));
+        Assert.True(inv.TrySetOffhand(StackId.FromItem(300, aux: 4), 1));
         var blob = inv.PackOffhandBlob();
 
         var loaded = new PlayerInventory();
@@ -149,8 +149,9 @@ public class OffhandTests
         player.Windows.OpenPlayerContainer(0, 0xff);
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
-        Assert.True(player.Inventory.TrySet(4, StackId.FromItem(300, aux: 1), 3));
-        Assert.True(player.Inventory.TrySetOffhand(StackId.FromItem(300, aux: 2), 1));
+        var arrow = fx.Context.ItemPalette.Require("minecraft:arrow");
+        Assert.True(player.Inventory.TrySet(4, StackId.FromItem(arrow, aux: 1), 3));
+        Assert.True(player.Inventory.TrySetOffhand(StackId.FromItem(arrow, aux: 2), 1));
 
         Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(62, [
             InventoryStackAction.Transfer(InventorySlotReference.Player(4), InventorySlotReference.Offhand, 1),
@@ -158,6 +159,6 @@ public class OffhandTests
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(3, player.Inventory.Get(4).Count);
-        Assert.Equal(StackId.FromItem(300, aux: 2), player.Inventory.Offhand.Id);
+        Assert.Equal(StackId.FromItem(arrow, aux: 2), player.Inventory.Offhand.Id);
     }
 }

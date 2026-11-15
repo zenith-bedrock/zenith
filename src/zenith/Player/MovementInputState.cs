@@ -14,6 +14,8 @@ struct MovementInputState
     public float Z;
     public float Pitch;
     public float Yaw;
+    public ulong InputTick;
+    public bool HandledTeleport;
 
     /// <summary>Continuous AuthInput sneak level (bit 8).</summary>
     public bool Sneaking;
@@ -52,7 +54,8 @@ struct MovementInputState
         bool sprintStart = false,
         bool sprintStop = false,
         bool missedSwing = false,
-        bool onGround = true)
+        bool onGround = true,
+        ulong inputTick = 0)
     {
         var state = From(x, eyeY - Blocks.PlayerEyeHeight, z, pitch, yaw);
         state.Sneaking = sneaking;
@@ -60,6 +63,7 @@ struct MovementInputState
         state.SprintStop = sprintStop;
         state.MissedSwing = missedSwing;
         state.OnGround = onGround;
+        state.InputTick = inputTick;
         return state;
     }
 

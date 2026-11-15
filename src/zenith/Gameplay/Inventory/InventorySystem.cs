@@ -16,13 +16,6 @@ namespace Zenith.Gameplay.Inventory;
 /// </summary>
 sealed class InventorySystem : IGameSystem
 {
-    // Q-drop toss: forward from the player's yaw (same yaw-only convention ProjectileSystem already
-    // uses for arrow launch — pitch is not factored in there either), fixed upward hop. Visual only:
-    // Zenith doesn't run per-tick floor-drop physics, so the client's own local simulation carries
-    // the arc from this one initial velocity.
-    private const float DropTossSpeed = 0.3f;
-    private const float DropTossUpwardVelocity = 0.2f;
-
     private readonly PlayerManager _players;
     private readonly World.World _world;
     private readonly RecipeRegistry _recipes;
@@ -60,28 +53,27 @@ sealed class InventorySystem : IGameSystem
 
         foreach (var player in online)
         {
-            // A disconnect can race with the GameLoop's once-per-tick online snapshot. Do not
-            // let a window request accepted before transport teardown create a new authoritative
-            // container session after that player has left gameplay.
-            if (!player.IsInGame)
+            if (player.IsInGame && !player.IsDead && player.Windows.RecoverUiToInventory(player.Inventory))
             {
-                while (player.Windows.TryConsumeWindowIntent(out _)) { }
-                continue;
+                player.Client.Inventory.SendInventoryContent(player.Inventory);
+                player.Client.Inventory.SendUiInventoryContent(player);
+                _world.PersistInventory(player);
             }
-
-            while (player.Windows.TryConsumeWindowIntent(out var window))
-                ApplyWindow(player, window, online);
-        }
-
-        foreach (var player in online)
-        {
-            while (player.Intents.TryConsumeInventoryStack(out var intent))
+            while (player.Windows.TryConsumeInventoryRequest(out var window, out var stack))
             {
-                // See the window pass above. A player can have been in the tick snapshot when
-                // the network lifecycle removes it; queued client work is cancelled, never
-                // committed after that boundary.
-                if (!player.IsInGame || player.IsDead) continue;
-                Apply(player, intent, online);
+                try
+                {
+                    // A departed player may still occur in this tick's online snapshot.
+                    if (!player.IsInGame) continue;
+                    if (window is { } lifecycle)
+                    {
+                        if (!player.IsDead || lifecycle.Action == InventoryWindowIntent.Kind.Close)
+                            ApplyWindow(player, lifecycle, online);
+                    }
+                    else if (!player.IsDead && stack is { } transaction)
+                        Apply(player, transaction, online);
+                }
+                finally { player.Windows.CompleteInventoryWindow(); }
             }
         }
     }
@@ -100,19 +92,21 @@ sealed class InventorySystem : IGameSystem
                 // crash the client (Dragonfly's handler_interact documents this behavior).
                 // The open-container state is gameplay-owned, so coalesce it here rather than
                 // making the network handler a second writer.
-                if (player.Windows.InventoryWindowOpen)
+                var inventoryAlreadyOpen = player.Windows.InventoryWindowOpen;
+                if (inventoryAlreadyOpen && player.Windows.OpenContainer?.Generation == intent.Generation)
                     return;
 
                 if (player.Windows.OpenChest.HasValue)
                     ChestLidFanout.ReleaseOpener(online, _world, player);
                 var inventorySession = player.Windows.OpenPlayerContainer(
                     (byte)InventoryContainerMap.WindowInventory,
-                    InventoryContainerMap.WindowTypeInventory);
+                    InventoryContainerMap.WindowTypeInventory, intent.Generation);
                 inv.BeginOpenContainerSession(inventorySession.Generation);
-                inv.SendContainerOpen(
-                    (int)MathF.Floor(player.PositionX),
-                    (int)MathF.Floor(player.PositionY),
-                    (int)MathF.Floor(player.PositionZ));
+                if (!inventoryAlreadyOpen)
+                    inv.SendContainerOpen(
+                        (int)MathF.Floor(player.PositionX),
+                        (int)MathF.Floor(player.PositionY),
+                        (int)MathF.Floor(player.PositionZ));
                 inv.SendUiInventoryContent(player);
                 break;
 
@@ -140,7 +134,7 @@ sealed class InventorySystem : IGameSystem
                 var chestSession = player.Windows.OpenChestContainer(
                     (byte)InventoryContainerMap.WindowChest,
                     InventoryContainerMap.WindowTypeChest,
-                    view);
+                    view, intent.Generation);
                 inv.BeginOpenContainerSession(chestSession.Generation);
 
                 var primaryFirst = _world.Chests.TryAddOpener(
@@ -163,7 +157,8 @@ sealed class InventorySystem : IGameSystem
 
             case InventoryWindowIntent.Kind.OpenCraftingTable:
                 // Same re-transmit-crash risk OpenInventory's dedup guard above exists for.
-                if (player.Windows.IsAtCraftingTable)
+                var tableAlreadyOpen = player.Windows.IsAtCraftingTable;
+                if (tableAlreadyOpen && player.Windows.OpenContainer?.Generation == intent.Generation)
                     return;
 
                 if (player.Windows.OpenChest.HasValue)
@@ -171,9 +166,10 @@ sealed class InventorySystem : IGameSystem
 
                 var tableSession = player.Windows.OpenCraftingTableContainer(
                     (byte)InventoryContainerMap.WindowCraftingTable,
-                    InventoryContainerMap.WindowTypeWorkbench);
+                    InventoryContainerMap.WindowTypeWorkbench, intent.Generation);
                 inv.BeginOpenContainerSession(tableSession.Generation);
-                inv.SendCraftingTableOpen(intent.X, intent.Y, intent.Z);
+                if (!tableAlreadyOpen)
+                    inv.SendCraftingTableOpen(intent.X, intent.Y, intent.Z);
                 inv.SendUiInventoryContent(player);
                 break;
 
@@ -203,7 +199,8 @@ sealed class InventorySystem : IGameSystem
                 // reopen loop client-side as it kept retrying. gophertunnel's own doc comment on this
                 // field confirms it exists to validate a *server-initiated* close on the client side,
                 // not something the server should validate on an incoming client-initiated close.
-                if (intent.WindowId != InventoryWindowIntent.UnknownWindowId && active.WindowId != intent.WindowId)
+                if (active.Generation != intent.Generation ||
+                    (intent.WindowId != InventoryWindowIntent.UnknownWindowId && active.WindowId != intent.WindowId))
                 {
                     player.Level.Logger?.Debug(
                         $"Ignored mismatched container close from {player.Username}: {intent.WindowId}/{intent.WindowType} (active {active.WindowId}/{active.WindowType}).");
@@ -228,7 +225,7 @@ sealed class InventorySystem : IGameSystem
         var protocol = player.Client.Inventory;
         var inventory = player.Inventory;
 
-        if (!player.Windows.TryClaimInventoryRequest(intent.RequestId))
+        if (!intent.UncorrelatedLegacyDrop && !player.Windows.TryClaimInventoryRequest(intent.RequestId))
         {
             protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
@@ -246,7 +243,7 @@ sealed class InventorySystem : IGameSystem
              (intent.ExpectedOpenContainerGeneration != 0 &&
               openContainer.Generation != intent.ExpectedOpenContainerGeneration)))
         {
-            protocol.SendItemStackResponseError(intent.RequestId);
+            if (!intent.UncorrelatedLegacyDrop) protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
             if (player.Windows.OpenChest is { } openStale)
@@ -258,7 +255,7 @@ sealed class InventorySystem : IGameSystem
 
         if (!ValidateClientStackNetIds(protocol, intent.Actions))
         {
-            protocol.SendItemStackResponseError(intent.RequestId);
+            if (!intent.UncorrelatedLegacyDrop) protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
             if (player.Windows.OpenChest is { } openMismatch)
@@ -270,7 +267,7 @@ sealed class InventorySystem : IGameSystem
 
         var invSnap = inventory.CaptureSnapshot();
         var armorSnap = inventory.SnapshotArmor();
-        var craftSnap = player.Windows.CraftUi.CaptureSnapshot();
+        var craftSnap = player.Windows.CraftUi.CaptureFullSnapshot();
         var tableCraftSnap = player.Windows.TableCraftUi.CaptureSnapshot();
         InventorySlot[]? chestSnap = null;
         OpenChestView? chestView = player.Windows.OpenChest;
@@ -295,9 +292,9 @@ sealed class InventorySystem : IGameSystem
 
                     // Materialize CreatedOutput so same-request Take/Place can move it;
                     // refuse if a prior result is still sitting untaken.
-                    if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty ||
-                        !_recipes.TryCraftFromGrid(grid, action.RecipeNetId, out var crafted, action.CraftTimes, isAtTable) ||
-                        !TrySetSlot(player, InventorySlotReference.CraftResult, crafted))
+                    if (player.Windows.CraftUi.HasPendingOutputs ||
+                        !_recipes.TryCraftOutputsFromGrid(grid, action.RecipeNetId, out var crafted, action.CraftTimes, isAtTable) ||
+                        !player.Windows.CraftUi.TryStageOutputs(crafted))
                     {
                         ok = false;
                         break;
@@ -323,13 +320,12 @@ sealed class InventorySystem : IGameSystem
                     break;
 
                 case InventoryStackActionKind.CraftCreative:
-                    // Creative pick: full MaxStack into CreatedOutput; same-request Place/Take/Drop moves it.
+                    // Creative pick: one legal stack into CreatedOutput; same-request Place/Take/Drop moves it.
                     // CreatedOutput is authoritative pending state: never overwrite a prior result.
-                    if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty ||
+                    if (player.Windows.CraftUi.HasPendingOutputs ||
                         player.GameMode != GameMode.Creative ||
                         !_creative.TryGet(action.CreativeNetId, out var creativeId, out _) ||
-                        !TrySetSlot(player, InventorySlotReference.CraftResult,
-                            new InventorySlot(creativeId, PlayerInventory.MaxStack)))
+                        !player.Windows.CraftUi.TryStageOutputs([new InventorySlot(creativeId, ItemStackLimits.For(creativeId))]))
                     {
                         ok = false;
                         break;
@@ -341,13 +337,15 @@ sealed class InventorySystem : IGameSystem
                     break;
 
                 case InventoryStackActionKind.Create:
-                    // Idempotent ack after CraftRecipe/CraftCreative wrote the craft result.
-                    if (GetSlot(player, InventorySlotReference.CraftResult).IsEmpty)
+                    // Select one indexed result into the shared CreatedOutput slot.
+                    if (!player.Windows.CraftUi.TrySelectOutput(action.ResultIndex))
                     {
                         ok = false;
                         break;
                     }
 
+                    AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
+                        InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot);
                     break;
 
                 case InventoryStackActionKind.NoOp:
@@ -366,6 +364,11 @@ sealed class InventorySystem : IGameSystem
 
                 case InventoryStackActionKind.Drop:
                 {
+                    if (action.ExpectedSourceStack is { } original && GetSlot(player, action.From) != original)
+                    {
+                        ok = false;
+                        break;
+                    }
                     var count = action.Count;
                     if (count == 0)
                         count = GetSlot(player, action.From).Count;
@@ -430,24 +433,21 @@ sealed class InventorySystem : IGameSystem
             var x = (int)MathF.Floor(player.PositionX);
             var y = (int)MathF.Floor(player.PositionY);
             var z = (int)MathF.Floor(player.PositionZ);
-            var radians = player.Yaw * (MathF.PI / 180f);
-            var velocityX = -MathF.Sin(radians) * DropTossSpeed;
-            var velocityZ = MathF.Cos(radians) * DropTossSpeed;
             ok = FloorDropFanout.TryDepositBatch(
                 _world, _players, online, x, y, z, pendingDrops,
                 FloorDropFanout.PlayerThrowPickupDelay, searchRadius: 3,
-                velocityX, DropTossUpwardVelocity, velocityZ);
+                launch: FloorDropPhysics.Launch(_world, player));
         }
 
         if (!ok)
         {
             inventory.RestoreSnapshot(invSnap);
             inventory.RestoreArmorSnapshot(armorSnap);
-            player.Windows.CraftUi.RestoreSnapshot(craftSnap);
+            player.Windows.CraftUi.RestoreFullSnapshot(craftSnap);
             player.Windows.TableCraftUi.RestoreSnapshot(tableCraftSnap);
             if (chestView is { } cvFail && chestSnap is not null)
                 _world.Chests.RestoreOpenSnapshot(cvFail, chestSnap);
-            protocol.SendItemStackResponseError(intent.RequestId);
+            if (!intent.UncorrelatedLegacyDrop) protocol.SendItemStackResponseError(intent.RequestId);
             protocol.SendInventoryContent(inventory);
             protocol.SendUiInventoryContent(player);
             if (chestView is { } open)
@@ -455,7 +455,7 @@ sealed class InventorySystem : IGameSystem
             return;
         }
 
-        protocol.SendItemStackResponseOk(intent.RequestId, player, wireTouches);
+        if (!intent.UncorrelatedLegacyDrop) protocol.SendItemStackResponseOk(intent.RequestId, player, wireTouches);
         if (player.Windows.InventoryWindowOpen)
             protocol.SendUiInventoryContent(player);
         if (chestView is { } openAfter)
@@ -531,7 +531,7 @@ sealed class InventorySystem : IGameSystem
         in InventoryStackAction action,
         List<WireTouch> wireTouches)
     {
-        if (!GetSlot(player, InventorySlotReference.CraftResult).IsEmpty) return false;
+        if (player.Windows.CraftUi.HasPendingOutputs) return false;
 
         var isAtTable = player.Windows.IsAtCraftingTable;
         ICraftGrid grid = isAtTable ? player.Windows.TableCraftUi : player.Windows.CraftUi;
@@ -555,8 +555,9 @@ sealed class InventorySystem : IGameSystem
             AddWireTouch(wireTouches, references[i], default);
         }
 
-        var main = recipe.Outputs[0];
-        if (!TrySetSlot(player, InventorySlotReference.CraftResult, new InventorySlot(main.Stack, main.Count * action.CraftTimes)))
+        var times = action.CraftTimes;
+        if (!player.Windows.CraftUi.TryStageOutputs(recipe.Outputs.Select(
+                output => new InventorySlot(output.Stack, output.Count * times)).ToArray()))
             return false;
         AddWireTouch(wireTouches, InventorySlotReference.CraftResult,
             InventoryContainerMap.CreatedOutput, InventoryContainerMap.CraftingResultWireSlot);
@@ -582,7 +583,7 @@ sealed class InventorySystem : IGameSystem
         var dst = GetSlot(player, to);
         if (!dst.IsEmpty && dst.Id != src.Id) return false;
 
-        var space = dst.IsEmpty ? PlayerInventory.MaxStack : PlayerInventory.MaxStack - dst.Count;
+        var space = ItemStackLimits.For(src.Id) - (dst.IsEmpty ? 0 : dst.Count);
         if (count > space) return false;
 
         var newDstCount = (dst.IsEmpty ? 0 : dst.Count) + count;
@@ -662,6 +663,8 @@ sealed class InventorySystem : IGameSystem
                 { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view } &&
                 reference.Index >= 0 && reference.Index < view.SlotCount && IsOpenChestAccessible(player, view),
             InventorySlotArea.CraftGrid => reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize,
+            InventorySlotArea.TableCraftGrid => player.Windows.IsAtCraftingTable &&
+                reference.Index >= 0 && reference.Index < PlayerTableCraftUi.GridSize,
             InventorySlotArea.CraftResult => reference.Index == 0,
             InventorySlotArea.Cursor => reference.Index == 0,
             InventorySlotArea.PlayerInventory => PlayerInventory.IsValidInventorySlot(reference.Index),

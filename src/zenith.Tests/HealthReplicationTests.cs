@@ -8,11 +8,34 @@ using Zenith.Binary;
 using Zenith.World;
 using Xunit;
 using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.Replication;
 
 namespace Zenith.Tests;
 
 public class HealthReplicationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Initial_peer_projection_sends_wounded_health_after_add_player(bool refresh)
+    {
+        var fx = new IntentTestFixture();
+        var subject = fx.AddInGamePlayer("wounded");
+        // Keep PlayerList below MTU: this test exercises health ordering, not skin fragmentation.
+        subject.Session.Skin = SerializedSkin.Default with
+        {
+            Image = new SkinImage { Width = 1, Height = 1, Data = [0, 0, 0, 255] }
+        };
+        subject.ApplyDamage(DamageSource.Generic, 13f, fx.Clock.CurrentTick);
+        var peer = fx.AddInGamePlayer("late-observer");
+        if (refresh) PlayerVisibility.RefreshPeerView(subject, fx.Players.Online);
+        else PlayerVisibility.AnnounceJoin(peer, fx.Players.Online);
+        FlushRaknet(fx.Players);
+        var update = Assert.Single(ReadHealthUpdates(fx, peer.Session.RakSession().EndPoint, requireSpawn: true));
+        Assert.Equal((ulong)subject.RuntimeId, update.ActorRuntimeId);
+        Assert.Equal(7f, update.Value); Assert.Equal(20f, update.Maximum);
+    }
+
     [Fact]
     public void Nonlethal_fall_emits_the_subjects_current_health_to_the_peer()
     {
@@ -69,9 +92,10 @@ public class HealthReplicationTests
 
     private static List<(ulong ActorRuntimeId, float Value, float Maximum)> ReadHealthUpdates(
         IntentTestFixture fx,
-        IPEndPoint recipient)
+        IPEndPoint recipient, bool requireSpawn = false)
     {
         var updates = new List<(ulong ActorRuntimeId, float Value, float Maximum)>();
+        var announced = new HashSet<ulong>();
         while (fx.Transport.CapturedByEndpoint.TryDequeue(out var captured))
         {
             if (!captured.EndPoint.Equals(recipient))
@@ -100,13 +124,20 @@ public class HealthReplicationTests
                     var length = gameStream.ReadUnsignedVarInt();
                     var packetBytes = gameStream.ReadSpan(length).ToArray();
                     var packetStream = new BinaryStream(packetBytes);
-                    if (packetStream.ReadUnsignedVarInt() != (int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET)
+                    var packetId = packetStream.ReadUnsignedVarInt();
+                    if (packetId == (int)ProtocolInfo.ADD_PLAYER_PACKET)
+                    {
+                        _ = packetStream.ReadUuid(); _ = packetStream.ReadVarString();
+                        announced.Add((ulong)packetStream.ReadUnsignedVarLong());
+                    }
+                    if (packetId != (int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET)
                     {
                         packetStream.Dispose();
                         continue;
                     }
 
                     var actorRuntimeId = (ulong)packetStream.ReadUnsignedVarLong();
+                    if (requireSpawn) Assert.Contains(actorRuntimeId, announced);
                     var count = packetStream.ReadUnsignedVarInt();
                     for (var i = 0; i < count; i++)
                     {

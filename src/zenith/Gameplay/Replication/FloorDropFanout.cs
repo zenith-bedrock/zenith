@@ -83,10 +83,11 @@ static class FloorDropFanout
         int searchRadius = 3,
         float velocityX = 0f,
         float velocityY = 0f,
-        float velocityZ = 0f)
+        float velocityZ = 0f,
+        FloorDropMotion? launch = null)
     {
         if (requests.Count == 0) return true;
-        if (!TryPlanDeposits(world.FloorDrops, x, y, z, requests, searchRadius, out var plan))
+        if (!TryPlanDeposits(world.FloorDrops, x, y, z, requests, searchRadius, out var plan, launch.HasValue))
             return false;
 
         var publications = new List<FloorDropStore.DepositResult>(plan.Count);
@@ -97,7 +98,7 @@ static class FloorDropFanout
             {
                 if (!world.FloorDrops.TryAddOrMerge(
                         entry.X, entry.Y, entry.Z, entry.Id, entry.Count,
-                        players.AllocateRuntimeId(), out var deposit, pickupDelayTicks) ||
+                        players.AllocateRuntimeId(), out var deposit, pickupDelayTicks, launch) ||
                     deposit is null)
                 {
                     // The plan and commit both run on the gameplay owner. Reaching this means a
@@ -127,17 +128,27 @@ static class FloorDropFanout
         int z,
         IReadOnlyList<DepositRequest> requests,
         int searchRadius,
-        out List<PlannedDeposit> plan)
+        out List<PlannedDeposit> plan,
+        bool freshActors = false)
     {
         var projected = new Dictionary<(int X, int Y, int Z), (StackId Id, int Count)>();
         foreach (var drop in store.Snapshot())
             projected[drop.Pos] = (drop.Id, drop.Count);
 
         plan = new List<PlannedDeposit>(requests.Count);
+        var split = new List<DepositRequest>(requests.Count);
         foreach (var request in requests)
         {
             if (request.Count <= 0 || request.Id.IsEmpty) continue;
             if (request.Count > FloorDropStore.MaxStack) return false;
+            var limit = ItemStackLimits.For(request.Id);
+            for (var remaining = request.Count; remaining > 0; remaining -= Math.Min(remaining, limit))
+                split.Add(request with { Count = Math.Min(remaining, limit) });
+        }
+
+        foreach (var request in split)
+        {
+            var limit = ItemStackLimits.For(request.Id);
 
             var planned = false;
             for (var r = 0; r <= searchRadius && !planned; r++)
@@ -151,7 +162,8 @@ static class FloorDropFanout
                         var key = (x + dx, y, z + dz);
                         if (projected.TryGetValue(key, out var existing))
                         {
-                            if (existing.Id != request.Id || existing.Count > FloorDropStore.MaxStack - request.Count)
+                            if (freshActors || !store.CanMergeAt(key.Item1, key.Item2, key.Item3)) continue;
+                            if (existing.Id != request.Id || existing.Count > limit - request.Count)
                                 continue;
 
                             projected[key] = (existing.Id, existing.Count + request.Count);
@@ -238,9 +250,9 @@ static class FloorDropFanout
                 requests.Add(new DepositRequest(slot.Id, slot.Count));
         }
 
-        var result = player.Windows.CraftUi.Result;
-        if (!result.IsEmpty)
-            requests.Add(new DepositRequest(result.Id, result.Count));
+        foreach (var result in player.Windows.CraftUi.SnapshotOutputs())
+            if (!result.IsEmpty)
+                requests.Add(new DepositRequest(result.Id, result.Count));
 
         for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
         {
@@ -283,9 +295,11 @@ static class FloorDropFanout
 
         var cx = PlayerChunkTracker.BlockToChunk(deposit.X);
         var cz = PlayerChunkTracker.BlockToChunk(deposit.Z);
-        var px = deposit.X + 0.5f;
-        var py = deposit.Y + 0.125f;
-        var pz = deposit.Z + 0.5f;
+        var px = deposit.Motion?.X ?? deposit.X + 0.5f;
+        var py = (deposit.Motion?.Y ?? deposit.Y) + EntityHitboxes.ItemNetworkOffset;
+        var pz = deposit.Motion?.Z ?? deposit.Z + 0.5f;
+        if (deposit.Motion is { } body)
+            (velocityX, velocityY, velocityZ) = (body.VelocityX, body.VelocityY, body.VelocityZ);
         if (!deposit.Created)
             velocityX = velocityY = velocityZ = 0f;
 

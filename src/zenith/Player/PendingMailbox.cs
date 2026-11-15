@@ -144,24 +144,4 @@ sealed class PendingMailbox<T>
         }
     }
 
-    /// <summary>
-    /// Reads the latest queued value without consuming it. This is only a handoff admission
-    /// hint: the gameplay owner must still consume and validate the mailbox on its tick.
-    /// </summary>
-    public bool TryPeekLast(out T value)
-    {
-        lock (_lock)
-        {
-            if (_queue.Count == 0)
-            {
-                value = default!;
-                return false;
-            }
-
-            value = default!;
-            foreach (var entry in _queue)
-                value = entry;
-            return true;
-        }
-    }
 }

@@ -7,9 +7,16 @@ namespace Zenith.World;
 /// </summary>
 static class EntityHitboxes
 {
+    public const float PlayerMeleeReach = 3f;
+    public const float CreativePlayerMeleeReach = 7f;
+
+    /// <summary>Mode-specific actor range; input picking may further constrain the client.</summary>
+    public static float MeleeReach(Player.GameMode mode) =>
+        mode == Player.GameMode.Creative ? CreativePlayerMeleeReach : PlayerMeleeReach;
     public const float PlayerWidth = 0.6f;
     public const float PlayerHeight = 1.8f;
     public const float ItemEntitySize = 0.25f;
+    public const float ItemNetworkOffset = 0.125f;
 
     /// <summary>
     /// Client player model anchor for <c>MoveActorAbsolute</c> / local <c>MovePlayer</c>:

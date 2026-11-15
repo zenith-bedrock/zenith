@@ -13,6 +13,60 @@ namespace Zenith.Tests;
 /// </summary>
 public class ResourcePackClientResponseStatusTests
 {
+    [Theory]
+    [InlineData(4)]
+    [InlineData(256)]
+    [InlineData(257)]
+    [InlineData(258)]
+    [InlineData(259)]
+    [InlineData(-1)]
+    public void Decode_rejects_unknown_union_tag_without_byte_aliasing(int status)
+    {
+        var w = new BinaryStream();
+        w.WriteUnsignedVarInt(status);
+        w.WriteVarString("completed");
+        var bytes = w.GetBufferDisposing().ToArray();
+        Assert.Throws<InvalidDataException>(() => Decode(bytes));
+    }
+
+    [Theory]
+    [InlineData(65536)]
+    [InlineData(-1)]
+    [InlineData(2)]
+    public void Decode_rejects_pack_count_before_allocation(int count)
+    {
+        var w = new BinaryStream();
+        w.WriteUnsignedVarInt(1);
+        w.WriteVarString("downloading");
+        w.WriteUnsignedVarInt(count);
+        if (count == 65536) w.Write(new byte[65536]); // enough bytes; only the contract cap rejects it
+        else w.WriteByte(0); // insufficient bytes for count 2; uint32 max becomes negative
+        var bytes = w.GetBufferDisposing().ToArray();
+        Assert.Throws<InvalidDataException>(() => Decode(bytes));
+    }
+
+    [Fact]
+    public void Decode_accepts_contract_maximum_pack_count()
+    {
+        var w = new BinaryStream();
+        w.WriteUnsignedVarInt(1); w.WriteVarString("downloading");
+        w.WriteUnsignedVarInt(65535); w.Write(new byte[65535]);
+        Assert.Equal(65535, Decode(w.GetBufferDisposing().ToArray()).ResourcePackIds.Length);
+    }
+
+    [Fact]
+    public void Decode_rejects_trailing_bytes()
+    {
+        Assert.Throws<InvalidDataException>(() => Decode([3, 0, 0]));
+    }
+
+    private static ResourcePackClientResponsePacket Decode(byte[] bytes)
+    {
+        var r = new BinaryStream(bytes);
+        try { var packet = new ResourcePackClientResponsePacket(); packet.Decode(ref r); return packet; }
+        finally { r.Dispose(); }
+    }
+
     [Fact]
     public void Status_constants_are_zero_indexed()
     {

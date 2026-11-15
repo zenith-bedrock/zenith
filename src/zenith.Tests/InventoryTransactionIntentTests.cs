@@ -115,6 +115,7 @@ public class InventoryTransactionIntentTests
         Assert.True(player.Inventory.TrySetBlock(4, Blocks.Air, 0));
         var writer = new BinaryStream();
         writer.WriteVarInt(0); // legacy request id
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         writer.WriteUnsignedVarInt(0); // no legacy actions
         writer.WriteUnsignedVarLong(99); // target actor runtime id
@@ -151,6 +152,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0); // legacy request id
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         writer.WriteUnsignedVarInt(0); // no legacy actions
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
@@ -170,7 +172,7 @@ public class InventoryTransactionIntentTests
         zombies.Tick(fx.Clock, fx.Players.Online);
 
         Assert.True(zombies.Stores.Health.TryGet(zombie, out var health));
-        Assert.Equal(16f, health.State.Current);
+        Assert.Equal(19f, health.State.Current);
     }
 
 
@@ -186,6 +188,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(target.RuntimeId);
@@ -202,9 +205,9 @@ public class InventoryTransactionIntentTests
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET },
             ref stream));
 
-        new PlayerMeleeSystem(fx.Players).Tick(fx.Clock, fx.Players.Online);
+        new PlayerMeleeSystem(fx.Players, fx.Context.ItemPalette).Tick(fx.Clock, fx.Players.Online);
 
-        Assert.Equal(16f, target.Health);
+        Assert.Equal(19f, target.Health);
     }
 
 
@@ -227,6 +230,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(checked((long)identity.ActorRuntimeId));
@@ -260,6 +264,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarLong(99);
@@ -290,6 +295,7 @@ public class InventoryTransactionIntentTests
         player.SelectedHotbarSlot = 0;
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(0); // release
@@ -306,7 +312,8 @@ public class InventoryTransactionIntentTests
             ref stream));
 
         Assert.Equal(5, player.SelectedHotbarSlot);
-        Assert.False(player.Intents.TryConsumeEatIntent());
+        Assert.True(player.Intents.TryConsumeFoodUse(out var cancellation));
+        Assert.True(cancellation.Cancel);
         Assert.False(player.Intents.TryConsumeProjectileIntent());
     }
 
@@ -322,6 +329,7 @@ public class InventoryTransactionIntentTests
 
         var use = new BinaryStream();
         use.WriteVarInt(0);
+        use.WriteBool(false); // legacy slots absent
         use.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         use.WriteUnsignedVarInt(0);
         use.WriteVarInt(99); // unknown UseItem action
@@ -345,6 +353,7 @@ public class InventoryTransactionIntentTests
 
         var actor = new BinaryStream();
         actor.WriteVarInt(0);
+        actor.WriteBool(false); // legacy slots absent
         actor.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUseOnActor);
         actor.WriteUnsignedVarInt(0);
         actor.WriteUnsignedVarLong(99);
@@ -361,6 +370,7 @@ public class InventoryTransactionIntentTests
 
         var release = new BinaryStream();
         release.WriteVarInt(0);
+        release.WriteBool(false); // legacy slots absent
         release.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemRelease);
         release.WriteUnsignedVarInt(0);
         release.WriteVarInt(99); // unknown Release action
@@ -385,6 +395,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(InventoryTransactionPacket.UseClickAir);
@@ -423,6 +434,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         writer.WriteUnsignedVarInt(0);
         writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
@@ -453,8 +465,10 @@ public class InventoryTransactionIntentTests
     }
 
 
-    [Fact]
-    public void InventoryTransaction_click_block_accepts_an_unspecified_clicked_runtime()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InventoryTransaction_click_block_consumes_one_item_with_or_without_legacy_prediction(bool predicted)
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("unspecified-click-runtime");
@@ -463,9 +477,20 @@ public class InventoryTransactionIntentTests
         var held = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
 
         var writer = new BinaryStream();
-        writer.WriteVarInt(0);
+        writer.WriteVarInt(predicted ? -2 : 0);
+        writer.WriteBool(predicted);
+        if (predicted)
+        {
+            writer.WriteUnsignedVarInt(1); // one container
+            writer.WriteByte(0); // player inventory
+            writer.WriteUnsignedVarInt(1);
+            writer.WriteByte(0); // selected slot
+        }
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
-        writer.WriteUnsignedVarInt(0);
+        writer.WriteUnsignedVarInt(predicted ? 1 : 0);
+        if (predicted)
+            WriteNormalInventoryAction(ref writer, InventoryTransactionPacket.SourceContainer, 0, 0,
+                held, held with { Count = 1 });
         writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
         writer.WriteByte(0);
         writer.WriteVarInt(9);
@@ -506,6 +531,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0); // legacy request ID
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
         writer.WriteUnsignedVarInt(0); // inventory actions
         writer.WriteVarInt(InventoryTransactionPacket.UseClickBlock);
@@ -548,6 +574,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(0);
+        writer.WriteBool(false); // legacy slots absent
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeMismatch);
         writer.WriteUnsignedVarInt(0);
 
@@ -574,6 +601,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(-2); // correlatable legacy request ID
+        writer.WriteBool(true); // legacy slots present
         writer.WriteUnsignedVarInt(0); // no requested slot replay entries
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
         writer.WriteUnsignedVarInt(2);
@@ -610,6 +638,41 @@ public class InventoryTransactionIntentTests
             .Sum(drop => drop.Count));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Whole_stack_drop_without_legacy_id_revalidates_source_and_commits_at_most_once(bool replaceSource)
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("uncorrelated-drop");
+        player.Inventory.Clear(); player.Inventory.TrySetBlock(0, Blocks.Stone, 5);
+        var before = player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, 0);
+        var writer = new BinaryStream(); writer.WriteVarInt(0); writer.WriteBool(false);
+        writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal); writer.WriteUnsignedVarInt(2);
+        WriteNormalInventoryAction(ref writer, InventoryTransactionPacket.SourceContainer, 0, 0, before, NetworkItemStack.Empty);
+        WriteNormalInventoryAction(ref writer, InventoryTransactionPacket.SourceWorld, null, 0, NetworkItemStack.Empty, before);
+        var bytes = writer.GetBufferDisposing().ToArray();
+        for (var i = 0; i < 2; i++)
+        {
+            var stream = new BinaryStream(bytes);
+            new InGameSessionHandler().HandleDataPacket(player.Session,
+                new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET }, ref stream);
+            stream.Dispose();
+        }
+        if (replaceSource) player.Inventory.TrySetBlock(0, Blocks.Dirt, 5);
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        if (replaceSource)
+        {
+            Assert.Equal(Blocks.Dirt, player.Inventory.Get(0).Id.Value);
+            Assert.Equal(5, player.Inventory.Get(0).Count);
+            Assert.Empty(fx.World.FloorDrops.Snapshot());
+        }
+        else
+        {
+            Assert.True(player.Inventory.Get(0).IsEmpty);
+            Assert.Equal(5, Assert.Single(fx.World.FloorDrops.Snapshot()).Count);
+        }
+    }
+
 
     [Fact]
     public void Legacy_normal_transaction_drop_rejects_a_stale_advertised_stack_id()
@@ -626,6 +689,7 @@ public class InventoryTransactionIntentTests
 
         var writer = new BinaryStream();
         writer.WriteVarInt(-2);
+        writer.WriteBool(true); // legacy slots present
         writer.WriteUnsignedVarInt(0);
         writer.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeNormal);
         writer.WriteUnsignedVarInt(2);

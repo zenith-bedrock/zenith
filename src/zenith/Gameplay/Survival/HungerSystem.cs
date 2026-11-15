@@ -28,15 +28,6 @@ sealed class HungerSystem : IGameSystem
 
     private const float ExhaustionThreshold = 4f;
 
-    /// <summary>
-    /// Phase XXV — vanilla's "well-fed" cushion: an exhaustion-threshold crossing depletes
-    /// saturation before it ever touches <see cref="Player.Player.Hunger"/>. Restore ratio is a
-    /// single vanilla-adjacent constant applied to every food's nutrition value, not a per-food
-    /// saturation-modifier table (vanilla has one per food; this is a deliberate simplification —
-    /// see the Phase XXV findings doc).
-    /// </summary>
-    private const float SaturationRestoreRatio = 0.5f;
-
     private const float RegenHungerThreshold = 18f;
     private const float RegenExhaustionCost = 6f;
     private const ulong StarveDamageIntervalTicks = 80; // 4s @ 20 TPS, vanilla-parity cadence.
@@ -55,14 +46,21 @@ sealed class HungerSystem : IGameSystem
     {
         foreach (var player in online)
         {
-            if (!player.IsInGame || player.IsDead) continue;
+            if (!player.IsInGame || player.IsDead)
+            {
+                player.FoodUse = null;
+                while (player.Intents.TryConsumeFoodUse(out _)) { }
+                continue;
+            }
 
             var hungerBefore = player.Hunger;
-            TryEat(player);
+            var saturationBefore = player.Saturation;
+            TryEat(player, clock.CurrentTick, online);
 
             if (player.GameMode == GameMode.Creative)
             {
-                if (player.Hunger != hungerBefore) player.Client.Entity.SendPlayerAttributes(player);
+                if (player.Hunger != hungerBefore || player.Saturation != saturationBefore)
+                    player.Client.Entity.SendPlayerAttributes(player);
                 continue;
             }
 
@@ -91,33 +89,77 @@ sealed class HungerSystem : IGameSystem
                 continue;
             }
 
-            if (player.Hunger != hungerBefore) player.Client.Entity.SendPlayerAttributes(player);
+            // Food/saturation changes are immediate. Exhaustion (also accrued by mining and
+            // damage outside this system) is refreshed at most once per second while nonzero.
+            if (player.Hunger != hungerBefore || player.Saturation != saturationBefore ||
+                (player.Exhaustion != 0f && clock.CurrentTick % GameClock.TicksPerSecond == 0))
+                player.Client.Entity.SendPlayerAttributes(player);
         }
     }
 
-    private void TryEat(Player.Player player)
+    private void TryEat(Player.Player player, ulong tick, IReadOnlyList<Player.Player> online)
     {
-        if (!player.Intents.TryConsumeEatIntent()) return;
-        if (player.Hunger >= 20f) return;
-
-        var slot = player.SelectedHotbarSlot;
-        if (!PlayerInventory.IsValidHotbarSlot(slot)) return;
-
-        var stack = player.Inventory.Get(slot);
-        if (stack.Count <= 0) return;
-        if (!FoodItems.TryGetNutrition(_itemPalette, stack.Id, out var nutrition)) return;
-
-        if (player.GameMode != GameMode.Creative)
+        while (player.Intents.TryConsumeFoodUse(out var request))
         {
-            if (!player.Inventory.TryConsume(stack.Id, 1)) return;
-            player.Client.Inventory.SendInventoryContent(player.Inventory);
-            player.Level.PersistInventory(player);
+            if (request.Cancel) { SetFoodUse(player, null, online); continue; }
+            var slot = request.Slot < 0 ? player.SelectedHotbarSlot : request.Slot;
+            if (!PlayerInventory.IsValidHotbarSlot(slot) || player.SelectedHotbarSlot != slot) continue;
+            var stack = player.Inventory.Get(slot);
+            if (stack.IsEmpty || (request.ExpectedStack is { } expected && expected != stack) ||
+                !FoodItems.TryGet(_itemPalette, stack.Id, out var food) ||
+                (player.Hunger >= 20f && !food.AlwaysEdible)) continue;
+            if (player.FoodUse is { } active && active.Slot == slot && active.Stack == stack) continue;
+            SetFoodUse(player, new FoodUseState(slot, stack, tick), online);
         }
+        if (player.FoodUse is not { } use) return;
+        if (player.SelectedHotbarSlot != use.Slot || player.Inventory.Get(use.Slot) != use.Stack ||
+            !FoodItems.TryGet(_itemPalette, use.Stack.Id, out var definition) ||
+            (player.Hunger >= 20f && !definition.AlwaysEdible))
+        {
+            SetFoodUse(player, null, online);
+            return;
+        }
+        if (tick - use.StartedTick < (ulong)definition.UseTicks) return;
+        SetFoodUse(player, null, online);
+        if (player.GameMode != GameMode.Creative && !ConsumeFood(player, use, definition, online)) return;
+        player.Hunger = MathF.Min(20f, player.Hunger + definition.Nutrition);
+        player.Saturation = MathF.Min(player.Hunger, player.Saturation + definition.Saturation);
+    }
 
-        player.Hunger = MathF.Min(20f, player.Hunger + nutrition);
-        // Vanilla caps saturation at the current food level — never lets a big meal "bank" more
-        // cushion than the hunger bar it's attached to.
-        player.Saturation = MathF.Min(player.Hunger, player.Saturation + nutrition * SaturationRestoreRatio);
+    private static void SetFoodUse(Player.Player player, FoodUseState? use, IReadOnlyList<Player.Player> online)
+    {
+        var changed = player.FoodUse.HasValue != use.HasValue;
+        player.FoodUse = use;
+        if (!changed) return;
+        foreach (var peer in online)
+            if (peer.IsInGame)
+                peer.Client.Entity.SendActorFlags((ulong)player.RuntimeId, player.IsSneaking, player.IsSprinting, use.HasValue);
+    }
+
+    private bool ConsumeFood(Player.Player player, FoodUseState use, FoodDefinition food, IReadOnlyList<Player.Player> online)
+    {
+        var snapshot = player.Inventory.CaptureSnapshot();
+        player.Inventory.TrySet(use.Slot, use.Stack.Id, use.Stack.Count - 1);
+        if (food.Remainder is { } remainder)
+        {
+            var id = StackId.FromItem(_itemPalette.Require(remainder));
+            if (use.Stack.Count == 1)
+                player.Inventory.TrySet(use.Slot, id, 1);
+            else if (!player.Inventory.TryAdd(id))
+            {
+                var x = (int)MathF.Floor(player.PositionX);
+                var y = (int)MathF.Floor(player.PositionY);
+                var z = (int)MathF.Floor(player.PositionZ);
+                if (!FloorDropFanout.TryDeposit(player.Level, _players, online, x, y, z, id, 1))
+                {
+                    player.Inventory.RestoreSnapshot(snapshot);
+                    return false;
+                }
+            }
+        }
+        player.Client.Inventory.SendInventoryContent(player.Inventory);
+        player.Level.PersistInventory(player);
+        return true;
     }
 
     private static void AccrueExhaustion(Player.Player player)

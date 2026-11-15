@@ -55,6 +55,19 @@ public class MiningProgressionTests
         Assert.False(player.Inventory.Get(0).IsEmpty);
         for (var i = 1; i < PlayerInventory.FullInventorySize; i++)
             Assert.True(player.Inventory.Get(i).IsEmpty);
+        Assert.Empty(fx.World.FloorDrops.Snapshot());
+    }
+
+    private static void PickUpMinedLoot(IntentTestFixture fx, Zenith.Player.Player player, StackId expected)
+    {
+        Assert.True(player.Inventory.Get(1).IsEmpty);
+        var drop = Assert.Single(fx.World.FloorDrops.Snapshot());
+        Assert.Equal(expected, drop.Id);
+        Assert.Equal(1, drop.Count);
+        var pickup = new FloorDropSystem(fx.World);
+        for (var tick = 0; tick < FloorDropStore.DefaultPickupDelay; tick++)
+            pickup.Tick(fx.Clock, fx.Players.Online);
+        Assert.Empty(fx.World.FloorDrops.Snapshot());
     }
 
     [Fact]
@@ -65,6 +78,7 @@ public class MiningProgressionTests
         var player = MineAt(fx, 6, 64, 6, Blocks.DiamondOre, iron);
 
         var diamond = fx.Context.ItemPalette.Require("minecraft:diamond");
+        PickUpMinedLoot(fx, player, StackId.FromItem(diamond));
         var slot = player.Inventory.Get(1); // slot 0 holds the pickaxe
         Assert.Equal(StackId.FromItem(diamond), slot.Id);
         Assert.Equal(1, slot.Count);
@@ -77,6 +91,7 @@ public class MiningProgressionTests
         var stone = Tools.Require("minecraft:stone_pickaxe");
         var player = MineAt(fx, 7, 64, 7, Blocks.IronOre, stone);
 
+        PickUpMinedLoot(fx, player, StackId.FromBlock(Blocks.IronOre));
         var slot = player.Inventory.Get(1);
         Assert.Equal(StackId.FromBlock(Blocks.IronOre), slot.Id);
         Assert.Equal(1, slot.Count);
@@ -90,6 +105,7 @@ public class MiningProgressionTests
         var player = MineAt(fx, 8, 64, 8, Blocks.CoalOre, wood);
 
         var coal = fx.Context.ItemPalette.Require("minecraft:coal");
+        PickUpMinedLoot(fx, player, StackId.FromItem(coal));
         var slot = player.Inventory.Get(1);
         Assert.Equal(StackId.FromItem(coal), slot.Id);
         Assert.Equal(1, slot.Count);

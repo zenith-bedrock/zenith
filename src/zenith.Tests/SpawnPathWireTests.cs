@@ -10,6 +10,37 @@ namespace Zenith.Tests;
 public class SpawnPathWireTests
 {
     [Fact]
+    public void Captured_biomes_follow_2225_optional_gates_and_string_table_to_EOF()
+    {
+        var reader = new Zenith.Binary.BinaryStream(BiomeDefinitionListBlob.WireBody.ToArray());
+        var count = reader.ReadUnsignedVarInt();
+        Assert.Equal(89, count);
+        var stringReferences = new List<ushort>();
+        for (var n = 0; n < count; n++)
+        {
+            stringReferences.Add(reader.ReadUShort(Zenith.Binary.BinaryStream.Endianess.Little)); // name-table map key
+            _ = reader.ReadUShort(Zenith.Binary.BinaryStream.Endianess.Little); // numeric biome ID, may be 65535
+            for (var f = 0; f < 5; f++) _ = reader.ReadFloat(Zenith.Binary.BinaryStream.Endianess.Little);
+            _ = reader.ReadInt(Zenith.Binary.BinaryStream.Endianess.Little); // water color
+            Assert.InRange(reader.ReadByte(), (byte)0, (byte)1); // rain
+            var tags = reader.ReadByte();
+            Assert.InRange(tags, (byte)0, (byte)1);
+            if (tags == 1)
+            {
+                var tagCount = reader.ReadUnsignedVarInt();
+                for (var t = 0; t < tagCount; t++)
+                    stringReferences.Add(reader.ReadUShort(Zenith.Binary.BinaryStream.Endianess.Little));
+            }
+            Assert.Equal(0, reader.ReadByte()); // this capture has no client chunk-generation payload
+        }
+        var strings = reader.ReadUnsignedVarInt();
+        Assert.Equal(187, strings);
+        for (var n = 0; n < strings; n++) _ = reader.ReadVarString();
+        Assert.All(stringReferences, index => Assert.InRange((int)index, 0, strings - 1));
+        Assert.True(reader.IsEndOfFile);
+    }
+
+    [Fact]
     public void Biome_definition_list_embeds_non_empty_vanilla_body()
     {
         Assert.True(BiomeDefinitionListBlob.ByteLength > 2,

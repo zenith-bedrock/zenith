@@ -14,6 +14,50 @@ namespace Zenith.Tests;
 /// </summary>
 public class GamePacketDispatchTests
 {
+    private sealed class ClosingHandler : ISessionHandler
+    {
+        public int Calls;
+        public bool HandleDataPacket(Zenith.Session.NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
+        { Calls++; session.Disconnect(); return true; }
+    }
+    private sealed class TransitionHandler(RecordingHandler next) : ISessionHandler
+    {
+        public bool HandleDataPacket(Zenith.Session.NetworkSession session, DataPacket.HeaderInfo header, ref BinaryStream stream)
+        { session.SetHandler(next); return true; }
+    }
+
+    [Fact]
+    public void Closing_first_subpacket_stops_the_batch_and_future_dispatch()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("closed-batch");
+        var handler = new ClosingHandler(); player.Session.SetHandler(handler);
+        var r = new BinaryStream(BuildUncompressedBatch((10,1),(20,2)));
+        player.Session.HandleGamePacket(ref r);
+        var after = new BinaryStream(BuildUncompressedBatch((30,3)));
+        player.Session.HandleGamePacket(ref after);
+        Assert.Equal(1,handler.Calls); Assert.True(player.Session.IsClosed);
+    }
+
+    [Fact]
+    public void Legitimate_handler_transition_still_dispatches_the_next_subpacket()
+    {
+        var fx=new IntentTestFixture(); var player=fx.AddInGamePlayer("transition");
+        var next=new RecordingHandler(); player.Session.SetHandler(new TransitionHandler(next));
+        var r=new BinaryStream(BuildUncompressedBatch((10,1),(20,2)));
+        player.Session.HandleGamePacket(ref r);
+        Assert.Equal((20,(byte)2),Assert.Single(next.Received));
+    }
+
+    [Fact]
+    public void Overflowing_batch_length_cannot_alias_a_valid_small_length()
+    {
+        var fx=new IntentTestFixture(); var player=fx.AddInGamePlayer("overflow-length");
+        var recorder=new RecordingHandler(); player.Session.SetHandler(recorder);
+        Assert.Throws<InvalidOperationException>(() => Dispatch(player.Session,Convert.FromHexString("82808080100A01")));
+        Assert.Empty(recorder.Received);
+    }
+    private static void Dispatch(Zenith.Session.NetworkSession session, byte[] bytes)
+    { var r=new BinaryStream(bytes); session.HandleGamePacket(ref r); }
     private sealed class RecordingHandler : ISessionHandler
     {
         public List<(int Id, byte Marker)> Received { get; } = new();

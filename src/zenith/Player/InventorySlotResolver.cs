@@ -59,6 +59,7 @@ static class InventorySlotResolver
 
     public static bool TrySetSlot(Player player, World.World world, in InventorySlotReference reference, InventorySlot value)
     {
+        if (!ItemStackLimits.CanReplace(GetSlot(player, world, reference), value)) return false;
         switch (reference.Area)
         {
             case InventorySlotArea.OpenContainer:

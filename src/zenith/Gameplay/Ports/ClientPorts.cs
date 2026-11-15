@@ -71,7 +71,7 @@ interface IEntityChannel
     void SendMovePlayerTeleport(ulong entityRuntimeId, float x, float y, float z, float pitch, float yaw, float headYaw, ulong tick = 0);
 
     void SendSetActorLink(long riderUniqueId, long riddenUniqueId, byte linkType, bool immediate = true, bool causedByRider = true);
-    void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting);
+    void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false);
     void SendActorIgnited(ulong actorRuntimeId, bool ignited);
 
     void SendHealth(ulong actorRuntimeId, float health, float maximum);

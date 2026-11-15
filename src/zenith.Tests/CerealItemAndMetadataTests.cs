@@ -26,7 +26,7 @@ public class CerealItemAndMetadataTests
         Assert.Equal(5, stream.ReadUnsignedVarInt()); // aux_value
         Assert.False(stream.ReadBool()); // net_id_variant has-flag
         Assert.Equal(0, stream.ReadUnsignedVarInt()); // block_runtime_id
-        Assert.Equal(0, stream.ReadUnsignedVarInt()); // user_data_buffer length
+        Assert.Equal(new byte[10], stream.ReadByteArray()); // no NBT, empty can-place/can-break lists
         Assert.True(stream.IsEndOfFile);
     }
 
@@ -69,7 +69,7 @@ public class CerealItemAndMetadataTests
         Assert.True(stream.ReadBool());
         Assert.Equal(77, stream.ReadVarInt()); // no intervening tag varint
         Assert.Equal(2, stream.ReadUnsignedVarInt());
-        Assert.Equal(0, stream.ReadUnsignedVarInt());
+        Assert.Equal(new byte[10], stream.ReadByteArray());
         Assert.True(stream.IsEndOfFile);
     }
 

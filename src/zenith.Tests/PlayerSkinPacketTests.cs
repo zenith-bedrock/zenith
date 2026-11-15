@@ -38,14 +38,14 @@ public class PlayerSkinPacketTests
                 AnimationData = "",
                 CapeId = "",
                 FullId = "test_skin",
-                ArmSize = "wide",
-                SkinColor = "#0",
+                ArmSize = SkinArmSize.Wide,
+                SkinColor = 0,
                 PersonaPieces =
                 [
                     new SkinPersonaPiece
                     {
                         PieceId = "piece1",
-                        PieceType = "persona_hair",
+                        PieceType = SkinPieceType.Hair,
                         PackId = "00000000-0000-0000-0000-000000000000",
                         IsDefault = true,
                         ProductId = "product1"
@@ -56,7 +56,7 @@ public class PlayerSkinPacketTests
                     new SkinPersonaTintPiece
                     {
                         Type = "hair",
-                        Colors = ["red", "blue"]
+                        Colors = [unchecked((int)0xffff0000), unchecked((int)0xff0000ff), 0, -1]
                     }
                 ],
                 IsPremium = false,
@@ -173,7 +173,7 @@ public class PlayerSkinPacketTests
         var skin = SerializedSkin.Default;
 
         Assert.Equal("", skin.Id);
-        Assert.Equal("wide", skin.ArmSize);
+        Assert.Equal(SkinArmSize.Wide, skin.ArmSize);
         Assert.Equal(64u, skin.Image.Width);
         Assert.Equal(64u, skin.Image.Height);
         Assert.Equal(64 * 64 * 4, skin.Image.Data.Length);
@@ -200,8 +200,8 @@ public class PlayerSkinPacketTests
             AnimationData = "",
             CapeId = "",
             FullId = "",
-            ArmSize = "wide",
-            SkinColor = "#0",
+            ArmSize = SkinArmSize.Wide,
+            SkinColor = 0,
             PersonaPieces = [],
             TintPieces = [],
             IsPremium = false,

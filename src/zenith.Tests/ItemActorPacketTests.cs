@@ -31,7 +31,7 @@ public class ItemActorPacketTests
         Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // aux_value
         Assert.False(stream.ReadBool()); // net_id_variant has-flag
         Assert.Equal(100, (int)stream.ReadUnsignedVarInt()); // block_runtime_id
-        Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // user_data_buffer length
+        Assert.Equal(new byte[10], stream.ReadByteArray()); // complete no-NBT extra data
         Assert.Equal(1.5f, stream.ReadFloat(BinaryStream.Endianess.Little));
         Assert.Equal(64.125f, stream.ReadFloat(BinaryStream.Endianess.Little));
         Assert.Equal(-2.5f, stream.ReadFloat(BinaryStream.Endianess.Little));
@@ -40,10 +40,11 @@ public class ItemActorPacketTests
         Assert.Equal(0f, stream.ReadFloat(BinaryStream.Endianess.Little));
         Assert.Equal(0, (int)stream.ReadUnsignedVarInt()); // metadata count
         Assert.False(stream.ReadBool());
+        Assert.True(stream.IsEndOfFile);
     }
 
     [Fact]
-    public void AddItemActor_air_item_is_single_varint_zero()
+    public void AddItemActor_air_descriptor_still_carries_every_field()
     {
         var bytes = new AddItemActorPacket
         {
@@ -59,7 +60,16 @@ public class ItemActorPacketTests
         _ = stream.ReadUnsignedVarInt();
         _ = stream.ReadVarLong();
         _ = stream.ReadUnsignedVarLong();
-        Assert.Equal(0, stream.ReadVarInt());
+        Assert.Equal(0, stream.ReadShort(BinaryStream.Endianess.Little));
+        Assert.Equal(0, stream.ReadUShort(BinaryStream.Endianess.Little));
+        Assert.Equal(0, stream.ReadUnsignedVarInt());
+        Assert.False(stream.ReadBool());
+        Assert.Equal(0, stream.ReadUnsignedVarInt());
+        Assert.Empty(stream.ReadByteArray());
+        for (var n = 0; n < 6; n++) Assert.Equal(0f, stream.ReadFloat(BinaryStream.Endianess.Little));
+        Assert.Equal(0, stream.ReadUnsignedVarInt());
+        Assert.False(stream.ReadBool());
+        Assert.True(stream.IsEndOfFile);
     }
 
     [Fact]

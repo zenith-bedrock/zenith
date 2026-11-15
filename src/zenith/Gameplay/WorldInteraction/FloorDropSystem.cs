@@ -3,6 +3,7 @@ using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
 using Zenith.Gameplay.Replication;
+using Zenith.Geometry;
 
 namespace Zenith.Gameplay.WorldInteraction;
 
@@ -14,6 +15,7 @@ sealed class FloorDropSystem : IGameSystem
 {
     private readonly World.World _world;
     private readonly List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)> _despawnScratch = new();
+    private readonly List<FloorDropStore.DropView> _dropScratch = new();
 
     public FloorDropSystem(World.World world)
     {
@@ -24,6 +26,18 @@ sealed class FloorDropSystem : IGameSystem
     {
         _ = clock;
         _world.FloorDrops.TickPickupDelays();
+        _world.FloorDrops.CopyViews(_dropScratch);
+        foreach (var drop in _dropScratch)
+        {
+            if (!drop.HasMotion) continue;
+            var next = FloorDropPhysics.Step(_world, drop.Pose);
+            if (next == drop.Pose) continue;
+            _world.FloorDrops.UpdateMotion(drop, next);
+            foreach (var peer in online)
+                if (peer.IsInGame || peer.Chunks.Knows(PlayerChunkTracker.BlockToChunk(next.X), PlayerChunkTracker.BlockToChunk(next.Z)))
+                    peer.Client.Entity.SendMoveActorAbsoluteRaw((ulong)drop.EntityRuntimeId, next.X,
+                        next.Y + EntityHitboxes.ItemNetworkOffset, next.Z, flags: next.OnGround ? (byte)1 : (byte)0);
+        }
 
         _despawnScratch.Clear();
         _world.FloorDrops.TickDespawn(_despawnScratch);
@@ -32,7 +46,8 @@ sealed class FloorDropSystem : IGameSystem
         if (_world.FloorDrops.Count == 0)
             return;
 
-        foreach (var drop in _world.FloorDrops.Snapshot())
+        _world.FloorDrops.CopyViews(_dropScratch);
+        foreach (var drop in _dropScratch)
             TryPickup(drop, online);
     }
 
@@ -57,7 +72,7 @@ sealed class FloorDropSystem : IGameSystem
     /// only for replication). The inventory mutation itself (<c>TryAddUpTo</c>) never took
     /// <c>online</c> — only the search and the post-pickup notification do.</summary>
     private void TryPickup(
-        ((int X, int Y, int Z) Pos, StackId Id, int Count, long EntityRuntimeId, int PickupDelayTicks, int AgeTicks) drop,
+        FloorDropStore.DropView drop,
         IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (drop.PickupDelayTicks > 0) return;
@@ -68,14 +83,14 @@ sealed class FloorDropSystem : IGameSystem
         foreach (var player in online)
         {
             if (!player.IsInGame || player.IsDead) continue;
-            if (!IsWithinPickupReach(player, drop.Pos.X, drop.Pos.Y, drop.Pos.Z)) continue;
+            if (!IsWithinPickupReach(player, drop.Pose.X, drop.Pose.Y, drop.Pose.Z)) continue;
 
             var invSnap = player.Inventory.CaptureSnapshot();
             var added = player.Inventory.TryAddUpTo(pickupId, drop.Count);
             if (added == 0) continue;
 
             if (!_world.FloorDrops.TryTakeUpTo(
-                    drop.Pos.X, drop.Pos.Y, drop.Pos.Z, added,
+                    drop.Key.X, drop.Key.Y, drop.Key.Z, added,
                     out _, out _, out var takenEntity, out var remainingPublish))
             {
                 player.Inventory.RestoreSnapshot(invSnap);
@@ -83,7 +98,7 @@ sealed class FloorDropSystem : IGameSystem
             }
 
             var eid = takenEntity != 0 ? takenEntity : drop.EntityRuntimeId;
-            NotifyPickup(player, eid, drop.Pos.X, drop.Pos.Z, remainingPublish, online);
+            NotifyPickup(player, eid, (int)MathF.Floor(drop.Pose.X), (int)MathF.Floor(drop.Pose.Z), remainingPublish, online);
 
             player.Client.Inventory.SendInventoryContent(player.Inventory);
             _world.PersistInventory(player);
@@ -119,10 +134,13 @@ sealed class FloorDropSystem : IGameSystem
     /// vs item entity AABB at cell. Domain <see cref="Player.Player.PositionY"/> is feet.
     /// </summary>
     internal static bool IsWithinPickupReach(global::Zenith.Player.Player player, int x, int y, int z)
+        => IsWithinPickupReach(player, x + .5f, (float)y, z + .5f);
+
+    internal static bool IsWithinPickupReach(global::Zenith.Player.Player player, float x, float y, float z)
     {
         var playerBb = EntityHitboxes.PlayerStanding(player.PositionX, player.PositionY, player.PositionZ)
             .Expand(EntityHitboxes.PickupExpand);
-        var itemBb = EntityHitboxes.ItemAtCell(x, y, z);
+        var itemBb = Aabb.FromCenterSize(x, y, z, EntityHitboxes.ItemEntitySize, EntityHitboxes.ItemEntitySize);
         return playerBb.Intersects(itemBb);
     }
 }

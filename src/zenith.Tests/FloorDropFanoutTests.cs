@@ -184,12 +184,8 @@ public class FloorDropFanoutTests
 
     /// <summary>End-to-end: a real Q-drop through InventorySystem (not a direct FloorDropFanout call)
     /// must actually reach the wire with the toss velocity, not just prove the plumbing works in
-    /// isolation. Yaw=45° keeps both horizontal components comfortably nonzero (Yaw=0 makes X exactly
-    /// -sin(0), i.e. negative zero — a different bit pattern than the +0.0 a naive expected literal
-    /// would use, even though they compare equal as floats). Expected values are computed with the
-    /// identical formula InventorySystem uses (same yaw-to-direction convention ProjectileSystem
-    /// already uses for arrow launch) rather than hand-rounded literals, so this can't drift from
-    /// floating-point rounding independent of the production code actually being correct.</summary>
+    /// isolation. The wire must carry the authoritative body's velocity, not a separate visual
+    /// hint. Cardinal/pitch values and the resulting flight are covered independently.</summary>
     [Fact]
     public void InventorySystem_drop_action_sends_a_nonzero_toss_velocity()
     {
@@ -210,18 +206,14 @@ public class FloorDropFanoutTests
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        const float dropTossSpeed = 0.3f;
-        const float dropTossUpwardVelocity = 0.2f;
-        var radians = player.Yaw * (MathF.PI / 180f);
-        var expectedVelocityX = -MathF.Sin(radians) * dropTossSpeed;
-        var expectedVelocityZ = MathF.Cos(radians) * dropTossSpeed;
-        Assert.NotEqual(0f, expectedVelocityX);
-        Assert.NotEqual(0f, expectedVelocityZ);
+        var body = Assert.Single(fx.World.FloorDrops.SnapshotViews()).Pose;
+        Assert.NotEqual(0f, body.VelocityX);
+        Assert.NotEqual(0f, body.VelocityZ);
 
         var tail = new BinaryStream();
-        tail.WriteFloat(expectedVelocityX, BinaryStream.Endianess.Little);
-        tail.WriteFloat(dropTossUpwardVelocity, BinaryStream.Endianess.Little);
-        tail.WriteFloat(expectedVelocityZ, BinaryStream.Endianess.Little);
+        tail.WriteFloat(body.VelocityX, BinaryStream.Endianess.Little);
+        tail.WriteFloat(body.VelocityY, BinaryStream.Endianess.Little);
+        tail.WriteFloat(body.VelocityZ, BinaryStream.Endianess.Little);
         tail.WriteUnsignedVarInt(0);
         tail.WriteBool(false);
         Assert.Contains(tail.GetBufferDisposing().ToArray(), ConcatCaptured(fx));

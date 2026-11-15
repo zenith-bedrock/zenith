@@ -48,9 +48,10 @@ sealed class EffectSystem : IGameSystem
 
         if (intent.ClearAll)
         {
+            var removed = player.Effects.Active.Keys.ToArray();
             if (!player.Effects.ClearEffects()) return;
-            // Best-effort per-type Remove is unnecessary here — the client only ever learned about
-            // types this player actually had, and Effects was just fully drained.
+            foreach (var type in removed)
+                entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
             return;
         }
 

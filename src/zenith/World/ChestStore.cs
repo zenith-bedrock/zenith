@@ -128,6 +128,7 @@ sealed class ChestStore
     {
         if ((uint)slot >= SingleSize) return false;
         if (!_chests.TryGetValue((x, y, z), out var slots)) return false;
+        if (!ItemStackLimits.CanReplace(slots[slot], value)) return false;
         slots[slot] = value.IsEmpty ? InventorySlot.Empty : value;
         return true;
     }
@@ -167,7 +168,15 @@ sealed class ChestStore
     {
         if (snapshot.Length != view.SlotCount) return;
         for (var i = 0; i < view.SlotCount; i++)
-            TrySetOpen(view, i, snapshot[i]);
+        {
+            // Rollback restores exact pre-existing custody, including legacy oversized stacks.
+            if (i < SingleSize)
+            {
+                if (TryGetSlots(view.PrimaryX, view.PrimaryY, view.PrimaryZ, out var primary)) primary[i] = snapshot[i];
+            }
+            else if (view.TryGetPartner(out var x, out var y, out var z) && TryGetSlots(x, y, z, out var partner))
+                partner[i - SingleSize] = snapshot[i];
+        }
     }
 
     /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (StackId, count).</summary>
@@ -243,7 +252,7 @@ sealed class ChestStore
 
     public bool TryLoadFromBlob(int x, int y, int z, ReadOnlySpan<byte> data)
     {
-        Span<InventorySlot> slots = stackalloc InventorySlot[SingleSize];
+        Span<InventorySlot> slots = new InventorySlot[SingleSize];
         if (!SlotBlob.TryUnpack(data, slots))
             return false;
         var key = (x, y, z);
@@ -251,4 +260,8 @@ sealed class ChestStore
         slots.CopyTo(cell);
         return true;
     }
+
+    /// <summary>Owner-only hydration seed; live inventory/openers always win over a stale disk read.</summary>
+    public bool TrySeedFromBlob(int x, int y, int z, ReadOnlySpan<byte> data) =>
+        !_chests.ContainsKey((x, y, z)) && TryLoadFromBlob(x, y, z, data);
 }

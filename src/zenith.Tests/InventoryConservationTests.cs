@@ -1,177 +1,203 @@
-using Xunit;
+using Zenith.Binary;
+using Zenith.Gameplay.Inventory;
+using Zenith.Gameplay.Replication;
+using Zenith.Packets;
 using Zenith.Player;
+using Zenith.Session.Handler;
 using Zenith.World;
+using Xunit;
 
 namespace Zenith.Tests;
 
-/// <summary>
-/// Property-style check of the ISR move path: whatever random mix of transfers and swaps between the bag, cursor,
-/// offhand, armor and the personal craft grid a client sends (valid or not), every item stays somewhere — a request
-/// either applies completely or rolls back, and moves never create or destroy items.
-/// </summary>
 public class InventoryConservationTests
 {
-    public InventoryConservationTests() => Blocks.EnsureLoaded();
-
-    private static readonly StackId[] Kinds =
-    [
-        StackId.FromBlock(Blocks.Dirt),
-        StackId.FromBlock(Blocks.Stone),
-        StackId.FromItem(300, aux: 0),
-        StackId.FromItem(300, aux: 1), // same item, other aux: must never merge with aux 0
-    ];
-
-    /// <summary>The random requests and the seeded stacks share a few bag slots so most requests have something to move.</summary>
-    private const int BusySlots = 5;
-
-    /// <summary>Every stack the player holds, as item-kind → total count.</summary>
-    private static Dictionary<StackId, int> Census(Player.Player p, IEnumerable<InventorySlot>? extra = null)
+    [Fact]
+    public void Death_drops_each_staged_output_without_counting_the_visible_one_twice()
     {
-        var census = new Dictionary<StackId, int>();
-        void Add(InventorySlot s)
-        {
-            if (!s.IsEmpty) census[s.Id] = census.GetValueOrDefault(s.Id) + s.Count;
-        }
-
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++) Add(p.Inventory.Get(i));
-        for (var i = 0; i < PlayerInventory.ArmorSize; i++) Add(p.Inventory.GetArmor(i));
-        for (var i = 0; i < PlayerCraftUi.GridSize; i++) Add(p.Windows.CraftUi.GetGrid(i));
-        Add(p.Inventory.Cursor);
-        Add(p.Inventory.Offhand);
-        foreach (var slot in extra ?? []) Add(slot);
-        return census;
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("result-death");
+        player.Inventory.Clear();
+        var sugar = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:sugar"));
+        var bottle = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:glass_bottle"));
+        player.Windows.CraftUi.TryStageOutputs([new InventorySlot(sugar, 3), new InventorySlot(bottle, 1)]);
+        player.Windows.CraftUi.TrySelectOutput(1);
+        Assert.True(FloorDropFanout.TryDropDeathLoot(fx.World, fx.Players, fx.Players.Online, player));
+        Assert.Equal(3, Assert.Single(fx.World.FloorDrops.Snapshot(), drop => drop.Id == sugar).Count);
+        Assert.Equal(1, Assert.Single(fx.World.FloorDrops.Snapshot(), drop => drop.Id == bottle).Count);
+        Assert.False(player.Windows.CraftUi.HasPendingOutputs);
     }
 
-    /// <summary>Mostly bag/cursor/offhand/craft grid (where moves succeed); armor now and then (where most are refused).</summary>
-    private static InventorySlotReference RandomReference(Random rng, bool withChest = false) => rng.Next(withChest ? 14 : 10) switch
+    [Fact]
+    public void Bad_inventory_envelope_does_not_partially_replace_the_bag()
     {
-        >= 10 => InventorySlotReference.OpenContainer(rng.Next(ChestStore.DoubleSize)),
-        < 4 => InventorySlotReference.Player(rng.Next(BusySlots)),
-        4 or 5 => InventorySlotReference.Cursor,
-        6 or 7 => InventorySlotReference.Offhand,
-        8 => InventorySlotReference.CraftGrid(rng.Next(PlayerCraftUi.GridSize)),
-        _ => InventorySlotReference.Armor(rng.Next(PlayerInventory.ArmorSize)),
-    };
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("bad-envelope");
+        var data = PlayerInventorySave.Pack(player);
+        var target = NewPrivatePlayer(fx, player); target.Inventory.Clear();
+        target.Inventory.TrySetBlock(0, Blocks.Dirt, 3);
+        Assert.False(PlayerInventorySave.TryLoad(data.AsSpan(0, data.Length - 1), target.Inventory, target.Windows));
+        Assert.Equal(InventorySlot.OfBlock(Blocks.Dirt, 3), target.Inventory.Get(0));
+    }
 
-    /// <summary>Where every stack sits, so a test can tell a request that moved something from one that was refused.</summary>
-    private static string Layout(Player.Player p, IEnumerable<InventorySlot>? extra = null)
+    [Fact]
+    public void Untaken_secondary_output_prevents_a_second_craft_from_overwriting_it()
     {
-        var sb = new System.Text.StringBuilder();
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++) sb.Append(p.Inventory.Get(i)).Append(';');
-        for (var i = 0; i < PlayerInventory.ArmorSize; i++) sb.Append(p.Inventory.GetArmor(i)).Append(';');
-        for (var i = 0; i < PlayerCraftUi.GridSize; i++) sb.Append(p.Windows.CraftUi.GetGrid(i)).Append(';');
-        foreach (var slot in extra ?? []) sb.Append(slot).Append(';');
-        return sb.Append(p.Inventory.Cursor).Append(';').Append(p.Inventory.Offhand).ToString();
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("result-busy");
+        player.Inventory.Clear(); player.Windows.OpenPlayerContainer(0, 255);
+        var honey = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:honey_bottle"));
+        player.Inventory.TrySet(0, honey, 2);
+        var recipe = fx.Context.Recipes.NetIdOf("minecraft:honey_bottle_to_sugar");
+        player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(901, [
+            InventoryStackAction.CraftAuto(recipe),
+            InventoryStackAction.Transfer(InventorySlotReference.CraftResult, InventorySlotReference.Player(1), 3)
+        ]));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(902, [InventoryStackAction.CraftAuto(recipe)]));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(3, player.Inventory.Get(1).Count);
+        Assert.True(player.Windows.CraftUi.TrySelectOutput(1));
+        Assert.Equal(1, player.Windows.CraftUi.Result.Count);
+    }
+
+    [Fact]
+    public void Single_result_api_refuses_secondary_outputs_before_consuming()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("single-result-refusal");
+        var honey = InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:honey_bottle"), 1);
+        player.Windows.CraftUi.TrySetGrid(0, honey);
+        Assert.False(fx.Context.Recipes.TryCraftFromGrid(player.Windows.CraftUi,
+            fx.Context.Recipes.NetIdOf("minecraft:honey_bottle_to_sugar"), out _, 1, false));
+        Assert.Equal(honey, player.Windows.CraftUi.GetGrid(0));
     }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    [InlineData(4)]
-    [InlineData(5)]
-    public void Random_move_requests_never_create_or_lose_items(int seed) => RunRandomMoves(seed, withChest: false, withDrops: false);
-
-    /// <summary>Same property with a double chest open: its 54 slots are one more place items can sit or move to.</summary>
-    [Theory]
-    [InlineData(11)]
-    [InlineData(12)]
-    [InlineData(13)]
-    [InlineData(14)]
-    [InlineData(15)]
-    public void Random_move_requests_with_a_double_chest_open_never_create_or_lose_items(int seed) =>
-        RunRandomMoves(seed, withChest: true, withDrops: false);
-
-    /// <summary>
-    /// Survival player who also sends Drop and Destroy: a drop must land on the floor in full (what left the player
-    /// is exactly what the floor gained), and the Creative-only Destroy must never delete anything in survival.
-    /// </summary>
-    [Theory]
-    [InlineData(21)]
-    [InlineData(22)]
-    [InlineData(23)]
-    [InlineData(24)]
-    [InlineData(25)]
-    public void Random_requests_with_drops_and_destroys_conserve_items_between_the_player_and_the_floor(int seed) =>
-        RunRandomMoves(seed, withChest: false, withDrops: true);
-
-    private static void RunRandomMoves(int seed, bool withChest, bool withDrops)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Honey_craft_delivers_sugar_and_bottle_once(bool automatic)
     {
-        var rng = new Random(seed);
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer($"conserve-{seed}");
-        var system = fx.CreateInventorySystem();
-        player.Windows.OpenPlayerContainer(0, 0xff);
-        for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-            Assert.True(player.Inventory.TrySetBlock(i, Blocks.Air, 0));
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("multi-result");
+        player.Inventory.Clear(); player.Windows.OpenPlayerContainer(0, 255);
+        var honey = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:honey_bottle"));
+        if (automatic) player.Inventory.TrySet(0, honey, 1);
+        else player.Windows.CraftUi.TrySetGrid(0, new InventorySlot(honey, 1));
+        var recipe = fx.Context.Recipes.NetIdOf("minecraft:honey_bottle_to_sugar");
+        var intent = InventoryStackIntent.Create(801, [
+            automatic ? InventoryStackAction.CraftAuto(recipe, 1) : InventoryStackAction.Craft(recipe),
+            InventoryStackAction.CreateOutput(1),
+            InventoryStackAction.Transfer(InventorySlotReference.CraftResult, InventorySlotReference.Player(0), 1),
+            InventoryStackAction.CreateOutput(0),
+            InventoryStackAction.Transfer(InventorySlotReference.CraftResult, InventorySlotReference.Player(1), 3)
+        ]);
+        Assert.True(player.Intents.SubmitInventoryStack(intent));
+        Assert.True(player.Intents.SubmitInventoryStack(intent)); // Replay cannot produce the containers again.
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:glass_bottle")), player.Inventory.Get(0).Id);
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:sugar")), player.Inventory.Get(1).Id);
+        Assert.Equal(3, player.Inventory.Get(1).Count);
+        Assert.False(player.Windows.CraftUi.HasPendingOutputs);
+    }
 
-        // Everything that is not on the player: the open chest's slots and what has been dropped on the floor.
-        IEnumerable<InventorySlot> Chest()
+    [Fact]
+    public void Wire_create_selects_secondary_then_primary_output()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("multi-result-wire");
+        player.Inventory.Clear(); player.Windows.OpenPlayerContainer(0, 255);
+        player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:honey_bottle"), 1));
+        var w = new BinaryStream(); w.WriteUnsignedVarInt(1); w.WriteVarInt(-101); w.WriteUnsignedVarInt(5);
+        w.WriteUnsignedVarInt(10); w.WriteByte(12);
+        w.WriteUnsignedVarInt((int)fx.Context.Recipes.NetIdOf("minecraft:honey_bottle_to_sugar")); w.WriteByte(1);
+        foreach (var index in new byte[] { 1, 0 })
         {
-            foreach (var drop in fx.World.FloorDrops.Snapshot()) yield return new InventorySlot(drop.Id, drop.Count);
-            if (!withChest) yield break;
-            for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(2, 64, 2, i);
-            for (var i = 0; i < ChestStore.SingleSize; i++) yield return fx.World.Chests.Get(3, 64, 2, i);
+            w.WriteUnsignedVarInt(6); w.WriteByte(6); w.WriteByte(index);
+            w.WriteUnsignedVarInt(1); w.WriteByte(1); w.WriteByte(index == 1 ? (byte)1 : (byte)3);
+            Slot(ref w, 60, 50); Slot(ref w, 28, index == 1 ? (byte)0 : (byte)1);
         }
+        w.WriteUnsignedVarInt(0); w.WriteInt(0, BinaryStream.Endianess.Little);
+        var reader = new BinaryStream(w.GetBufferDisposing().ToArray());
+        Assert.True(new InGameSessionHandler().HandleDataPacket(player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.ITEM_STACK_REQUEST_PACKET }, ref reader));
+        reader.Dispose(); fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(1, player.Inventory.Get(0).Count); Assert.Equal(3, player.Inventory.Get(1).Count);
+        Assert.False(player.Windows.CraftUi.HasPendingOutputs);
+    }
 
-        if (withChest)
-        {
-            var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
-            fx.World.SetBlock(2, 64, 2, south);
-            fx.World.SetBlock(3, 64, 2, south);
-            Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
-            Assert.True(fx.World.Chests.TryEnsure(3, 64, 2));
-            player.PositionX = 2.5f;
-            player.PositionY = 64;
-            player.PositionZ = 2.5f;
-            Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 2)));
-            system.Tick(fx.Clock, fx.Players.Online);
-            Assert.Equal(ChestStore.DoubleSize, player.Windows.OpenChest!.Value.SlotCount);
-            // A few stacks already in the chest, in both halves.
-            Assert.True(fx.World.Chests.TrySet(2, 64, 2, 0, new InventorySlot(Kinds[0], 20)));
-            Assert.True(fx.World.Chests.TrySet(3, 64, 2, 1, new InventorySlot(Kinds[3], 7)));
-        }
+    [Fact]
+    public void Invalid_output_index_rolls_back_ingredients_and_all_pending_results()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("bad-result");
+        player.Inventory.Clear(); player.Windows.OpenPlayerContainer(0, 255);
+        var honey = InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:honey_bottle"), 1);
+        player.Windows.CraftUi.TrySetGrid(0, honey);
+        player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(802, [
+            InventoryStackAction.Craft(fx.Context.Recipes.NetIdOf("minecraft:honey_bottle_to_sugar")),
+            InventoryStackAction.CreateOutput(200)
+        ]));
+        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(honey, player.Windows.CraftUi.GetGrid(0));
+        Assert.False(player.Windows.CraftUi.HasPendingOutputs);
+        Assert.All(player.Inventory.SnapshotMainInventory(), slot => Assert.True(slot.IsEmpty));
+    }
 
-        // Seed a handful of mixed stacks across the bag, the cursor and the offhand.
-        for (var i = 0; i < 12; i++)
-            Assert.True(player.Inventory.TrySet(rng.Next(BusySlots), Kinds[rng.Next(Kinds.Length)], 1 + rng.Next(40)));
-        Assert.True(player.Inventory.TrySet(PlayerInventory.CursorSlot, Kinds[rng.Next(Kinds.Length)], 1 + rng.Next(40)));
-        Assert.True(player.Inventory.TrySetOffhand(Kinds[rng.Next(Kinds.Length)], 1 + rng.Next(40)));
+    [Fact]
+    public async Task Disconnect_save_recovers_cursor_grids_and_unselected_results()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("disconnect-custody");
+        player.Inventory.Clear();
+        player.Inventory.TrySet(PlayerInventory.CursorSlot, StackId.FromBlock(Blocks.Stone), 2);
+        player.Windows.CraftUi.TrySetGrid(0, InventorySlot.OfBlock(Blocks.OakPlanks, 3));
+        player.Windows.TableCraftUi.TrySetGrid(8, InventorySlot.OfBlock(Blocks.Dirt, 4));
+        player.Windows.CraftUi.TryStageOutputs([InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:sugar"), 3),
+            InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:glass_bottle"), 1)]);
+        player.Windows.CraftUi.TrySelectOutput(1); // Do not save only the shared visible slot.
+        player.IsInGame = false;
+        fx.Players.SubmitDisconnectedInventoryPersist(player);
+        fx.CreateInventorySystem().Tick(fx.Clock, []);
+        await fx.World.FlushPersistenceAsync();
+        var restored = NewPrivatePlayer(fx, player);
+        Assert.True(fx.World.TryLoadInventory(restored));
+        Assert.Equal(13, restored.Inventory.SnapshotMainInventory().Sum(slot => slot.Count));
+        Assert.True(restored.Inventory.Cursor.IsEmpty);
+        Assert.False(restored.Windows.CraftUi.HasPendingOutputs);
+        Assert.True(restored.Windows.TableCraftUi.GetGrid(8).IsEmpty);
+        Assert.False(restored.Windows.RecoverUiToInventory(restored.Inventory));
+    }
 
-        var expected = Census(player, Chest());
-        var moved = 0;
-        for (var request = 0; request < 150; request++)
-        {
-            var actions = new List<InventoryStackAction>();
-            for (var a = rng.Next(4) == 0 ? 2 : 1; a > 0; a--)
-            {
-                var from = RandomReference(rng, withChest);
-                var to = RandomReference(rng, withChest);
-                var roll = rng.Next(withDrops ? 5 : 3);
-                actions.Add(roll switch
-                {
-                    0 => InventoryStackAction.Swap(from, to),
-                    3 => InventoryStackAction.Drop(from, rng.Next(0, 65)),
-                    4 => InventoryStackAction.Destroy(from, rng.Next(0, 65), default),
-                    _ => InventoryStackAction.Transfer(from, to, rng.Next(0, 65)),
-                });
-            }
+    [Fact]
+    public void Full_bag_keeps_overflow_across_reloads_and_recovers_only_when_space_is_available()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("full-recovery");
+        for (var i = 0; i < PlayerInventory.FullInventorySize; i++) player.Inventory.TrySetBlock(i, Blocks.Stone, 64);
+        var diamonds = InventorySlot.OfItem(fx.Context.ItemPalette.Require("minecraft:diamond"), 3);
+        player.Inventory.TrySet(PlayerInventory.CursorSlot, diamonds.Id, diamonds.Count);
+        var restored = NewPrivatePlayer(fx, player);
+        Assert.True(PlayerInventorySave.TryLoad(PlayerInventorySave.Pack(player), restored.Inventory, restored.Windows));
+        Assert.Equal(diamonds, restored.Inventory.Cursor);
+        Assert.False(restored.Windows.RecoverUiToInventory(restored.Inventory));
+        var again = NewPrivatePlayer(fx, player);
+        Assert.True(PlayerInventorySave.TryLoad(PlayerInventorySave.Pack(restored), again.Inventory, again.Windows));
+        Assert.Equal(diamonds, again.Inventory.Cursor);
+        again.Inventory.TrySetBlock(0, Blocks.Air, 0);
+        Assert.True(again.Windows.RecoverUiToInventory(again.Inventory));
+        Assert.Equal(diamonds, again.Inventory.Get(0)); Assert.True(again.Inventory.Cursor.IsEmpty);
+        Assert.False(again.Windows.RecoverUiToInventory(again.Inventory));
+    }
 
-            var layoutBefore = Layout(player, Chest());
-            Assert.True(player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1000 + request, actions.ToArray())));
-            system.Tick(fx.Clock, fx.Players.Online);
+    [Fact]
+    public void Legacy_bag_blob_remains_readable()
+    {
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("legacy-save");
+        var restored = NewPrivatePlayer(fx, player);
+        Assert.True(PlayerInventorySave.TryLoad(player.Inventory.PackMainBlob(), restored.Inventory, restored.Windows));
+        Assert.Equal(player.Inventory.SnapshotMainInventory(), restored.Inventory.SnapshotMainInventory());
+    }
 
-            if (Layout(player, Chest()) != layoutBefore) moved++;
-            var actual = Census(player, Chest());
-            Assert.True(
-                expected.Count == actual.Count && expected.All(kv => actual.GetValueOrDefault(kv.Key) == kv.Value),
-                $"seed {seed}, request {request}: items were created or lost.");
-            for (var i = 0; i < PlayerInventory.FullInventorySize; i++)
-                Assert.InRange(player.Inventory.Get(i).Count, 0, PlayerInventory.MaxStack);
-        }
+    private static Player.Player NewPrivatePlayer(IntentTestFixture fx, Player.Player original) =>
+        new("restored", original.Session, fx.Players.AllocateRuntimeId(), original.Uuid,
+            level: fx.World, itemPalette: fx.Context.ItemPalette);
 
-        // Guards against a vacuous pass: a good share of the random requests must really have applied.
-        if (withDrops) Assert.NotEmpty(fx.World.FloorDrops.Snapshot());
-        Assert.True(moved >= 20, $"seed {seed}: only {moved}/150 requests changed anything.");
+    private static void Slot(ref BinaryStream writer, byte container, byte index)
+    {
+        writer.WriteByte(container); writer.WriteBool(false); writer.WriteByte(index);
+        writer.WriteInt(0, BinaryStream.Endianess.Little);
     }
 }

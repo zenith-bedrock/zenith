@@ -9,6 +9,22 @@ namespace Zenith.Tests;
 
 public class ClientSkinParserTests
 {
+    [Theory]
+    [InlineData("persona_facial_hair", (uint)SkinPieceType.FacialHair)]
+    [InlineData("persona_high_pants", (uint)SkinPieceType.HighPants)]
+    [InlineData("persona_left_arm", (uint)SkinPieceType.LeftArm)]
+    public void Persona_JSON_names_map_to_the_numeric_wire_enum(string pieceType, uint expected)
+    {
+        var jwt = MakeClientDataJwt(new
+        {
+            SkinImageWidth = 64, SkinImageHeight = 64,
+            SkinData = Convert.ToBase64String(new byte[64 * 64 * 4]),
+            PersonaPieces = new[] { new { PieceType = pieceType } }
+        });
+        Assert.True(ClientSkinParser.TryParse(jwt, out var skin));
+        Assert.Equal(expected, (uint)Assert.Single(skin.PersonaPieces).PieceType);
+    }
+
     [Fact]
     public void TryParse_classic_skin_roundtrips_on_player_list()
     {
@@ -56,7 +72,8 @@ public class ClientSkinParserTests
         Assert.Equal(patch, skin.ResourcePatch);
         Assert.Equal(geometry, skin.GeometryData);
         Assert.Equal("1.21.0", skin.GeometryVersion);
-        Assert.Equal("slim", skin.ArmSize);
+        Assert.Equal(SkinArmSize.Slim, skin.ArmSize);
+        Assert.Equal(1, skin.SkinColor);
         Assert.False(skin.IsPersona);
         Assert.True(skin.OverridesPlayerAppearance);
         Assert.Equal(rgba, skin.Image.Data);
@@ -96,13 +113,13 @@ public class ClientSkinParserTests
         Assert.Equal(skin.Image.Width, decoded.Image.Width);
         Assert.Equal(skin.Image.Height, decoded.Image.Height);
         Assert.Equal(skin.Image.Data, decoded.Image.Data);
-        Assert.Equal("slim", decoded.ArmSize);
+        Assert.Equal(SkinArmSize.Slim, decoded.ArmSize);
     }
 
     [Fact]
     public void TryParse_persona_pieces_and_animation()
     {
-        var rgba = new byte[64 * 64 * 4];
+        var rgba = new byte[256 * 256 * 4]; // BDS persona capture uses 256px, above the former 128px cap
         rgba.AsSpan().Fill(0xff);
         var animPixels = new byte[32 * 32 * 4];
         var jwt = MakeClientDataJwt(new Dictionary<string, object?>
@@ -110,8 +127,8 @@ public class ClientSkinParserTests
             ["SkinId"] = "persona.1",
             ["PlayFabId"] = "",
             ["SkinResourcePatch"] = B64("""{"geometry":{"default":"geometry.humanoid.custom"}}"""),
-            ["SkinImageWidth"] = 64,
-            ["SkinImageHeight"] = 64,
+            ["SkinImageWidth"] = 256,
+            ["SkinImageHeight"] = 256,
             ["SkinData"] = Convert.ToBase64String(rgba),
             ["CapeData"] = "",
             ["CapeImageWidth"] = 0,
@@ -150,7 +167,7 @@ public class ClientSkinParserTests
                 new Dictionary<string, object?>
                 {
                     ["PieceType"] = "persona_hair",
-                    ["Colors"] = new[] { "#ff0000" }
+                    ["Colors"] = new[] { "#ffff0000", "#ff0000ff", "#0", "#ffffffff" }
                 }
             },
             ["PremiumSkin"] = true,
@@ -162,14 +179,16 @@ public class ClientSkinParserTests
 
         Assert.True(ClientSkinParser.TryParse(jwt, out var skin));
         Assert.True(skin.IsPersona);
+        Assert.Equal(256u, skin.Image.Width);
         Assert.True(skin.IsPremium);
         Assert.Single(skin.Animations);
         Assert.Equal(32u, skin.Animations[0].Image.Width);
         Assert.Single(skin.PersonaPieces);
-        Assert.Equal("persona_hair", skin.PersonaPieces[0].PieceType);
+        Assert.Equal(SkinPieceType.Hair, skin.PersonaPieces[0].PieceType);
         Assert.Equal("00000000-0000-0000-0000-000000000001", skin.PersonaPieces[0].PackId);
         Assert.Single(skin.TintPieces);
-        Assert.Equal("#ff0000", skin.TintPieces[0].Colors[0]);
+        Assert.Equal("hair", skin.TintPieces[0].Type);
+        Assert.Equal([unchecked((int)0xffff0000), unchecked((int)0xff0000ff), 0, -1], skin.TintPieces[0].Colors);
     }
 
     [Fact]

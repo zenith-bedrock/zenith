@@ -57,7 +57,8 @@ static class DigProfiles
         {
             if (!_loaded)
                 LoadCuratedUnlocked();
-            return ByBlockRuntimeId.TryGetValue(blockRuntimeId, out profile!);
+            return ByBlockRuntimeId.TryGetValue(blockRuntimeId, out profile!) ||
+                   SolidBuildingBlocks.TryGet(blockRuntimeId, out profile);
         }
     }
 

@@ -227,7 +227,7 @@ public class BlockIntentTests
 
 
     [Fact]
-    public void BlockSystem_break_fills_storage_when_hotbar_full()
+    public void BlockSystem_break_spawns_ground_loot_even_when_storage_has_space()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("fullhotbar");
@@ -241,6 +241,16 @@ public class BlockIntentTests
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
+        Assert.True(player.Inventory.Get(9).IsEmpty);
+        var drop = Assert.Single(fx.World.FloorDrops.Snapshot());
+        Assert.Equal(Blocks.Stone, drop.Id.Value); Assert.Equal(1, drop.Count);
+        Assert.Equal(FloorDropStore.DefaultPickupDelay, drop.PickupDelayTicks);
+        var pickup = new FloorDropSystem(fx.World);
+        for (var tick = 1; tick < FloorDropStore.DefaultPickupDelay; tick++)
+            pickup.Tick(fx.Clock, fx.Players.Online);
+        Assert.True(player.Inventory.Get(9).IsEmpty);
+        pickup.Tick(fx.Clock, fx.Players.Online);
+        Assert.Empty(fx.World.FloorDrops.Snapshot());
         Assert.Equal(Blocks.Stone, player.Inventory.Get(9).Id.Value);
         Assert.Equal(1, player.Inventory.Get(9).Count);
     }
@@ -719,8 +729,10 @@ public class BlockIntentTests
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         var gainedA = CountRuntime(a.Inventory, Blocks.Dirt) - beforeA;
         var gainedB = CountRuntime(b.Inventory, Blocks.Dirt) - beforeB;
-        Assert.Equal(1, gainedA + gainedB);
-        Assert.True(gainedA == 1 ^ gainedB == 1);
+        Assert.Equal(0, gainedA + gainedB);
+        var drop = Assert.Single(fx.World.FloorDrops.Snapshot());
+        Assert.Equal(Blocks.Dirt, drop.Id.Value);
+        Assert.Equal(1, drop.Count); // one block cannot produce two drops from competing requests
     }
 
 
@@ -909,7 +921,10 @@ public class BlockIntentTests
         Assert.Equal(Blocks.Air, fx.World.GetBlock(5, 64, 5));
         Assert.False(fx.World.Chests.TryGetSlots(5, 64, 5, out _));
         Assert.Equal(Blocks.Chest, player.Inventory.Get(5).Id.Value);
-        Assert.Equal(before + 1, player.Inventory.Get(5).Count);
+        Assert.Equal(before, player.Inventory.Get(5).Count);
+        var chestDrop = Assert.Single(fx.World.FloorDrops.Snapshot());
+        Assert.Equal(Blocks.Chest, chestDrop.Id.Value);
+        Assert.Equal(1, chestDrop.Count);
     }
 
 

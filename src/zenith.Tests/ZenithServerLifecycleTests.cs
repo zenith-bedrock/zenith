@@ -112,7 +112,7 @@ public sealed class ZenithServerLifecycleTests
     }
 
     private static ZenithServer CreateServer(int port) => new(
-        new ServerConfig { Server = { Port = port } },
+        new ServerConfig { Server = { Port = port }, Auth = { Accept = ["self-signed"] } },
         configPath: "lifecycle-test.yml");
 
     private sealed class ThrowingSystem : IGameSystem

@@ -50,7 +50,9 @@ public class PlayerVisibilityJoinTests
         var bootstrapPacketIds = ReadUnsplitPacketIds(fx, bob.Session.RakSession().EndPoint);
         Assert.Contains((int)ProtocolInfo.ADD_PLAYER_PACKET, bootstrapPacketIds);
         Assert.DoesNotContain((int)ProtocolInfo.MOVE_ACTOR_ABSOLUTE_PACKET, bootstrapPacketIds);
-        Assert.DoesNotContain((int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET, bootstrapPacketIds);
+        Assert.Contains((int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET, bootstrapPacketIds);
+        Assert.True(bootstrapPacketIds.IndexOf((int)ProtocolInfo.UPDATE_ATTRIBUTES_PACKET) >
+                    bootstrapPacketIds.IndexOf((int)ProtocolInfo.ADD_PLAYER_PACKET));
         Assert.DoesNotContain((int)ProtocolInfo.PLAYER_SKIN_PACKET, bootstrapPacketIds);
         Assert.DoesNotContain((int)ProtocolInfo.MOB_ARMOR_EQUIPMENT_PACKET, bootstrapPacketIds);
 

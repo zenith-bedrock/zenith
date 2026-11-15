@@ -6,8 +6,8 @@ namespace Zenith.Player;
 /// 32-40 (<see cref="Protocol.InventoryContainerMap.CraftingTableGridWireOffset"/>), distinct from
 /// <see cref="PlayerCraftUi"/>'s personal 2×2 grid (wire slots 28-31) rather than an extension of
 /// it — the two occupy separate, non-overlapping wire slot ranges on real Bedrock clients, confirmed
-/// against Dragonfly/pmmp's protocol constants. Not persisted, same lifecycle as
-/// <see cref="PlayerCraftUi"/>; no created-output slot of its own — see <see cref="ICraftGrid"/>'s
+/// against Dragonfly/pmmp's protocol constants. Saved with transient inventory custody (ADR §158);
+/// no created-output slot of its own — see <see cref="ICraftGrid"/>'s
 /// doc comment for why.
 /// </summary>
 sealed class PlayerTableCraftUi : ICraftGrid

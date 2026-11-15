@@ -2,6 +2,7 @@ using Zenith.Packets;
 using Zenith.Binary;
 using Xunit;
 using Zenith.Session.Handler;
+using Zenith.Raknet.Network;
 
 namespace Zenith.Tests;
 
@@ -14,6 +15,31 @@ namespace Zenith.Tests;
 /// </summary>
 public class ResourcePacksSessionHandlerTests
 {
+    [Theory]
+    [InlineData(259, "completed")]
+    [InlineData(1, "downloading")]
+    public void Invalid_response_closes_without_bootstrap(int status, string name)
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddPlayer("invalid-packs");
+        player.Session.SetHandler(new ResourcePacksSessionHandler());
+        // Downloading without its required count is truncated; 259 must not alias Completed.
+        var stream = new BinaryStream(BuildStatusOnlyBatch(status, name));
+        player.Session.HandleGamePacket(ref stream);
+        player.Session.Transport.FlushOutgoing();
+        Assert.True(player.Session.IsClosed);
+        foreach (var datagram in fx.Transport.Captured)
+        {
+            var frames = new FrameSet();
+            var r = new BinaryStream(datagram[1..]);
+            frames.Decode(ref r);
+            // RakNet's disconnect notification is allowed, Bedrock bootstrap is not.
+            Assert.All(frames.Packets, frame => Assert.NotEqual(0xfe, frame.Buffer.Span[0]));
+            r.Dispose();
+        }
+        Assert.False(player.IsSpawning);
+    }
+
     private static byte[] BuildStatusOnlyBatch(int status, string name)
     {
         var header = new BinaryStream();

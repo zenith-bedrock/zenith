@@ -77,6 +77,16 @@ sealed class RecipeRegistry
     public bool TryCraftFromGrid(ICraftGrid grid, uint netId, out InventorySlot output, int times, bool isAtCraftingTable)
     {
         output = InventorySlot.Empty;
+        // This single-result API cannot take custody of secondary results. Refuse before consuming.
+        if (!TryGet(netId, out var single) || single.Outputs.Length != 1 ||
+            !TryCraftOutputsFromGrid(grid, netId, out var outputs, times, isAtCraftingTable)) return false;
+        output = outputs[0];
+        return true;
+    }
+
+    public bool TryCraftOutputsFromGrid(ICraftGrid grid, uint netId, out InventorySlot[] outputs, int times, bool isAtCraftingTable)
+    {
+        outputs = [];
         if (times == 0) times = 1;
         if (!TryResolveCraft(netId, times, isAtCraftingTable, out var recipe)) return false;
         if (!TryMatch(recipe, grid, out var used)) return false;
@@ -96,8 +106,7 @@ sealed class RecipeRegistry
             }
         }
 
-        var main = recipe.Outputs[0];
-        output = new InventorySlot(main.Stack, main.Count * times);
+        outputs = recipe.Outputs.Select(o => new InventorySlot(o.Stack, o.Count * times)).ToArray();
         return true;
     }
 
@@ -127,8 +136,8 @@ sealed class RecipeRegistry
         if (!_byNetId.TryGetValue(netId, out recipe) || recipe.Outputs.Length == 0) return false;
         if (recipe.RequiresTable && !isAtCraftingTable) return false;
         if (times <= 0) return false;
-        var main = recipe.Outputs[0];
-        return main.Count > 0 && times <= PlayerInventory.MaxStack / main.Count;
+        return recipe.Outputs.Length <= PlayerCraftUi.MaxCreatedOutputs &&
+            recipe.Outputs.All(o => o.Count > 0 && times <= ItemStackLimits.For(o.Stack) / o.Count);
     }
 
     /// <summary>Name and aux of whatever sits in a grid cell (blocks and items share the namespace); null when empty.</summary>

@@ -10,6 +10,73 @@ namespace Zenith.Tests;
 /// </summary>
 public class PlayerAuthInputDecodeTests
 {
+    [Fact]
+    public void Handled_teleport_flag_survives_decode_and_handler_handoff()
+    {
+        var w = new BinaryStream(); WritePoseAndModes(ref w);
+        w.WriteUnsignedVarInt(1); w.WriteVarInt(37);
+        WriteModesAndTick(ref w); WriteNoTransactionNoItemStackRequest(ref w);
+        w.WriteBool(false); WriteNoVehicleTail(ref w);
+        var bytes = w.GetBufferDisposing().ToArray();
+        Assert.True(DecodeBody(bytes).InputHandledTeleport);
+        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("teleport-flag");
+        var r = new BinaryStream(bytes);
+        new Zenith.Session.Handler.InGameSessionHandler().HandleDataPacket(player.Session,
+            new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET }, ref r);
+        Assert.True(player.Intents.TryConsumeMovementInput(out var input));
+        Assert.True(input.HandledTeleport);
+    }
+
+    [Theory]
+    [InlineData(100, true)]
+    [InlineData(101, false)]
+    [InlineData(int.MaxValue, false)]
+    public void Block_actions_are_bounded_before_reading_or_publishing(int count, bool valid)
+    {
+        var w = new BinaryStream();
+        WritePoseAndModes(ref w);
+        WriteEmptyInputData(ref w);
+        WriteModesAndTick(ref w);
+        WriteNoTransactionNoItemStackRequest(ref w);
+        w.WriteBool(true);
+        w.WriteUnsignedVarInt(count);
+        if (valid)
+        {
+            for (var n = 0; n < count; n++)
+                for (var field = 0; field < 5; field++) w.WriteVarInt(0);
+            WriteNoVehicleTail(ref w);
+        }
+        var bytes = w.GetBufferDisposing().ToArray();
+        if (!valid) Assert.Throws<InvalidDataException>(() => DecodeBody(bytes));
+        else Assert.Equal(count, DecodeBody(bytes).BlockActions.Length);
+        if (!valid)
+        {
+            var fx = new IntentTestFixture();
+            var player = fx.AddInGamePlayer("block-action-bounds");
+            var input = new BinaryStream(bytes);
+            new Zenith.Session.Handler.InGameSessionHandler().HandleDataPacket(player.Session,
+                new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.PLAYER_AUTH_INPUT_PACKET }, ref input);
+            Assert.False(player.Intents.TryPeekMovementInput(out _));
+            Assert.False(player.Intents.TryConsumeBlockEdit(out _));
+        }
+    }
+
+    [Fact]
+    public void Complete_AuthInput_rejects_trailing_bytes()
+    {
+        var w = new BinaryStream();
+        WritePoseAndModes(ref w); WriteEmptyInputData(ref w); WriteModesAndTick(ref w);
+        WriteNoTransactionNoItemStackRequest(ref w); w.WriteBool(false); WriteNoVehicleTail(ref w);
+        var bytes = w.GetBufferDisposing().ToArray();
+        Assert.Throws<InvalidDataException>(() => DecodeBody([.. bytes, 0]));
+    }
+
+    private static PlayerAuthInputPacket DecodeBody(byte[] bytes)
+    {
+        var reader = new BinaryStream(bytes);
+        var packet = new PlayerAuthInputPacket(); packet.Decode(ref reader); return packet;
+    }
+
     private static void WritePoseAndModes(ref BinaryStream w, float pitch = 1.5f)
     {
         w.WriteFloat(pitch, BinaryStream.Endianess.Little); // pitch
@@ -61,7 +128,7 @@ public class PlayerAuthInputDecodeTests
     private static void WriteStackActionHeader(ref BinaryStream w, byte legacyActionId)
     {
         w.WriteUnsignedVarInt(legacyActionId);
-        w.WriteByte(legacyActionId);
+        w.WriteByte((byte)(legacyActionId >= 7 ? legacyActionId + 2 : legacyActionId));
     }
 
     private static void WriteSlotInfo(ref BinaryStream w, byte container, byte slot)
@@ -88,6 +155,7 @@ public class PlayerAuthInputDecodeTests
         packet.Decode(ref stream);
 
         Assert.Equal(1.5f, packet.Pitch);
+        Assert.Equal(1UL, packet.InputTick);
         Assert.Empty(packet.BlockActions);
         Assert.Null(packet.ItemInteraction);
         Assert.False(packet.InputSneaking);
@@ -161,6 +229,7 @@ public class PlayerAuthInputDecodeTests
         w.WriteBool(true); // transaction option
 
         w.WriteVarInt(0); // legacy_request_id
+        w.WriteBool(false); // legacy slots absent
         w.WriteUnsignedVarInt(0); // no legacy actions
 
         w.WriteVarInt(actionType);
