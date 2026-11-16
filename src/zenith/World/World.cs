@@ -55,6 +55,12 @@ sealed class World
     public GravityPendingStore GravityPending { get; }
     public FallingBlockStore FallingBlocks { get; }
 
+    /// <summary>Cells written since the last tick whose neighbourhood must be re-evaluated (ADR §164).</summary>
+    public BlockUpdateQueue BlockUpdates { get; } = new();
+
+    /// <summary>Cells due for re-evaluation at a later tick (ADR §164).</summary>
+    public ScheduledTicks ScheduledTicks { get; } = new();
+
     /// <summary>Per-chunk viewer refcount driving eviction (ADR §114) — see <see cref="ChunkResidencyIndex"/>.</summary>
     public ChunkResidencyIndex ChunkResidency { get; } = new();
 
@@ -506,6 +512,7 @@ sealed class World
                 WriteBehind(_storage.DeleteOverlayAsync(x, y, z), "DeleteOverlay");
             }
 
+            _ = BlockUpdates.Enqueue(x, y, z);
             return true;
         }
 
@@ -523,6 +530,7 @@ sealed class World
 
         StoreOverlay(x, y, z, blockRuntimeId);
         WriteBehind(_storage.PutOverlayAsync(x, y, z, blockRuntimeId), "PutOverlay");
+        _ = BlockUpdates.Enqueue(x, y, z);
         return true;
     }
 

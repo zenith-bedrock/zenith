@@ -1,6 +1,6 @@
 # World dynamics: ticks, liquids, fire, growth, weather, dimensions
 
-**Status:** plan only — nothing here is implemented. It answers the gap "the world is static: no random ticks,
+**Status:** step 1 (update foundation) is implemented — see ADR §164; everything after it is still plan only. It answers the gap "the world is static: no random ticks,
 liquids, fire, growth, weather, Nether or End; dimensions are protocol constants" from
 [`dragonfly-gap-analysis-2026-11-15.md`](dragonfly-gap-analysis-2026-11-15.md). Each step is a separate, shippable
 change with its own tests and wire smoke; none depends on a later one.
@@ -19,7 +19,9 @@ Single-writer: the GameLoop owns world writes. Per ADR §97 the first question i
 at all — all of the below do (continuous evaluation, ordering). So one new `IGameSystem` per concern is justified,
 but they share one foundation instead of each inventing a queue like gravity did.
 
-## Step 1 — Block update foundation (prerequisite for everything else)
+## Step 1 — Block update foundation (prerequisite for everything else) — DONE, ADR §164
+
+Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support rules in `BlockBehaviors`; the plant-support hack moved onto it, gravity deliberately stayed on its own store; no behaviour registry until liquids need one. Measured p99 0.54 ms at 256 changed cells/tick. The original design notes follow.
 
 - `BlockUpdateQueue`: bounded, deduplicated set of cells to re-evaluate, fed by every successful world write
   (place, break, gravity landing, explosions). Neighbour fan-out (6 faces) happens when a cell is drained, not when

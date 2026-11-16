@@ -373,8 +373,6 @@ sealed class BlockEditSystem : IGameSystem
         }
 
         NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
-        if (edit.BlockRuntimeId == World.World.AirRuntimeId)
-            ReleaseUnsupportedPlantAbove(edit.X, edit.Y, edit.Z, online);
         return true;
     }
 
@@ -397,32 +395,6 @@ sealed class BlockEditSystem : IGameSystem
         if (!BlockShapes.TryToggle(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
         CommitExtraWrites();
         return _extra.Count > 0;
-    }
-
-    /// <summary>
-    /// Ground decoration (flowers, grass, saplings…) cannot outlive its soil: when the cell under it was just
-    /// cleared, the plant breaks and drops like any other block. One level only — plants are never stacked on plants.
-    /// </summary>
-    private void ReleaseUnsupportedPlantAbove(int x, int y, int z, IReadOnlyList<global::Zenith.Player.Player> online)
-    {
-        var aboveY = y + 1;
-        var rid = _world.GetBlock(x, aboveY, z);
-        if (Blocks.Catalog.KindOf(rid) != BlockKind.Plant || BlockPlacement.HasSupport(_world, x, aboveY, z, rid))
-            return;
-        if (!_world.CanAcceptBlockWrite(x, aboveY, z, World.World.AirRuntimeId) ||
-            !_world.TrySetBlock(x, aboveY, z, World.World.AirRuntimeId))
-            return;
-
-        var drop = BlockLoot.DropOf(rid);
-        if (drop.Count > 0 && _world.Rules.DoTileDrops)
-            _ = FloorDropFanout.TryDepositBatch(_world, _players, online, x, aboveY, z,
-                [new FloorDropFanout.DepositRequest(drop.Id, drop.Count)]);
-
-        var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)> { (x, aboveY, z, World.World.AirRuntimeId) };
-        foreach (var peer in online)
-        {
-            if (peer.IsInGame) peer.Client.World.PublishUpdateBlocks(updates);
-        }
     }
 
     /// <summary>Enqueue gravity evaluation after a successful world mutation (ADR §57).</summary>

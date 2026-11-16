@@ -178,5 +178,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 161 | [Solid building block families](0161-solid-building-block-families.md) |
 | 162 | [Owner-applied chest hydration](0162-owner-applied-chest-hydration.md) |
 | 163 | [Authoritative player-drop toss](0163-authoritative-player-drop-toss.md) |
+| 164 | [Block update foundation](0164-block-update-foundation.md) |
 
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

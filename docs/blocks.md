@@ -48,7 +48,7 @@ half-working.
   rendered client yet (only exact runtime ids on the wire).
 - Tool classification is a name heuristic (`BlockToolRules`) with exact vanilla values for the common families;
   hoe/shears/sword-effective blocks (leaves, hay, cobweb) are treated as "any tool".
-- Plants only break when the block directly under them is removed; no general neighbour-update propagation exists yet.
+- Support reactions exist (plants, torches, doors break when what they hang on goes — `BlockUpdateSystem`, ADR §164); gravity, liquids, fire, growth and random ticks are still separate or missing.
 - Hardness data comes from an unverified third-party table (see above).
 
 ## Validation

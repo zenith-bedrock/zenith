@@ -22,6 +22,8 @@ sealed class WorldModule : IGameplayModule
         s.Register(new BlockDigSystem(s.World), "block-dig");
         s.Register(new BlockEditSystem(s.Players, s.World, s.Durability), "block-edit");
         s.Register(Gravity, "gravity");
+        // After edits and gravity: reacts to everything they wrote this tick (a plant whose soil was just dug, a door without ground).
+        s.Register(new BlockUpdateSystem(s.World, s.Players), "block-update");
         s.Register(new FloorDropSystem(s.World), "floor-drop");
         s.Register(new InventorySystem(s.Players, s.World, s.Recipes, s.Creative), "inventory");
         // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.

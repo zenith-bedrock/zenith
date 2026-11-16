@@ -130,7 +130,7 @@ src/
       Commands/        # CommandCatalog, CommandRuntime
       Entities/        # mob species (ZombieSystem, CowSystem, …) + shared combat/movement/lifecycle helpers (DamageDispatch, GroundMobMovement, ActorInterest, …)
       Survival/        # player vitals/state (HealthState, HungerSystem, EffectSystem, PlayerDamage, PlayerExperience, ArmorMitigation, FoodItems, MovementSystem, …)
-      WorldInteraction/ # BlockDigSystem, BlockEditSystem, GravitySystem, FloorDropSystem, ChunkStreamSystem
+      WorldInteraction/ # BlockDigSystem, BlockEditSystem, GravitySystem, BlockUpdateSystem, FloorDropSystem, ChunkStreamSystem
       Inventory/       # InventorySystem, EquipmentSystem, RecipeRegistry, CreativeCatalog
       Replication/     # cross-domain fanout (BlockCrackFanout, ChestLidFanout, ArmorFanout, …), ChatSystem, GameModeSystem, TimeSyncSystem
     World/         # World façade, Dimension, IChunkStorage, Blocks, Noise/ (FastNoiseLite), chests, floor drops
