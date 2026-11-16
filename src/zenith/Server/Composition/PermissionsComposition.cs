@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Permissions;
+using Zenith.Gameplay.Policy;
 
 namespace Zenith.Server.Composition;
 
@@ -16,5 +17,13 @@ static class PermissionsComposition
             config.Permissions.Grants,
             config.Permissions.Denies,
             config.Permissions.TrustSelfAsserted));
+    }
+
+    /// <summary>The policies every player block edit passes through, permission first; modules add theirs during composition.</summary>
+    public static BlockEditPolicies CreateBlockPolicies(PermissionAuthority permissions, Zenith.Logging.ILogger? logger)
+    {
+        var policies = new BlockEditPolicies(logger);
+        policies.Register(new PermissionBlockEditPolicy(permissions));
+        return policies;
     }
 }

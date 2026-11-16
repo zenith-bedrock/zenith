@@ -5,6 +5,7 @@ using Zenith.Diagnostics;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Commands;
 using Zenith.Gameplay.Permissions;
+using Zenith.Gameplay.Policy;
 using Zenith.Server.Composition;
 using Zenith.Player;
 using Zenith.Logging;
@@ -34,6 +35,7 @@ class ServerContext
     public CreativeCatalog Creative { get; }
     public PermissionAuthority Permissions { get; }
     public AuthorityGate Gate { get; }
+    public BlockEditPolicies BlockPolicies { get; }
     public CommandRuntime Commands { get; }
     public ServerRuntimeDiagnostics Diagnostics { get; }
 
@@ -51,7 +53,8 @@ class ServerContext
         CreativeCatalog creative,
         ServerRuntimeDiagnostics? diagnostics = null,
         MobSpawner? spawner = null,
-        PermissionAuthority? permissions = null)
+        PermissionAuthority? permissions = null,
+        BlockEditPolicies? blockPolicies = null)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -69,6 +72,7 @@ class ServerContext
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
         Permissions = permissions ?? PermissionsComposition.Create(config);
         Gate = new AuthorityGate(Permissions, playerManager);
+        BlockPolicies = blockPolicies ?? PermissionsComposition.CreateBlockPolicies(Permissions, logger);
         Commands = new CommandRuntime(playerManager, Permissions, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner);
     }
 }

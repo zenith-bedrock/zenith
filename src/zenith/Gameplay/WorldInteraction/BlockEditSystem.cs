@@ -1,4 +1,8 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
+using Zenith.Event;
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
@@ -20,19 +24,31 @@ sealed class BlockEditSystem : IGameSystem
     private readonly World.World _world;
     private readonly ItemDurability _durability;
     private readonly List<BlockWrite> _extra = new();
+    private readonly List<BlockCellChange> _cells = new();
+    private readonly BlockEditPolicies _policies;
+    private readonly EventBus? _events;
     private int _appliedId;
+    private ulong _tick;
+    private long _nextOperation;
 
-    public BlockEditSystem(PlayerManager players, World.World world, ItemDurability durability)
+    /// <param name="policies">The vetoes consulted before an edit; none means nothing can refuse (composition always supplies the permission policy).</param>
+    /// <param name="events">Where the applied-edit fact is published; none means nobody is told.</param>
+    public BlockEditSystem(
+        PlayerManager players, World.World world, ItemDurability durability,
+        BlockEditPolicies? policies = null, EventBus? events = null)
     {
         _players = players;
         _world = world;
         _durability = durability;
+        _policies = policies ?? new BlockEditPolicies();
+        _events = events;
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         if (online.Count == 0) return;
 
+        _tick = clock.CurrentTick;
         var updates = _updatesScratch;
         updates.Clear();
         foreach (var player in online)
@@ -154,6 +170,16 @@ sealed class BlockEditSystem : IGameSystem
             return RejectPlace(player, edit);
         }
 
+        // Plan the whole edit (the clicked cell plus whatever a coupled block takes along) without touching anything, and let the
+        // policies judge it before an item is consumed or a cell is written.
+        var placedId = edit.BlockRuntimeId;
+        _extra.Clear();
+        BlockShapes.OnPlaced(_world, edit.X, edit.Y, edit.Z, placedId, _extra);
+        _extra.RemoveAll(write => !World.WorldColumn.InRange(write.Y));
+        var decision = Evaluate(player, BlockEditKind.Place, edit, existing);
+        if (!decision.IsAllowed)
+            return DenyPlace(player, edit, decision);
+
         var consumedPlacementStack = false;
         InventorySnapshot placementSnapshot = default;
         if (player.GameMode != GameMode.Creative)
@@ -170,8 +196,6 @@ sealed class BlockEditSystem : IGameSystem
             consumedPlacementStack = true;
         }
 
-        var placedId = edit.BlockRuntimeId;
-        BlockShapes.OnPlaced(_world, edit.X, edit.Y, edit.Z, placedId, _extra);
         if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, placedId))
         {
             if (consumedPlacementStack)
@@ -199,6 +223,7 @@ sealed class BlockEditSystem : IGameSystem
             _world.Persistence.PersistInventory(player);
         }
 
+        PublishApplied(player, BlockEditKind.Place);
         return true;
     }
 
@@ -216,6 +241,14 @@ sealed class BlockEditSystem : IGameSystem
         var wasChest = Blocks.IsChest(previous);
         var pairView = wasChest ? ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z) : default;
 
+        // Plan the whole edit (a door takes its other half along) without touching anything, and let the policies judge it.
+        _extra.Clear();
+        BlockShapes.OnRemoved(_world, edit.X, edit.Y, edit.Z, previous, _extra);
+        _extra.RemoveAll(write => !World.WorldColumn.InRange(write.Y));
+        var decision = Evaluate(player, BlockEditKind.Break, edit, previous);
+        if (!decision.IsAllowed)
+            return DenyBreak(player, online, edit, decision);
+
         var shouldDrop = !creative && _world.Rules.DoTileDrops && ShouldDropBrokenBlock(previous, player);
         if (!TryPlanDrops(player, edit, previous, wasChest, shouldDrop, out var floorDropRequests))
             return RejectBreak(player, online, edit);
@@ -224,7 +257,6 @@ sealed class BlockEditSystem : IGameSystem
             return RejectBreak(player, online, edit, "Break refused (outside the world's height)");
 
         _appliedId = World.World.AirRuntimeId;
-        BlockShapes.OnRemoved(_world, edit.X, edit.Y, edit.Z, previous, _extra);
         CommitExtraWrites();
 
         // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
@@ -253,7 +285,44 @@ sealed class BlockEditSystem : IGameSystem
             player.Level.Logger?.Debug($"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
         }
 
+        PublishApplied(player, BlockEditKind.Break);
         return true;
+    }
+
+    /// <summary>Asks the policies about the edit just planned: the clicked cell first, then every cell it drags along.</summary>
+    private PolicyDecision Evaluate(global::Zenith.Player.Player player, BlockEditKind kind, in BlockEditIntent edit, int before)
+    {
+        var cells = _cells;
+        cells.Clear();
+        cells.Add(new BlockCellChange(edit.X, edit.Y, edit.Z, before, edit.BlockRuntimeId));
+        foreach (var write in _extra)
+            cells.Add(new BlockCellChange(write.X, write.Y, write.Z, _world.GetBlock(write.X, write.Y, write.Z), write.BlockRuntimeId));
+        return _policies.Evaluate(new BlockEditProposal(player.Principal, kind, _tick, CollectionsMarshal.AsSpan(cells)));
+    }
+
+    /// <summary>A vetoed placement: nothing was consumed or written; the placer's client gets every cell it predicted put back.</summary>
+    private bool DenyPlace(global::Zenith.Player.Player player, in BlockEditIntent edit, PolicyDecision decision)
+    {
+        player.Level.Logger?.Debug($"Place denied for {player.Username} @ {edit.X},{edit.Y},{edit.Z}: {decision.Reason}");
+        foreach (var cell in _cells) ResyncCellToBreaker(player, cell.X, cell.Y, cell.Z);
+        _extra.Clear();
+        return false;
+    }
+
+    private bool DenyBreak(
+        global::Zenith.Player.Player player, IReadOnlyList<global::Zenith.Player.Player> online, in BlockEditIntent edit, PolicyDecision decision)
+    {
+        foreach (var cell in _cells) ResyncCellToBreaker(player, cell.X, cell.Y, cell.Z);
+        _extra.Clear();
+        return RejectBreak(player, online, edit, $"Break denied ({decision.Reason})");
+    }
+
+    /// <summary>The one fact of an applied edit, after every effect of it is done.</summary>
+    private void PublishApplied(global::Zenith.Player.Player player, BlockEditKind kind)
+    {
+        if (_events is null) return;
+        _events.Publish(new BlocksChanged(
+            ++_nextOperation, player.Uuid, player.RuntimeId, kind, _tick, [.. _cells]));
     }
 
     /// <summary>

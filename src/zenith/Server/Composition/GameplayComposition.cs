@@ -1,4 +1,5 @@
 using Zenith.Event;
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Permissions;
 using Zenith.Diagnostics;
 using Zenith.Ecs;
@@ -30,6 +31,7 @@ sealed record ServerServices(
     MobSpawner Spawner,
     AuthorityGate Gate,
     EventBus Events,
+    BlockEditPolicies BlockPolicies,
     int ChunkResidencySweepIntervalTicks)
 {
     /// <summary>Registers <paramref name="system"/> on the loop under its diagnostics timing name: the one place that pairs the two.</summary>
@@ -75,6 +77,8 @@ static class GameplayComposition
             world ??= module as WorldModule;
         }
 
+        // Composition is over: no module may add a policy once the loop runs.
+        services.BlockPolicies.Freeze();
         return world ?? throw new InvalidOperationException("The gameplay composition has no world module.");
     }
 }
