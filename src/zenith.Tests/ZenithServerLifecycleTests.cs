@@ -5,6 +5,7 @@ using Zenith.Network;
 using Zenith.Player;
 using Zenith.Server;
 using Xunit;
+using Zenith.World;
 
 namespace Zenith.Tests;
 

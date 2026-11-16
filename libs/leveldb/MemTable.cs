@@ -77,6 +77,16 @@ sealed class MemTable
         return false;
     }
 
+    /// <summary>Every entry in key order, tombstones (null value) included: what a flush writes to a table.</summary>
+    public KeyValuePair<byte[], byte[]?>[] Entries()
+    {
+        var current = Volatile.Read(ref _map);
+        var entries = new KeyValuePair<byte[], byte[]?>[current.Count];
+        var i = 0;
+        foreach (var entry in current) entries[i++] = entry;
+        return entries;
+    }
+
     public List<KeyValuePair<byte[], byte[]>> LiveEntries()
     {
         var current = Volatile.Read(ref _map);

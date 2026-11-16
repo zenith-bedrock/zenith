@@ -141,6 +141,10 @@ public ref struct NbtReader
         var len = ReadInt();
         if (len < 0)
             throw new NbtException($"Negative array/list length {len}.");
+        // Every element takes at least one byte on every encoding, so a count above what is left is a lie.
+        // Checked before anything is allocated: a forged length must not cost memory.
+        if (len > _data.Length - _offset)
+            throw new NbtException($"Length {len} exceeds the {_data.Length - _offset} bytes left in the buffer.");
         return len;
     }
 
@@ -320,6 +324,8 @@ public ref struct NbtReader
                 throw new NbtException("Malformed unsigned varint.");
             Need(1);
             b = _data[_offset++];
+            if (shift == 28 && b > 0x0F)
+                throw new NbtException("Unsigned varint overflows 32 bits.");
             result |= (uint)(b & 0x7F) << shift;
             shift += 7;
         } while ((b & 0x80) != 0);
@@ -337,6 +343,8 @@ public ref struct NbtReader
                 throw new NbtException("Malformed unsigned varlong.");
             Need(1);
             b = _data[_offset++];
+            if (shift == 63 && b > 0x01)
+                throw new NbtException("Unsigned varlong overflows 64 bits.");
             result |= (ulong)(b & 0x7F) << shift;
             shift += 7;
         } while ((b & 0x80) != 0);
@@ -355,6 +363,51 @@ public static class NbtCodec
         var root = reader.ReadNamedTag();
         return new NbtDecodeResult(root, reader.BytesConsumed);
     }
+
+    /// <summary>
+    /// Reads every named root in <paramref name="data"/>, one after the other. Bedrock stores a chunk's block
+    /// entities this way: several NBT compounds back to back with no count.
+    /// </summary>
+    public static List<NbtNamedTag> DecodeAll(ReadOnlySpan<byte> data, NbtEncoding encoding)
+    {
+        var roots = new List<NbtNamedTag>();
+        var offset = 0;
+        while (offset < data.Length)
+        {
+            var result = Decode(data[offset..], encoding);
+            roots.Add(result.Root);
+            offset += result.BytesConsumed;
+        }
+
+        return roots;
+    }
+
+    /// <summary>
+    /// Reads a file that starts with Bedrock's 8-byte header (<c>level.dat</c>): storage version, then the
+    /// length of the NBT that follows, both int32 little-endian. The NBT itself is little-endian.
+    /// </summary>
+    public static NbtDecodeResult DecodeWithHeader(ReadOnlySpan<byte> data, out int storageVersion)
+    {
+        if (data.Length < HeaderSize)
+            throw new NbtException("NBT file is shorter than its 8-byte header.");
+        storageVersion = BinaryPrimitives.ReadInt32LittleEndian(data);
+        var length = BinaryPrimitives.ReadInt32LittleEndian(data[4..]);
+        if (length < 0 || length > data.Length - HeaderSize)
+            throw new NbtException($"NBT header declares {length} bytes but {data.Length - HeaderSize} follow.");
+        return Decode(data.Slice(HeaderSize, length), NbtEncoding.LittleEndian);
+    }
+
+    public static byte[] EncodeWithHeader(NbtNamedTag root, int storageVersion)
+    {
+        var body = Encode(root, NbtEncoding.LittleEndian);
+        var file = new byte[HeaderSize + body.Length];
+        BinaryPrimitives.WriteInt32LittleEndian(file, storageVersion);
+        BinaryPrimitives.WriteInt32LittleEndian(file.AsSpan(4), body.Length);
+        body.CopyTo(file, HeaderSize);
+        return file;
+    }
+
+    private const int HeaderSize = 8;
 
     public static byte[] Encode(NbtNamedTag root, NbtEncoding encoding)
     {

@@ -5,7 +5,7 @@
     <AssemblyName>Zenith.LevelDB</AssemblyName>
     <IsPackable>true</IsPackable>
     <PackageId>Zenith.LevelDB</PackageId>
-    <Description>Managed LevelDB-style KV (mem + WAL + snapshot) for Zenith keys — leaf library, dataset fits in RAM.</Description>
+    <Description>Managed LevelDB-style KV (memtable + WAL + sorted tables + compaction) for Zenith keys — leaf library.</Description>
     <Authors>Zenith</Authors>
     <PackageLicenseExpression>LGPL-3.0-only</PackageLicenseExpression>
   </PropertyGroup>

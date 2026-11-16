@@ -1,155 +1,127 @@
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
+using System.Text;
+
 namespace Zenith.World;
 
 readonly record struct ChunkCoord(int X, int Z);
 
-/// <summary>World generator identity — see <see cref="IChunkStorage.GetWorldMetadataAsync"/>.</summary>
+/// <summary>World generator identity — see <see cref="ChunkStorageExtensions.GetWorldMetadataAsync"/>.</summary>
 readonly record struct WorldMetadata(string Terrain, int Seed);
 
 /// <summary>
-/// Seam de storage. <see cref="ValueTask"/> desde o dia 1.
-/// Colunas (<c>c:</c>, one <see cref="ColumnCodec"/> blob each) + inventário (<c>inv:</c>) + playerdata (<c>pd:</c>) — ADR §167.
+/// The world's storage seam (ADR §168): records addressed by <see cref="RecordKey"/>, values opaque to the store.
+/// What a record means is in <see cref="ChunkStorageExtensions"/>; how it reaches the disk is in the implementation.
+/// <see cref="ValueTask"/> from day one.
 /// </summary>
 interface IChunkStorage
 {
-    /// <summary>The stored blob of a column, or null when it was never saved (the world then generates it).</summary>
-    ValueTask<byte[]?> GetColumnAsync(ChunkCoord coord, CancellationToken cancellationToken = default);
-
-    /// <summary>Write-behind: completes once the blob is queued, not when the disk has it.</summary>
-    ValueTask PutColumnAsync(ChunkCoord coord, byte[] blob, CancellationToken cancellationToken = default);
-
-    ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
-    ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default);
-
-    ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
-    ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default);
-    ValueTask PutOffhandAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
-    ValueTask<byte[]?> GetOffhandAsync(Guid uuid, CancellationToken cancellationToken = default);
-
-    ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default);
-    ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default);
+    /// <summary>The stored bytes, or null when the record was never written.</summary>
+    ValueTask<byte[]?> GetAsync(RecordKey key, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// World identity (generator mode + seed) — set once, the first time a world is ever opened, and
-    /// never overwritten after (Phase XXIV: seed is world identity, not a per-restart config knob).
-    /// Null means this is a brand-new world with no committed generator identity yet.
+    /// Write-behind: completes once the record is accepted, not when the disk has it. The array is kept by
+    /// reference, so the caller must not change it afterwards.
     /// </summary>
-    ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default);
-    ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default);
+    ValueTask PutAsync(RecordKey key, byte[] blob, CancellationToken cancellationToken = default);
 
-    /// <summary>The world's game rules in <see cref="GameRuleCodec"/> bytes; null until a rule is first changed.</summary>
-    ValueTask<byte[]?> GetGameRulesAsync(CancellationToken cancellationToken = default);
-    ValueTask PutGameRulesAsync(byte[] blob, CancellationToken cancellationToken = default);
-
-    /// <summary>Await in-flight persistence (column/inv/pd). Shutdown only — never GameLoop (ADR §41).</summary>
+    /// <summary>Await in-flight persistence. Shutdown only — never GameLoop (ADR §41).</summary>
     ValueTask FlushAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Backend-specific operational property (ADR §114/§121) — e.g. <c>Zenith.LevelDB</c>'s
-    /// <c>"zldb.num-entries"</c>/<c>"zldb.approximate-memory-usage"</c> via <c>DB.GetProperty</c>.
-    /// Diagnostics only, never gameplay logic. False for an unrecognized name or a backend with no
-    /// such properties (never throws).
+    /// Backend operational property (ADR §114/§121), e.g. <c>"zldb.num-entries"</c>. Diagnostics only, never
+    /// gameplay logic. False for an unknown name or a backend with none (never throws).
     /// </summary>
     bool TryGetProperty(string property, out string value);
 }
 
-/// <summary>
-/// Thread-safe.
-/// Colunas/inv/pd em RAM para testes (ADR §39 / §60).
-/// </summary>
+/// <summary>What each <see cref="RecordKind"/> means, as calls the game can read.</summary>
+static class ChunkStorageExtensions
+{
+    /// <summary>The stored blob of a column, or null when it was never saved (the world then generates it).</summary>
+    public static ValueTask<byte[]?> GetColumnAsync(this IChunkStorage storage, ChunkCoord coord, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Column(coord), ct);
+
+    public static ValueTask PutColumnAsync(this IChunkStorage storage, ChunkCoord coord, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Column(coord), blob, ct);
+
+    public static ValueTask<byte[]?> GetInventoryAsync(this IChunkStorage storage, Guid uuid, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Player(RecordKind.Inventory, uuid), ct);
+
+    public static ValueTask PutInventoryAsync(this IChunkStorage storage, Guid uuid, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Player(RecordKind.Inventory, uuid), blob, ct);
+
+    public static ValueTask<byte[]?> GetArmorAsync(this IChunkStorage storage, Guid uuid, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Player(RecordKind.Armor, uuid), ct);
+
+    public static ValueTask PutArmorAsync(this IChunkStorage storage, Guid uuid, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Player(RecordKind.Armor, uuid), blob, ct);
+
+    public static ValueTask<byte[]?> GetOffhandAsync(this IChunkStorage storage, Guid uuid, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Player(RecordKind.Offhand, uuid), ct);
+
+    public static ValueTask PutOffhandAsync(this IChunkStorage storage, Guid uuid, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Player(RecordKind.Offhand, uuid), blob, ct);
+
+    public static ValueTask<byte[]?> GetPlayerDataAsync(this IChunkStorage storage, Guid uuid, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Player(RecordKind.PlayerData, uuid), ct);
+
+    public static ValueTask PutPlayerDataAsync(this IChunkStorage storage, Guid uuid, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Player(RecordKind.PlayerData, uuid), blob, ct);
+
+    /// <summary>The world's game rules in <see cref="GameRuleCodec"/> bytes; null until a rule is first changed.</summary>
+    public static ValueTask<byte[]?> GetGameRulesAsync(this IChunkStorage storage, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Singleton(RecordKind.GameRules), ct);
+
+    public static ValueTask PutGameRulesAsync(this IChunkStorage storage, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Singleton(RecordKind.GameRules), blob, ct);
+
+    /// <summary>
+    /// World identity (generator mode + seed): set once, the first time a world is opened, and never overwritten
+    /// (Phase XXIV: the seed is world identity, not a per-restart config knob). Null means a brand-new world.
+    /// </summary>
+    public static async ValueTask<WorldMetadata?> GetWorldMetadataAsync(this IChunkStorage storage, CancellationToken ct = default)
+    {
+        var bytes = await storage.GetAsync(RecordKey.Singleton(RecordKind.WorldMetadata), ct).ConfigureAwait(false);
+        if (bytes is null || bytes.Length < sizeof(int) + 1) return null;
+        return new WorldMetadata(
+            Encoding.UTF8.GetString(bytes.AsSpan(sizeof(int))),
+            BinaryPrimitives.ReadInt32LittleEndian(bytes));
+    }
+
+    public static ValueTask PutWorldMetadataAsync(this IChunkStorage storage, WorldMetadata metadata, CancellationToken ct = default)
+    {
+        var terrain = Encoding.UTF8.GetBytes(metadata.Terrain);
+        var blob = new byte[sizeof(int) + terrain.Length];
+        BinaryPrimitives.WriteInt32LittleEndian(blob, metadata.Seed);
+        terrain.CopyTo(blob.AsSpan(sizeof(int)));
+        return storage.PutAsync(RecordKey.Singleton(RecordKind.WorldMetadata), blob, ct);
+    }
+}
+
+/// <summary>Thread-safe, RAM only: the storage tests run against (ADR §39 / §60).</summary>
 sealed class InMemoryChunkStorage : IChunkStorage
 {
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, byte[]> _columns = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _inventories = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _armor = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _offhand = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]> _playerData = new();
-    private WorldMetadata? _worldMetadata;
-    private byte[]? _gameRules;
+    private readonly ConcurrentDictionary<RecordKey, byte[]> _records = new();
+    private int _putCount;
 
-    /// <summary>Column Put count — tests for ADR §45 (a column nobody edited is never written).</summary>
-    public int PutCount { get; private set; }
+    /// <summary>Column puts so far — tests for ADR §45 (a column nobody edited is never written).</summary>
+    public int PutCount => Volatile.Read(ref _putCount);
 
-    public ValueTask<byte[]?> GetColumnAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
+    public ValueTask<byte[]?> GetAsync(RecordKey key, CancellationToken cancellationToken = default)
     {
-        _columns.TryGetValue(coord, out var blob);
+        _records.TryGetValue(key, out var blob);
         return ValueTask.FromResult<byte[]?>(blob);
     }
 
-    public ValueTask PutColumnAsync(ChunkCoord coord, byte[] blob, CancellationToken cancellationToken = default)
+    public ValueTask PutAsync(RecordKey key, byte[] blob, CancellationToken cancellationToken = default)
     {
-        PutCount++;
-        _columns[coord] = blob;
+        if (key.Kind == RecordKind.Column) Interlocked.Increment(ref _putCount);
+        _records[key] = blob;
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
-    {
-        _inventories[uuid] = blob;
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<byte[]?> GetInventoryAsync(Guid uuid, CancellationToken cancellationToken = default)
-    {
-        _inventories.TryGetValue(uuid, out var blob);
-        return ValueTask.FromResult<byte[]?>(blob);
-    }
-
-    public ValueTask PutArmorAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
-    {
-        _armor[uuid] = blob;
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<byte[]?> GetArmorAsync(Guid uuid, CancellationToken cancellationToken = default)
-    {
-        _armor.TryGetValue(uuid, out var blob);
-        return ValueTask.FromResult<byte[]?>(blob);
-    }
-
-    public ValueTask PutOffhandAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
-    {
-        _offhand[uuid] = blob;
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<byte[]?> GetOffhandAsync(Guid uuid, CancellationToken cancellationToken = default)
-    {
-        _offhand.TryGetValue(uuid, out var blob);
-        return ValueTask.FromResult<byte[]?>(blob);
-    }
-
-    public ValueTask PutPlayerDataAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)
-    {
-        _playerData[uuid] = blob;
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<byte[]?> GetPlayerDataAsync(Guid uuid, CancellationToken cancellationToken = default)
-    {
-        _playerData.TryGetValue(uuid, out var blob);
-        return ValueTask.FromResult<byte[]?>(blob);
-    }
-
-    public ValueTask<byte[]?> GetGameRulesAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(_gameRules);
-
-    public ValueTask PutGameRulesAsync(byte[] blob, CancellationToken cancellationToken = default)
-    {
-        _gameRules = blob;
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask FlushAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.CompletedTask;
-
-    public ValueTask<WorldMetadata?> GetWorldMetadataAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(_worldMetadata);
-
-    public ValueTask PutWorldMetadataAsync(WorldMetadata metadata, CancellationToken cancellationToken = default)
-    {
-        _worldMetadata = metadata;
-        return ValueTask.CompletedTask;
-    }
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
     public bool TryGetProperty(string property, out string value)
     {

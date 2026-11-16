@@ -1,42 +1,80 @@
 namespace Zenith.LevelDB;
 
+/// <summary>The tables of a database, oldest first. Immutable: a change builds a new set and swaps it in.</summary>
+sealed class TableSet(Table[] tables)
+{
+    public static TableSet Empty { get; } = new([]);
+
+    public int Count => tables.Length;
+    public Table this[int index] => tables[index];
+
+    public IEnumerable<Table> Oldest => tables;
+
+    public TableSet With(Table added) => new([.. tables, added]);
+
+    /// <summary>This set with <c>count</c> tables from <paramref name="start"/> replaced by <paramref name="merged"/> (null: removed).</summary>
+    public TableSet Replace(int start, int count, Table? merged)
+    {
+        var next = new List<Table>(tables.Length);
+        next.AddRange(tables.Take(start));
+        if (merged is not null) next.Add(merged);
+        next.AddRange(tables.Skip(start + count));
+        return new TableSet([.. next]);
+    }
+
+    /// <summary>Newest value for <paramref name="key"/> among the tables; <see cref="TableLookup.Deleted"/> stops the search.</summary>
+    public TableLookup TryGet(byte[] key, out byte[]? value)
+    {
+        for (var i = tables.Length - 1; i >= 0; i--)
+        {
+            var result = tables[i].TryGet(key, out value);
+            if (result != TableLookup.NotFound) return result;
+        }
+
+        value = null;
+        return TableLookup.NotFound;
+    }
+
+    public List<ISortedCursor> Cursors(ISortedCursor? first)
+    {
+        var cursors = new List<ISortedCursor>(tables.Length + 1);
+        if (first is not null) cursors.Add(first);
+        for (var i = tables.Length - 1; i >= 0; i--) cursors.Add(new TableCursor(tables[i]));
+        return cursors;
+    }
+}
+
 /// <summary>
-/// A reusable, consistent point-in-time view of the dataset, materialized once. This is the same
-/// copy <see cref="DB.CreateIterator()"/> already builds for isolation from concurrent writes —
-/// <see cref="DB.GetSnapshot()"/> just gives that copy a name and lets a caller reuse it for
-/// several point reads or iterations without paying the copy cost again per call. Not real MVCC
-/// (no sequence numbers, no tombstone filtering) — ZLDB's RAM-resident model makes "clone the live
-/// set once" a sufficient, much simpler equivalent for its scope; see <c>README.md</c>'s "why not a
-/// full LSM" section for why sequence-numbered snapshots aren't pursued here.
-/// <para/>
-/// Backed by a sorted array (<see cref="MemTable.LiveEntries"/> already returns entries in
-/// <see cref="ByteComparer"/> order, since it iterates the already-sorted
-/// <see cref="System.Collections.Immutable.ImmutableSortedDictionary{TKey,TValue}"/>), not a
-/// <see cref="SortedDictionary{TKey,TValue}"/> — <see cref="TryGet"/> and
-/// <see cref="Iterator.Seek"/> binary-search it directly (O(log n)) instead of relying on a tree
-/// lookup / linear scan.
+/// A consistent point-in-time view of the database: the memtable as it was, plus the tables that existed. Both
+/// are immutable, so a snapshot costs one array copy of the memtable (bounded by the write buffer), never a copy
+/// of the dataset, and later writes cannot reach it.
 /// </summary>
 public sealed class Snapshot
 {
-    private readonly IReadOnlyList<KeyValuePair<byte[], byte[]>> _entries;
+    private readonly KeyValuePair<byte[], byte[]?>[] _memtable;
+    private readonly TableSet _tables;
 
-    internal Snapshot(IReadOnlyList<KeyValuePair<byte[], byte[]>> sortedEntries)
+    internal Snapshot(KeyValuePair<byte[], byte[]?>[] memtable, TableSet tables)
     {
-        _entries = sortedEntries;
+        _memtable = memtable;
+        _tables = tables;
     }
 
-    /// <summary>Point read against this snapshot's view — never reflects writes made after the
-    /// snapshot was taken, even if the live <see cref="DB"/> has since changed the key. Zero-alloc
-    /// (ADR §118): the array underneath is owned by this snapshot's copy, never cloned per call —
-    /// safe under the same copy-on-write discipline <see cref="DB.TryGet"/> relies on. O(log n)
-    /// binary search (ADR §120), not a linear scan.</summary>
+    /// <summary>Point read against this view; never reflects writes made after the snapshot was taken.</summary>
     public bool TryGet(byte[] key, out ReadOnlyMemory<byte> value)
     {
         ArgumentNullException.ThrowIfNull(key);
-        var index = SortedEntrySearch.LowerBound(_entries, key);
-        if (index < _entries.Count && ByteComparer.Compare(_entries[index].Key, key) == 0)
+        var index = ArrayCursor.LowerBound(_memtable, key);
+        if (index < _memtable.Length && ByteComparer.Compare(_memtable[index].Key, key) == 0)
         {
-            value = _entries[index].Value;
+            var stored = _memtable[index].Value;
+            value = stored ?? default;
+            return stored is not null;
+        }
+
+        if (_tables.TryGet(key, out var fromTable) == TableLookup.Found)
+        {
+            value = fromTable;
             return true;
         }
 
@@ -44,33 +82,6 @@ public sealed class Snapshot
         return false;
     }
 
-    /// <summary>A fresh <see cref="Iterator"/> over this same materialized view. Cheap relative to
-    /// <see cref="DB.CreateIterator()"/> — no new copy, just a new cursor over the existing one.
-    /// Safe to call from multiple threads concurrently, and safe to use the resulting iterators
-    /// concurrently with each other — this snapshot's entries are never mutated after
-    /// construction.</summary>
-    public Iterator CreateIterator() => new(_entries);
-}
-
-/// <summary>Shared binary-search helper (ADR §120) so <see cref="Snapshot.TryGet"/> and
-/// <see cref="Iterator.Seek"/> use one tested implementation instead of two hand-rolled ones.</summary>
-internal static class SortedEntrySearch
-{
-    /// <summary>Index of the first entry whose key is <c>&gt;= target</c>, or
-    /// <c>entries.Count</c> if every key sorts before <paramref name="target"/>.</summary>
-    public static int LowerBound(IReadOnlyList<KeyValuePair<byte[], byte[]>> entries, ReadOnlySpan<byte> target)
-    {
-        var lo = 0;
-        var hi = entries.Count;
-        while (lo < hi)
-        {
-            var mid = lo + (hi - lo) / 2;
-            if (ByteComparer.Compare(entries[mid].Key, target) < 0)
-                lo = mid + 1;
-            else
-                hi = mid;
-        }
-
-        return lo;
-    }
+    /// <summary>A fresh cursor over this view. Safe to call from any thread.</summary>
+    public Iterator CreateIterator() => new(_tables.Cursors(new ArrayCursor(_memtable)));
 }

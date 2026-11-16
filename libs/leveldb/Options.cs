@@ -6,8 +6,23 @@ public sealed class Options
     public bool CreateIfMissing { get; set; } = true;
     public bool ErrorIfExists { get; set; }
 
-    /// <summary>Tamanho aproximado do memtable antes do flush para tabela imutável.</summary>
+    /// <summary>Approximate memtable size that triggers a flush to a new table. Only the memtable is written: the cost of a flush does not grow with the database.</summary>
     public int WriteBufferSize { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>Target size of a table's data block. A value larger than this gets a block of its own.</summary>
+    public int BlockSize { get; set; } = 16 * 1024;
+
+    /// <summary>Bloom filter bits per key. Ten keeps false positives near 1%.</summary>
+    public int BloomBitsPerKey { get; set; } = 10;
+
+    /// <summary>Merge this many neighbouring tables of similar size into one (size-tiered compaction).</summary>
+    public int CompactionFanIn { get; set; } = 4;
+
+    /// <summary>Above this many tables the smallest neighbouring run is merged even when the sizes differ.</summary>
+    public int MaxTableCount { get; set; } = 12;
+
+    /// <summary>Compact on a background thread. Turn it off for deterministic tests; <see cref="DB.CompactNow"/> still works.</summary>
+    public bool BackgroundCompaction { get; set; } = true;
 
     /// <summary>
     /// Observability hook: invoked with a human-readable message when WAL replay (during

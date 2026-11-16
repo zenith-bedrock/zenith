@@ -167,10 +167,10 @@ public class LevelDbTests
 
             // Simulate crash after writing a new snapshot but before CURRENT publish.
             var orphanPath = Path.Combine(dir, "999999.ldb");
-            TableFile.Write(
+            TableWriter.Write(
                 orphanPath,
-                [new KeyValuePair<byte[], byte[]>(Encoding.UTF8.GetBytes("k"), Encoding.UTF8.GetBytes("B"))],
-                sync: true);
+                [new KeyValuePair<byte[], byte[]?>(Encoding.UTF8.GetBytes("k"), Encoding.UTF8.GetBytes("B"))],
+                blockSize: 4096, bloomBitsPerKey: 10, dropTombstones: false, sync: true);
             Assert.True(File.Exists(orphanPath));
             Assert.Equal(currentName, File.ReadAllText(Path.Combine(dir, "CURRENT")).Trim());
 
@@ -196,7 +196,7 @@ public class LevelDbTests
         try
         {
             var key = Encoding.UTF8.GetBytes("k");
-            using (var db = new DB(new Options { CreateIfMissing = true, WriteBufferSize = 32 }, dir))
+            using (var db = new DB(new Options { CreateIfMissing = true, WriteBufferSize = 32, BackgroundCompaction = false }, dir))
             {
                 db.Put(key, Encoding.UTF8.GetBytes("A"));
                 for (var i = 0; i < 8; i++)
@@ -208,7 +208,7 @@ public class LevelDbTests
 
             DB.AfterTableWriteBeforeCurrent = () => throw new IOException("simulated crash mid-flush");
             // Intentionally leaked: Dispose/Close would finish the flush and defeat the crash sim.
-            var leaked = new DB(new Options { CreateIfMissing = false, WriteBufferSize = 32 }, dir);
+            var leaked = new DB(new Options { CreateIfMissing = false, WriteBufferSize = 32, BackgroundCompaction = false }, dir);
             try
             {
                 leaked.Put(key, Encoding.UTF8.GetBytes("B"));
@@ -241,13 +241,13 @@ public class LevelDbTests
                 }
             }
 
-            using var reopened = new DB(new Options { CreateIfMissing = false }, recovery);
+            using var reopened = new DB(new Options { CreateIfMissing = false, BackgroundCompaction = false }, recovery);
             // WAL replay brings B; orphan .ldb alone would have been ignored (see orphan_ldb test).
             Assert.Equal("B", Encoding.UTF8.GetString(reopened.Get(key)!));
-            var live = File.ReadAllText(Path.Combine(recovery, "CURRENT")).Trim();
+            var live = File.ReadAllLines(Path.Combine(recovery, "CURRENT")).Select(l => l.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
             Assert.DoesNotContain(
                 Directory.EnumerateFiles(recovery, "*.ldb").Select(Path.GetFileName),
-                n => !string.Equals(n, live, StringComparison.OrdinalIgnoreCase));
+                n => !live.Contains(n!));
         }
         finally
         {

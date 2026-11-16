@@ -23,6 +23,61 @@ public sealed class NbtCompound
         _entries.Add(new KeyValuePair<string, NbtTag>(name, value));
     }
 
+    public bool ContainsKey(string name) => _index.ContainsKey(name);
+
+    /// <summary>Removes <paramref name="name"/>; later entries keep their order.</summary>
+    public bool Remove(string name)
+    {
+        if (!_index.Remove(name, out var at)) return false;
+        _entries.RemoveAt(at);
+        for (var i = at; i < _entries.Count; i++)
+            _index[_entries[i].Key] = i;
+        return true;
+    }
+
+    // Fluent setters, so building a compound reads as one expression.
+    public NbtCompound SetByte(string name, sbyte value) => Put(name, NbtTag.Byte(value));
+    public NbtCompound SetBool(string name, bool value) => Put(name, NbtTag.Byte((sbyte)(value ? 1 : 0)));
+    public NbtCompound SetShort(string name, short value) => Put(name, NbtTag.Short(value));
+    public NbtCompound SetInt(string name, int value) => Put(name, NbtTag.Int(value));
+    public NbtCompound SetLong(string name, long value) => Put(name, NbtTag.Long(value));
+    public NbtCompound SetFloat(string name, float value) => Put(name, NbtTag.Float(value));
+    public NbtCompound SetDouble(string name, double value) => Put(name, NbtTag.Double(value));
+    public NbtCompound SetString(string name, string value) => Put(name, NbtTag.String(value));
+    public NbtCompound SetCompound(string name, NbtCompound value) => Put(name, NbtTag.Compound(value));
+    public NbtCompound SetList(string name, NbtList value) => Put(name, NbtTag.List(value));
+
+    // Typed reads: false when the entry is missing or has another type.
+    public bool TryGetInt(string name, out int value)
+    {
+        value = 0;
+        return TryGet(name, out var tag) && tag.TryGetInt(out value);
+    }
+
+    public bool TryGetString(string name, out string value)
+    {
+        value = "";
+        return TryGet(name, out var tag) && tag.TryGetString(out value);
+    }
+
+    public bool TryGetCompound(string name, out NbtCompound value)
+    {
+        value = null!;
+        return TryGet(name, out var tag) && tag.TryGetCompound(out value);
+    }
+
+    public bool TryGetList(string name, out NbtList value)
+    {
+        value = null!;
+        return TryGet(name, out var tag) && tag.TryGetList(out value);
+    }
+
+    private NbtCompound Put(string name, NbtTag tag)
+    {
+        Set(name, tag);
+        return this;
+    }
+
     public bool TryGet(string name, out NbtTag tag)
     {
         if (_index.TryGetValue(name, out var i))
