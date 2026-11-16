@@ -26,6 +26,51 @@ sealed class BlockPalette
         _nameByRuntime = nameByRuntime;
     }
 
+    private readonly Dictionary<int, BlockState> _stateByRuntime = new();
+    private readonly Dictionary<string, int> _byFullState = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, List<string>>> _propertyValues = new(StringComparer.Ordinal);
+
+    /// <summary>Total number of distinct block states (runtime ids) with full property data.</summary>
+    public int StateCount => _stateByRuntime.Count;
+
+    /// <summary>All properties of a runtime id (empty for stateless blocks); false when the id is unknown.</summary>
+    public bool TryGetState(int networkId, out BlockState state) => _stateByRuntime.TryGetValue(networkId, out state!);
+
+    /// <summary>Exact lookup of the runtime id for a name plus its complete property set.</summary>
+    public bool TryGetExact(string name, BlockState state, out int networkId) =>
+        _byFullState.TryGetValue(state.CanonicalKey(name), out networkId);
+
+    /// <summary>
+    /// Runtime id for the name with <paramref name="overrides"/> applied on top of the block's default state.
+    /// Overrides naming a property or value the block does not have make the lookup fail; it never guesses.
+    /// </summary>
+    public bool TryResolve(string name, IReadOnlyDictionary<string, string> overrides, out int networkId)
+    {
+        networkId = 0;
+        if (!_byName.TryGetValue(name, out var defaultId) || !_stateByRuntime.TryGetValue(defaultId, out var baseState))
+            return false;
+        var merged = baseState.With(overrides);
+        return merged is not null && _byFullState.TryGetValue(merged.CanonicalKey(name), out networkId);
+    }
+
+    /// <summary>Property names and their ordered legal values for a block name (null for stateless blocks).</summary>
+    public IReadOnlyDictionary<string, List<string>>? PropertiesOf(string name) =>
+        _propertyValues.TryGetValue(name, out var values) ? values : null;
+
+    internal void AddState(string name, int networkId, BlockState state)
+    {
+        _stateByRuntime.TryAdd(networkId, state);
+        _byFullState.TryAdd(state.CanonicalKey(name), networkId);
+        if (state.Count == 0) return;
+        if (!_propertyValues.TryGetValue(name, out var props))
+            _propertyValues[name] = props = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var (key, value) in state.Entries)
+        {
+            if (!props.TryGetValue(key, out var list)) props[key] = list = new List<string>();
+            if (!list.Contains(value)) list.Add(value);
+        }
+    }
+
     public int Count => _byName.Count;
 
     /// <summary>Dump entries with a recorded network_id (includes multi-state variants).</summary>
@@ -118,6 +163,7 @@ static class BlockPaletteLoader
         var fallback = new Dictionary<string, int>(StringComparer.Ordinal);
         var byState = new Dictionary<string, int>(StringComparer.Ordinal);
         var nameByRuntime = new Dictionary<int, string>(blocks.Count);
+        var fullStates = new List<(string Name, int Id, BlockState State)>(blocks.Count);
 
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -135,6 +181,8 @@ static class BlockPaletteLoader
 
             if (!entry.TryGet("states", out var statesTag) || !statesTag.TryGetCompound(out var states))
                 continue;
+
+            fullStates.Add((name, networkId, BlockState.FromNbt(states)));
 
             if (states.Count == 0)
             {
@@ -154,6 +202,8 @@ static class BlockPaletteLoader
         foreach (var (name, id) in preferred)
             fallback[name] = id;
 
-        return new BlockPalette(fallback, byState, nameByRuntime);
+        var palette = new BlockPalette(fallback, byState, nameByRuntime);
+        foreach (var (name, id, state) in fullStates) palette.AddState(name, id, state);
+        return palette;
     }
 }
