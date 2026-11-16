@@ -66,11 +66,12 @@ internal sealed class IntentTestFixture
         var blockPalette = BlockPaletteLoader.FromEmbeddedResource();
         var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
         Players = new PlayerManager();
+        Log = new RecordingLogger();
         World = new World.World(new InMemoryChunkStorage());
         Context = new ServerContext(
-            new SilentLogger(),
+            Log,
             Players,
-            new EventBus(new SilentLogger()),
+            new EventBus(Log),
             Clock,
             World,
             new ServerConfig(),
@@ -80,6 +81,9 @@ internal sealed class IntentTestFixture
             ItemDurability.CreateDefault(itemPalette),
             CreativeCatalog.CreateDefault());
     }
+
+    /// <summary>Everything the server logged for this fixture.</summary>
+    public RecordingLogger Log { get; }
 
     public InventorySystem CreateInventorySystem() =>
         new(Players, World, Context.Recipes, Context.Creative);
