@@ -62,7 +62,7 @@ sealed class CowSystem : IGameSystem
         _cows = new ComponentStore<CowState>(stores.Entities);
         _feedItem = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
         _emptyBucket = StackId.FromItem(itemPalette.Require(Zenith.Gameplay.WorldInteraction.Fluids.BucketItems.EmptyName));
-        _milkBucket = StackId.FromItem(itemPalette.Require("minecraft:milk_bucket"));
+        _milkBucket = StackId.FromItem(itemPalette.Require(Zenith.Gameplay.WorldInteraction.Fluids.BucketItems.MilkName));
         _random = random ?? new Random();
     }
 

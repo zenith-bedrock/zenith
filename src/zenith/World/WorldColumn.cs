@@ -15,7 +15,7 @@ sealed class WorldColumn
     public const int MinY = -64;
     public const int SectionCount = 24;
     public const int MaxY = MinY + SectionCount * Section.Edge - 1;
-    private const int MinSectionIndex = MinY >> 4;
+    private const int MinSectionIndex = MinY >> ChunkMath.ChunkSizeShift;
     private const int BiomeNetworkBorderBlocksEmpty = 0;
     private const byte BiomePaletteHeader = 1;
 
@@ -76,15 +76,15 @@ sealed class WorldColumn
     public int Get(int x, int y, int z)
     {
         if (!InRange(y)) return Blocks.Air;
-        var section = _sections[(y - MinY) >> 4];
-        return section is null ? Blocks.Air : section.Get(x & 15, y & 15, z & 15);
+        var section = _sections[(y - MinY) >> ChunkMath.ChunkSizeShift];
+        return section is null ? Blocks.Air : section.Get(ChunkMath.ToLocal(x), ChunkMath.ToLocal(y), ChunkMath.ToLocal(z));
     }
 
     /// <summary>Owner-thread write; false when out of range or already that block.</summary>
     public bool Set(int x, int y, int z, int runtimeId)
     {
         if (!InRange(y)) return false;
-        var index = (y - MinY) >> 4;
+        var index = (y - MinY) >> ChunkMath.ChunkSizeShift;
         var section = _sections[index];
         if (section is null)
         {
@@ -93,7 +93,7 @@ sealed class WorldColumn
             _sections[index] = section;
         }
 
-        if (!section.Set(Section.IndexOf(x & 15, y & 15, z & 15), runtimeId)) return false;
+        if (!section.Set(Section.IndexOf(ChunkMath.ToLocal(x), ChunkMath.ToLocal(y), ChunkMath.ToLocal(z)), runtimeId)) return false;
         RefreshTickBit(index);
         _dirty = true;
         Interlocked.Increment(ref _editVersion); // after the section changed — see GetWire
@@ -104,7 +104,11 @@ sealed class WorldColumn
 
     public int EntityCount => _entities.Count;
 
-    private static int EntityKey(int x, int y, int z) => ((y - MinY) << 8) | ((z & 15) << 4) | (x & 15);
+    /// <summary>Y above the floor, then z, then x: unlike a section cell index, y here spans the whole column.</summary>
+    private static int EntityKey(int x, int y, int z) =>
+        ((y - MinY) << EntityYShift) | (ChunkMath.ToLocal(z) << ChunkMath.ChunkSizeShift) | ChunkMath.ToLocal(x);
+
+    private const int EntityYShift = 2 * ChunkMath.ChunkSizeShift;
 
     public bool TryGetEntity(int x, int y, int z, out BlockEntity entity) =>
         _entities.TryGetValue(EntityKey(x, y, z), out entity!);
@@ -126,7 +130,9 @@ sealed class WorldColumn
     public void ForEachEntity(Action<int, int, int, BlockEntity> visitor)
     {
         foreach (var (key, entity) in _entities)
-            visitor(key & 15, (key >> 8) + MinY, (key >> 4) & 15, entity);
+            {
+            visitor(ChunkMath.ToLocal(key), (key >> EntityYShift) + MinY, ChunkMath.ToLocal(key >> ChunkMath.ChunkSizeShift), entity);
+        }
     }
 
     // ---- wire ----

@@ -10,6 +10,7 @@ sealed class BucketItems
 {
     public const string EmptyName = "minecraft:bucket";
     public const string WaterName = "minecraft:water_bucket";
+    public const string MilkName = "minecraft:milk_bucket";
     public const string LavaName = "minecraft:lava_bucket";
     public const string PowderSnowName = "minecraft:powder_snow_bucket";
     private const string PowderSnowBlock = "minecraft:powder_snow";

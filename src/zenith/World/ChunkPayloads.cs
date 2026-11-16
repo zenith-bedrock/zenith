@@ -63,8 +63,8 @@ static class ChunkPayloads
             0,
             OverworldMaxSubChunkIndex - OverworldMinSubChunkIndex);
 
-        var baseX = chunkX << 4;
-        var baseZ = chunkZ << 4;
+        var baseX = ChunkMath.ChunkOrigin(chunkX);
+        var baseZ = ChunkMath.ChunkOrigin(chunkZ);
         Span<OreCell> oreCells = stackalloc OreCell[OverworldOrePlacer.MaxColumnCellCount];
         var oreCellCount = OverworldOrePlacer.FillColumnCells(
             baseX, baseZ, seed, oreCells,
@@ -129,8 +129,8 @@ static class ChunkPayloads
         int biomeNetworkId = PlainsBiomeId,
         int? maxWorldY = null)
     {
-        var baseX = chunkX << 4;
-        var baseZ = chunkZ << 4;
+        var baseX = ChunkMath.ChunkOrigin(chunkX);
+        var baseZ = ChunkMath.ChunkOrigin(chunkZ);
         var boundY = maxWorldY ?? (OverworldMaxSubChunkIndex * 16 + 15);
         var maxSubChunk = Math.Clamp(
             SectionIndex(boundY),
@@ -167,5 +167,5 @@ static class ChunkPayloads
     private static int SectionIndex(int worldY)
         => (worldY - OverworldMinSubChunkIndex * 16) >> 4;
 
-    private static int BlockIndex(int x, int y, int z) => (x << 8) | (z << 4) | y;
+    private static int BlockIndex(int x, int y, int z) => Section.IndexOf(x, y, z);
 }

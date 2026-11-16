@@ -54,7 +54,7 @@ static class FoodItems
         ["minecraft:beetroot_soup"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
         ["minecraft:rabbit_stew"] = new(10, 12, Remainder: "minecraft:bowl"),
         ["minecraft:suspicious_stew"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
-        ["minecraft:milk_bucket"] = new(0, 0f, AlwaysEdible: true, Remainder: BucketItems.EmptyName, ClearsEffects: true),
+        [BucketItems.MilkName] = new(0, 0f, AlwaysEdible: true, Remainder: BucketItems.EmptyName, ClearsEffects: true),
         ["minecraft:honey_bottle"] = new(6, 1.2f, UseTicks: 40, AlwaysEdible: true, Remainder: "minecraft:glass_bottle"),
     };
 

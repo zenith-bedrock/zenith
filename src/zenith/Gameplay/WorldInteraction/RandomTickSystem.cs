@@ -49,23 +49,23 @@ sealed class RandomTickSystem : IGameSystem
         var mask = column.RandomTickMask;
         if (mask == 0 || !_world.ChunkResidency.HasViewers(column.Coord.X, column.Coord.Z)) return;
 
-        var originX = column.Coord.X << 4;
-        var originZ = column.Coord.Z << 4;
+        var originX = ChunkMath.ChunkOrigin(column.Coord.X);
+        var originZ = ChunkMath.ChunkOrigin(column.Coord.Z);
         while (mask != 0)
         {
             var sectionIndex = System.Numerics.BitOperations.TrailingZeroCount(mask);
             mask &= mask - 1;
             if (column.SectionAt(sectionIndex) is not { } section) continue;
 
-            var originY = WorldColumn.MinY + (sectionIndex << 4);
+            var originY = WorldColumn.MinY + ChunkMath.ChunkOrigin(sectionIndex);
             for (var n = 0; n < _speed; n++)
             {
                 var cell = _random.Next(Section.Volume);
                 var id = section.Get(cell);
                 if (!_behaviors.TryGet(id, out var behavior)) continue;
 
-                // IndexOf is (x << 8) | (z << 4) | y
-                _context.Aim(originX + (cell >> 8), originY + (cell & 15), originZ + ((cell >> 4) & 15), id);
+                var (lx, ly, lz) = Section.LocalOf(cell);
+                _context.Aim(originX + lx, originY + ly, originZ + lz, id);
                 behavior.OnRandomTick(_context);
             }
         }

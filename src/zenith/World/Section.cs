@@ -10,11 +10,18 @@ namespace Zenith.World;
 /// </summary>
 sealed class Section
 {
-    public const int Edge = 16;
+    public const int Edge = ChunkMath.Edge;
     public const int Volume = Edge * Edge * Edge;
 
+    private const int ZShift = ChunkMath.ChunkSizeShift;
+    private const int XShift = 2 * ChunkMath.ChunkSizeShift;
+
     /// <summary>Same layout the wire uses: x major, then z, then y (so a column of blocks is contiguous).</summary>
-    public static int IndexOf(int localX, int localY, int localZ) => (localX << 8) | (localZ << 4) | localY;
+    public static int IndexOf(int localX, int localY, int localZ) => (localX << XShift) | (localZ << ZShift) | localY;
+
+    /// <summary>The local x, y, z (each 0..15) of a cell index; the reverse of <see cref="IndexOf"/>.</summary>
+    public static (int X, int Y, int Z) LocalOf(int index) =>
+        (index >> XShift, ChunkMath.ToLocal(index), ChunkMath.ToLocal(index >> ZShift));
 
     private int[] _palette;
     private int _paletteCount;
