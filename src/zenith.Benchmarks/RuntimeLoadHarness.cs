@@ -652,7 +652,7 @@ internal static class RuntimeLoadHarness
                 Loop.Register(new BlockEditSystem(players, world, ItemDurability.CreateDefault(itemPalette)), timings.BlockEdit);
             else
                 Loop.Register(new BlockEditSystem(players, world, ItemDurability.CreateDefault(itemPalette)));
-            Loop.Register(new GravitySystem(world, players));
+            Loop.Register(new GravitySystem(world, players, new Zenith.Gameplay.Policy.EnvironmentChangePolicies()));
             if (WorldDiagnostics is { } floorTimings)
                 Loop.Register(new FloorDropSystem(world), floorTimings.FloorDrop);
             else

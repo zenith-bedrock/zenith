@@ -48,6 +48,9 @@ sealed class FallingBlockStore
 
     public IReadOnlyList<FallingBlockEntry> Active => _active;
 
+    /// <summary>True while another entry can be tracked. Checked before a block is taken out of the world, so a full store never loses one.</summary>
+    public bool HasRoom => _active.Count < SoftCap;
+
     public bool TrySpawn(FallingBlockEntry entry)
     {
         if (_active.Count >= SoftCap)

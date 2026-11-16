@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.Logging;
@@ -14,6 +15,11 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// A block that starts to fall exists as exactly one thing at every tick boundary: the block at its origin, one falling entry (with
 /// a record saved in its column), or the block at its resting place. It leaves that set only by landing, or through the void
 /// (plan 002, phase 4a). Landing never overwrites a cell that does not accept the block; the block rests above it instead.
+/// <para/>
+/// Gravity is an environment change (cause <see cref="EnvironmentCause.Gravity"/>, plan 002 phase 4b). A cell the policies refuse
+/// behaves like ground: a block never starts to fall into it, never passes through it and never lands in it, it rests above. Vetoing
+/// the origin leaves the block where it is (nothing replays when a protection is lifted). No veto ever removes a block: when no
+/// cell may take it, the entry stays alive and is retried.
 /// </summary>
 sealed class GravitySystem : IGameSystem
 {
@@ -26,6 +32,8 @@ sealed class GravitySystem : IGameSystem
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly ILogger? _logger;
+    private readonly EnvironmentChangePolicies _environment;
+    private ulong _now;
     private readonly List<WorldColumn> _columnsToRetryAdopting = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
     private readonly List<FallingBlockEntry> _landedScratch = new();
@@ -34,10 +42,11 @@ sealed class GravitySystem : IGameSystem
     /// <summary>Ticks between attempts to place a block that no cell accepts yet. Paces the retry and the log only; it never ends the entry.</summary>
     internal const int StuckRetryTicks = 20;
 
-    public GravitySystem(World.World world, PlayerManager players, ILogger? logger = null)
+    public GravitySystem(World.World world, PlayerManager players, EnvironmentChangePolicies environment, ILogger? logger = null)
     {
         _world = world;
         _players = players;
+        _environment = environment;
         _logger = logger ?? world.Logger;
     }
 
@@ -48,9 +57,16 @@ sealed class GravitySystem : IGameSystem
     /// </summary>
     internal static bool Accepts(int blockRuntimeId) => Blocks.IsFluid(blockRuntimeId) || FluidFlow.CanHold(blockRuntimeId);
 
+    /// <summary>Can a falling block occupy this cell: it accepts one, and no environment policy refuses gravity there.</summary>
+    private bool CanPass(int x, int y, int z, int fallingBlock)
+    {
+        var current = _world.GetBlock(x, y, z);
+        return Accepts(current) && _environment.Allows(EnvironmentCause.Gravity, _now, x, y, z, current, fallingBlock);
+    }
+
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        _ = clock;
+        _now = clock.CurrentTick;
 
         var updates = _updatesScratch;
         updates.Clear();
@@ -77,6 +93,11 @@ sealed class GravitySystem : IGameSystem
         var updates = _updatesScratch;
         updates.Clear();
         AdoptSavedFalls(Array.Empty<global::Zenith.Player.Player>());
+
+        // Entries already in flight land first: that frees store room before any new fall starts.
+        foreach (var entry in _world.FallingBlocks.Active.ToArray())
+            LandAtCurrentSupport(entry, updates, deferCascade: false);
+
         var pending = _world.GravityPending;
         var guard = GravityPendingStore.SoftCap * 2;
         while (guard-- > 0)
@@ -88,9 +109,6 @@ sealed class GravitySystem : IGameSystem
             if (entry is not null)
                 LandAtCurrentSupport(entry, updates, deferCascade: false);
         }
-
-        foreach (var entry in _world.FallingBlocks.Active.ToArray())
-            LandAtCurrentSupport(entry, updates, deferCascade: false);
         // No peer fan-out on shutdown — clients disconnect; overlays persist.
     }
 
@@ -127,8 +145,20 @@ sealed class GravitySystem : IGameSystem
         var rid = _world.GetBlock(x, y, z);
         if (!Blocks.IsGravity(rid))
             return;
-        if (!IsUnsupported(x, y, z))
+        if (!IsUnsupported(x, y, z, rid))
             return;
+
+        // Vetoed origin: the block stays where it is, quietly. Nothing is queued, so nothing replays when the protection is lifted.
+        if (!_environment.Allows(EnvironmentCause.Gravity, _now, x, y, z, rid, World.World.AirRuntimeId))
+            return;
+
+        // No room to track another fall (capacity is transient): the block stays and is looked at again later, instead of being
+        // cleared and force-landed.
+        if (!_world.FallingBlocks.HasRoom)
+        {
+            EnqueueFallCell(x, y, z, defer: true);
+            return;
+        }
 
         // The record is written into the column before the cell is cleared: no image of the column can show the empty cell without it.
         var record = _world.RecordFall(x, y, z, rid);
@@ -158,7 +188,7 @@ sealed class GravitySystem : IGameSystem
 
         if (!_world.FallingBlocks.TrySpawn(entry))
         {
-            // SoftCap refuse — resolve at the current support instantly rather than lose the block.
+            // Room was checked above; if it vanished anyway, resolve at the current support rather than lose the block.
             LandAtCurrentSupport(entry, updates, deferCascade);
             return;
         }
@@ -193,7 +223,7 @@ sealed class GravitySystem : IGameSystem
             // Someone else already claimed our current cell while we were airborne: rest above it
             // instead of overwriting it; Land searches upward for the first cell that accepts the block.
             // Phase XXIX: water no longer counts, a block falling into a lake keeps sinking.
-            if (cellY >= Blocks.FlatMinY && !Accepts(_world.GetBlock(entry.LandX, cellY, entry.LandZ)))
+            if (cellY >= Blocks.FlatMinY && !CanPass(entry.LandX, cellY, entry.LandZ, entry.BlockRuntimeId))
             {
                 entry.LandY = cellY + 1;
                 _landedScratch.Add(entry);
@@ -208,7 +238,7 @@ sealed class GravitySystem : IGameSystem
                 continue;
             }
 
-            if (!Accepts(_world.GetBlock(entry.LandX, belowY, entry.LandZ)))
+            if (!CanPass(entry.LandX, belowY, entry.LandZ, entry.BlockRuntimeId))
             {
                 entry.LandY = cellY;
                 _landedScratch.Add(entry);
@@ -248,7 +278,7 @@ sealed class GravitySystem : IGameSystem
         bool deferCascade)
     {
         var landY = entry.LandY;
-        while (landY - 1 >= Blocks.FlatMinY && Accepts(_world.GetBlock(entry.LandX, landY - 1, entry.LandZ)))
+        while (landY - 1 >= Blocks.FlatMinY && CanPass(entry.LandX, landY - 1, entry.LandZ, entry.BlockRuntimeId))
             landY--;
 
         if (landY - 1 < Blocks.FlatMinY)
@@ -273,7 +303,7 @@ sealed class GravitySystem : IGameSystem
         bool deferCascade,
         IReadOnlyList<global::Zenith.Player.Player>? online)
     {
-        var restY = FindRestingCell(entry.LandX, entry.LandY, entry.LandZ);
+        var restY = FindRestingCell(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId);
         if (restY is null || !_world.TrySetBlock(entry.LandX, restY.Value, entry.LandZ, entry.BlockRuntimeId))
         {
             MarkStuck(entry);
@@ -293,15 +323,15 @@ sealed class GravitySystem : IGameSystem
         }
 
         updates.Add((entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId));
-        if (IsUnsupported(entry.LandX, entry.LandY, entry.LandZ))
+        if (IsUnsupported(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId))
             EnqueueFallCell(entry.LandX, entry.LandY, entry.LandZ, deferCascade);
     }
 
     /// <summary>The lowest cell at or above <paramref name="fromY"/> that accepts a falling block, or null when none up to the world's top does.</summary>
-    private int? FindRestingCell(int x, int fromY, int z)
+    private int? FindRestingCell(int x, int fromY, int z, int fallingBlock)
     {
         for (var y = Math.Max(fromY, Blocks.FlatMinY); y <= WorldColumn.MaxY; y++)
-            if (Accepts(_world.GetBlock(x, y, z)))
+            if (CanPass(x, y, z, fallingBlock))
                 return y;
         return null;
     }
@@ -389,12 +419,13 @@ sealed class GravitySystem : IGameSystem
         }
     }
 
-    private bool IsUnsupported(int x, int y, int z)
+    /// <summary>True when the cell below would let the block fall: it accepts one and no policy refuses. A refused cell is ground.</summary>
+    private bool IsUnsupported(int x, int y, int z, int fallingBlock)
     {
         var belowY = y - 1;
         if (belowY < Blocks.FlatMinY)
             return true;
-        return Accepts(_world.GetBlock(x, belowY, z));
+        return CanPass(x, belowY, z, fallingBlock);
     }
 
     private void EnqueueAbove(int x, int y, int z, bool defer)

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
@@ -13,7 +14,7 @@ public class GravityTests
 
     private static World.World NewWorld() => new(new InMemoryChunkStorage());
 
-    private static GravitySystem NewGravity(World.World world) => new(world, new PlayerManager());
+    private static GravitySystem NewGravity(World.World world) => new(world, new PlayerManager(), new EnvironmentChangePolicies());
 
     /// <summary>Ticks until every pending/active fall settles, or fails the test past a sane budget.</summary>
     private static void Settle(GravitySystem gravity, World.World world, int maxTicks = 200)

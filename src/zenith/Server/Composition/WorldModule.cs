@@ -18,7 +18,7 @@ sealed class WorldModule : IGameplayModule
 
     public void Register(ServerServices s)
     {
-        Gravity = new GravitySystem(s.World, s.Players);
+        Gravity = new GravitySystem(s.World, s.Players, s.EnvironmentPolicies);
 
         s.Register(new GameRuleSyncSystem(s.World), "game-rule-sync");
         s.Register(new BlockDigSystem(s.World), "block-dig");

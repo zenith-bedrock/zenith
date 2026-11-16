@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Xunit;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.WorldInteraction;
@@ -33,7 +34,7 @@ public sealed class FallingBlockDurabilityTests
         {
             var log = new RecordingLogger();
             var world = new World.World(storage, log);
-            return new Rig { Storage = storage, World = world, Gravity = new GravitySystem(world, new PlayerManager(), log), Log = log };
+            return new Rig { Storage = storage, World = world, Gravity = new GravitySystem(world, new PlayerManager(), new EnvironmentChangePolicies(), log), Log = log };
         }
 
         public void Tick() => Gravity.Tick(new GameClock(), Array.Empty<Zenith.Player.Player>());
