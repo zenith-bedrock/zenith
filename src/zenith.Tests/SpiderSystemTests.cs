@@ -74,6 +74,7 @@ public sealed class SpiderSystemTests
         Assert.Empty(system.Spiders);
         Assert.False(system.Stores.Entities.IsAlive(id));
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "spider");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(5, player.ExperiencePoints);
     }
 

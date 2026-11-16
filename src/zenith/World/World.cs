@@ -34,6 +34,7 @@ sealed class World
     public PlayerPersistence Persistence { get; }
 
     public FloorDropStore FloorDrops { get; }
+    public ExperienceOrbStore ExperienceOrbs { get; }
     public ChestStore Chests { get; }
     public GravityPendingStore GravityPending { get; }
     public FallingBlockStore FallingBlocks { get; }
@@ -90,6 +91,7 @@ sealed class World
         _generationWorkers = generationWorkers;
         _generationBroker = new WorldGenerationBroker(generationWorkers, GenerateColumnCoreAsync, generationDiagnostics);
         FloorDrops = new FloorDropStore(logger);
+        ExperienceOrbs = new ExperienceOrbStore(logger);
         Chests = new ChestStore(this);
         GravityPending = new GravityPendingStore(logger);
         FallingBlocks = new FallingBlockStore(logger);

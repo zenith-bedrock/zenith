@@ -49,6 +49,24 @@ internal static class IntentTestHelpers
     }
 
 
+    /// <summary>
+    /// Lets the experience orbs a kill dropped reach the players: loads the column each player stands in (a tick never does), then
+    /// runs the orb system until none is left. A kill grants its points when its orbs are collected, not before.
+    /// </summary>
+    internal static void CollectOrbs(IntentTestFixture fx, int maxTicks = 400)
+    {
+        foreach (var player in fx.Players.Online)
+            fx.World.GetBlock((int)MathF.Floor(player.PositionX), (int)MathF.Floor(player.PositionY), (int)MathF.Floor(player.PositionZ));
+
+        var system = new ExperienceOrbSystem(fx.World);
+        for (var i = 0; i < maxTicks && fx.World.ExperienceOrbs.Count > 0; i++)
+        {
+            fx.Clock.AdvanceBy(1);
+            system.Tick(fx.Clock, fx.Players.Online);
+        }
+    }
+
+
     internal static void BeginBreakReady(GameClock clock, World.World world, Player.Player player, int x, int y, int z)
     {
         var held = player.Inventory.Get(player.SelectedHotbarSlot);

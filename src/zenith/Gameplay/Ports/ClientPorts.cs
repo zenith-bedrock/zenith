@@ -63,6 +63,8 @@ interface IEntityChannel
     void SendAddMob(MobKind kind, long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw);
     void SendAddProjectile(long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float velocityX, float velocityY, float velocityZ);
     void SendAddFallingBlock(long entityUniqueId, ulong entityRuntimeId, int blockRuntimeId, float x, float y, float z);
+    /// <summary>An experience orb worth <paramref name="points"/>; the client draws its size from the value.</summary>
+    void SendAddExperienceOrb(long entityId, int points, float x, float y, float z, float velocityX, float velocityY, float velocityZ);
     void SendRemoveActor(long actorUniqueId);
 
     void SendMoveActorAbsoluteRaw(ulong actorRuntimeId, float x, float y, float z, byte flags = 0, float pitch = 0f, float yaw = 0f, float headYaw = 0f);

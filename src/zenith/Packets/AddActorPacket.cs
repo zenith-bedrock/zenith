@@ -27,6 +27,8 @@ sealed class AddActorPacket : DataPacket
 
     /// <summary>DATA_VARIANT metadata (e.g. falling_block's block runtime id) — null omits the entry.</summary>
     public int? Variant { get; set; }
+    /// <summary>EXPERIENCE_VALUE metadata of an xp_orb — null omits the entry.</summary>
+    public int? ExperiencePoints { get; set; }
     public bool ZombieMetadata { get; set; }
     public bool BatMetadata { get; set; }
     /// <summary>Phase XXIII-B — real per-species Bedrock hitbox (width, height), replacing the Scale-only placeholder metadata most mobs used.</summary>
@@ -54,6 +56,8 @@ sealed class AddActorPacket : DataPacket
             EntityMetadataWriter.WriteZombieMetadata(ref writer);
         else if (BatMetadata)
             EntityMetadataWriter.WriteBatMetadata(ref writer);
+        else if (ExperiencePoints is { } points)
+            EntityMetadataWriter.WriteExperienceOrbMetadata(ref writer, points);
         else if (Variant is { } variant)
             EntityMetadataWriter.WriteFallingBlockMetadata(ref writer, variant);
         else if (Dimensions is { } dimensions)

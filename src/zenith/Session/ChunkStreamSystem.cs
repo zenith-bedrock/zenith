@@ -56,6 +56,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 if (player.Chunks.Knows(published.X, published.Z))
                 {
                     ColumnSend.EmitFloorDropsInColumn(player.Session, _world, published.X, published.Z);
+                    ColumnSend.EmitExperienceOrbsInColumn(player.Session, _world, published.X, published.Z);
                     ColumnSend.EmitChestActorsInColumn(player.Session, _world, published.X, published.Z);
                 }
             ApplySpawnReady(player, online, clock.CurrentTick);

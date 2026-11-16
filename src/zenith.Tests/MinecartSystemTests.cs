@@ -303,6 +303,7 @@ public sealed class MinecartSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:minecart"), loot.Id.Value);
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(1, player.ExperiencePoints);
     }
 

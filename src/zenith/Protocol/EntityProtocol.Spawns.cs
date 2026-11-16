@@ -24,6 +24,24 @@ sealed partial class EntityProtocol
         });
     }
 
+    /// <summary>Experience orb actor (plan 003): <c>minecraft:xp_orb</c> with its value in metadata. Position is the orb's feet.</summary>
+    public void SendAddExperienceOrb(long entityId, int points, float x, float y, float z, float velocityX, float velocityY, float velocityZ)
+    {
+        _session.SendDataPacket(new AddActorPacket
+        {
+            EntityUniqueId = entityId,
+            EntityRuntimeId = (ulong)entityId,
+            EntityType = "minecraft:xp_orb",
+            PositionX = x,
+            PositionY = y,
+            PositionZ = z,
+            VelocityX = velocityX,
+            VelocityY = velocityY,
+            VelocityZ = velocityZ,
+            ExperiencePoints = points
+        });
+    }
+
     /// <summary>
     /// Dropped item entity at cell center (ADR §26 wire). Velocity is server-decided once at spawn
     /// (a toss, e.g. Q-drop) — Zenith does not run per-tick floor-drop physics, so the client's own

@@ -26,7 +26,8 @@ If you hit something that isn't listed as a known gap below, it's likely a real 
 | Crafting (2×2 personal + 3×3 table) | Survival craft chain (log → planks → stick/tools/chest/fence/…). Recipes whose real vanilla shape needs more than 2×2 (chest, every tool, fence, wall) require an actual crafting table, matching vanilla — placing/interacting with a `crafting_table` block opens a real 9-slot grid (ADR §139). |
 | Creative / Survival gamemode | `/gamemode` minimal — fly in Creative, no fly in Survival; no Adventure/Spectator semantics. |
 | Void death / respawn | Fall below world → DeathInfo + Respawn handshake; Survival death drops loot to floor. |
-| Block gravity | Sand/gravel fall when unsupported (`GravitySystem`). |
+| Block gravity | Sand/gravel fall when unsupported (`GravitySystem`): an unsupported block hangs for 2 ticks (the vanilla scheduled-tick delay, to verify on BDS) and then becomes a falling entity; a stack peels one block per delay. |
+| Experience orbs | A player-caused kill drops `xp_orb` entities in the vanilla sizes; they home in on the nearest player within 8 blocks, are collected on touch (points credited once, pickup sound), and expire after 5 minutes. RAM-only. No merging, and mobs are the only source of experience (`ExperienceOrbSystem`). |
 | World persistence | LevelDB overlay + inventory/chest/playerdata persist across restart; graceful shutdown flushes (Ctrl+C / SIGTERM). |
 | Terrain beyond flat | Noise/biome/cave/ore generation (§62–§67, §72) when configured — watch for pillar/column artifacts. |
 
@@ -57,7 +58,7 @@ The prioritized gap list lives in [`../plans/dragonfly-gap-analysis-2026-11-15.m
 - Dynamic world: random/scheduled ticks, liquids, fire, crop/tree growth, weather
 - Nether / End dimensions (dimension ids exist only as protocol constants)
 - Redstone, furnaces, hoppers, ender chest, beds, block entities beyond chests
-- Enchantments, potion effects, bows/ranged player weapons, XP orbs
+- Enchantments, potion effects, bows/ranged player weapons, XP from sources other than mob kills
 - Permissions, admin commands, plugin API, full command catalogue
 - Forms, title/bossbar/scoreboard
 - Mojang world import (BDS/PM world format)

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.WorldInteraction;
 using Zenith.Gameplay.Replication;
 using Zenith.Player;
 using Zenith.Session;
@@ -42,6 +43,7 @@ static class ColumnSend
                 EmitToSession(session, column, NetworkSession.WorldStreamOrderChannel);
 
             EmitFloorDropsInColumn(session, world, cx, cz);
+            EmitExperienceOrbsInColumn(session, world, cx, cz);
             EmitChestActorsInColumn(session, world, cx, cz);
         }
     }
@@ -58,6 +60,16 @@ static class ColumnSend
             if (entity is ContainerEntity)
                 ChestActorFanout.Describe(channel, world, originX + lx, y, originZ + lz);
         });
+    }
+
+    /// <summary>The experience orbs lying in one column, for a client that arrives or catches up after they spawned.</summary>
+    public static void EmitExperienceOrbsInColumn(NetworkSession session, World.World world, int chunkX, int chunkZ)
+    {
+        foreach (var orb in world.ExperienceOrbs.Active)
+        {
+            if (PlayerChunkTracker.BlockToChunk(orb.Pose.X) != chunkX || PlayerChunkTracker.BlockToChunk(orb.Pose.Z) != chunkZ) continue;
+            ExperienceOrbSystem.Describe(session.Protocol.Entity, orb);
+        }
     }
 
     /// <summary>AddItemActor for floor drops in one column (late join / stream catch-up, §26 wire).</summary>

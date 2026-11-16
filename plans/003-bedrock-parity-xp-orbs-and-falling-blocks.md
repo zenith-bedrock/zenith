@@ -1,6 +1,6 @@
 # 003: Bedrock parity review, XP orbs and falling blocks
 
-- Status: REVIEW done. Phase B (scheduled start of a fall) is implemented; phase A (XP orbs) follows. Each its own commit, in the order below.
+- Status: both phases implemented, each its own commit (B first, then A).
 - Sources read: Zenith (`MobKillReward`, `DamageableActorCombatCore`, `PlayerExperience`, `FloorDropSystem`, `GravitySystem`, `GravityPendingStore`, `BlockEditSystem.NotifyGravityAfterEdit`), PocketMine (`ExperienceOrb.php`, `FallableTrait.php`), Dragonfly (`experience_orb*.go`, `falling_block*.go`), the Mojang protocol docs (`SpawnExperienceOrbPacket`). What is vanilla is marked with how sure it is; a number marked "to verify" should be checked against BDS with the differential tool before it is coded as a constant.
 
 ## 1. Experience: what Zenith does now, and the gap
@@ -46,6 +46,14 @@ Reuse what exists: `ScheduledTicks` already holds "this cell is evaluated at tic
 - **Not touched, found on the way.** Explosions, liquids and support loss that remove a block under sand do not enqueue gravity at all (only player edits and falls do). That is an older gap and a separate small change.
 - **The 2 is not yet checked against BDS.** One named constant, `GravityPendingStore.StartDelayTicks`.
 - **Tests (`GravityStartDelayTests`).** A real break: the sand still hangs for exactly the delay, then becomes one entity. Support restored in the window: it never falls. A five-block stack: every block lands, the count is conserved at every tick, starts are at least a delay apart. A collapse of 138 cells: starts per tick bounded, all land. Graceful stop and crash in the window. Setting the delay to 0 fails two. Existing gravity tests now advance the clock, which they previously never did.
+
+## Phase A result
+
+- **Entity.** `ExperienceOrbStore` (cap 256, RAM-only) and `ExperienceOrbSystem`, registered right after floor drops. An orb reuses the dropped-item body (`FloorDropMotion`, `FloorDropPhysics.Step`: gravity 0.04, drag 0.98, swept collision, box 0.25), so it falls and slides as items do. Homing is the PocketMine formula (nearest valid player within 8 blocks, looked for once a second, pull `0.2 * (1 - d)^2` towards the middle of the body); collection is a box touch, then credit and removal in one step; an orb expires after 6000 ticks without giving anything. An orb in a column that is not loaded waits where it is (a tick never wakes a chunk) and still ages.
+- **Spawn.** `MobKillReward.DropExperience` replaces the direct credit: the kill's points are split into the vanilla sizes (`ExperienceOrbSizes`), each orb pops out with Dragonfly's random velocity, and every in-game peer is told. Only a player-caused kill drops orbs, as before. If the store has no room the remaining points are credited to the killer at once, so a full store never loses experience.
+- **Wire.** `AddActor` of `minecraft:xp_orb` with the value in metadata key 15 (`SendAddExperienceOrb` on the entity port), `RemoveActor` on collection and expiry, `LevelEvent` 1051 for the pickup sound (`SoundCue.ExperienceOrbPickup`), movement as for drops. A column streamed to a client later also describes the orbs lying in it. Not verified against a real Bedrock client yet: the metadata key and the feet-anchored position follow PocketMine and Dragonfly, the only references available; a client session should confirm the sprite size and the pickup sound.
+- **Tests (`ExperienceOrbTests`).** Every amount from 1 to 6000 splits into valid sizes that add up exactly, largest first. A kill spawns orbs and credits nothing until they are collected, then exactly the points. Collection gives the points once, removes the orb, plays the sound and sends the attributes. Out of range (20 blocks) nothing happens; with two players the nearest one collects and the other gets nothing; an unreached orb expires at tick 6000 without credit; a full store credits directly; a kill with no owner drops nothing; several orbs level the player up and the total is conserved; an orb in an unloaded column neither moves nor spams the peers. The ten existing "kill awards experience" tests now collect the orbs first. Removing the credit fails four, widening the range to 80 fails one.
+- **Left out on purpose, as stated in the review.** Merging of orbs, persistence across a restart, experience from sources other than mob kills (mining, smelting, breeding, fishing) and the player's own death drop.
 
 ## 3. Order and cost
 

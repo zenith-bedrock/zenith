@@ -21,6 +21,7 @@ enum SoundCue : byte
     Explosion,
     EndermanTeleport,
     IronGolemAttack,
+    ExperienceOrbPickup,
 }
 
 /// <summary>The other half of a double chest, as the client needs to be told: where it is, and whether this cell leads the pair.</summary>

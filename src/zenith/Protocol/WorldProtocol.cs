@@ -258,7 +258,14 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
     public void SendExplosionParticles(float x, float y, float z) =>
         SendLevelEvent(LevelEventPacket.EventParticleExplosion, x, y, z);
 
-    public void SendSoundCue(SoundCue cue, float x, float y, float z) =>
+    public void SendSoundCue(SoundCue cue, float x, float y, float z)
+    {
+        if (cue == SoundCue.ExperienceOrbPickup)
+        {
+            SendLevelEvent(LevelEventPacket.EventSoundExperienceOrbPickup, x, y, z);
+            return;
+        }
+
         SendLevelSoundEvent(
             cue switch
             {
@@ -268,6 +275,7 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
                 _ => throw new ArgumentOutOfRangeException(nameof(cue), cue, "No wire sound for this cue."),
             },
             x, y, z);
+    }
 
     public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0)
     {

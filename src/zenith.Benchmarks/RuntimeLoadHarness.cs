@@ -657,6 +657,7 @@ internal static class RuntimeLoadHarness
                 Loop.Register(new FloorDropSystem(world), floorTimings.FloorDrop);
             else
                 Loop.Register(new FloorDropSystem(world));
+            Loop.Register(new ExperienceOrbSystem(world));
             if (WorldDiagnostics is { } inventoryTimings)
                 Loop.Register(new InventorySystem(players, world, context.Recipes, context.Creative), inventoryTimings.Inventory);
             else

@@ -147,6 +147,7 @@ public sealed class EndermanSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Endermen);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "enderman");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(5, player.ExperiencePoints);
     }
 

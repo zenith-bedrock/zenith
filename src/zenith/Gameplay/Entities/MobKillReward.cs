@@ -1,28 +1,55 @@
 using Zenith.Player;
 
 using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.WorldInteraction;
+using Zenith.World;
 namespace Zenith.Gameplay.Entities;
 
 /// <summary>
-/// Player-caused mob kill → XP credit (Phase XI.4). Extracted (Phase XII) from the identical copy
+/// Player-caused mob kill → experience orbs (Phase XI.4, orbs in plan 003 phase A). Extracted (Phase XII) from the identical copy
 /// that had grown independently in <c>ZombieSystem</c> and <c>SkeletonSystem</c> — two concrete
 /// mob systems, one small shared step, not a mob/loot framework.
 /// </summary>
 static class MobKillReward
 {
     /// <summary>
-    /// A kill's <see cref="DamageSource"/> carries the attacker's runtime id for both the melee
-    /// and projectile paths; an unattributed cause (fall, void, ...) simply grants nothing.
+    /// A kill's <see cref="DamageSource"/> carries the attacker's runtime id for both the melee and projectile paths; an unattributed
+    /// cause (fall, void, ...) simply grants nothing. The points leave the mob as orbs, split into the vanilla sizes, popping out with
+    /// a small random velocity; whoever touches them collects them (<see cref="ExperienceOrbSystem"/>). Orbs the store has no room for
+    /// are credited to the killer at once, so a full store never loses experience.
     /// </summary>
-    public static void AwardExperience(DamageSource source, int amount, IReadOnlyList<Player.Player> online)
+    public static void DropExperience(
+        DamageSource source, int amount, IReadOnlyList<Player.Player> online, World.World world, PlayerManager players,
+        Random random, float x, float y, float z)
     {
+        if (amount <= 0) return;
         if (source.OwnerRuntimeId is not { } ownerRuntimeId) return;
+
+        Player.Player? killer = null;
         foreach (var candidate in online)
+            if (candidate.RuntimeId == ownerRuntimeId) { killer = candidate; break; }
+        if (killer is null) return;
+
+        var credited = 0;
+        foreach (var points in ExperienceOrbSizes.Split(amount))
         {
-            if (candidate.RuntimeId != ownerRuntimeId) continue;
-            candidate.AddExperience(amount);
-            candidate.Client.Entity.SendPlayerAttributes(candidate);
-            break;
+            var pose = new FloorDropMotion(
+                x, y, z,
+                (random.NextSingle() * 0.2f - 0.1f) * 2f, random.NextSingle() * 0.4f, (random.NextSingle() * 0.2f - 0.1f) * 2f);
+            var orb = new ExperienceOrbEntry { EntityId = players.AllocateRuntimeId(), Value = points, Pose = pose };
+            if (!world.ExperienceOrbs.TrySpawn(orb))
+            {
+                credited += points;
+                continue;
+            }
+
+            ExperienceOrbSystem.Announce(online, orb);
+        }
+
+        if (credited > 0)
+        {
+            killer.AddExperience(credited);
+            killer.Client.Entity.SendPlayerAttributes(killer);
         }
     }
 }

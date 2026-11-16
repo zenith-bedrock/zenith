@@ -78,6 +78,7 @@ public sealed class VillagerSystemTests
         Assert.Empty(system.Villagers);
         Assert.False(system.Stores.Entities.IsAlive(id));
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "villager");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(1, player.ExperiencePoints);
     }
 

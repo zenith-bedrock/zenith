@@ -128,6 +128,7 @@ public sealed class GolemSystemTests
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "iron_golem");
         // 25 raw XP from level 0 crosses two level-up thresholds (7, then 9) — same
         // PlayerExperience.AddPoints math every other kill-XP path already goes through.
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal((2, 9), (player.ExperienceLevel, player.ExperiencePoints));
     }
 

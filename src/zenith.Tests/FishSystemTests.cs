@@ -119,6 +119,7 @@ public sealed class FishSystemTests
         var cod = Assert.Single(drops, drop => drop.Id.IsItem && drop.Id.Value == fx.Context.ItemPalette.Require("minecraft:cod"));
         Assert.Equal(1, cod.Count);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "fish");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(1, player.ExperiencePoints);
     }
 

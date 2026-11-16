@@ -142,6 +142,7 @@ public sealed class CreeperSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Creepers);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "creeper");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(5, player.ExperiencePoints); // player-caused kill *does* credit XP, unlike self-explosion
         Assert.Equal(0, system.ExplosionCount);
     }

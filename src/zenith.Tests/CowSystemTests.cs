@@ -80,6 +80,7 @@ public sealed class CowSystemTests
         Assert.Empty(system.Cows);
         Assert.False(system.Stores.Entities.IsAlive(id));
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "cow");
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(1, player.ExperiencePoints);
     }
 
@@ -149,6 +150,7 @@ public sealed class CowSystemTests
         Assert.True(system.TryApplyDamage(
             id, DamageSource.Projectile(shooter.RuntimeId), Health(system, id).Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(1, shooter.ExperiencePoints);
     }
 

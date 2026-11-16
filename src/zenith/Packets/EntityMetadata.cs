@@ -10,6 +10,7 @@ static class EntityMetaKey
     public const int ColorIndex = 3;
     public const int Name = 4;
     public const int AirSupply = 7;
+    public const int ExperienceValue = 15;
     public const int EffectColor = 8;
     public const int EffectAmbience = 9;
     public const int AirSupplyMax = 42;
@@ -247,6 +248,14 @@ static class EntityMetadataWriter
     /// second variant-carrying entity with different flags needs its own writer, not a
     /// generic-named one that quietly forces gravity on it.
     /// </summary>
+    /// <summary>An experience orb: gravity and collision flags, and the points it is worth (the client sizes the sprite by it).</summary>
+    public static void WriteExperienceOrbMetadata(ref BinaryStream writer, int points) =>
+        new EntityMetadataBuilder()
+            .Flags(EntityFlag.Bit(EntityFlag.AffectedByGravity) | EntityFlag.Bit(EntityFlag.HasCollision))
+            .Scale()
+            .Int(EntityMetaKey.ExperienceValue, points)
+            .WriteTo(ref writer);
+
     public static void WriteFallingBlockMetadata(ref BinaryStream writer, int variant) =>
         new EntityMetadataBuilder()
             .Flags(EntityFlag.Bit(EntityFlag.AffectedByGravity) | EntityFlag.Bit(EntityFlag.HasCollision))

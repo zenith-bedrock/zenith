@@ -99,7 +99,7 @@ internal static class DamageableActorCombatCore
         // FloorDropStore already logs once when SoftCap refuses a cell (TryAddOrMerge).
         MobLoot.Drop(lootTable, MobLoot.ContextOf(source, online), random, world, players, online, view.X, view.Y, view.Z, itemPalette);
 
-        MobKillReward.AwardExperience(source, killExperience, online);
+        MobKillReward.DropExperience(source, killExperience, online, world, players, random, view.X, view.Y, view.Z);
 
         // With an animation, peers keep the actor for deathAnimationTicks and the corpse entity removes it then
         // (DeathAnimationSystem); without one it goes at once.

@@ -78,6 +78,7 @@ public class ExperienceTests
             id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.False(system.Stores.Entities.IsAlive(id));
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(0, player.ExperienceLevel);
         Assert.Equal(5, player.ExperiencePoints);
     }
@@ -102,6 +103,7 @@ public class ExperienceTests
             id, DamageSource.MeleeFrom(player.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         Assert.False(ecsStores.Entities.IsAlive(id));
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(5, player.ExperiencePoints);
     }
 
@@ -117,6 +119,7 @@ public class ExperienceTests
         Assert.True(system.TryApplyDamage(
             id, DamageSource.Projectile(shooter.RuntimeId), health.State.Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
+        IntentTestHelpers.CollectOrbs(fx);
         Assert.Equal(5, shooter.ExperiencePoints);
     }
 
