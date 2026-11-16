@@ -106,6 +106,12 @@ sealed class BlockFamily
 
     public BlockTraits Traits { get; internal set; }
 
+    /// <summary>Chance weight that the block burns away next to fire (block_properties.json); 0 for a block that does not burn.</summary>
+    public int Flammability { get; internal set; }
+
+    /// <summary>How strongly the block invites fire to spread to a cell beside it (block_properties.json).</summary>
+    public int FlameEncouragement { get; internal set; }
+
     public DigProfile? Dig { get; internal set; }
 
     /// <summary>The data row this family was classified from; null for blocks the definitions file does not list.</summary>

@@ -536,7 +536,7 @@
   "minecraft:jungle_stairs":{"kind":"Stairs","tool":"Axe"},
   "minecraft:jungle_trapdoor":{"kind":"Trapdoor","tool":"Axe"},
   "minecraft:jungle_wood":{"kind":"Pillar","tool":"Axe","traits":["WallConnectable","Log"]},
-  "minecraft:lava":{"kind":"Unsupported","traits":["Lava"]},
+  "minecraft:lava":{"kind":"Unsupported","traits":["Lava","RandomTick"]},
   "minecraft:lapis_block":{"kind":"Cube","tool":"Pickaxe","tier":"Stone","requiresTool":true,"traits":["WallConnectable"]},
   "minecraft:lapis_ore":{"kind":"Cube","tool":"Pickaxe","tier":"Stone","requiresTool":true,"traits":["WallConnectable"],"drop":{"item":"minecraft:lapis_lazuli"}},
   "minecraft:light_block_0":{"kind":"Cube","traits":["WallConnectable"]},

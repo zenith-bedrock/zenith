@@ -297,7 +297,7 @@ sealed class FluidFlow
 
     /// <summary>Open space or something liquid washes away: air, ground-cover plants and torches.</summary>
     public static bool CanHold(int id) =>
-        Blocks.IsAir(id) || Blocks.Catalog.KindOf(id) is BlockKind.Plant or BlockKind.Torch;
+        Blocks.IsAir(id) || Blocks.IsFire(id) || Blocks.Catalog.KindOf(id) is BlockKind.Plant or BlockKind.Torch;
 
     /// <summary>Liquid can be put here: it is open and not already liquid (liquid that is there re-derives itself).</summary>
     private static bool CanSpreadTo(int id) => !Blocks.IsFluid(id) && CanHold(id);
@@ -305,7 +305,7 @@ sealed class FluidFlow
     /// <summary>Liquid can run across this cell on its way to a drop-off: open, or its own flowing liquid.</summary>
     private bool CanPassThrough(int id) => IsOwn(id) ? FluidBlocks.DepthOf(id) != 0 : !Blocks.IsFluid(id) && CanHold(id);
 
-    private static bool IsSolid(int id) => !Blocks.IsAir(id) && !Blocks.IsFluid(id) && !Blocks.IsPassableDecoration(id);
+    private static bool IsSolid(int id) => !Blocks.IsAir(id) && !Blocks.IsFluid(id) && !Blocks.IsFire(id) && !Blocks.IsPassableDecoration(id);
 
     private void Place(int x, int y, int z, int existing, int depth)
     {

@@ -41,6 +41,8 @@ static class Blocks
         public int Water { get; set; }
         public int Lava { get; set; }
         public int Obsidian { get; set; }
+        public int Fire { get; set; }
+        public BlockFamily FireFamily { get; set; } = null!;
         public int Cobblestone { get; set; }
         public int Deepslate { get; set; }
         public int CoalOre { get; set; }
@@ -95,6 +97,7 @@ static class Blocks
     public static int Water => Current.Water;
     public static int Lava => Current.Lava;
     public static int Obsidian => Current.Obsidian;
+    public static int Fire => Current.Fire;
     public static int Cobblestone => Current.Cobblestone;
     public static int Deepslate => Current.Deepslate;
     public static int CoalOre => Current.CoalOre;
@@ -166,6 +169,8 @@ static class Blocks
         b.Water = palette.Require("minecraft:water");
         b.Lava = palette.Require("minecraft:lava");
         b.Obsidian = palette.Require("minecraft:obsidian");
+        b.Fire = palette.Require("minecraft:fire");
+        b.FireFamily = b.Catalog.States.FamilyOf(b.Fire)!;
         b.Cobblestone = palette.Require("minecraft:cobblestone");
         b.Deepslate = palette.Require("minecraft:deepslate");
         b.CoalOre = palette.Require("minecraft:coal_ore");
@@ -311,6 +316,15 @@ static class Blocks
     public static bool IsLog(int runtimeId) =>
         Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.Log) != 0;
 
+    /// <summary>The fire block, at any age (ADR §172).</summary>
+    public static bool IsFire(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId) == Current.FireFamily;
+
+    /// <summary>How readily the block burns away (block_properties.json), 0 when it does not.</summary>
+    public static int FlammabilityOf(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId)?.Flammability ?? 0;
+
+    /// <summary>How strongly the block invites fire to spread next to it (block_properties.json), 0 when it does not.</summary>
+    public static int FlameEncouragementOf(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId)?.FlameEncouragement ?? 0;
+
     public static bool IsLeaves(int runtimeId) => Current.Catalog.KindOf(runtimeId) == BlockKind.Leaves;
 
     /// <summary>Literal empty air. Never occupies, never supports (Phase XXIX).</summary>
@@ -359,7 +373,7 @@ static class Blocks
     /// legitimately need to diverge, but there is exactly one classification underneath until that
     /// happens.
     /// </summary>
-    private static bool IsSolid(int runtimeId) => !IsAir(runtimeId) && !IsFluid(runtimeId) && !IsPassableDecoration(runtimeId);
+    private static bool IsSolid(int runtimeId) => !IsAir(runtimeId) && !IsFluid(runtimeId) && !IsFire(runtimeId) && !IsPassableDecoration(runtimeId);
 
     /// <summary>Blocks body occupancy for any actor's feet/head cell. Air and fluid are both occupiable.</summary>
     public static bool BlocksMovement(int runtimeId) => IsSolid(runtimeId);

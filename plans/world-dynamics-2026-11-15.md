@@ -50,7 +50,7 @@ Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support 
   fire, bucket items. The first slice is flowing water + buckets; lava follows.
 - Largest single step; do not start until step 1 is merged and measured.
 
-## Step 4 — Fire
+## Step 4 — Fire — SPREAD, BURNING AND LAVA IGNITION DONE, ADR §172 (open: flint and steel, punching out, burning entities, rain)
 
 - Fire block (`age`), spread via random/scheduled ticks using `flammability`/`flameEncouragement` — already imported in
   `data/block_properties.json`, so the data side is done. Flint and steel, burning entities, extinguishing by rain/water.

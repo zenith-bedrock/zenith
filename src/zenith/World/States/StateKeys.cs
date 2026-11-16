@@ -40,6 +40,8 @@ static class StateKeys
     public static readonly BitKey Age = new("age_bit");
     /// <summary>Water level: 0 is a source, 1..7 flows thinner with distance, +8 marks water that is falling.</summary>
     public static readonly IntKey LiquidDepth = new("liquid_depth", 16);
+    /// <summary>Fire's age, 0..15: it burns out as it ages.</summary>
+    public static readonly IntKey FireAge = new("age", 16);
     public static readonly BitKey Persistent = new("persistent_bit");
 
     // Recognised for classification only.

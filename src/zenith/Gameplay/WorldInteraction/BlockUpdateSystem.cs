@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Replication;
+using Zenith.Gameplay.WorldInteraction.Fire;
 using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -31,6 +32,8 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = new();
     private readonly FluidFlow _water;
     private readonly FluidFlow _lava;
+    private readonly FireSpread _fire;
+    private readonly Random _random = new();
     private ulong _now;
     private IReadOnlyList<global::Zenith.Player.Player> _online = [];
 
@@ -40,6 +43,7 @@ sealed class BlockUpdateSystem : IGameSystem
         _players = players;
         _water = new FluidFlow(world, FluidSpec.Water, _updates, DropWashedAway);
         _lava = new FluidFlow(world, FluidSpec.Lava, _updates, DropWashedAway);
+        _fire = new FireSpread(world, _random, _updates);
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
@@ -63,6 +67,10 @@ sealed class BlockUpdateSystem : IGameSystem
             scheduled++;
             if (_world.TryGetBlock(sx, sy, sz, out var due) && Blocks.FluidOf(due) is var fluid and not FluidType.None)
                 FlowOf(fluid).Tick(sx, sy, sz);
+            else if (Blocks.IsFire(due))
+            {
+                if (_fire.Tick(sx, sy, sz)) _ = _world.ScheduledTicks.Schedule(sx, sy, sz, _now + (ulong)FireSpread.NextDelay(_random));
+            }
             else
                 Evaluate(sx, sy, sz, online, updates);
         }
@@ -88,6 +96,13 @@ sealed class BlockUpdateSystem : IGameSystem
             var flow = FlowOf(fluid);
             if (!flow.TryReact(x, y, z, id))
                 _ = _world.ScheduledTicks.Schedule(x, y, z, _now + (ulong)flow.Spec.TickDelay);
+            return;
+        }
+
+        // Fire lives on its own clock: any change at or beside it makes sure one is running.
+        if (Blocks.IsFire(id))
+        {
+            _ = _world.ScheduledTicks.Schedule(x, y, z, _now + (ulong)FireSpread.NextDelay(_random));
             return;
         }
 

@@ -71,6 +71,12 @@ sealed class BlockCatalog
         var problems = new List<string>();
         foreach (var family in States.Families)
         {
+            if (properties.TryGetValue(family.Name, out var property))
+            {
+                family.Flammability = property.Flammability;
+                family.FlameEncouragement = property.FlameEncouragement;
+            }
+
             // A block the definitions do not list stays Unsupported: neither placeable nor breakable.
             if (!definitions.TryGetValue(family.Name, out var definition)) continue;
             family.Definition = definition;
