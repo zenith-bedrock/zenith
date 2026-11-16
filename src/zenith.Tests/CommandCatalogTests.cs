@@ -92,4 +92,69 @@ public sealed class CommandCatalogTests
             new CommandOverload()));
         return catalog;
     }
+
+    private static CommandDefinition Def(string name, params string[] aliases) =>
+        new(name, "test", CommandPermission.Any, [new CommandOverload()], aliases);
+
+    private static void AssertUnchanged(CommandCatalog catalog, int definitions, params string[] unknown)
+    {
+        Assert.Equal(definitions, catalog.Definitions.Count);
+        foreach (var name in unknown)
+            Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/" + name, CommandPermission.Operator).Status);
+    }
+
+    [Theory]
+    [InlineData("a", "b", "b")]   // alias repeated inside the definition
+    [InlineData("a", "a")]        // alias equal to the name
+    [InlineData("a", "A")]        // same, ignoring case
+    [InlineData("a", "")]         // empty alias
+    [InlineData("a", "x y")]      // alias with whitespace
+    public void A_definition_with_bad_names_is_rejected_and_leaves_the_catalog_untouched(string name, params string[] aliases)
+    {
+        var catalog = new CommandCatalog();
+        catalog.Register(Def("existing", "ex"));
+
+        Assert.ThrowsAny<Exception>(() => catalog.Register(Def(name, aliases)));
+
+        AssertUnchanged(catalog, 1, name, aliases.FirstOrDefault(a => a.Length > 0 && !a.Contains(' ')) ?? "zzz");
+        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/ex", CommandPermission.Any).Status);
+    }
+
+    [Fact]
+    public void A_collision_with_an_existing_alias_registers_nothing_of_the_new_definition()
+    {
+        var catalog = new CommandCatalog();
+        catalog.Register(Def("existing", "ex"));
+
+        Assert.Throws<InvalidOperationException>(() => catalog.Register(Def("fresh", "fr", "ex")));
+
+        AssertUnchanged(catalog, 1, "fresh", "fr");
+        catalog.Register(Def("fresh", "fr")); // the names are still free
+        Assert.Equal(2, catalog.Definitions.Count);
+    }
+
+    [Fact]
+    public void A_frozen_catalog_refuses_registration_and_keeps_its_definitions()
+    {
+        var catalog = new CommandCatalog();
+        catalog.Register(Def("one"));
+        catalog.Freeze();
+
+        Assert.Throws<InvalidOperationException>(() => catalog.Register(Def("two")));
+
+        AssertUnchanged(catalog, 1, "two");
+    }
+
+    [Fact]
+    public void The_catalog_keeps_its_own_copy_of_the_definitions_lists()
+    {
+        var aliases = new List<string> { "o" };
+        var catalog = new CommandCatalog();
+        catalog.Register(new CommandDefinition("one", "t", CommandPermission.Any, [new CommandOverload()], aliases));
+
+        aliases.Add("sneaky");
+
+        Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/sneaky", CommandPermission.Operator).Status);
+        Assert.Single(catalog.Definitions[0].Aliases);
+    }
 }

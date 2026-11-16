@@ -9,16 +9,35 @@ sealed class CommandCatalog
 
     public IReadOnlyList<CommandDefinition> Definitions => _definitions;
 
+    /// <summary>
+    /// Adds a command. Everything is validated before the catalog changes, so a rejected definition leaves it exactly as it was.
+    /// The catalog keeps its own copy of the definition's lists: later edits by the caller cannot change what it parses.
+    /// </summary>
     public void Register(CommandDefinition definition)
     {
         if (_frozen)
             throw new InvalidOperationException("CommandCatalog is frozen; register before Freeze().");
+        ArgumentNullException.ThrowIfNull(definition);
         ArgumentException.ThrowIfNullOrWhiteSpace(definition.Name);
-        if (_names.ContainsKey(definition.Name) || definition.Aliases.Any(_names.ContainsKey))
-            throw new InvalidOperationException($"Duplicate command name or alias for '{definition.Name}'.");
-        _definitions.Add(definition);
-        _names.Add(definition.Name, definition);
-        foreach (var alias in definition.Aliases) _names.Add(alias, definition);
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in definition.Aliases.Prepend(definition.Name))
+        {
+            if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsWhiteSpace))
+                throw new ArgumentException($"Command '{definition.Name}' has an empty or whitespace-containing name or alias.", nameof(definition));
+            if (!names.Add(name))
+                throw new InvalidOperationException($"Command '{definition.Name}' repeats the name or alias '{name}'.");
+            if (_names.ContainsKey(name))
+                throw new InvalidOperationException($"Duplicate command name or alias '{name}' (registering '{definition.Name}').");
+        }
+
+        var owned = definition with
+        {
+            Aliases = [.. definition.Aliases],
+            Overloads = [.. definition.Overloads]
+        };
+        _definitions.Add(owned);
+        foreach (var name in names) _names.Add(name, owned);
     }
 
     /// <summary>
