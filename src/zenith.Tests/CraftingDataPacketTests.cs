@@ -13,7 +13,7 @@ public class CraftingDataPacketTests
 
     public CraftingDataPacketTests()
     {
-        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        Blocks.EnsureLoaded();
     }
 
     private static CraftingDataPacket Build() => InventoryProtocol.BuildCraftingData(RecipeRegistry.CreateDefault(), Palette);
