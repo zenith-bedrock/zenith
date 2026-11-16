@@ -25,6 +25,9 @@ sealed class MobHazardSystem(
     private const float HeadHeight = 1.0f;
     private const float FeetOffset = 0.1f;
 
+    /// <summary>How often the breath of entities that no longer exist is forgotten.</summary>
+    private const int SweepEveryTicks = 200;
+
     private readonly Dictionary<EntityId, int> _air = [];
     private readonly List<EntityId> _scratch = [];
 
@@ -44,25 +47,17 @@ sealed class MobHazardSystem(
                 continue;
             }
 
-            if (FluidAt(pos, HeadHeight) == FluidType.Water)
-            {
-                var air = _air.GetValueOrDefault(id, AirSupplySystem.MaxAirSupply) - 1;
-                if (air <= AirSupplySystem.DrownThreshold)
-                {
-                    air = 0;
-                    damage.TryApplyDamage(id, DamageSource.Drown, AirSupplySystem.DrownDamage, online, clock.CurrentTick);
-                }
-                _air[id] = air;
-            }
-            else if (_air.Remove(id, out var left) && left < AirSupplySystem.MaxAirSupply)
-            {
-                var refilled = Math.Min(AirSupplySystem.MaxAirSupply, Math.Max(0, left) + 4);
-                if (refilled < AirSupplySystem.MaxAirSupply) _air[id] = refilled;
-            }
+            var underwater = FluidAt(pos, HeadHeight) == FluidType.Water;
+            if (!underwater && !_air.ContainsKey(id)) continue; // nothing to breathe back in
+
+            var air = AirSupplySystem.Breathe(_air.GetValueOrDefault(id, AirSupplySystem.MaxAirSupply), underwater, out var drowning);
+            if (drowning) damage.TryApplyDamage(id, DamageSource.Drown, AirSupplySystem.DrownDamage, online, clock.CurrentTick);
+            if (air >= AirSupplySystem.MaxAirSupply) _air.Remove(id);
+            else _air[id] = air;
         }
 
         // Entities that are gone leave their breath behind; sweep rarely.
-        if (clock.CurrentTick % 200 == 0 && _air.Count > 0)
+        if (clock.CurrentTick % SweepEveryTicks == 0 && _air.Count > 0)
             _air.Keys.Where(k => !stores.Health.Has(k)).ToList().ForEach(k => _air.Remove(k));
     }
 

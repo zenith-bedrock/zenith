@@ -19,7 +19,7 @@ sealed class AirSupplySystem(PlayerManager players) : IGameSystem
     public const int DrownThreshold = -20;
     public const float DrownDamage = 2f;
     public const float LavaDamage = 4f;
-    private const int RefillPerTick = 4;
+    public const int RefillPerTick = 4;
     private const int ReportEvery = 10;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
@@ -38,22 +38,26 @@ sealed class AirSupplySystem(PlayerManager players) : IGameSystem
                 PlayerDamage.ApplyCore(player, players, DamageSource.Lava, LavaDamage, clock.CurrentTick).Conclude(online);
             if (player.IsDead) continue;
 
-            if (SubmersionProbe.AtHead(player) == FluidType.Water)
-            {
-                player.AirSupply--;
-                if (player.AirSupply <= DrownThreshold)
-                {
-                    player.AirSupply = 0;
-                    PlayerDamage.ApplyCore(player, players, DamageSource.Drown, DrownDamage, clock.CurrentTick).Conclude(online);
-                }
-            }
-            else if (player.AirSupply < MaxAirSupply)
-            {
-                player.AirSupply = Math.Min(MaxAirSupply, Math.Max(0, player.AirSupply) + RefillPerTick);
-            }
+            player.AirSupply = Breathe(player.AirSupply, SubmersionProbe.AtHead(player) == FluidType.Water, out var drowning);
+            if (drowning)
+                PlayerDamage.ApplyCore(player, players, DamageSource.Drown, DrownDamage, clock.CurrentTick).Conclude(online);
 
             Report(player);
         }
+    }
+
+    /// <summary>One tick of breathing for any body: the new air supply, and whether it just ran out and must take drowning damage.</summary>
+    public static int Breathe(int air, bool headUnderWater, out bool drowning)
+    {
+        drowning = false;
+        if (headUnderWater)
+        {
+            if (--air > DrownThreshold) return air;
+            drowning = true;
+            return 0;
+        }
+
+        return air < MaxAirSupply ? Math.Min(MaxAirSupply, Math.Max(0, air) + RefillPerTick) : air;
     }
 
     private static void Report(Player.Player player)

@@ -38,7 +38,7 @@ sealed class FluidFlow
     private const int SourceAmount = 8;
 
     // Index ^ 1 is the opposite direction.
-    private static readonly (int Dx, int Dz)[] Sides = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    private static readonly (int Dx, int Dz)[] Sides = BlockFaces.Horizontal;
 
     private readonly World.World _world;
     private readonly FluidSpec _spec;

@@ -30,10 +30,30 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
     public const int MinDelay = 30;
     public const int DelayRange = 10;
 
+    /// <summary>Fire stays on while it is this young with solid ground under it, even with nothing burnable beside it.</summary>
+    private const int YoungestUnfuelledAge = 3;
+
+    /// <summary>Old fire over a floor that does not burn goes out with this chance (one in N) each step.</summary>
+    private const int BurnOutOneIn = 4;
+
+    /// <summary>Open cells it can jump to: this many to each side and below by one, up to <see cref="ReachUp"/> above.</summary>
+    private const int ReachSide = 1;
+    private const int ReachDown = 1;
+    private const int ReachUp = 4;
+
+    /// <summary>The roll that decides a jump is out of this, plus this much more for each cell above the first.</summary>
+    private const int JumpRoll = 100;
+
+    /// <summary>Added to a neighbour's encouragement before dividing by the fire's age, so young fire spreads fastest.</summary>
+    private const int EncouragementBase = 40;
+    private const int AgeBase = 30;
+
+    /// <summary>Burning a neighbour turns it into fire when a roll of (age + this) lands under <see cref="FireTurnThreshold"/>, else it is just gone.</summary>
+    private const int FireTurnRollBase = 10;
+    private const int FireTurnThreshold = 5;
+
     private const int SideBurnWeight = 300;
     private const int VerticalBurnWeight = 250;
-
-    private static readonly (int Dx, int Dy, int Dz)[] Faces = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)];
 
     public static int NextDelay(Random random) => MinDelay + random.Next(DelayRange);
 
@@ -42,7 +62,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
     {
         if (!world.TryGetBlock(x, y, z, out var id) || !Blocks.IsFire(id)) return false;
 
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (world.TryGetBlock(x + dx, y + dy, z + dz, out var side) && Blocks.FluidOf(side) == FluidType.Water)
                 return Remove(x, y, z);
 
@@ -51,14 +71,14 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
         var onFuel = floorKnown && Blocks.FlammabilityOf(floor) > 0;
         var fuelBeside = HasFlammableNeighbour(x, y, z);
 
-        if (!fuelBeside && floorKnown && (!Blocks.CanSupportGroundActor(floor) || age > 3)) return Remove(x, y, z);
-        if (!onFuel && age == FireBlocks.MaxAge && random.Next(4) == 0) return Remove(x, y, z);
+        if (!fuelBeside && floorKnown && (!Blocks.CanSupportGroundActor(floor) || age > YoungestUnfuelledAge)) return Remove(x, y, z);
+        if (!onFuel && age == FireBlocks.MaxAge && random.Next(BurnOutOneIn) == 0) return Remove(x, y, z);
 
         var aged = Math.Min(FireBlocks.MaxAge, age + random.Next(3) / 2);
         if (aged != age) Write(x, y, z, FireBlocks.WithAge(aged));
         age = aged;
 
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             TryCatchFire(x + dx, y + dy, z + dz, dy == 0 ? SideBurnWeight : VerticalBurnWeight, age);
 
         SpreadToAir(x, y, z, age);
@@ -72,7 +92,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
         if (flammability <= 0 || random.Next(weight) >= flammability) return;
 
         // A burning block either becomes fire in its turn or is simply gone.
-        if (random.Next(sourceAge + 10) < 5)
+        if (random.Next(sourceAge + FireTurnRollBase) < FireTurnThreshold)
             Write(x, y, z, FireBlocks.WithAge(sourceAge + random.Next(5) / 4));
         else
             Write(x, y, z, World.World.AirRuntimeId);
@@ -80,9 +100,9 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
 
     private void SpreadToAir(int x, int y, int z, int age)
     {
-        for (var dx = -1; dx <= 1; dx++)
-            for (var dz = -1; dz <= 1; dz++)
-                for (var dy = -1; dy <= 4; dy++)
+        for (var dx = -ReachSide; dx <= ReachSide; dx++)
+            for (var dz = -ReachSide; dz <= ReachSide; dz++)
+                for (var dy = -ReachDown; dy <= ReachUp; dy++)
                 {
                     if (dx == 0 && dy == 0 && dz == 0) continue;
                     var (tx, ty, tz) = (x + dx, y + dy, z + dz);
@@ -92,8 +112,8 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
                     if (encouragement <= 0) continue;
 
                     // Higher cells are harder to reach.
-                    var reluctance = dy > 1 ? 100 + (dy - 1) * 100 : 100;
-                    if (random.Next(reluctance) > (encouragement + 40) / (age + 30)) continue;
+                    var reluctance = dy > 1 ? JumpRoll + (dy - 1) * JumpRoll : JumpRoll;
+                    if (random.Next(reluctance) > (encouragement + EncouragementBase) / (age + AgeBase)) continue;
                     if (HasWaterNeighbour(tx, ty, tz)) continue;
 
                     Write(tx, ty, tz, FireBlocks.WithAge(age + random.Next(5) / 4));
@@ -103,7 +123,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
     private int StrongestEncouragement(int x, int y, int z)
     {
         var best = 0;
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (world.TryGetBlock(x + dx, y + dy, z + dz, out var id))
                 best = Math.Max(best, Blocks.FlameEncouragementOf(id));
         return best;
@@ -111,7 +131,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
 
     private bool HasFlammableNeighbour(int x, int y, int z)
     {
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (world.TryGetBlock(x + dx, y + dy, z + dz, out var id) && Blocks.FlammabilityOf(id) > 0)
                 return true;
         return false;
@@ -119,7 +139,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
 
     private bool HasWaterNeighbour(int x, int y, int z)
     {
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (world.TryGetBlock(x + dx, y + dy, z + dz, out var id) && Blocks.FluidOf(id) == FluidType.Water)
                 return true;
         return false;

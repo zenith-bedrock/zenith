@@ -22,11 +22,6 @@ sealed class BlockUpdateSystem : IGameSystem
     /// <summary>Scheduled cells evaluated per tick.</summary>
     public const int MaxScheduledPerTick = 256;
 
-    private static readonly (int Dx, int Dy, int Dz)[] Neighbours =
-    [
-        (0, 0, 0), (0, 1, 0), (0, -1, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1)
-    ];
-
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = new();
@@ -57,7 +52,8 @@ sealed class BlockUpdateSystem : IGameSystem
         while (changed < MaxChangedCellsPerTick && _world.BlockUpdates.TryDequeue(out var x, out var y, out var z))
         {
             changed++;
-            foreach (var (dx, dy, dz) in Neighbours)
+            Evaluate(x, y, z, online, updates);
+            foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
                 Evaluate(x + dx, y + dy, z + dz, online, updates);
         }
 

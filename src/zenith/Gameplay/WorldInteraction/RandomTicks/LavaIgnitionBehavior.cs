@@ -10,8 +10,6 @@ namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
 /// </summary>
 sealed class LavaIgnitionBehavior : IRandomTickBehavior
 {
-    private static readonly (int Dx, int Dy, int Dz)[] Faces = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)];
-
     public void OnRandomTick(RandomTickContext tick)
     {
         var random = tick.Random;
@@ -49,7 +47,7 @@ sealed class LavaIgnitionBehavior : IRandomTickBehavior
 
     private static bool HasFlammableNeighbour(RandomTickContext tick, int x, int y, int z)
     {
-        foreach (var (dx, dy, dz) in Faces)
+        foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (tick.TryGetBlock(x + dx, y + dy, z + dz, out var id) && Blocks.FlammabilityOf(id) > 0)
                 return true;
         return false;

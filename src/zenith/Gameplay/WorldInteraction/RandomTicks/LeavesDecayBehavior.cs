@@ -12,8 +12,6 @@ sealed class LeavesDecayBehavior : IRandomTickBehavior
     /// <summary>Steps from a trunk, through leaves, that still hold a leaf on.</summary>
     public const int Reach = 4;
 
-    private static readonly (int X, int Y, int Z)[] Neighbours = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)];
-
     private readonly HashSet<(int, int, int)> _seen = [];
     private readonly List<(int X, int Y, int Z)> _frontier = [];
     private readonly List<(int X, int Y, int Z)> _next = [];
@@ -39,7 +37,7 @@ sealed class LeavesDecayBehavior : IRandomTickBehavior
             _next.Clear();
             foreach (var (x, y, z) in _frontier)
             {
-                foreach (var (dx, dy, dz) in Neighbours)
+                foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
                 {
                     var (nx, ny, nz) = (x + dx, y + dy, z + dz);
                     if (!_seen.Add((nx, ny, nz))) continue;
