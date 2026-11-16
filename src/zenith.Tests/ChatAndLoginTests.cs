@@ -176,6 +176,48 @@ public class LoginIdentityTests
         Assert.Equal(id, parsed.Uuid);
     }
 
+    [Fact]
+    public void ParseIdentityToken_uses_the_chain_identity_when_the_token_names_none()
+    {
+        var chainId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var chain = "{\"chain\":[\"" + MakeJwt("{\"extraData\":{\"identity\":\"" + chainId + "\"}}") + "\"]}";
+        var parsed = LoginIdentity.ParseIdentityToken(
+            MakeJwt("""{"xname":"Steve"}"""), chain, auth: Auth("xbox"));
+        Assert.Equal(chainId, parsed.Uuid);
+        Assert.True(parsed.IdentityStable);
+        Assert.False(parsed.IdentityFromJwt);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_prefers_xid_over_the_chain_identity()
+    {
+        var chainId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var chain = "{\"chain\":[\"" + MakeJwt("{\"extraData\":{\"identity\":\"" + chainId + "\"}}") + "\"]}";
+        var parsed = LoginIdentity.ParseIdentityToken(
+            MakeJwt("""{"xname":"Steve","xid":"25332747913222912"}"""), chain, auth: Auth("xbox"));
+        Assert.Equal(LoginIdentity.IdentityFromXuid("25332747913222912"), parsed.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_prefers_the_chain_identity_over_the_self_signed_id()
+    {
+        var chainId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var selfId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var chain = "{\"chain\":[\"" + MakeJwt("{\"extraData\":{\"identity\":\"" + chainId + "\"}}") + "\"]}";
+        var clientData = MakeJwt("{\"SelfSignedId\":\"" + selfId + "\"}");
+        var parsed = LoginIdentity.ParseIdentityToken(
+            MakeJwt("""{"xname":"Steve"}"""), chain, clientData, Auth("xbox", "offline"));
+        Assert.Equal(chainId, parsed.Uuid);
+    }
+
+    [Fact]
+    public void ParseIdentityToken_ignores_a_malformed_chain_instead_of_failing_the_login()
+    {
+        var parsed = LoginIdentity.ParseIdentityToken(
+            MakeJwt("""{"xname":"Steve"}"""), "{not json", auth: Auth("xbox", "offline"));
+        Assert.Equal(LoginIdentity.IdentityFromOfflineName("Steve"), parsed.Uuid);
+    }
+
     private static string MakeJwt(string payloadJson)
     {
         static string B64Url(string s)

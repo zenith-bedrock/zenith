@@ -72,48 +72,97 @@ class LoginSessionHandler : ISessionHandler
         if (!TryAcceptProtocol(session, packet.Protocol, stage: "Login"))
             return;
 
-        var auth = session.Context.Config.Auth;
         var authType = packet.AuthInfo.AuthenticationType;
-        if (authType is < LoginPacket.AuthenticationInfo.TypeFull or > LoginPacket.AuthenticationInfo.TypeSelfSigned)
+        if (!IsAuthenticationAllowed(session, packet, authType) ||
+            !TryResolveIdentity(session, packet, authType, out var identity))
         {
-            session.Context.Logger.Warning("Rejected login: unknown authentication type.");
             session.Disconnect();
             return;
         }
-        if (authType == LoginPacket.AuthenticationInfo.TypeGuest)
+
+        if (!identity.IdentityStable)
         {
-            session.Context.Logger.Warning("Rejected login: guest authentication is not supported.");
+            session.Context.Logger.Warning(
+                $"Login '{identity.DisplayName}': no stable identity (identity/xid/chain) — " +
+                $"using ephemeral uuid {identity.Uuid:D}; inventory/playerdata will not persist across rejoins.");
+        }
+
+        identity = ApplyJoinSkin(session, packet, identity);
+        session.Profile = ClientProfileParser.Parse(
+            packet.AuthInfo.Token,
+            packet.AuthInfo.Certificate,
+            packet.ClientDataJwt);
+
+        var player = CreatePlayer(session, identity);
+        HydratePlayer(session, player);
+
+        if (!TryAdmit(session, player))
+        {
             session.Disconnect();
             return;
+        }
+
+        session.Player = player;
+        session.HasGameIdentity = true;
+
+        session.Context.EventBus.Publish(new PlayerLoginEvent(player));
+
+        session.Protocol.Login.SendLoginSuccess();
+        session.Protocol.ResourcePacks.SendInfo(
+            mustAccept: true,
+            hasAddons: false,
+            hasScripts: false,
+            worldTemplateVersion: "");
+        session.SetHandler(new ResourcePacksSessionHandler());
+    }
+
+    /// <summary>
+    /// Whether this server accepts the kind of login the client presents (auth.accept), and whether a NetherNet transport's
+    /// authenticated identity agrees with it. Logs why when it does not.
+    /// </summary>
+    private static bool IsAuthenticationAllowed(NetworkSession session, LoginPacket packet, int authType)
+    {
+        var auth = session.Context.Config.Auth;
+        var logger = session.Context.Logger;
+        if (authType is < LoginPacket.AuthenticationInfo.TypeFull or > LoginPacket.AuthenticationInfo.TypeSelfSigned)
+        {
+            logger.Warning("Rejected login: unknown authentication type.");
+            return false;
+        }
+
+        if (authType == LoginPacket.AuthenticationInfo.TypeGuest)
+        {
+            logger.Warning("Rejected login: guest authentication is not supported.");
+            return false;
         }
 
         if (authType == LoginPacket.AuthenticationInfo.TypeFull && !auth.AllowsXbox)
         {
-            session.Context.Logger.Warning(
-                "Rejected login: AuthenticationType FULL but auth.accept does not include xbox.");
-            session.Disconnect();
-            return;
+            logger.Warning("Rejected login: AuthenticationType FULL but auth.accept does not include xbox.");
+            return false;
         }
 
         if (authType == LoginPacket.AuthenticationInfo.TypeSelfSigned && !auth.AllowsSelfSigned)
         {
-            session.Context.Logger.Warning(
+            logger.Warning(
                 "Rejected login: AuthenticationType SELF_SIGNED but auth.accept does not include self-signed.");
-            session.Disconnect();
-            return;
+            return false;
         }
 
-        if (session.RequiresTransportIdentityBinding)
+        if (session.RequiresTransportIdentityBinding &&
+            !MatchesTransportAuthentication(session.TransportIdentity, authType, packet.AuthInfo.Token))
         {
-            if (!MatchesTransportAuthentication(session.TransportIdentity, authType, packet.AuthInfo.Token))
-            {
-                session.Context.Logger.Warning("Rejected NetherNet login: authenticated SDP and game authentication do not match.");
-                session.Disconnect();
-                return;
-            }
+            logger.Warning("Rejected NetherNet login: authenticated SDP and game authentication do not match.");
+            return false;
         }
 
-        LoginIdentity.ParsedIdentity identity;
+        return true;
+    }
+
+    /// <summary>Verifies the credentials (a FULL login's issuer signature and key proof) and reads who the player is.</summary>
+    private static bool TryResolveIdentity(
+        NetworkSession session, LoginPacket packet, int authType, out LoginIdentity.ParsedIdentity identity)
+    {
         try
         {
             if (authType == LoginPacket.AuthenticationInfo.TypeFull)
@@ -130,45 +179,38 @@ class LoginSessionHandler : ISessionHandler
                 packet.AuthInfo.Token, packet.AuthInfo.Certificate, packet.ClientDataJwt,
                 authType == LoginPacket.AuthenticationInfo.TypeFull
                     ? new ServerConfig.AuthSection { Accept = [ServerConfig.AuthSection.ModeXbox] }
-                    : auth);
+                    : session.Context.Config.Auth);
+            return true;
         }
         catch (Exception ex)
         {
             session.Context.Logger.Warning($"Failed to parse/validate identity: {ex.Message}");
-            session.Disconnect();
-            return;
+            identity = default;
+            return false;
         }
+    }
 
-        if (!identity.IdentityStable)
-        {
-            session.Context.Logger.Warning(
-                $"Login '{identity.DisplayName}': no stable identity (identity/xid/chain) — " +
-                $"using ephemeral uuid {identity.Uuid:D}; inventory/playerdata will not persist across rejoins.");
-        }
+    /// <summary>
+    /// Join skin = ClientData full SerializedSkin (DF parseSkin / PM ClientDataToSkinDataHelper).
+    /// Mid-game PlayerSkin is secondary; nobody needs to change skin for peers to see it.
+    /// </summary>
+    private static LoginIdentity.ParsedIdentity ApplyJoinSkin(
+        NetworkSession session, LoginPacket packet, LoginIdentity.ParsedIdentity identity)
+    {
+        if (!ClientSkinParser.TryParse(packet.ClientDataJwt, out var joinSkin))
+            return LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
 
-        // Join skin = ClientData full SerializedSkin (DF parseSkin / PM ClientDataToSkinDataHelper).
-        // Mid-game PlayerSkin is secondary; nobody needs to change skin for peers to see it.
-        if (ClientSkinParser.TryParse(packet.ClientDataJwt, out var joinSkin))
-        {
-            session.Skin = joinSkin;
-            session.SkinTrusted = ClientSkinParser.IsTrusted(packet.ClientDataJwt);
-            if (joinSkin.TryGetClassicRgba(out var rgba, out var sw, out var sh))
-            {
-                identity = identity with { SkinRgba = rgba, SkinWidth = sw, SkinHeight = sh };
-            }
-        }
-        else
-        {
-            identity = LoginIdentity.AttachClientSkin(identity, packet.ClientDataJwt);
-        }
+        session.Skin = joinSkin;
+        session.SkinTrusted = ClientSkinParser.IsTrusted(packet.ClientDataJwt);
+        return joinSkin.TryGetClassicRgba(out var rgba, out var sw, out var sh)
+            ? identity with { SkinRgba = rgba, SkinWidth = sw, SkinHeight = sh }
+            : identity;
+    }
 
-        session.Profile = ClientProfileParser.Parse(
-            packet.AuthInfo.Token,
-            packet.AuthInfo.Certificate,
-            packet.ClientDataJwt);
-
+    private static Zenith.Player.Player CreatePlayer(NetworkSession session, LoginIdentity.ParsedIdentity identity)
+    {
         var gameMode = Zenith.Player.GameModeConfig.FromConfig(session.Context.Config.Server.Gamemode);
-        var player = new Zenith.Player.Player(
+        return new Zenith.Player.Player(
             identity.DisplayName,
             session,
             session.Context.PlayerManager.AllocateRuntimeId(),
@@ -182,89 +224,80 @@ class LoginSessionHandler : ISessionHandler
             SkinWidth = identity.SkinWidth,
             SkinHeight = identity.SkinHeight
         };
+    }
 
-        // Deliberately NOT PlayerManager.TryAdd yet — that's what makes this player visible to
-        // GameLoop's Online snapshot (PlayerManager.Online/FillOnline). Populate everything below
-        // (inventory, armor, position, gamemode, vitals) on this still-private object first, so a
-        // concurrent GameLoop tick can never observe a half-initialized player. TryAdd moves to
-        // just before PlayerLoginEvent publishes, once the object is actually tick-ready.
-        var loaded = session.Context.World.Persistence.TryLoadInventory(player);
-        session.Context.Logger.Info(
+    /// <summary>
+    /// Restores what the player saved (bag, armor, offhand, pose, mode, experience, vitals) or places a first-time player on the
+    /// terrain at the origin. Deliberately NOT <see cref="PlayerManager.TryAdd"/> yet — that is what makes a player visible to the
+    /// GameLoop's Online snapshot, so everything is populated on this still-private object first and a concurrent tick can never
+    /// observe a half-initialized player.
+    /// </summary>
+    private static void HydratePlayer(NetworkSession session, Zenith.Player.Player player)
+    {
+        var world = session.Context.World;
+        var logger = session.Context.Logger;
+        var loaded = world.Persistence.TryLoadInventory(player);
+        logger.Info(
             loaded
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
                 : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
-        session.Context.World.Persistence.TryLoadArmor(player.Uuid, player.Inventory);
-        session.Context.World.Persistence.TryLoadOffhand(player.Uuid, player.Inventory);
+        world.Persistence.TryLoadArmor(player.Uuid, player.Inventory);
+        world.Persistence.TryLoadOffhand(player.Uuid, player.Inventory);
 
-        if (session.Context.World.Persistence.TryLoadPlayerData(
+        if (!world.Persistence.TryLoadPlayerData(
                 player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode,
                 out var savedLevel, out var savedPoints,
                 out var savedHealth, out var savedHunger, out var savedSaturation, out var savedExhaustion))
         {
-            player.PositionX = px;
-            player.PositionY = py;
-            player.PositionZ = pz;
-            player.Yaw = yaw;
-            player.Pitch = pitch;
-            player.HeadYaw = yaw;
-            player.SetGameMode(savedMode);
-            player.SetExperience(savedLevel, savedPoints);
-            player.HydrateVitals(savedHealth, savedHunger, savedSaturation, savedExhaustion);
-            session.Context.Logger.Info(
-                $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode} xp={savedLevel}/{savedPoints} " +
-                $"hp={savedHealth:F1} hunger={savedHunger:F1}");
-
-            // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
-            if (session.Context.World.TryHealSpawnFeet(player.PositionX, player.PositionY, player.PositionZ, out var healedY))
-            {
-                player.PositionY = healedY;
-                session.Context.Logger.Info(
-                    $"Spawn heal for '{player.Username}': Y {py:F1} → {player.PositionY:F0} (clear feet at XZ)");
-                session.Context.World.Persistence.PersistPlayerData(player);
-            }
-        }
-        else
-        {
             // First join: stand on base terrain at world origin (noise-aware; ADR §63).
             player.PositionX = 0f;
-            player.PositionY = session.Context.World.SampleSpawnFeetY(0, 0);
+            player.PositionY = world.SampleSpawnFeetY(0, 0);
             player.PositionZ = 0f;
-            session.Context.Logger.Info(
+            logger.Info(
                 $"Playerdata load miss for '{player.Username}' uuid={player.Uuid:D} " +
                 $"(terrain spawn Y={player.PositionY:F0} / config mode)");
+            return;
         }
 
-        // Player is fully populated now — safe to make it visible to the GameLoop for the first time.
-        if (!session.Context.PlayerManager.TryAdd(player))
+        player.PositionX = px;
+        player.PositionY = py;
+        player.PositionZ = pz;
+        player.Yaw = yaw;
+        player.Pitch = pitch;
+        player.HeadYaw = yaw;
+        player.SetGameMode(savedMode);
+        player.SetExperience(savedLevel, savedPoints);
+        player.HydrateVitals(savedHealth, savedHunger, savedSaturation, savedExhaustion);
+        logger.Info(
+            $"Playerdata load hit for '{player.Username}' @ {px:F1},{py:F1},{pz:F1} mode={savedMode} xp={savedLevel}/{savedPoints} " +
+            $"hp={savedHealth:F1} hunger={savedHunger:F1}");
+
+        // Flat-era pd: (Y≈-60) into noise hills → buried solid; client never leaves loading (PM/DF stand on surface).
+        if (world.TryHealSpawnFeet(player.PositionX, player.PositionY, player.PositionZ, out var healedY))
         {
-            var existing = session.Context.PlayerManager.Get(identity.DisplayName);
-            if (existing is not null)
-            {
-                session.Context.Logger.Warning(
-                    $"Displacing already-online player '{identity.DisplayName}' for reconnect.");
-                existing.Session.Disconnect();
-            }
+            player.PositionY = healedY;
+            logger.Info($"Spawn heal for '{player.Username}': Y {py:F1} → {player.PositionY:F0} (clear feet at XZ)");
+            world.Persistence.PersistPlayerData(player);
+        }
+    }
 
-            if (!session.Context.PlayerManager.TryAdd(player))
-            {
-                session.Context.Logger.Warning($"Rejected login: '{identity.DisplayName}' already online.");
-                session.Disconnect();
-                return;
-            }
+    /// <summary>Makes the finished player visible to the GameLoop, displacing a stale session of the same name once.</summary>
+    private static bool TryAdmit(NetworkSession session, Zenith.Player.Player player)
+    {
+        var players = session.Context.PlayerManager;
+        if (players.TryAdd(player)) return true;
+
+        var existing = players.Get(player.Username);
+        if (existing is not null)
+        {
+            session.Context.Logger.Warning($"Displacing already-online player '{player.Username}' for reconnect.");
+            existing.Session.Disconnect();
         }
 
-        session.Player = player;
-        session.HasGameIdentity = true;
+        if (players.TryAdd(player)) return true;
 
-        session.Context.EventBus.Publish(new PlayerLoginEvent(player));
-
-        session.Protocol.Login.SendLoginSuccess();
-        session.Protocol.ResourcePacks.SendInfo(
-            mustAccept: true,
-            hasAddons: false,
-            hasScripts: false,
-            worldTemplateVersion: "");
-        session.SetHandler(new ResourcePacksSessionHandler());
+        session.Context.Logger.Warning($"Rejected login: '{player.Username}' already online.");
+        return false;
     }
 
     /// <summary>
