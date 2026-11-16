@@ -25,7 +25,7 @@ sealed class LavaIgnitionBehavior : IRandomTickBehavior
                 if (Blocks.IsAir(id))
                 {
                     if (HasFlammableNeighbour(tick, x, y, z) && tick.Allows(EnvironmentCause.Fire, x, y, z, id, FireBlocks.WithAge(0)))
-                        tick.TrySet(x, y, z, FireBlocks.WithAge(0));
+                        tick.TrySet(EnvironmentCause.Fire, x, y, z, FireBlocks.WithAge(0));
                     return;
                 }
 
@@ -42,7 +42,7 @@ sealed class LavaIgnitionBehavior : IRandomTickBehavior
             if (tick.TryGetBlock(x, tick.Y, z, out var beside) && Blocks.FlammabilityOf(beside) > 0)
             {
                 if (!tick.Allows(EnvironmentCause.Fire, x, tick.Y + 1, z, above, FireBlocks.WithAge(0))) return;
-                tick.TrySet(x, tick.Y + 1, z, FireBlocks.WithAge(0));
+                tick.TrySet(EnvironmentCause.Fire, x, tick.Y + 1, z, FireBlocks.WithAge(0));
                 return;
             }
         }

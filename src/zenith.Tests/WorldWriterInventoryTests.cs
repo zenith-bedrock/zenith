@@ -54,7 +54,7 @@ public sealed class WorldWriterInventoryTests
         [("Zenith.Gameplay.WorldInteraction.GravitySystem", "Land")] = new(Kind.EnvironmentPoliced, "Gravity (landing)"),
         [("Zenith.Gameplay.WorldInteraction.BlockUpdateSystem", "BreakUnsupported")] = new(Kind.EnvironmentPoliced, "SupportLoss (break and drop)"),
         [("Zenith.Gameplay.WorldInteraction.BlockUpdateSystem", "Evaluate")] = new(Kind.EnvironmentPoliced, "SupportLoss (neighbour-driven reshape)"),
-        [("Zenith.Gameplay.WorldInteraction.RandomTicks.RandomTickContext", "TrySet")] = new(Kind.Environment, "per behaviour: see RandomTickWriters"),
+        [("Zenith.Gameplay.WorldInteraction.RandomTicks.RandomTickContext", "TrySet")] = new(Kind.EnvironmentPoliced, "per behaviour: see RandomTickWriters"),
 
         // The world itself.
         [("Zenith.World.World", "SetBlock")] = new(Kind.WorldInternals, "setup-time write API"),
@@ -123,7 +123,7 @@ public sealed class WorldWriterInventoryTests
         // Pins the size of the remaining gap: moving a writer from Environment to a policed kind is a deliberate edit of this test.
         var environment = CellWriters.Where(entry => entry.Value.Kind == Kind.Environment).Select(entry => entry.Key.Type.Split('.')[^1]).Distinct().Order();
         Assert.Equal(
-            ["RandomTickContext"],
+            [],
             environment);
     }
 }

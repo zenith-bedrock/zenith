@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
@@ -21,7 +22,7 @@ sealed class GrassSpreadBehavior : IRandomTickBehavior
 
         if (!tick.TryGetBlock(x, y, z, out var target) || target != Blocks.Dirt) return;
         if (!tick.TryGetBlock(x, y + 1, z, out var above) || !IsOpen(above)) return;
-        tick.TrySet(x, y, z, Blocks.GrassBlock);
+        tick.TrySet(EnvironmentCause.Spread, x, y, z, Blocks.GrassBlock);
     }
 
     /// <summary>Space the sky (or a plant) can occupy: not a solid block, and not water.</summary>

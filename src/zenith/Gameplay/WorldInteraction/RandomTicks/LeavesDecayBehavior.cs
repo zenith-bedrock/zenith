@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
@@ -20,7 +21,7 @@ sealed class LeavesDecayBehavior : IRandomTickBehavior
     {
         if (Blocks.Catalog.States.Bit(tick.BlockRuntimeId, StateKeys.Persistent)) return;
         if (Search(tick, out var unknown) || unknown) return;
-        tick.TrySet(tick.X, tick.Y, tick.Z, World.World.AirRuntimeId);
+        tick.TrySet(EnvironmentCause.Decay, tick.X, tick.Y, tick.Z, World.World.AirRuntimeId);
     }
 
     /// <summary>Breadth-first through leaves, <see cref="Reach"/> steps at most; true as soon as a trunk is met.</summary>

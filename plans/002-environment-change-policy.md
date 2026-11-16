@@ -7,7 +7,7 @@
 - Effort: M across six independently reviewable phases
 - Risk: MED. The danger is not the seam, it is the writers: a veto that leaves a writer retrying forever, drops an item while the block stays, or builds half a structure is worse than no veto.
 - Depends on: plan 001 phases 0-3 (done)
-- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phases 1 (the seam, Explosion, the shared fault log), 2 (liquids, fire, lava ignition) 3 (support loss) and 4b (gravity) are implemented. You delegated the order of the rest ("choose the best approach"): what remains is 5, its own commit. Decision 3(b), the void as the single named exit, is approved.
+- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phases 1 (the seam, Explosion, the shared fault log), 2 (liquids, fire, lava ignition) 3 (support loss) 4b (gravity) and 5 (random ticks) are implemented: every environment writer is now policed. The deferred items at the end stay deferred. Decision 3(b), the void as the single named exit, is approved.
 
 Revision 2 changes, from review plus a second reading of the code: the cause list now follows the meaning of the change, not the system that makes it; the proposal is per cell; what happens after a protection is lifted is stated; gravity has explicit invariants (and the code has a pre-existing conservation hole there); tree growth is a planned multi-cell unit, which the per-cell rule alone would break; the ratchet is an IL call-site scan, not text search; policy faults get rate-limited logging; the `EnvironmentChanged` fact and region flags are deferred.
 
@@ -131,7 +131,15 @@ Each phase is one reviewable commit with tests that assert the world and the ite
 - **Phase 3, SupportLoss. DONE, see "Phase 3 result".** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
 - **Phase 4a, falling-block durability. DONE, awaiting review; see "Phase 4a result".**
 - **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests. DONE, see "Phase 4b result".
-- **Phase 5, random ticks: Growth, Decay, Spread.** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
+- **Phase 5, random ticks: Growth, Decay, Spread. DONE, see "Phase 5 result".** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
+
+## Phase 5 result
+
+- **One write path, one cause per behaviour.** `RandomTickContext.TrySet` now takes the cause and asks the policies before writing: grass spread is `Spread`, leaf decay is `Decay`, sapling maturing and tree growth are `Growth`, lava ignition stays `Fire`. A behaviour cannot write a cell without naming why. Lava still asks first, before its rolls, as in phase 2; the write asks again, which costs nothing.
+- **Tree growth is one planned unit.** While planning, every cell of the footprint (trunk, canopy and the sapling's own cell) is asked under `Growth`; one refusal abandons the whole plan, so there is never a trunk without canopy or a canopy without trunk. The per-cell ask inside `TrySet` is then only a guard that cannot disagree within the same tick. A sapling in a region does not even set its growth bit.
+- **Stated behaviour.** Strict regions v1, as decided: saplings, leaves and grass are blocked inside a region, and a tree whose footprint touches a region does not grow at all (the sapling stays a sapling, it is not an error). Leaves of a tree that did grow outside a region and are inside one never decay. Nothing replays when a protection is lifted: the next random tick of the same block decides again, which is the normal behaviour of random ticks, not a special case.
+- **Ratchet finished.** `RandomTickContext.TrySet` is `EnvironmentPoliced`; the pin of unpoliced environment writers is now empty. A new environment writer must be classified as policed or the ratchet fails.
+- **Tests (`EnvironmentRandomTickTests`), each with a control.** A single protected canopy cell: no log and no leaf anywhere (control: the tree grows). A protected trunk cell: no tree. A protected sapling does not mature. A region elsewhere does not stop a tree. Leaves in a region stay (control: a lone leaf decays). Grass does not spread into a region (control: it does). Removing the planning ask leaves a partial tree and fails two; removing the guard in `TrySet` fails three.
 
 ## Phase 4b result
 

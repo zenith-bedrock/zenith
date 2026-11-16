@@ -14,7 +14,8 @@ interface IRandomTickBehavior
 
 /// <summary>
 /// The cell being ticked and the ways to act on the world. One instance is reused for every tick of a frame, so a
-/// behaviour must not keep it. Writes go through <see cref="TrySet"/> so that clients are told about them.
+/// behaviour must not keep it. Writes go through <see cref="TrySet"/> so that clients are told about them; every write names its
+/// cause and is asked of the environment policies first, so no random tick changes a cell the policies refuse.
 /// </summary>
 sealed class RandomTickContext(
     World.World world, Random random, List<(int X, int Y, int Z, int BlockRuntimeId)> changes, EnvironmentChangePolicies environment)
@@ -51,9 +52,14 @@ sealed class RandomTickContext(
     /// <summary>Reads a block; false when its chunk is not resident (a tick never wakes a chunk).</summary>
     public bool TryGetBlock(int x, int y, int z, out int blockRuntimeId) => World.TryGetBlock(x, y, z, out blockRuntimeId);
 
-    /// <summary>Writes a block and queues it for the clients; false when the write is refused.</summary>
-    public bool TrySet(int x, int y, int z, int blockRuntimeId)
+    /// <summary>
+    /// Writes a block and queues it for the clients, under <paramref name="cause"/>; false when the policies or the world refuse.
+    /// A behaviour whose unit of change is several cells (a tree) asks about all of them while planning, so this per-cell ask is
+    /// then only a guard.
+    /// </summary>
+    public bool TrySet(EnvironmentCause cause, int x, int y, int z, int blockRuntimeId)
     {
+        if (!TryGetBlock(x, y, z, out var before) || !Allows(cause, x, y, z, before, blockRuntimeId)) return false;
         if (!World.TrySetBlock(x, y, z, blockRuntimeId)) return false;
         changes.Add((x, y, z, blockRuntimeId));
         return true;

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
@@ -6,6 +7,9 @@ namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
 /// An oak sapling matures in two steps: a random tick first sets its growth bit (one in <see cref="OddsPerStage"/>),
 /// the next successful one grows a tree, the same shape world-gen plants (trunk, canopy of radius 2 over the top three
 /// trunk cells, a cap of radius 1) — provided every cell the tree needs is free and its chunks are resident.
+/// <para/>
+/// The tree is one planned unit: while planning, every cell is asked of the environment policies (cause Growth) and a single refusal
+/// abandons the whole tree, so there is never a trunk without its canopy or a canopy without its trunk.
 /// </summary>
 sealed class SaplingGrowthBehavior : IRandomTickBehavior
 {
@@ -24,12 +28,12 @@ sealed class SaplingGrowthBehavior : IRandomTickBehavior
         if (!states.Bit(tick.BlockRuntimeId, StateKeys.Age))
         {
             var grown = tick.BlockRuntimeId;
-            if (states.TrySet(ref grown, StateKeys.Age, true)) tick.TrySet(tick.X, tick.Y, tick.Z, grown);
+            if (states.TrySet(ref grown, StateKeys.Age, true)) tick.TrySet(EnvironmentCause.Growth, tick.X, tick.Y, tick.Z, grown);
             return;
         }
 
         if (!Plan(tick, tick.Random.Next(MinTrunk, MaxTrunk + 1))) return;
-        foreach (var (x, y, z, block) in _tree) tick.TrySet(x, y, z, block);
+        foreach (var (x, y, z, block) in _tree) tick.TrySet(EnvironmentCause.Growth, x, y, z, block);
     }
 
     /// <summary>Lays the tree out in <see cref="_tree"/>; false when any cell is taken or unknown.</summary>
@@ -60,6 +64,7 @@ sealed class SaplingGrowthBehavior : IRandomTickBehavior
         if (!tick.TryGetBlock(x, y, z, out var existing)) return false;
         var isSapling = x == tick.X && y == tick.Y && z == tick.Z;
         if (!isSapling && !Blocks.IsAir(existing) && !Blocks.IsLeaves(existing) && !Blocks.IsPassableDecoration(existing)) return false;
+        if (!tick.Allows(EnvironmentCause.Growth, x, y, z, existing, block)) return false;
         _tree.Add((x, y, z, block));
         return true;
     }
