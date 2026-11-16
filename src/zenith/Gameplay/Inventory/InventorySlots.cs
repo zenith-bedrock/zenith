@@ -10,16 +10,24 @@ using Zenith.Gameplay.WorldInteraction;
 
 namespace Zenith.Gameplay.Inventory;
 
-/// <summary>The slot primitives every action is built from: read, write, transfer, swap, drop, destroy, and who may reach which slot.</summary>
-sealed partial class InventorySystem
+/// <summary>
+/// The slot primitives every inventory action is built from: read, write, transfer, swap, drop and destroy a slot addressed by an
+/// <see cref="InventorySlotReference"/>, and decide who may reach which slot. It owns no policy about requests; that is
+/// <see cref="StackRequestApplier"/>.
+/// </summary>
+sealed class InventorySlots
 {
-    private InventorySlot GetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference) =>
+    private readonly World.World _world;
+
+    public InventorySlots(World.World world) => _world = world;
+
+    public InventorySlot GetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference) =>
         InventorySlotResolver.GetSlot(player, _world, reference);
 
-    private bool TrySetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference, InventorySlot value) =>
+    public bool TrySetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference, InventorySlot value) =>
         InventorySlotResolver.TrySetSlot(player, _world, reference, value);
 
-    private bool TryTransfer(global::Zenith.Player.Player player, in InventorySlotReference from, in InventorySlotReference to, int count)
+    public bool TryTransfer(global::Zenith.Player.Player player, in InventorySlotReference from, in InventorySlotReference to, int count)
     {
         if (from == to) return false;
         if (!IsValidReference(player, from) || !IsValidReference(player, to)) return false;
@@ -44,7 +52,7 @@ sealed partial class InventorySystem
         return true;
     }
 
-    private bool TryRemoveForDrop(
+    public bool TryRemoveForDrop(
         global::Zenith.Player.Player player,
         in InventorySlotReference from,
         int count,
@@ -64,7 +72,7 @@ sealed partial class InventorySystem
         return true;
     }
 
-    private bool TryDestroy(
+    public bool TryDestroy(
         global::Zenith.Player.Player player,
         in InventorySlotReference from,
         int count)
@@ -79,7 +87,7 @@ sealed partial class InventorySystem
         return TrySetSlot(player, from, left == 0 ? InventorySlot.Empty : src with { Count = left });
     }
 
-    private bool TrySwap(global::Zenith.Player.Player player, in InventorySlotReference a, in InventorySlotReference b)
+    public bool TrySwap(global::Zenith.Player.Player player, in InventorySlotReference a, in InventorySlotReference b)
     {
         if (a == b) return false;
         if (!IsValidReference(player, a) || !IsValidReference(player, b)) return false;
@@ -104,7 +112,7 @@ sealed partial class InventorySystem
                slot == reference.Index;
     }
 
-    private bool IsValidReference(global::Zenith.Player.Player player, in InventorySlotReference reference)
+    public bool IsValidReference(global::Zenith.Player.Player player, in InventorySlotReference reference)
     {
         return reference.Area switch
         {
