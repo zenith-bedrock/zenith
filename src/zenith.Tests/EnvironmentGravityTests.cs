@@ -79,7 +79,7 @@ public sealed class EnvironmentGravityTests
 
         public void Drop(int y, int block = 0)
         {
-            World.SetBlock(X, y, Z, block == 0 ? Blocks.Sand : block);
+            World.SetQuietly(X, y, Z, block == 0 ? Blocks.Sand : block);
             Assert.True(World.GravityPending.TryEnqueue(X, y, Z));
         }
 

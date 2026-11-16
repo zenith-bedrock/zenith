@@ -62,7 +62,7 @@ public class GravityTests
         var world = NewWorld();
         var supportY = Blocks.FlatGrassY;
         var sandY = supportY + 2;
-        Assert.True(world.TrySetBlock(0, sandY, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(0, sandY, 0, Blocks.Sand));
         Assert.True(world.GravityPending.TryEnqueue(0, sandY, 0));
 
         var gravity = NewGravity(world);
@@ -82,7 +82,7 @@ public class GravityTests
         var supportY = Blocks.FlatGrassY;
         var sandY = supportY + 2; // one air cell between
         Assert.Equal(Blocks.Air, world.GetBlock(0, supportY + 1, 0));
-        Assert.True(world.TrySetBlock(0, sandY, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(0, sandY, 0, Blocks.Sand));
         Assert.True(world.GravityPending.TryEnqueue(0, sandY, 0));
 
         var gravity = NewGravity(world);
@@ -99,10 +99,10 @@ public class GravityTests
     {
         var world = NewWorld();
         var baseY = Blocks.FlatGrassY + 1;
-        Assert.True(world.TrySetBlock(1, baseY, 0, Blocks.Sand));
-        Assert.True(world.TrySetBlock(1, baseY + 1, 0, Blocks.Sand));
-        Assert.True(world.TrySetBlock(1, baseY + 2, 0, Blocks.Sand));
-        Assert.True(world.TrySetBlock(1, baseY, 0, Blocks.Air));
+        Assert.True(world.SetQuietly(1, baseY, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(1, baseY + 1, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(1, baseY + 2, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(1, baseY, 0, Blocks.Air));
         Assert.True(world.GravityPending.TryEnqueue(1, baseY + 1, 0));
 
         var gravity = NewGravity(world);
@@ -122,7 +122,7 @@ public class GravityTests
         var baseY = Blocks.FlatGrassY;
         // Six floating sand with a single air gap above grass — enqueue bottom floater only.
         for (var i = 0; i < 6; i++)
-            Assert.True(world.TrySetBlock(2, baseY + 2 + i, 0, Blocks.Sand));
+            Assert.True(world.SetQuietly(2, baseY + 2 + i, 0, Blocks.Sand));
         Assert.True(world.GravityPending.TryEnqueue(2, baseY + 2, 0));
 
         var gravity = NewGravity(world);
@@ -151,7 +151,7 @@ public class GravityTests
     {
         var world = NewWorld();
         // Place sand at FlatMinY with nothing below (unsupported → void destroy).
-        Assert.True(world.TrySetBlock(2, Blocks.FlatMinY, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(2, Blocks.FlatMinY, 0, Blocks.Sand));
         Assert.True(world.GravityPending.TryEnqueue(2, Blocks.FlatMinY, 0));
 
         var gravity = NewGravity(world);
@@ -167,7 +167,7 @@ public class GravityTests
         var world = NewWorld();
         var supportY = Blocks.FlatGrassY;
         var y = supportY + 2;
-        Assert.True(world.TrySetBlock(3, y, 0, Blocks.Gravel));
+        Assert.True(world.SetQuietly(3, y, 0, Blocks.Gravel));
         Assert.True(world.GravityPending.TryEnqueue(3, y, 0));
         var gravity = NewGravity(world);
         Settle(gravity, world);
@@ -188,7 +188,7 @@ public class GravityTests
     public void SettleAllPending_drains_queue_and_active_entities()
     {
         var world = NewWorld();
-        Assert.True(world.TrySetBlock(4, Blocks.FlatGrassY + 3, 0, Blocks.Sand));
+        Assert.True(world.SetQuietly(4, Blocks.FlatGrassY + 3, 0, Blocks.Sand));
         Assert.True(world.GravityPending.TryEnqueue(4, Blocks.FlatGrassY + 3, 0));
         var gravity = NewGravity(world);
         // One tick to get the entity in-flight, then force-settle mid-fall (shutdown path).

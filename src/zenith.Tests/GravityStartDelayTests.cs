@@ -38,7 +38,7 @@ public sealed class GravityStartDelayTests
         var player = fx.AddInGamePlayer("digger");
         StandNear(player, 0, Ground + 3, 0);
         fx.World.SetBlock(0, Ground + 3, 0, Blocks.Stone);
-        fx.World.SetBlock(0, Ground + 4, 0, Blocks.Sand);
+        fx.World.SetQuietly(0, Ground + 4, 0, Blocks.Sand);
         EquipWoodenPickaxe(player);
         QueueReadyBreak(fx.Clock, fx.World, player, 0, Ground + 3, 0);
         var gravity = new GravitySystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
@@ -67,7 +67,7 @@ public sealed class GravityStartDelayTests
     public void Support_restored_inside_the_delay_cancels_the_fall()
     {
         var (world, gravity, clock) = Boot();
-        world.SetBlock(0, Ground + 2, 0, Blocks.Sand); // one air cell between it and the grass
+        world.SetQuietly(0, Ground + 2, 0, Blocks.Sand); // one air cell between it and the grass
         Assert.True(world.GravityPending.TryEnqueue(0, Ground + 2, 0, clock.CurrentTick + Delay));
 
         Tick(gravity, clock);
@@ -83,7 +83,7 @@ public sealed class GravityStartDelayTests
     public void A_stack_peels_one_block_per_delay_and_every_block_lands()
     {
         var (world, gravity, clock) = Boot();
-        for (var i = 0; i < 5; i++) world.SetBlock(0, Ground + 3 + i, 0, Blocks.Sand); // floating, two air cells under the first
+        for (var i = 0; i < 5; i++) world.SetQuietly(0, Ground + 3 + i, 0, Blocks.Sand); // floating, two air cells under the first
         Assert.True(world.GravityPending.TryEnqueue(0, Ground + 3, 0, clock.CurrentTick + Delay));
 
         var startedAt = new List<ulong>();
@@ -115,7 +115,7 @@ public sealed class GravityStartDelayTests
         for (var i = 0; i < total; i++)
         {
             var x = i % 16; var z = i / 16;
-            world.SetBlock(x, Ground + 3, z, Blocks.Sand);
+            world.SetQuietly(x, Ground + 3, z, Blocks.Sand);
             Assert.True(world.GravityPending.TryEnqueue(x, Ground + 3, z, clock.CurrentTick + Delay));
         }
 
@@ -137,7 +137,7 @@ public sealed class GravityStartDelayTests
         var storage = new InMemoryChunkStorage();
         var world = new World.World(storage);
         var gravity = new GravitySystem(world, new PlayerManager(), new EnvironmentChangePolicies());
-        world.SetBlock(0, Ground + 3, 0, Blocks.Sand);
+        world.SetQuietly(0, Ground + 3, 0, Blocks.Sand);
         Assert.True(world.GravityPending.TryEnqueue(0, Ground + 3, 0, 1_000));
 
         world.PersistDirtyColumns(int.MaxValue);

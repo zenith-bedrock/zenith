@@ -119,6 +119,7 @@ sealed class GravitySystem : IGameSystem
         var pending = _world.GravityPending;
         if (pending.Count == 0) return;
 
+        pending.StampNoticed(_now, GravityPendingStore.StartDelayTicks);
         pending.PromoteDue(_now);
 
         var steps = 0;

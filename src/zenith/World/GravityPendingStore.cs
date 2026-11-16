@@ -27,6 +27,8 @@ sealed class GravityPendingStore
     private readonly HashSet<(int X, int Y, int Z)> _pending = new();
     private readonly Queue<(int X, int Y, int Z)> _queue = new();
     private readonly PriorityQueue<(int X, int Y, int Z), ulong> _scheduled = new();
+    /// <summary>Cells noticed by a world write, which has no clock: gravity stamps them with a due tick on its next run.</summary>
+    private readonly Queue<(int X, int Y, int Z)> _unstamped = new();
     private readonly ILogger? _logger;
     private int _capWarned;
 
@@ -44,9 +46,32 @@ sealed class GravityPendingStore
         }
     }
 
+    /// <summary>Gives every cell noticed since the last run its due tick, <paramref name="delayTicks"/> after <paramref name="now"/> (call before <see cref="PromoteDue"/>).</summary>
+    public void StampNoticed(ulong now, int delayTicks)
+    {
+        while (_unstamped.TryDequeue(out var key))
+            _scheduled.Enqueue(key, now + (ulong)delayTicks);
+    }
+
+    /// <summary>
+    /// A world write noticed that this cell may have lost its support (or is a gravity block that was just placed). It has no clock, so
+    /// the cell waits unstamped; the same cell noticed twice is one entry.
+    /// </summary>
+    public bool TryNotice(int x, int y, int z)
+    {
+        var key = (x, y, z);
+        if (_pending.Contains(key)) return true;
+        if (_pending.Count >= SoftCap) return TryEnqueue(x, y, z); // takes the shared refuse-and-warn path
+        _pending.Add(key);
+        _unstamped.Enqueue(key);
+        return true;
+    }
+
     /// <summary>Makes every scheduled cell ready now, whatever its due tick (shutdown settles everything).</summary>
     public void PromoteAll()
     {
+        while (_unstamped.TryDequeue(out var noticed))
+            _queue.Enqueue(noticed);
         while (_scheduled.TryDequeue(out var key, out _))
             _queue.Enqueue(key);
     }
@@ -97,5 +122,6 @@ sealed class GravityPendingStore
         _pending.Clear();
         _queue.Clear();
         _scheduled.Clear();
+        _unstamped.Clear();
     }
 }

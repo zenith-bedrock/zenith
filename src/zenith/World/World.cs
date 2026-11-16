@@ -361,8 +361,24 @@ sealed class World
     {
         if (!WorldColumn.InRange(y)) return false;
         ColumnAt(x, z).Set(x, y, z, blockRuntimeId);
-        if ((flags & SetBlockFlags.NotifyNeighbors) != 0) _ = BlockUpdates.Enqueue(x, y, z);
+        if ((flags & SetBlockFlags.NotifyNeighbors) != 0)
+        {
+            _ = BlockUpdates.Enqueue(x, y, z);
+            NoticeGravity(x, y, z, blockRuntimeId);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Whatever wrote the cell (a player, an explosion, water, a block that lost its support), a sand or gravel block that was placed, or
+    /// that now has something else under it, is looked at by gravity: it may have lost its support. Gravity re-checks support when the
+    /// cell comes due, so noticing a block that turns out to be supported costs one entry that does nothing.
+    /// </summary>
+    private void NoticeGravity(int x, int y, int z, int blockRuntimeId)
+    {
+        if (Blocks.IsGravity(blockRuntimeId)) _ = GravityPending.TryNotice(x, y, z);
+        if (y + 1 <= WorldColumn.MaxY && Blocks.IsGravity(GetBlock(x, y + 1, z))) _ = GravityPending.TryNotice(x, y + 1, z);
     }
 
     /// <summary>

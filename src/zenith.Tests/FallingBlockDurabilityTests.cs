@@ -96,11 +96,11 @@ public sealed class FallingBlockDurabilityTests
     private static Rig SandAtOrigin(params int[] extraAbove)
     {
         var rig = Rig.Boot(new InMemoryChunkStorage());
-        rig.World.SetBlock(X, Origin, Z, Blocks.Sand);
+        rig.World.SetQuietly(X, Origin, Z, Blocks.Sand);
         rig.World.GravityPending.TryEnqueue(X, Origin, Z);
         for (var i = 0; i < extraAbove.Length; i++)
         {
-            rig.World.SetBlock(X, Origin + 1 + i, Z, extraAbove[i]);
+            rig.World.SetQuietly(X, Origin + 1 + i, Z, extraAbove[i]);
             rig.World.GravityPending.TryEnqueue(X, Origin + 1 + i, Z);
         }
 
@@ -402,7 +402,7 @@ public sealed class FallingBlockDurabilityTests
     {
         var rig = Rig.Boot(new InMemoryChunkStorage());
         for (var y = WorldColumn.MinY; y <= Ground; y++) rig.World.SetBlock(X, y, Z, Blocks.Air);
-        rig.World.SetBlock(X, WorldColumn.MinY + 4, Z, Blocks.Sand);
+        rig.World.SetQuietly(X, WorldColumn.MinY + 4, Z, Blocks.Sand);
         rig.World.GravityPending.TryEnqueue(X, WorldColumn.MinY + 4, Z);
         rig.Save();
 

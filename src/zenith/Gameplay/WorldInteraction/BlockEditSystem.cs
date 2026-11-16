@@ -129,7 +129,6 @@ sealed class BlockEditSystem : IGameSystem
             : TryBreak(player, edit, clock, online);
         if (!applied) return false;
 
-        NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         return true;
     }
 
@@ -484,22 +483,6 @@ sealed class BlockEditSystem : IGameSystem
         _cells.RemoveAll(cell => !_extra.Exists(write => write.X == cell.X && write.Y == cell.Y && write.Z == cell.Z));
         PublishApplied(player, BlockEditKind.Interact);
         return true;
-    }
-
-    /// <summary>Enqueue gravity evaluation after a successful world mutation (ADR §57).</summary>
-    private void NotifyGravityAfterEdit(int x, int y, int z, int placedOrAirRid)
-    {
-        var pending = _world.GravityPending;
-        if (Blocks.IsGravity(placedOrAirRid))
-            pending.TryEnqueue(x, y, z, _tick + GravityPendingStore.StartDelayTicks);
-
-        // Break / replace to air (or any non-gravity): cell above may lose support.
-        if (placedOrAirRid == World.World.AirRuntimeId || !Blocks.IsGravity(placedOrAirRid))
-        {
-            var aboveY = y + 1;
-            if (Blocks.IsGravity(_world.GetBlock(x, aboveY, z)))
-                pending.TryEnqueue(x, aboveY, z, _tick + GravityPendingStore.StartDelayTicks);
-        }
     }
 
     /// <summary>Self UpdateBlock with server truth — kills client ghost after reject (§27).</summary>
