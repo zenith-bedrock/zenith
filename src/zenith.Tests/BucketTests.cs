@@ -137,7 +137,7 @@ public sealed class BucketTests
         Assert.True(s.Player.Inventory.TrySet(0, s.Buckets.Water.Item, 1));
         Use(s, 8, Floor, 8, face: 1);
 
-        var updates = new BlockUpdateSystem(s.Fx.World, s.Fx.Players);
+        var updates = new BlockUpdateSystem(s.Fx.World, s.Fx.Players, s.Fx.Context.EnvironmentPolicies);
         for (var i = 0; i < 20; i++)
         {
             s.Fx.Clock.AdvanceBy(1);
@@ -192,7 +192,7 @@ public sealed class BucketTests
         Assert.True(s.Player.Inventory.TrySet(0, ItemOf(s, ItemNames.LavaBucket), 1));
         Use(s, 8, Floor, 8, face: 1);
 
-        var updates = new BlockUpdateSystem(s.Fx.World, s.Fx.Players);
+        var updates = new BlockUpdateSystem(s.Fx.World, s.Fx.Players, s.Fx.Context.EnvironmentPolicies);
         for (var i = 0; i < 3; i++)
         {
             s.Fx.Clock.AdvanceBy(1);

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
@@ -15,8 +16,19 @@ interface IRandomTickBehavior
 /// The cell being ticked and the ways to act on the world. One instance is reused for every tick of a frame, so a
 /// behaviour must not keep it. Writes go through <see cref="TrySet"/> so that clients are told about them.
 /// </summary>
-sealed class RandomTickContext(World.World world, Random random, List<(int X, int Y, int Z, int BlockRuntimeId)> changes)
+sealed class RandomTickContext(
+    World.World world, Random random, List<(int X, int Y, int Z, int BlockRuntimeId)> changes, EnvironmentChangePolicies environment)
 {
+    /// <summary>The game tick being processed; carried into every proposal.</summary>
+    public ulong Now { get; set; }
+
+    /// <summary>
+    /// Whether the environment policies let this behaviour change the cell, under the cause it names. A behaviour asks before it
+    /// acts (and before it rolls anything it would waste on a refusal); a change that is refused is simply not made.
+    /// </summary>
+    public bool Allows(EnvironmentCause cause, int x, int y, int z, int before, int after) =>
+        environment.Allows(cause, Now, x, y, z, before, after);
+
     public World.World World { get; } = world;
 
     public Random Random { get; } = random;

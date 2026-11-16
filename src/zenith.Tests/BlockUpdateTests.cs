@@ -82,7 +82,7 @@ public class BlockUpdateTests
     public void A_plant_breaks_when_its_soil_is_removed_and_stays_otherwise()
     {
         var fx = new IntentTestFixture();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         var grass = Id("minecraft:grass_block");
         var flower = Id("minecraft:dandelion");
         fx.World.TrySetBlock(3, 70, 3, grass);
@@ -102,7 +102,7 @@ public class BlockUpdateTests
     public void A_door_without_ground_falls_apart_and_the_upper_half_follows_its_lower_half()
     {
         var fx = new IntentTestFixture();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         var lower = Id("minecraft:wooden_door");
         var upper = With(Id("minecraft:wooden_door"), StateKeys.UpperBlock, true);
         fx.World.TrySetBlock(9, 70, 9, Blocks.Stone);
@@ -122,7 +122,7 @@ public class BlockUpdateTests
     public void A_wall_torch_breaks_with_the_block_it_hangs_on_but_a_standing_torch_only_needs_ground()
     {
         var fx = new IntentTestFixture();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         // Placed by clicking the north face of the block at z+1: the torch cell is one north of it, facing "north".
         var wallTorch = With(Id("minecraft:torch"), StateKeys.TorchFacing, TorchFacing.North);
         var standing = With(Id("minecraft:torch"), StateKeys.TorchFacing, TorchFacing.Top);
@@ -145,7 +145,7 @@ public class BlockUpdateTests
     public void A_cascade_longer_than_one_tick_budget_continues_on_the_next_ticks()
     {
         var fx = new IntentTestFixture();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         var flower = Id("minecraft:dandelion");
         var count = BlockUpdateSystem.MaxChangedCellsPerTick + 40;
         for (var i = 0; i < count; i++)

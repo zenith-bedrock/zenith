@@ -41,7 +41,7 @@ public sealed class WaterFlowTests
 
     private static void Run(IntentTestFixture fx, int ticks)
     {
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         for (var i = 0; i < ticks; i++)
         {
             fx.Clock.AdvanceBy(1);
@@ -230,7 +230,7 @@ public sealed class LavaFlowTests
 
     private static void Run(IntentTestFixture fx, int ticks)
     {
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         for (var i = 0; i < ticks; i++)
         {
             fx.Clock.AdvanceBy(1);

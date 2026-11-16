@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.Fluids;
@@ -29,6 +30,10 @@ readonly record struct FluidSpec(FluidType Type, int TickDelay, int SlopeReach, 
 /// with water (<see cref="TryReact"/>). Every write is an ordinary world write, so the block-update queue wakes the
 /// neighbours and the change goes out to clients. Chunks that are not resident are never read as open, flowed into or
 /// loaded.
+/// <para/>
+/// Every change is asked of the environment policies first (cause <see cref="EnvironmentCause.FluidFlow"/>), in the predicates
+/// that decide whether a cell can take liquid, so a vetoed cell behaves like a wall: nothing is written, nothing is dropped, and
+/// nothing is left waiting for it. A vetoed cell that already holds liquid is simply left as it is.
 /// </summary>
 sealed class FluidFlow
 {
@@ -45,6 +50,7 @@ sealed class FluidFlow
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _changes;
     private readonly Action<int, int, int, int> _beforeDestroy;
     private readonly BlockStateTable _states = Blocks.Catalog.States;
+    private readonly EnvironmentChangePolicies _policies;
     private readonly int _sourceBlock;
 
     /// <param name="changes">Receives every write, for the clients.</param>
@@ -53,8 +59,10 @@ sealed class FluidFlow
         World.World world,
         FluidSpec spec,
         List<(int X, int Y, int Z, int BlockRuntimeId)> changes,
-        Action<int, int, int, int> beforeDestroy)
+        Action<int, int, int, int> beforeDestroy,
+        EnvironmentChangePolicies policies)
     {
+        _policies = policies;
         _world = world;
         _spec = spec;
         _changes = changes;
@@ -63,6 +71,12 @@ sealed class FluidFlow
     }
 
     public FluidSpec Spec => _spec;
+
+    /// <summary>The game tick being processed, set by the system that drives this flow; carried into every proposal.</summary>
+    public ulong Now { get; set; }
+
+    private bool Permits(int x, int y, int z, int before, int after) =>
+        _policies.Allows(EnvironmentCause.FluidFlow, Now, x, y, z, before, after);
 
     public void Tick(int x, int y, int z)
     {
@@ -75,11 +89,11 @@ sealed class FluidFlow
             var wanted = Derive(x, y, z);
             if (wanted == None)
             {
-                Write(x, y, z, World.World.AirRuntimeId);
+                if (Permits(x, y, z, id, World.World.AirRuntimeId)) Write(x, y, z, World.World.AirRuntimeId);
                 return;
             }
 
-            if (wanted != depth)
+            if (wanted != depth && Permits(x, y, z, id, LiquidAt(wanted)))
             {
                 Write(x, y, z, LiquidAt(wanted));
                 depth = wanted;
@@ -99,7 +113,9 @@ sealed class FluidFlow
 
         if (!TouchesWater(x, y, z)) return false;
 
-        Write(x, y, z, FluidBlocks.IsSource(id) ? Blocks.Obsidian : Blocks.Cobblestone);
+        var set = FluidBlocks.IsSource(id) ? Blocks.Obsidian : Blocks.Cobblestone;
+        if (!Permits(x, y, z, id, set)) return false;
+        Write(x, y, z, set);
         return true;
     }
 
@@ -139,18 +155,18 @@ sealed class FluidFlow
         // Lava falling onto water turns the water cell to stone.
         if (_spec.Type == FluidType.Lava && Blocks.FluidOf(below) == FluidType.Water)
         {
-            Write(x, y - 1, z, Blocks.Stone);
+            if (Permits(x, y - 1, z, below, Blocks.Stone)) Write(x, y - 1, z, Blocks.Stone);
             return;
         }
 
-        if (CanSpreadTo(below))
+        if (CanSpreadTo(x, y - 1, z, below))
         {
             Place(x, y - 1, z, below, Derive(x, y - 1, z));
             if (SourceNeighbours(x, y, z) >= 3) SpreadSideways(x, y, z, depth);
             return;
         }
 
-        if (depth == 0 || !IsHole(below)) SpreadSideways(x, y, z, depth);
+        if (depth == 0 || !IsHole(x, y - 1, z, below)) SpreadSideways(x, y, z, depth);
     }
 
     private void SpreadSideways(int x, int y, int z, int depth)
@@ -170,7 +186,7 @@ sealed class FluidFlow
         {
             if (distance[i] != best) continue;
             var (nx, nz) = (x + Sides[i].Dx, z + Sides[i].Dz);
-            if (!_world.TryGetBlock(nx, y, nz, out var target) || !CanSpreadTo(target)) continue;
+            if (!_world.TryGetBlock(nx, y, nz, out var target) || !CanSpreadTo(nx, y, nz, target)) continue;
             Place(nx, y, nz, target, Derive(nx, y, nz));
         }
     }
@@ -268,15 +284,15 @@ sealed class FluidFlow
     {
         var slot = Slot(cx, cz, originX, originZ, reach, side);
         if (kind[slot] != 0) return kind[slot];
-        kind[slot] = !_world.TryGetBlock(cx, y, cz, out var cell) || !CanPassThrough(cell) ? (byte)1 : IsHole(cx, y, cz) ? (byte)3 : (byte)2;
+        kind[slot] = !_world.TryGetBlock(cx, y, cz, out var cell) || !CanPassThrough(cx, y, cz, cell) ? (byte)1 : IsHoleBelow(cx, y, cz) ? (byte)3 : (byte)2;
         return kind[slot];
     }
 
-    /// <summary>A cell the liquid would fall out of: the one under it is the same liquid, or open.</summary>
-    private bool IsHole(int x, int y, int z) =>
-        _world.TryGetBlock(x, y - 1, z, out var below) && IsHole(below);
+    /// <summary>A cell the liquid would fall out of: the one under it is the same liquid, or open, and the environment lets it change.</summary>
+    private bool IsHoleBelow(int x, int y, int z) =>
+        _world.TryGetBlock(x, y - 1, z, out var below) && IsHole(x, y - 1, z, below);
 
-    private bool IsHole(int below) => IsOwn(below) || CanHold(below);
+    private bool IsHole(int x, int y, int z, int id) => (IsOwn(id) || CanHold(id)) && Permits(x, y, z, id, _sourceBlock);
 
     private int SourceNeighbours(int x, int y, int z)
     {
@@ -300,10 +316,11 @@ sealed class FluidFlow
         Blocks.IsAir(id) || Blocks.IsFire(id) || Blocks.Catalog.KindOf(id) is BlockKind.Plant or BlockKind.Torch;
 
     /// <summary>Liquid can be put here: it is open and not already liquid (liquid that is there re-derives itself).</summary>
-    private static bool CanSpreadTo(int id) => !Blocks.IsFluid(id) && CanHold(id);
+    private bool CanSpreadTo(int x, int y, int z, int id) => !Blocks.IsFluid(id) && CanHold(id) && Permits(x, y, z, id, _sourceBlock);
 
     /// <summary>Liquid can run across this cell on its way to a drop-off: open, or its own flowing liquid.</summary>
-    private bool CanPassThrough(int id) => IsOwn(id) ? FluidBlocks.DepthOf(id) != 0 : !Blocks.IsFluid(id) && CanHold(id);
+    private bool CanPassThrough(int x, int y, int z, int id) =>
+        IsOwn(id) ? FluidBlocks.DepthOf(id) != 0 : !Blocks.IsFluid(id) && CanHold(id) && Permits(x, y, z, id, _sourceBlock);
 
     private static bool IsSolid(int id) => !Blocks.IsAir(id) && !Blocks.IsFluid(id) && !Blocks.IsFire(id) && !Blocks.IsPassableDecoration(id);
 

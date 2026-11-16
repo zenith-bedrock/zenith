@@ -99,7 +99,7 @@ public class BlockShapesTests
     {
         var fx = new IntentTestFixture();
         var wall = Id("minecraft:cobblestone_wall");
-        var update = new BlockUpdateSystem(fx.World, fx.Players);
+        var update = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         var east = StateKeys.WallConnections[(int)Cardinal.East];
         var west = StateKeys.WallConnections[(int)Cardinal.West];
 
@@ -121,7 +121,7 @@ public class BlockShapesTests
     {
         var fx = new IntentTestFixture();
         var wall = Id("minecraft:cobblestone_wall");
-        var update = new BlockUpdateSystem(fx.World, fx.Players);
+        var update = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         for (var x = 0; x < 3; x++) fx.World.SetBlock(x, 64, 4, wall);
         update.Tick(fx.Clock, fx.Players.Online);
         Assert.False(States.Bit(fx.World.GetBlock(1, 64, 4), StateKeys.WallPost));

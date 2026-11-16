@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.Fire;
@@ -23,9 +24,20 @@ static class FireBlocks
 /// next to it. Each tick it may set a flammable neighbour alight (or burn it to nothing), and may jump to nearby air that
 /// borders something that invites fire. All of it is data: <see cref="BlockFamily.Flammability"/> and
 /// <see cref="BlockFamily.FlameEncouragement"/>. A neighbour in a chunk that is not resident is never read as open and never loaded.
+/// <para/>
+/// Every change is asked of the environment policies first (cause <see cref="EnvironmentCause.Fire"/>). A vetoed cell is not
+/// burned, not set alight and not aged; a fire in a vetoed cell is left exactly as it is and stops acting, so nothing is
+/// scheduled for it. (Asked once for the fire's own cell at the top of <see cref="Tick"/>.)
 /// </summary>
-sealed class FireSpread(World.World world, Random random, List<(int X, int Y, int Z, int BlockRuntimeId)> changes)
+sealed class FireSpread(
+    World.World world, Random random, List<(int X, int Y, int Z, int BlockRuntimeId)> changes, EnvironmentChangePolicies policies)
 {
+    /// <summary>The game tick being processed, set by the system that drives this fire; carried into every proposal.</summary>
+    public ulong Now { get; set; }
+
+    private bool Permits(int x, int y, int z, int before, int after) =>
+        policies.Allows(EnvironmentCause.Fire, Now, x, y, z, before, after);
+
     /// <summary>Ticks until a fire cell next acts: 30 to 39.</summary>
     public const int MinDelay = 30;
     public const int DelayRange = 10;
@@ -62,6 +74,10 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
     {
         if (!world.TryGetBlock(x, y, z, out var id) || !Blocks.IsFire(id)) return false;
 
+        // A fire in a protected cell is frozen: it neither ages nor goes out nor spreads, and returning false means nothing is
+        // scheduled for it again. (The same answer covers every change to this cell below, so they need no check of their own.)
+        if (!Permits(x, y, z, id, World.World.AirRuntimeId)) return false;
+
         foreach (var (dx, dy, dz) in BlockFaces.Neighbours)
             if (world.TryGetBlock(x + dx, y + dy, z + dz, out var side) && Blocks.FluidOf(side) == FluidType.Water)
                 return Remove(x, y, z);
@@ -89,7 +105,7 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
     {
         if (!world.TryGetBlock(x, y, z, out var id)) return;
         var flammability = Blocks.FlammabilityOf(id);
-        if (flammability <= 0 || random.Next(weight) >= flammability) return;
+        if (flammability <= 0 || !Permits(x, y, z, id, World.World.AirRuntimeId) || random.Next(weight) >= flammability) return;
 
         // A burning block either becomes fire in its turn or is simply gone.
         if (random.Next(sourceAge + FireTurnRollBase) < FireTurnThreshold)
@@ -116,7 +132,8 @@ sealed class FireSpread(World.World world, Random random, List<(int X, int Y, in
                     if (random.Next(reluctance) > (encouragement + EncouragementBase) / (age + AgeBase)) continue;
                     if (HasWaterNeighbour(tx, ty, tz)) continue;
 
-                    Write(tx, ty, tz, FireBlocks.WithAge(age + random.Next(5) / 4));
+                    var fire = FireBlocks.WithAge(age + random.Next(5) / 4);
+                    if (Permits(tx, ty, tz, target, fire)) Write(tx, ty, tz, fire);
                 }
     }
 

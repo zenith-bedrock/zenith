@@ -42,7 +42,7 @@ public sealed class FireTests
     public async Task Fire_with_nothing_to_burn_goes_out_on_its_own()
     {
         var fx = await Ground();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         fx.World.SetBlock(5, Level, 5, FireBlocks.WithAge(0));
 
         Run(fx, system, 4000); // ~110 steps: it has aged past 3 many times over
@@ -54,7 +54,7 @@ public sealed class FireTests
     public async Task Fire_next_to_planks_spreads_and_eats_them()
     {
         var fx = await Ground();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         for (var x = 4; x <= 8; x++)
             for (var y = Level; y < Level + 3; y++) fx.World.SetBlock(x, y, 5, Blocks.OakPlanks);
         fx.World.SetBlock(4, Level, 4, FireBlocks.WithAge(0));
@@ -72,7 +72,7 @@ public sealed class FireTests
     public async Task Water_beside_a_fire_puts_it_out()
     {
         var fx = await Ground();
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         fx.World.SetBlock(5, Level - 0, 6, Blocks.OakPlanks);
         fx.World.SetBlock(5, Level, 5, FireBlocks.WithAge(0));
         fx.World.SetBlock(6, Level, 5, Blocks.Water);
@@ -87,7 +87,7 @@ public sealed class FireTests
     public async Task Lava_lights_the_air_over_a_flammable_neighbour()
     {
         var fx = await Ground();
-        var tick = new RandomTickContext(fx.World, new Random(7), []);
+        var tick = new RandomTickContext(fx.World, new Random(7), [], fx.Context.EnvironmentPolicies);
         fx.World.SetBlock(5, Level, 5, Blocks.Lava);
         fx.World.SetBlock(6, Level, 5, Blocks.OakPlanks);
         var behavior = new LavaIgnitionBehavior();

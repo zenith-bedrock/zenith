@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.WorldInteraction.Fire;
 using Zenith.Gameplay.WorldInteraction.Fluids;
@@ -32,13 +33,13 @@ sealed class BlockUpdateSystem : IGameSystem
     private ulong _now;
     private IReadOnlyList<global::Zenith.Player.Player> _online = [];
 
-    public BlockUpdateSystem(World.World world, PlayerManager players)
+    public BlockUpdateSystem(World.World world, PlayerManager players, EnvironmentChangePolicies environment)
     {
         _world = world;
         _players = players;
-        _water = new FluidFlow(world, FluidSpec.Water, _updates, DropWashedAway);
-        _lava = new FluidFlow(world, FluidSpec.Lava, _updates, DropWashedAway);
-        _fire = new FireSpread(world, _random, _updates);
+        _water = new FluidFlow(world, FluidSpec.Water, _updates, DropWashedAway, environment);
+        _lava = new FluidFlow(world, FluidSpec.Lava, _updates, DropWashedAway, environment);
+        _fire = new FireSpread(world, _random, _updates, environment);
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
@@ -46,6 +47,7 @@ sealed class BlockUpdateSystem : IGameSystem
         var updates = _updates;
         updates.Clear();
         _now = clock.CurrentTick;
+        _water.Now = _lava.Now = _fire.Now = _now;
         _online = online;
 
         var changed = 0;

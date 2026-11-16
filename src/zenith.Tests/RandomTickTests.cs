@@ -112,7 +112,7 @@ public sealed class RandomTickSystemTests
         fx.World.SetBlock(5, 64, 5, Blocks.Stone);
         fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
         fx.World.SetBlock(5, 64, 5, Blocks.GrassBlock);
-        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), new Random(1));
+        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
 
         Run(fx, system, 100);
 
@@ -126,7 +126,7 @@ public sealed class RandomTickSystemTests
         fx.World.SetBlock(5, 64, 5, Blocks.GrassBlock);
         fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
         fx.World.SetBlock(6, 65, 5, Blocks.Stone);
-        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), new Random(1));
+        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
 
         Run(fx, system, 100);
 
@@ -142,7 +142,7 @@ public sealed class RandomTickSystemTests
         await fx.World.GetOrCreateColumnAsync(0, 0);
         fx.World.SetBlock(5, 64, 5, Blocks.GrassBlock);
         fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
-        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), new Random(1));
+        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
 
         Run(fx, system, 100);
 
@@ -153,7 +153,7 @@ public sealed class RandomTickSystemTests
     public async Task Ticking_never_loads_a_chunk()
     {
         var fx = await FixtureWithViewedColumn();
-        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), new Random(1));
+        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
         var before = fx.World.SyncLoadCount;
 
         Run(fx, system, 500);
@@ -161,7 +161,7 @@ public sealed class RandomTickSystemTests
         Assert.Equal(before, fx.World.SyncLoadCount);
     }
 
-    private static RandomTickSystem SystemFor(IntentTestFixture fx) => new(fx.World, RandomTickBehaviors.Default(), new Random(1));
+    private static RandomTickSystem SystemFor(IntentTestFixture fx) => new(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
 
     [Fact]
     public async Task A_world_grown_leaf_with_no_trunk_decays()
@@ -251,7 +251,7 @@ public sealed class RandomTickSystemTests
         fx.World.SetBlock(5, 64, 5, Blocks.GrassBlock);
         fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
         Assert.True(fx.World.Rules.TrySet(Rulebook.GameRules.RandomTickSpeedName, "0", out _));
-        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), new Random(1));
+        var system = new RandomTickSystem(fx.World, RandomTickBehaviors.Default(), fx.Context.EnvironmentPolicies, new Random(1));
 
         Run(fx, system, 100);
 

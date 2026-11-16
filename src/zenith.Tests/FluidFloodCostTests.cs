@@ -61,7 +61,7 @@ public sealed class FluidFloodCostTests(ITestOutputHelper output)
                 sources++;
             }
 
-        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        var system = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
         var millis = new double[TicksToRun];
         var peakScheduled = 0;
         var peakQueued = 0;

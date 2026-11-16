@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.WorldInteraction.RandomTicks;
 using Zenith.World;
@@ -21,18 +22,19 @@ sealed class RandomTickSystem : IGameSystem
     private readonly Action<WorldColumn> _visit;
     private int _speed;
 
-    public RandomTickSystem(World.World world, RandomTickBehaviors behaviors, Random? random = null)
+    public RandomTickSystem(World.World world, RandomTickBehaviors behaviors, EnvironmentChangePolicies environment, Random? random = null)
     {
         behaviors.Validate();
         _world = world;
         _behaviors = behaviors;
         _random = random ?? new Random();
-        _context = new RandomTickContext(world, _random, _changes);
+        _context = new RandomTickContext(world, _random, _changes, environment);
         _visit = VisitColumn;
     }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _context.Now = clock.CurrentTick;
         _speed = _world.Rules.RandomTickSpeed;
         if (_speed <= 0 || online.Count == 0) return;
 
