@@ -38,6 +38,8 @@ static class StateKeys
     public static readonly BitKey UpsideDown = new("upside_down_bit");
     public static readonly BitKey InWall = new("in_wall_bit");
     public static readonly BitKey Age = new("age_bit");
+    /// <summary>Water level: 0 is a source, 1..7 flows thinner with distance, +8 marks water that is falling.</summary>
+    public static readonly IntKey LiquidDepth = new("liquid_depth", 16);
     public static readonly BitKey Persistent = new("persistent_bit");
 
     // Recognised for classification only.

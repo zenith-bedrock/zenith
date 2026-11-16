@@ -71,7 +71,6 @@ static class Blocks
         public HashSet<int> ChestIds { get; set; } = [];
         public HashSet<int> PlaceableIds { get; set; } = [];
         public HashSet<int> GravityIds { get; set; } = [];
-        public HashSet<int> FluidIds { get; set; } = [];
         public HashSet<int> PassableIds { get; set; } = [];
         public Dictionary<int, string> NameByRuntime { get; set; } = [];
         public BlockPalette Palette { get; set; } = null!;
@@ -217,9 +216,6 @@ static class Blocks
             b.CraftingTable
         ];
         b.GravityIds = [b.Sand, b.Gravel];
-        // Phase XXIX: only fluid the palette currently loads — no lava block exists in Zenith yet.
-        // Extend this set, not a scattered `== Blocks.Water` check, the day a second fluid lands.
-        b.FluidIds = [b.Water];
         b.PassableIds = [b.ShortGrass, b.Dandelion, b.Poppy, b.Torch];
         b.NameByRuntime = new Dictionary<int, string>
         {
@@ -327,7 +323,7 @@ static class Blocks
     /// </summary>
     public static bool IsFluid(int runtimeId)
     {
-        return Current.FluidIds.Contains(runtimeId);
+        return Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.Fluid) != 0;
     }
 
     /// <summary>

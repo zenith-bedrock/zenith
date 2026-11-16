@@ -22,7 +22,10 @@ enum BlockTraits : byte
     RandomTick = 16,
 
     /// <summary>A trunk: leaves within reach of one do not decay (ADR §170).</summary>
-    Log = 32
+    Log = 32,
+
+    /// <summary>A liquid (water): never solid, flows (ADR §171).</summary>
+    Fluid = 64
 }
 
 /// <summary>One property of a block type: its legal values and the mixed-radix stride of the state ordinal.</summary>

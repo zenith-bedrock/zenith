@@ -986,6 +986,7 @@
   "minecraft:warped_stem":{"kind":"Pillar","tool":"Axe","traits":["WallConnectable"]},
   "minecraft:warped_trapdoor":{"kind":"Trapdoor","tool":"Axe"},
   "minecraft:warped_wart_block":{"kind":"Cube","traits":["WallConnectable"]},
+  "minecraft:water":{"kind":"Unsupported","traits":["Fluid"]},
   "minecraft:waterlily":{"kind":"Cube","traits":["WallConnectable"]},
   "minecraft:waxed_chiseled_copper":{"kind":"Cube","tool":"Pickaxe","tier":"Stone","requiresTool":true,"traits":["WallConnectable"]},
   "minecraft:waxed_copper":{"kind":"Cube","tool":"Pickaxe","tier":"Stone","requiresTool":true,"traits":["WallConnectable"]},

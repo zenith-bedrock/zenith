@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Replication;
+using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
@@ -28,17 +29,21 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = new();
+    private readonly WaterFlow _water;
+    private ulong _now;
 
     public BlockUpdateSystem(World.World world, PlayerManager players)
     {
         _world = world;
         _players = players;
+        _water = new WaterFlow(world, _updates);
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
         var updates = _updates;
         updates.Clear();
+        _now = clock.CurrentTick;
 
         var changed = 0;
         while (changed < MaxChangedCellsPerTick && _world.BlockUpdates.TryDequeue(out var x, out var y, out var z))
@@ -52,7 +57,8 @@ sealed class BlockUpdateSystem : IGameSystem
         while (scheduled < MaxScheduledPerTick && _world.ScheduledTicks.TryPopDue(clock.CurrentTick, out var sx, out var sy, out var sz))
         {
             scheduled++;
-            Evaluate(sx, sy, sz, online, updates);
+            if (_world.TryGetBlock(sx, sy, sz, out var due) && WaterFlow.IsWater(due)) _water.Tick(sx, sy, sz);
+            else Evaluate(sx, sy, sz, online, updates);
         }
 
         if (updates.Count == 0) return;
@@ -69,6 +75,13 @@ sealed class BlockUpdateSystem : IGameSystem
     {
         // A cell in a chunk nobody has loaded is not ours to wake: it is re-evaluated when the chunk streams in and a neighbour changes.
         if (!_world.TryGetBlock(x, y, z, out var id) || id == World.World.AirRuntimeId) return;
+
+        // Water reacts to a neighbour's change after its own delay, not now.
+        if (WaterFlow.IsWater(id))
+        {
+            _ = _world.ScheduledTicks.Schedule(x, y, z, _now + WaterFlow.TickDelay);
+            return;
+        }
 
         if (!BlockShapes.CanExist(_world, x, y, z, id))
         {

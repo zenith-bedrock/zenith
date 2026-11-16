@@ -58,6 +58,14 @@ sealed class BitKey(string name) : StateKey(name)
     internal override string WireName(int index) => index == 0 ? "0" : "1";
 }
 
+/// <summary>A small integer property whose wire values are the decimal numbers <c>0..count-1</c> (<c>liquid_depth</c>).</summary>
+sealed class IntKey(string name, int count) : StateKey(name)
+{
+    internal override int WireCount => count;
+
+    internal override string WireName(int index) => index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+
 /// <summary>A property the server only needs to recognise (classification), never to read or write.</summary>
 sealed class PresenceKey(string name) : StateKey(name)
 {

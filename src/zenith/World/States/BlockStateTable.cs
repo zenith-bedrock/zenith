@@ -29,6 +29,16 @@ sealed class BlockStateTable
     /// <summary>The bit's value; false when the block has no such property.</summary>
     public bool Bit(int runtimeId, BitKey key) => TryGet(runtimeId, key, out var value) && value;
 
+    public bool TryGet(int runtimeId, IntKey key, out int value)
+    {
+        value = 0;
+        if (!TryLocate(runtimeId, key, out var property, out var local)) return false;
+        value = property.LocalToWire[local];
+        return value >= 0;
+    }
+
+    public bool TrySet(ref int runtimeId, IntKey key, int value) => TrySetWire(ref runtimeId, key, value);
+
     public bool TryGet(int runtimeId, BitKey key, out bool value)
     {
         value = false;
