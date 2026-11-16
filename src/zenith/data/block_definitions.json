@@ -438,7 +438,7 @@
   "minecraft:granite_slab":{"kind":"Slab","tool":"Pickaxe","tier":"Wood","requiresTool":true,"mergesInto":"minecraft:granite_double_slab"},
   "minecraft:granite_stairs":{"kind":"Stairs","tool":"Pickaxe","tier":"Wood","requiresTool":true},
   "minecraft:granite_wall":{"kind":"Wall","tool":"Pickaxe","tier":"Wood","requiresTool":true},
-  "minecraft:grass_block":{"kind":"Cube","tool":"Shovel","traits":["Soil","WallConnectable"],"drop":{"block":"minecraft:dirt"}},
+  "minecraft:grass_block":{"kind":"Cube","tool":"Shovel","traits":["Soil","WallConnectable","RandomTick"],"drop":{"block":"minecraft:dirt"}},
   "minecraft:grass_path":{"kind":"Cube","tool":"Shovel","traits":["Soil","WallConnectable"],"drop":{"block":"minecraft:dirt"}},
   "minecraft:gravel":{"kind":"Cube","tool":"Shovel","traits":["WallConnectable"]},
   "minecraft:gray_carpet":{"kind":"Cube","traits":["WallConnectable"]},

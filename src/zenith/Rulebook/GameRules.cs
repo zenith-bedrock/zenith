@@ -17,6 +17,7 @@ sealed class GameRules
     public const string NaturalRegenerationName = "naturalRegeneration";
     public const string DoTileDropsName = "doTileDrops";
     public const string DoMobSpawningName = "doMobSpawning";
+    public const string RandomTickSpeedName = "randomTickSpeed";
 
     private sealed record State(long Version, GameRule[] Rules);
 
@@ -34,7 +35,7 @@ sealed class GameRules
         _state = new State(0, rules);
 
         // Fail at composition, not at the first tick: every rule a typed accessor reads must exist with its type.
-        _ = (KeepInventory, FallDamage, NaturalRegeneration, DoTileDrops, DoMobSpawning);
+        _ = (KeepInventory, FallDamage, NaturalRegeneration, DoTileDrops, DoMobSpawning, RandomTickSpeed);
     }
 
     /// <summary>Every rule in wire order (the order BDS sends them).</summary>
@@ -51,6 +52,9 @@ sealed class GameRules
     public bool DoTileDrops => Get(DoTileDropsName).AsBool;
 
     public bool DoMobSpawning => Get(DoMobSpawningName).AsBool;
+
+    /// <summary>Random ticks per section per game tick (Bedrock default 1).</summary>
+    public int RandomTickSpeed => Get(RandomTickSpeedName).AsInt;
 
     public GameRule Get(string name) =>
         TryGet(name, out var rule) ? rule : throw new KeyNotFoundException($"Unknown game rule '{name}'.");

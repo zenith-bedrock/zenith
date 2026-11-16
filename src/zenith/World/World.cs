@@ -49,6 +49,13 @@ sealed class World
     /// <summary>Columns resident in RAM now.</summary>
     public int LoadedColumnCount => _columns.Count;
 
+    /// <summary>Visits every resident column without allocating. The GameLoop's view: a column evicted meanwhile is simply not visited.</summary>
+    public void ForEachLoadedColumn(Action<WorldColumn> visit)
+    {
+        foreach (var entry in _columns)
+            visit(entry.Value);
+    }
+
     /// <summary>
     /// Columns the tick thread had to load or generate itself because a read or write reached a cell nobody had streamed.
     /// Zero in steady state; a rising count means gameplay is touching chunks that are not resident.

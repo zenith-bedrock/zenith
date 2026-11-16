@@ -298,6 +298,10 @@ static class Blocks
         return Current.GravityIds.Contains(runtimeId);
     }
 
+    /// <summary>True for blocks that take random ticks (the <c>RandomTick</c> trait in block_definitions.json).</summary>
+    public static bool IsRandomTicking(int runtimeId) =>
+        Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.RandomTick) != 0;
+
     /// <summary>Literal empty air. Never occupies, never supports (Phase XXIX).</summary>
     public static bool IsAir(int runtimeId)
     {

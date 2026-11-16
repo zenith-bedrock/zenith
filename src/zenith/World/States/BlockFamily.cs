@@ -16,7 +16,10 @@ enum BlockTraits : byte
     RedstoneOnly = 4,
 
     /// <summary>A wall, fence or pane visually joins this full block.</summary>
-    WallConnectable = 8
+    WallConnectable = 8,
+
+    /// <summary>Gets random ticks (ADR §169): grass spreading and decaying. Needs a behaviour registered for it.</summary>
+    RandomTick = 16
 }
 
 /// <summary>One property of a block type: its legal values and the mixed-radix stride of the state ordinal.</summary>

@@ -34,7 +34,7 @@ Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support 
 - Migrate the plant-support hack and gravity onto it, behaviour unchanged (existing tests are the safety net).
 - Exit: cell-update fan-out and tick cost measured with the diagnostics lib (p99 per tick) at a stated load.
 
-## Step 2 — Random ticks
+## Step 2 — Random ticks — FIRST SLICE DONE, ADR §169 (grass spread; sections with nothing to tick cost nothing; leaves, crops and decay still open)
 
 - `randomTickSpeed` game rule (default 1 on Bedrock; Dragonfly uses 3-style sampling). Per tick, per loaded chunk
   near a player: pick N random cells per sub-chunk and call `OnRandomTick` if the block has a behaviour.
