@@ -379,8 +379,14 @@ partial class InGameSessionHandler
         return true;
     }
 
-    private static void RejectIsr(NetworkSession session, Player.Player player, int requestId)
+    private static void RejectIsr(
+        NetworkSession session,
+        Player.Player player,
+        int requestId,
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
+        // The call site's line says which gate refused the request — the wire only ever sees a bare error status.
+        session.Context.Logger.Debug($"ItemStackRequest {requestId} from {player.Username} refused (InGameInventoryHandler.cs:{line}).");
         session.Protocol.Inventory.SendItemStackResponseError(requestId);
         session.Protocol.Inventory.ResyncActiveInventoryView(player);
     }

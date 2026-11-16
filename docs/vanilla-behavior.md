@@ -40,8 +40,8 @@ If any of these misbehave — desync, wrong slot contents, block not appearing f
 |------|--------------------|
 | Mobs | Ten species (zombie, skeleton, spider, creeper, enderman, bat, villager, golem, fish, cow) plus minecart and projectile run on the ECS with melee, knockback, hurt/death feedback and data-driven loot tables (`data/loot_tables.json`). Spawning, breeding and per-species special behaviour are narrower than vanilla — see [`entity-fidelity.md`](entity-fidelity.md) and [`entity-behavior-matrix.md`](entity-behavior-matrix.md). |
 | Hunger / armor | Hunger and armor reduction exist; armor durability wear, effects and saturation edge cases are incomplete. |
-| Blocks | The palette has 1477 block types, but only a curated subset (~100) is placeable and ~110 breakable in survival. Stairs, slabs, doors, glass and plants are missing. Block gravity covers sand/gravel only. |
-| Creative catalogue | Curated subset, not the full Mojang `creative_items.json`. |
+| Blocks | Cubes, glass/panes, logs/pillars, stairs, slabs, torches and ground plants are placeable/breakable with derived tools, hardness and drops — see [`blocks.md`](blocks.md) for what is and is not covered (doors, containers, liquids, walls, redstone are not). Gravity covers sand/gravel only. |
+| Creative catalogue | The full vanilla `creative_items.json` is loaded and sent; what a catalogue entry *does* once placed is limited to the supported block kinds (see [`blocks.md`](blocks.md)). |
 | Tool speed | Curated tool table + speed-delta packet; **no enchantments**. |
 | Drop entities | Floor items use `AddItemActor`/`TakeItemActor` with a fan-out store; physics is minimal. |
 | World gen | Zenith-native noise/biome/cave/ore — not Mojang's noise tables. Visuals will differ from real Bedrock terrain. |

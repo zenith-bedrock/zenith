@@ -25,6 +25,8 @@ species. See the Phase XXI/XXII sections below.
 Current gaps against a mature server (permissions, placeable blocks, ticks/liquids/fire/growth,
 Nether/End, furnaces, effects, ...) are prioritized in
 [`plans/dragonfly-gap-analysis-2026-11-15.md`](../plans/dragonfly-gap-analysis-2026-11-15.md).
+Block coverage is described in [`blocks.md`](blocks.md); the plan for the static-world gap (ticks, liquids, fire,
+growth, weather, dimensions) is [`plans/world-dynamics-2026-11-15.md`](../plans/world-dynamics-2026-11-15.md).
 
 ## Progress states
 

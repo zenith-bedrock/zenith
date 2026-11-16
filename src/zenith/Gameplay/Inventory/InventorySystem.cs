@@ -327,6 +327,8 @@ sealed class InventorySystem : IGameSystem
                         !_creative.TryGet(action.CreativeNetId, out var creativeId, out _) ||
                         !player.Windows.CraftUi.TryStageOutputs([new InventorySlot(creativeId, ItemStackLimits.For(creativeId))]))
                     {
+                        player.Level.Logger?.Debug(
+                            $"CraftCreative refused for {player.Username}: net={action.CreativeNetId} mode={player.GameMode} pending={player.Windows.CraftUi.HasPendingOutputs}");
                         ok = false;
                         break;
                     }
