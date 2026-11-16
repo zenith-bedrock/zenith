@@ -143,3 +143,15 @@ Do not treat the architecture setter test as proof that arbitrary inventory/worl
 - No canonical trusted identity can be established for a configured persistent administrator: reject that config; do not silently trust a username/offline UUID.
 
 At completion of a selected phase, update this plan and its index. Leave later phases TODO until their tests and exit criteria pass.
+
+## Status log
+
+| Phase | Status | Evidence / gaps |
+|-------|--------|-----------------|
+| 0 Permissions | Done | `Principal`, `PermissionRegistry/Policy/Authority`, trust model (Authenticated/SelfAsserted/Ephemeral), config `permissions.*`, owner-side recheck via `AuthorityGate`. Gap: runtime grant persistence (`/op`), command metadata not refreshed on permission change. |
+| 1 Domain policy and events | Done for block edits and container access | `IBlockEditPolicy` (plan, judge, commit; whole coupled edit judged first), `BlocksChanged` fact, `IContainerAccessPolicy` (open + every transfer; a withdrawn right closes an open window), presence facts (`PlayerEnteredWorld`/`PlayerLeftWorld`). Gaps: door toggles, bucket, creeper, fluid, fire and gravity writers do not pass block policy yet. |
+| 2 Commands | Partial | Permission-gated catalog and runtime, per-node checks. TODO: definition-to-executor binding before freeze, Rejected/Accepted/Applied outcomes, identity targets, bounded summon queue. |
+| 3 Internal Protect module | TODO | Needs the TODO above plus a dependency-boundary test. Policies for blocks and containers are ready to host it. |
+| 4 Re-audit / ADR | TODO | Only after Protect exists. |
+
+Unverified: nothing here has been exercised with a real Bedrock client; evidence is the headless suite (1805 passing).
