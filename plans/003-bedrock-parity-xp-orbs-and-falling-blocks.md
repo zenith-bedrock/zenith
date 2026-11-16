@@ -1,6 +1,6 @@
 # 003: Bedrock parity review, XP orbs and falling blocks
 
-- Status: REVIEW done, nothing implemented. Two phases proposed, each its own commit, in the order below.
+- Status: REVIEW done. Phase B (scheduled start of a fall) is implemented; phase A (XP orbs) follows. Each its own commit, in the order below.
 - Sources read: Zenith (`MobKillReward`, `DamageableActorCombatCore`, `PlayerExperience`, `FloorDropSystem`, `GravitySystem`, `GravityPendingStore`, `BlockEditSystem.NotifyGravityAfterEdit`), PocketMine (`ExperienceOrb.php`, `FallableTrait.php`), Dragonfly (`experience_orb*.go`, `falling_block*.go`), the Mojang protocol docs (`SpawnExperienceOrbPacket`). What is vanilla is marked with how sure it is; a number marked "to verify" should be checked against BDS with the differential tool before it is coded as a constant.
 
 ## 1. Experience: what Zenith does now, and the gap
@@ -29,13 +29,23 @@ Zenith already has the entity: sand and gravel become a `falling_block` actor (A
 - **Stack.** Zenith starts at most `MaxStepsPerTick = 2` new falls per tick and defers the cell above a started fall by one tick, so a column of sand peels off one block per tick (two on the first tick). Vanilla gives every block its own scheduled tick, started by the block below leaving, so a column peels off one block per 2 ticks, evenly. Zenith's cascade is twice as fast as vanilla's, and uneven at the start.
 - **Landing.** Landing on a cell that no longer accepts the block: vanilla turns it into an item; Zenith rests it above (a deliberate, documented divergence from plan 002: a block is never deleted). Not part of this change.
 
-### Proposal, phase B: the scheduled start
+### Phase B: the scheduled start. DONE, see "Phase B result"
 
 Reuse what exists: `ScheduledTicks` already holds "this cell is evaluated at tick N" for liquids and fire. A gravity block that becomes unsupported schedules itself `GravityDelayTicks` ahead (2, one named constant, set from the BDS check) instead of being enqueued at once; when it comes due, `BeginFall` re-checks support (so a block whose support came back falls no more) and runs as today. The cascade then follows by itself: the block above is scheduled when the one below leaves, so a stack peels at one block per delay with no `MaxStepsPerTick` special case. The per-tick cap stays as a safety bound (a very large collapse does not start thousands of falls in one tick), but it stops being what paces an ordinary stack.
 
 - **Invariants kept.** Everything from plan 002 phase 4a/4b is unchanged: one representation of a block at every tick, the record in the column image before the origin is cleared, the policy question for the origin, the room check before clearing. The scheduled delay happens *before* the block is touched, so the block is simply still there, supported by nothing, for 2 ticks: nothing to persist for it (a restart in that window loses only the schedule; the block is re-evaluated when its column loads, the same as any other unsupported gravity block today, to be confirmed by a test with a crash in the window).
 - **Tests.** A broken support: the block is still there for exactly the delay and falls on the next tick after it; the support restored inside the window: it never falls; a stack of five peels at one block per delay; the cap still bounds a huge collapse; the crash-in-the-window test; the plan 002 gravity tests unchanged apart from running the extra ticks.
 - **Risk.** Low. It changes timing only. The constant is a number to verify, not to guess: if BDS shows a different delay, the constant changes and the tests with it.
+
+## Phase B result
+
+- **What changed.** `GravityPendingStore` now holds each cell with a due tick (`TryEnqueue(x, y, z, dueTick)`, a priority queue; `PromoteDue(now)` once per tick; `PromoteAll()` at shutdown). Breaking or placing schedules `now + StartDelayTicks` (2); a block that lands unsupported, or whose lower neighbour starts to fall, schedules the same way, so a stack peels one block per delay with no special case. `MaxStepsPerTick` went from 2 to 64: it is now only a bound for a huge collapse, no longer what paces a stack. The separate "deferred" queue is gone: one mechanism instead of two.
+- **Reused mechanism.** The plan proposed `ScheduledTicks`; the gravity store already had the dedupe, the cap and the shutdown drain, and `BlockUpdateSystem` dispatches scheduled ticks by block kind, so the due tick went into the gravity store instead. Same idea, no second dispatcher.
+- **Unchanged.** Everything from plan 002 phase 4a/4b: `BeginFall` re-checks support when the cell comes due, asks the policies, checks room, records before clearing.
+- **A crash inside the delay** loses only the schedule: the column still holds exactly one block, hanging, which falls the next time something updates its neighbourhood (the same exposure the old in-memory queue had). A graceful stop settles it (`SettleAllPending` promotes everything). Stated and tested; nothing is persisted for the window.
+- **Not touched, found on the way.** Explosions, liquids and support loss that remove a block under sand do not enqueue gravity at all (only player edits and falls do). That is an older gap and a separate small change.
+- **The 2 is not yet checked against BDS.** One named constant, `GravityPendingStore.StartDelayTicks`.
+- **Tests (`GravityStartDelayTests`).** A real break: the sand still hangs for exactly the delay, then becomes one entity. Support restored in the window: it never falls. A five-block stack: every block lands, the count is conserved at every tick, starts are at least a delay apart. A collapse of 138 cells: starts per tick bounded, all land. Graceful stop and crash in the window. Setting the delay to 0 fails two. Existing gravity tests now advance the clock, which they previously never did.
 
 ## 3. Order and cost
 

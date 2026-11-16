@@ -4,24 +4,29 @@ using Zenith.Logging;
 namespace Zenith.World;
 
 /// <summary>
-/// Sparse pending gravity cells (ADR §57). SoftCap refuses new keys; re-enqueue of an
-/// existing key is a no-op refresh. RAM-only — settled overlays are normal <c>ov:</c>.
+/// Sparse pending gravity cells (ADR §57). SoftCap refuses new keys; re-enqueue of an existing key is a no-op (the earlier due tick
+/// stands). RAM-only — settled overlays are normal <c>ov:</c>.
+/// <para/>
+/// A cell does not start to fall when it is enqueued but when its due tick comes (plan 003): vanilla schedules the block's tick
+/// <see cref="StartDelayTicks"/> ahead, so an unsupported block hangs for that long, and a stack peels one block per delay because
+/// each block is scheduled by the one below leaving.
 /// </summary>
 sealed class GravityPendingStore
 {
     internal const int SoftCap = 2048;
 
+    /// <summary>Ticks between a block losing its support and starting to fall (vanilla scheduled-tick delay of a falling block).</summary>
+    public const int StartDelayTicks = 2;
+
     /// <summary>
-    /// Max <em>new</em> falls started per GameLoop tick — not a cap on how many falls animate at
-    /// once (that's <see cref="FallingBlockStore.SoftCap"/>). Kept low so a dug-out tower cascades
-    /// gradually, one or two cells per tick, matching vanilla's staggered feel (ADR §57/§95).
+    /// Max <em>new</em> falls started per GameLoop tick — a safety bound for very large collapses, not what paces an ordinary stack
+    /// (the start delay does that). Not a cap on how many falls animate at once (<see cref="FallingBlockStore.SoftCap"/>).
     /// </summary>
-    public const int MaxStepsPerTick = 2;
+    public const int MaxStepsPerTick = 64;
 
     private readonly HashSet<(int X, int Y, int Z)> _pending = new();
     private readonly Queue<(int X, int Y, int Z)> _queue = new();
-    /// <summary>Cascade cells enqueued during a tick — promoted next tick (no same-tick chain).</summary>
-    private readonly Queue<(int X, int Y, int Z)> _deferred = new();
+    private readonly PriorityQueue<(int X, int Y, int Z), ulong> _scheduled = new();
     private readonly ILogger? _logger;
     private int _capWarned;
 
@@ -29,20 +34,25 @@ sealed class GravityPendingStore
 
     public int Count => _pending.Count;
 
-    /// <summary>Move deferred cascade cells into the active queue (call once per tick).</summary>
-    public void PromoteDeferred()
+    /// <summary>Moves every cell whose due tick has come into the ready queue (call once per tick).</summary>
+    public void PromoteDue(ulong now)
     {
-        while (_deferred.Count > 0)
-            _queue.Enqueue(_deferred.Dequeue());
+        while (_scheduled.TryPeek(out var key, out var due) && due <= now)
+        {
+            _scheduled.Dequeue();
+            _queue.Enqueue(key);
+        }
     }
 
-    /// <summary>Enqueue a cell for gravity evaluation. Existing keys OK at SoftCap.</summary>
-    public bool TryEnqueue(int x, int y, int z) => TryEnqueueCore(x, y, z, immediate: true);
+    /// <summary>Makes every scheduled cell ready now, whatever its due tick (shutdown settles everything).</summary>
+    public void PromoteAll()
+    {
+        while (_scheduled.TryDequeue(out var key, out _))
+            _queue.Enqueue(key);
+    }
 
-    /// <summary>Enqueue after a fall step — processed next tick so columns cascade gradually.</summary>
-    public bool TryEnqueueDeferred(int x, int y, int z) => TryEnqueueCore(x, y, z, immediate: false);
-
-    private bool TryEnqueueCore(int x, int y, int z, bool immediate)
+    /// <summary>Enqueues a cell for gravity evaluation once <paramref name="dueTick"/> has come (0: at the next promotion).</summary>
+    public bool TryEnqueue(int x, int y, int z, ulong dueTick = 0)
     {
         var key = (x, y, z);
         if (_pending.Contains(key))
@@ -60,10 +70,7 @@ sealed class GravityPendingStore
         }
 
         _pending.Add(key);
-        if (immediate)
-            _queue.Enqueue(key);
-        else
-            _deferred.Enqueue(key);
+        _scheduled.Enqueue(key, dueTick);
         return true;
     }
 
@@ -89,6 +96,6 @@ sealed class GravityPendingStore
     {
         _pending.Clear();
         _queue.Clear();
-        _deferred.Clear();
+        _scheduled.Clear();
     }
 }

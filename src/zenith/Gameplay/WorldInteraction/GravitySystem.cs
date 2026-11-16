@@ -102,7 +102,7 @@ sealed class GravitySystem : IGameSystem
         var guard = GravityPendingStore.SoftCap * 2;
         while (guard-- > 0)
         {
-            pending.PromoteDeferred();
+            pending.PromoteAll();
             if (!pending.TryDequeue(out var x, out var y, out var z))
                 break;
             BeginFall(x, y, z, updates, deferCascade: false, out var entry);
@@ -119,7 +119,7 @@ sealed class GravitySystem : IGameSystem
         var pending = _world.GravityPending;
         if (pending.Count == 0) return;
 
-        pending.PromoteDeferred();
+        pending.PromoteDue(_now);
 
         var steps = 0;
         while (steps < GravityPendingStore.MaxStepsPerTick &&
@@ -438,9 +438,7 @@ sealed class GravitySystem : IGameSystem
 
     private void EnqueueFallCell(int x, int y, int z, bool defer)
     {
-        if (defer)
-            _world.GravityPending.TryEnqueueDeferred(x, y, z);
-        else
-            _world.GravityPending.TryEnqueue(x, y, z);
+        // Deferred (the normal path): the cell starts to fall after the vanilla delay. Not deferred (shutdown): at once.
+        _world.GravityPending.TryEnqueue(x, y, z, defer ? _now + GravityPendingStore.StartDelayTicks : 0);
     }
 }

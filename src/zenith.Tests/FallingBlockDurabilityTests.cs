@@ -37,7 +37,13 @@ public sealed class FallingBlockDurabilityTests
             return new Rig { Storage = storage, World = world, Gravity = new GravitySystem(world, new PlayerManager(), new EnvironmentChangePolicies(), log), Log = log };
         }
 
-        public void Tick() => Gravity.Tick(new GameClock(), Array.Empty<Zenith.Player.Player>());
+        public GameClock Clock { get; } = new();
+
+        public void Tick()
+        {
+            Clock.AdvanceBy(1);
+            Gravity.Tick(Clock, Array.Empty<Zenith.Player.Player>());
+        }
 
         /// <summary>What the disk holds now: the column images written so far, nothing that is still only in memory.</summary>
         public void Save() => World.PersistDirtyColumns(int.MaxValue);

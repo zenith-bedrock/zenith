@@ -23,6 +23,7 @@ public class GravityTests
         for (var i = 0; i < maxTicks; i++)
         {
             if (world.GravityPending.Count == 0 && world.FallingBlocks.Active.Count == 0) return;
+            clock.AdvanceBy(1); // a cell below another starts to fall a start delay after the one below left
             gravity.Tick(clock, Array.Empty<Zenith.Player.Player>());
         }
 
