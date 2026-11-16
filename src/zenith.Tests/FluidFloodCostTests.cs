@@ -7,6 +7,7 @@ using Zenith.World;
 namespace Zenith.Tests;
 
 /// <summary>How much a large flood costs the tick (ADR §171): a flat 3x3-chunk floor with many sources, run until it settles.</summary>
+[Collection(ExclusiveCollection.Name)]
 public sealed class FluidFloodCostTests(ITestOutputHelper output)
 {
     private const int Floor = 199;

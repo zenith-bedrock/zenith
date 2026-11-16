@@ -130,12 +130,7 @@ public class BlockCatalogTests
 
     private static IEnumerable<string> AllNames()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "src", "zenith", "data", "block_properties.json")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        using var doc = System.Text.Json.JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(dir!.FullName, "src", "zenith", "data", "block_properties.json")));
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(RepoPaths.Source("data", "block_properties.json")));
         foreach (var block in doc.RootElement.GetProperty("blocks").EnumerateObject())
             yield return block.Name;
     }

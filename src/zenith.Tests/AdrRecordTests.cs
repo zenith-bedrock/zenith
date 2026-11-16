@@ -5,12 +5,11 @@ namespace Zenith.Tests;
 
 /// <summary>
 /// The decision log is a convention, so it is checked like code: every `ADR §N` cited in source resolves to a record, each record
-/// carries its own number, and the index lists every file. Reads the repository's files, so it is skipped when run from a
-/// packaged copy without the docs.
+/// carries its own number, and the index lists every file. Reads the repository's files (see <see cref="RepoPaths"/>).
 /// </summary>
 public partial class AdrRecordTests
 {
-    private static readonly string? RepoRoot = FindRepoRoot();
+    private static readonly string RepoRoot = RepoPaths.Root;
 
     [GeneratedRegex(@"ADR §(\d+[a-z]?)")]
     private static partial Regex Citation();
@@ -18,7 +17,6 @@ public partial class AdrRecordTests
     [Fact]
     public void Every_ADR_cited_in_source_has_a_record()
     {
-        if (RepoRoot is null) return;
         var adrDir = Path.Combine(RepoRoot, "docs", "adr");
         var missing = new SortedSet<string>();
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories))
@@ -39,7 +37,6 @@ public partial class AdrRecordTests
     [Fact]
     public void Every_record_names_its_own_number_and_is_listed_in_the_index()
     {
-        if (RepoRoot is null) return;
         var adrDir = Path.Combine(RepoRoot, "docs", "adr");
         var index = File.ReadAllText(Path.Combine(adrDir, "README.md"));
         var problems = new List<string>();
@@ -64,15 +61,5 @@ public partial class AdrRecordTests
     {
         var digits = new string(number.TakeWhile(char.IsDigit).ToArray());
         return digits.PadLeft(4, '0') + number[digits.Length..];
-    }
-
-    private static string? FindRepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "zenith.sln")) && Directory.Exists(Path.Combine(dir.FullName, "docs", "adr")))
-                return dir.FullName;
-        }
-        return null;
     }
 }
