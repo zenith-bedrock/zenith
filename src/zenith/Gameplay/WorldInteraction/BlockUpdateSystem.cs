@@ -14,6 +14,11 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// (<see cref="BlockShapes.UpdateShape"/>); unsupported blocks break
 /// and drop like any other. Cascades (a door's upper half after its lower half, a plant on a plant) continue through the
 /// same queue, bounded per tick. Also drains <see cref="ScheduledTicks"/> that came due. Runs after block edits and gravity.
+/// <para/>
+/// Losing support and being reshaped by a neighbour are environment changes (cause <see cref="EnvironmentCause.SupportLoss"/>) and
+/// are asked per cell: a protected block that has lost its support stays, with no drop, even if that leaves a torch on air. That is
+/// deliberate: a protected cell changes only with bypass. Nothing replays it later; it is judged again the next time something
+/// updates its neighbourhood.
 /// </summary>
 sealed class BlockUpdateSystem : IGameSystem
 {
@@ -29,6 +34,7 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly FluidFlow _water;
     private readonly FluidFlow _lava;
     private readonly FireSpread _fire;
+    private readonly EnvironmentChangePolicies _environment;
     private readonly Random _random = new();
     private ulong _now;
     private IReadOnlyList<global::Zenith.Player.Player> _online = [];
@@ -37,6 +43,7 @@ sealed class BlockUpdateSystem : IGameSystem
     {
         _world = world;
         _players = players;
+        _environment = environment;
         _water = new FluidFlow(world, FluidSpec.Water, _updates, DropWashedAway, environment);
         _lava = new FluidFlow(world, FluidSpec.Lava, _updates, DropWashedAway, environment);
         _fire = new FireSpread(world, _random, _updates, environment);
@@ -113,7 +120,8 @@ sealed class BlockUpdateSystem : IGameSystem
         // Neighbour-dependent shape (wall connections): rewrite in place when it changed. A reshape depends on what the
         // neighbours are, not on how they are shaped, so it does not wake them again.
         var shaped = BlockShapes.UpdateShape(_world, x, y, z, id);
-        if (shaped != id && _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
+        if (shaped != id && _environment.Allows(EnvironmentCause.SupportLoss, _now, x, y, z, id, shaped) &&
+            _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
             updates.Add((x, y, z, shaped));
     }
 
@@ -124,6 +132,8 @@ sealed class BlockUpdateSystem : IGameSystem
         IReadOnlyList<global::Zenith.Player.Player> online,
         List<(int X, int Y, int Z, int BlockRuntimeId)> updates)
     {
+        // Asked before the write and the drop: a vetoed block neither breaks nor spills.
+        if (!_environment.Allows(EnvironmentCause.SupportLoss, _now, x, y, z, id, World.World.AirRuntimeId)) return;
         if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
             return;
 

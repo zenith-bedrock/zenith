@@ -7,7 +7,7 @@
 - Effort: M across six independently reviewable phases
 - Risk: MED. The danger is not the seam, it is the writers: a veto that leaves a writer retrying forever, drops an item while the block stays, or builds half a structure is worse than no veto.
 - Depends on: plan 001 phases 0-3 (done)
-- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phases 1 (the seam, Explosion, the shared fault log) and 2 (liquids, fire, lava ignition) are implemented. You delegated the order of the rest ("choose the best approach"): the order stays 3, 4b, 5, each its own commit. Decision 3(b), the void as the single named exit, is approved.
+- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phases 1 (the seam, Explosion, the shared fault log), 2 (liquids, fire, lava ignition) and 3 (support loss) are implemented. You delegated the order of the rest ("choose the best approach"): the order stays 4b, 5, each its own commit. Decision 3(b), the void as the single named exit, is approved.
 
 Revision 2 changes, from review plus a second reading of the code: the cause list now follows the meaning of the change, not the system that makes it; the proposal is per cell; what happens after a protection is lifted is stated; gravity has explicit invariants (and the code has a pre-existing conservation hole there); tree growth is a planned multi-cell unit, which the per-cell rule alone would break; the ratchet is an IL call-site scan, not text search; policy faults get rate-limited logging; the `EnvironmentChanged` fact and region flags are deferred.
 
@@ -128,10 +128,18 @@ Each phase is one reviewable commit with tests that assert the world and the ite
 - **Phase 0, the ratchet. DONE, see "Phase 0 result".**
 - **Phase 1, seam + Explosion + fault log. DONE, see "Phase 1 result".** The types, composition, Protect implementation, `CreeperSystem` per cell, the shared fault-log helper adopted by the three sets, the first measurement. Tests: a crater stops at the boundary; protected blocks untouched, others carved; a faulty policy denies safely and logs boundedly; frozen after composition.
 - **Phase 2, FluidFlow + Fire (incl. lava ignition). DONE, see "Phase 2 result".** Veto in the predicates. Tests: liquid and fire do not enter a region; no washed-away drop for a vetoed cell (item conservation); quiet afterwards (no re-queued tick for the vetoed cell); after the region is removed, resumption happens on the next neighbour update and not before (the documented semantics).
-- **Phase 3, SupportLoss.** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
+- **Phase 3, SupportLoss. DONE, see "Phase 3 result".** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
 - **Phase 4a, falling-block durability. DONE, awaiting review; see "Phase 4a result".**
 - **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests. Not started.
 - **Phase 5, random ticks: Growth, Decay, Spread.** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
+
+## Phase 3 result
+
+- **What is asked.** `BlockUpdateSystem.BreakUnsupported` asks under `SupportLoss` before the write and before the drop; the neighbour-driven reshape in `Evaluate` (wall connections) asks before it rewrites the cell. A vetoed block neither breaks nor spills nor reshapes. Both are in the ratchet as `EnvironmentPoliced`; two environment writers remain unpoliced (`GravitySystem`, `RandomTickContext`).
+- **Stated behaviour.** A protected cell changes only with bypass, even if that leaves a block vanilla would not allow: a torch on air, a door half without its other half. It is per cell: an unprotected cell next to a protected one still breaks (a door's lower half goes, its protected upper half stays). Nothing replays when a protection is lifted: the block stays until something updates its neighbourhood, then breaks and drops once.
+- **Quiet.** A vetoed block writes nothing, so it wakes nobody; further neighbour updates ask again and are refused again, with no queued update and no scheduled tick left behind.
+- **Tests (`EnvironmentSupportLossTests`).** A standing torch in a region survives its support going, with no drop (control: it breaks and drops). It stays through three later neighbour updates and the world stays quiet. After the region is removed it is still there 50 ticks later, and breaks and drops on the next update, not before. A protected upper door half stays while the unprotected lower half goes. A protected wall keeps its shape next to a new neighbour, an unprotected one connects (control). Removing the break veto fails four of them.
+- **Measurement.** The question is asked only for a cell that has already failed `CanExist` or whose shape changed, so ordinary neighbour fan-out pays nothing extra; nothing to measure beyond phase 2's per-cell number.
 
 ## Phase 2 result
 
