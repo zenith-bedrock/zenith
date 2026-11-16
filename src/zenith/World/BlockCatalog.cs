@@ -30,7 +30,19 @@ enum BlockKind : byte
     Plant,
 
     /// <summary><c>torch_facing_direction</c> from the clicked face.</summary>
-    Torch
+    Torch,
+
+    /// <summary>Two-block door: lower half placed, upper half added with it; right click toggles <c>open_bit</c> on both.</summary>
+    Door,
+
+    /// <summary>Facing from yaw, half from face/cursor height; right click toggles <c>open_bit</c>.</summary>
+    Trapdoor,
+
+    /// <summary>Facing from yaw; right click toggles <c>open_bit</c>.</summary>
+    FenceGate,
+
+    /// <summary>Connection types and post recomputed from neighbours on every placement or removal next to it.</summary>
+    Wall
 }
 
 /// <summary>
@@ -71,8 +83,14 @@ sealed class BlockCatalog
     public bool IsPlaceable(int runtimeId) =>
         KindOf(runtimeId) is not (BlockKind.Unsupported or BlockKind.DoubleSlab);
 
-    /// <summary>Blocks that must not obstruct movement or placement checks (flowers, grass, torches).</summary>
-    public bool IsPassable(int runtimeId) => KindOf(runtimeId) is BlockKind.Plant or BlockKind.Torch;
+    /// <summary>Blocks that must not obstruct movement or placement checks (flowers, grass, torches, open doors/gates/trapdoors).</summary>
+    public bool IsPassable(int runtimeId)
+    {
+        var kind = KindOf(runtimeId);
+        if (kind is BlockKind.Plant or BlockKind.Torch) return true;
+        return kind is BlockKind.Door or BlockKind.Trapdoor or BlockKind.FenceGate &&
+               _palette.TryGetState(runtimeId, out var state) && state.Get("open_bit") == "1";
+    }
 
     /// <summary>Derived dig profile for a supported, breakable block; false for unsupported or unbreakable ones.</summary>
     public bool TryGetDigProfile(int runtimeId, out DigProfile profile)
@@ -117,6 +135,14 @@ sealed class BlockCatalog
 
         if (properties.ContainsKey("pillar_axis") && properties.Keys.All(k => k is "pillar_axis" or "deprecated"))
             return BlockKind.Pillar;
+
+        if (properties.ContainsKey("wall_post_bit")) return BlockKind.Wall;
+        if (properties.ContainsKey("upper_block_bit") && properties.ContainsKey("door_hinge_bit") &&
+            name.EndsWith("_door", StringComparison.Ordinal)) return BlockKind.Door;
+        if (properties.ContainsKey("open_bit") && properties.ContainsKey("upside_down_bit") &&
+            properties.ContainsKey("direction") && name.EndsWith("trapdoor", StringComparison.Ordinal)) return BlockKind.Trapdoor;
+        if (properties.ContainsKey("open_bit") && properties.ContainsKey("in_wall_bit") &&
+            name.EndsWith("fence_gate", StringComparison.Ordinal)) return BlockKind.FenceGate;
 
         if (properties.Count == 1)
         {

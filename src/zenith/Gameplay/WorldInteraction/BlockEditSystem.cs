@@ -19,6 +19,8 @@ sealed class BlockEditSystem : IGameSystem
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
     private readonly World.World _world;
     private readonly ItemDurability _durability;
+    private readonly List<BlockShapes.Write> _extra = new();
+    private int _appliedId;
 
     public BlockEditSystem(PlayerManager players, World.World world, ItemDurability durability)
     {
@@ -40,8 +42,19 @@ sealed class BlockEditSystem : IGameSystem
                 // The online list is captured once per tick. A disconnect can remove a player
                 // after that snapshot; its queued client edit must not mutate world state.
                 if (!player.IsInGame || player.IsDead) continue;
+                _extra.Clear();
+                if (edit.IsToggle)
+                {
+                    if (ApplyToggle(player, edit))
+                        foreach (var write in _extra) updates.Add((write.X, write.Y, write.Z, write.BlockRuntimeId));
+                    continue;
+                }
+
                 if (ApplyEdit(player, edit, clock, online))
-                    updates.Add((edit.X, edit.Y, edit.Z, edit.BlockRuntimeId));
+                {
+                    updates.Add((edit.X, edit.Y, edit.Z, _appliedId));
+                    foreach (var write in _extra) updates.Add((write.X, write.Y, write.Z, write.BlockRuntimeId));
+                }
             }
         }
 
@@ -102,13 +115,15 @@ sealed class BlockEditSystem : IGameSystem
         List<FloorDropFanout.DepositRequest>? floorDropRequests = null;
         if (edit.BlockRuntimeId != World.World.AirRuntimeId)
         {
-            if (!Blocks.IsPlaceable(edit.BlockRuntimeId))
+            if (!Blocks.IsPlaceable(edit.BlockRuntimeId) &&
+                Blocks.Catalog.KindOf(edit.BlockRuntimeId) != BlockKind.DoubleSlab)
             {
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
             }
 
-            if (_world.GetBlock(edit.X, edit.Y, edit.Z) != World.World.AirRuntimeId)
+            var existing = _world.GetBlock(edit.X, edit.Y, edit.Z);
+            if (!BlockShapes.CanPlace(_world, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId, existing))
             {
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
@@ -150,14 +165,19 @@ sealed class BlockEditSystem : IGameSystem
                 consumedPlacementStack = true;
             }
 
-            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
+            var placedId = BlockShapes.Finalize(_world, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId, _extra);
+            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, placedId))
             {
                 if (consumedPlacementStack)
                     player.Inventory.RestoreSnapshot(placementSnapshot);
 
+                _extra.Clear();
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
             }
+
+            _appliedId = placedId;
+            CommitExtraWrites();
 
             if (Blocks.IsChest(edit.BlockRuntimeId))
             {
@@ -288,6 +308,10 @@ sealed class BlockEditSystem : IGameSystem
                 return false;
             }
 
+            _appliedId = World.World.AirRuntimeId;
+            BlockShapes.AfterRemoval(_world, edit.X, edit.Y, edit.Z, previous, _extra);
+            CommitExtraWrites();
+
             // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
             // Creative skip). Small per-block value: mining alone barely dents hunger in vanilla
             // either, sprinting dominates.
@@ -352,6 +376,27 @@ sealed class BlockEditSystem : IGameSystem
         if (edit.BlockRuntimeId == World.World.AirRuntimeId)
             ReleaseUnsupportedPlantAbove(edit.X, edit.Y, edit.Z, online);
         return true;
+    }
+
+    /// <summary>Applies the shape writes a placement/removal produced (door upper half, wall neighbours); drops those a world refuses.</summary>
+    private void CommitExtraWrites()
+    {
+        for (var i = _extra.Count - 1; i >= 0; i--)
+        {
+            var write = _extra[i];
+            if (!_world.CanAcceptBlockWrite(write.X, write.Y, write.Z, write.BlockRuntimeId) ||
+                !_world.TrySetBlock(write.X, write.Y, write.Z, write.BlockRuntimeId))
+                _extra.RemoveAt(i);
+        }
+    }
+
+    /// <summary>Right-click open/close for doors, trapdoors and fence gates.</summary>
+    private bool ApplyToggle(global::Zenith.Player.Player player, in BlockEditIntent edit)
+    {
+        if (!edit.IsInWorldBounds() || !IsWithinReach(player, edit.X, edit.Y, edit.Z)) return false;
+        if (!BlockShapes.TryToggle(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
+        CommitExtraWrites();
+        return _extra.Count > 0;
     }
 
     /// <summary>

@@ -22,7 +22,7 @@ static class BlockPlacement
         if (kind == BlockKind.DoubleSlab) return false;
         // Curated placeables the catalog does not model (walls, crafting table) are placed exactly as held.
         if (kind == BlockKind.Unsupported) return Blocks.IsPlaceable(heldRuntimeId);
-        if (kind is BlockKind.Cube or BlockKind.Plant) return true;
+        if (kind is BlockKind.Cube or BlockKind.Plant or BlockKind.Wall) return true;
 
         if (!catalog.Palette.TryGetName(heldRuntimeId, out var name)) return false;
         var overrides = new Dictionary<string, string>(2);
@@ -40,6 +40,24 @@ static class BlockPlacement
 
             case BlockKind.Slab:
                 overrides[VerticalHalf] = IsUpperHalf(face, clickY) ? "top" : "bottom";
+                break;
+
+            case BlockKind.Door:
+                // PocketMine encodes a door facing north as "east": the cardinal is the player's look turned clockwise.
+                overrides["minecraft:cardinal_direction"] = Clockwise(PlaceFacing.LookFromYaw(yawDegrees));
+                overrides["upper_block_bit"] = "0";
+                overrides["open_bit"] = "0";
+                break;
+
+            case BlockKind.Trapdoor:
+                overrides["direction"] = TrapdoorDirection(PlaceFacing.Opposite(PlaceFacing.LookFromYaw(yawDegrees)));
+                overrides["upside_down_bit"] = IsUpperHalf(face, clickY) ? "1" : "0";
+                overrides["open_bit"] = "0";
+                break;
+
+            case BlockKind.FenceGate:
+                overrides["minecraft:cardinal_direction"] = PlaceFacing.LookFromYaw(yawDegrees);
+                overrides["open_bit"] = "0";
                 break;
 
             case BlockKind.Torch:
@@ -68,6 +86,13 @@ static class BlockPlacement
     public static bool HasSupport(World world, int x, int y, int z, int runtimeId)
     {
         var catalog = Blocks.Catalog;
+        if (catalog.KindOf(runtimeId) == BlockKind.Door)
+        {
+            // Two blocks tall: solid ground below and room for the upper half.
+            var ground = world.GetBlock(x, y - 1, z);
+            return ground != World.AirRuntimeId && !Blocks.IsFluid(ground) && !Blocks.IsPassableDecoration(ground) &&
+                   world.GetBlock(x, y + 1, z) == World.AirRuntimeId;
+        }
         if (catalog.KindOf(runtimeId) != BlockKind.Plant) return true;
         if (!catalog.Palette.TryGetName(runtimeId, out var name)) return false;
 
@@ -84,6 +109,23 @@ static class BlockPlacement
         0 => true,
         1 => false,
         _ => clickY > 0.5f
+    };
+
+    internal static string Clockwise(string cardinal) => cardinal switch
+    {
+        Blocks.CardinalNorth => Blocks.CardinalEast,
+        Blocks.CardinalEast => Blocks.CardinalSouth,
+        Blocks.CardinalSouth => Blocks.CardinalWest,
+        _ => Blocks.CardinalNorth
+    };
+
+    // PocketMine's write5MinusHorizontalFacing: trapdoors use east 0, west 1, south 2, north 3 (not the legacy order).
+    private static string TrapdoorDirection(string cardinal) => cardinal switch
+    {
+        Blocks.CardinalEast => "0",
+        Blocks.CardinalWest => "1",
+        Blocks.CardinalSouth => "2",
+        _ => "3"
     };
 
     // Bedrock weirdo_direction: 0 east, 1 west, 2 south, 3 north — the direction the player is looking.

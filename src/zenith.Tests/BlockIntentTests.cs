@@ -181,7 +181,7 @@ public class BlockIntentTests
         var player = fx.AddInGamePlayer("goldie");
         StandNear(player, 4, 64, 4);
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Assert.True(palette.TryGet("minecraft:wooden_door", out var goldRid));
+        Assert.True(palette.TryGet("minecraft:furnace", out var goldRid));
         Assert.False(Blocks.IsPlaceable(goldRid));
         Assert.True(player.Inventory.TrySetBlock(0, goldRid, 3));
 

@@ -21,7 +21,7 @@ public class BlockCatalogTests
     [InlineData("minecraft:blue_stained_glass_pane", "Cube")]
     [InlineData("minecraft:dandelion", "Plant")]
     [InlineData("minecraft:oak_sapling", "Plant")]
-    [InlineData("minecraft:wooden_door", "Unsupported")]
+    [InlineData("minecraft:wooden_door", "Door")]
     [InlineData("minecraft:water", "Unsupported")]
     [InlineData("minecraft:furnace", "Unsupported")]
     public void Blocks_are_classified_by_state_signature_and_name(string name, string expected) =>
@@ -50,7 +50,7 @@ public class BlockCatalogTests
         AssertDig("minecraft:iron_block", ToolKind.Pickaxe, true, ToolTier.Stone);
         AssertDig("minecraft:obsidian", ToolKind.Pickaxe, true, ToolTier.Diamond);
         Assert.False(DigProfiles.TryGet(Id("minecraft:bedrock"), out _), "unbreakable stays undiggable");
-        Assert.False(DigProfiles.TryGet(Id("minecraft:wooden_door"), out _), "unsupported blocks are not derived");
+        Assert.False(DigProfiles.TryGet(Id("minecraft:furnace"), out _), "unsupported blocks are not derived");
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class BlockCatalogTests
     public void Double_slabs_and_unsupported_blocks_cannot_be_placed_from_an_item()
     {
         Assert.False(BlockPlacement.TryResolve(Id("minecraft:oak_double_slab"), 1, 0.5f, 0f, out _));
-        Assert.False(BlockPlacement.TryResolve(Id("minecraft:wooden_door"), 1, 0.5f, 0f, out _));
+        Assert.False(BlockPlacement.TryResolve(Id("minecraft:furnace"), 1, 0.5f, 0f, out _));
     }
 
     [Fact]

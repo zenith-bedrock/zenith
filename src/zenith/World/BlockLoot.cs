@@ -63,6 +63,13 @@ static class BlockLoot
         if (OreDrops.TryGetValue(blockRuntimeId, out var item))
             return new BlockDrop(item, 1);
 
+        if (Blocks.Catalog.KindOf(blockRuntimeId) == BlockKind.Door)
+        {
+            // A door is one item whichever half is broken (the other half is removed without a drop); the item is not the block form.
+            if (Blocks.TryGetName(blockRuntimeId, out var doorName) && DoorItems.Value.TryGet(doorName, out var doorItem))
+                return new BlockDrop(StackId.FromItem(doorItem), 1);
+        }
+
         if (Blocks.TryGetName(blockRuntimeId, out var name))
         {
             if (BlockDropRules.TryRedirect(name, out var redirect, out var count))
@@ -75,6 +82,8 @@ static class BlockLoot
 
         return new BlockDrop(StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId)), 1);
     }
+
+    private static readonly Lazy<ItemPalette> DoorItems = new(() => ItemPaletteLoader.FromEmbeddedResource());
 
     /// <summary>Single-stack form of <see cref="DropOf"/> kept for callers that only need the item identity.</summary>
     public static StackId DropFor(int blockRuntimeId) => DropOf(blockRuntimeId).Id;

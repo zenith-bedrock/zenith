@@ -30,6 +30,20 @@ readonly struct BlockEditIntent
     /// </summary>
     public bool DigAuthorized { get; init; }
     public ulong DigStartedTick { get; init; }
+
+    /// <summary>Right-click on a door/trapdoor/fence gate: flips its open state, consumes nothing.</summary>
+    public bool IsToggle { get; init; }
+
+    public static BlockEditIntent Toggle(int x, int y, int z) => new()
+    {
+        HasValue = true,
+        X = x,
+        Y = y,
+        Z = z,
+        BlockRuntimeId = World.World.AirRuntimeId,
+        HotbarSlot = -1,
+        IsToggle = true
+    };
     public int DigRequiredTicks { get; init; }
 
     public static BlockEditIntent Set(

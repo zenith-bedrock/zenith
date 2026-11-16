@@ -146,14 +146,36 @@ partial class InGameSessionHandler
             }
         }
 
+        // Doors, trapdoors and fence gates open and close on right click (iron variants answer to redstone only).
+        if (Blocks.Catalog.KindOf(clicked) is BlockKind.Door or BlockKind.Trapdoor or BlockKind.FenceGate)
+        {
+            var sneakingAtDoor = player.IsSneaking;
+            if (player.Intents.TryPeekMovementInput(out var doorMove))
+                sneakingAtDoor = doorMove.Sneaking;
+            if (stack.IsEmpty || stack.Count <= 0 || !sneakingAtDoor)
+            {
+                if (!player.Intents.SubmitBlockEdit(BlockEditIntent.Toggle(blockX, blockY, blockZ)))
+                    session.Context.Logger.Debug($"Dropped door toggle from {player.Username}: block-edit queue full.");
+                return;
+            }
+        }
+
         if (!PlayerInventory.IsValidStackCount(stack.Count) || stack.Count <= 0)
         {
             session.Context.Logger.Debug($"Rejected place: invalid/empty stack count {stack.Count}");
             return;
         }
 
-        if (!stack.Id.IsBlock) return;
-        var runtimeId = stack.Id.Value;
+        int runtimeId;
+        if (stack.Id.IsBlock)
+            runtimeId = stack.Id.Value;
+        else if (stack.Id.IsItem &&
+                 session.Context.ItemPalette.TryGetName(stack.Id.Value, out var heldItemName) &&
+                 Blocks.TryGetDefaultRuntimeId(heldItemName, out var blockOfItem) &&
+                 Blocks.Catalog.KindOf(blockOfItem) == BlockKind.Door)
+            runtimeId = blockOfItem; // doors are items in the catalogue; their block form is placed
+        else
+            return;
         if (runtimeId == World.World.AirRuntimeId) return;
         // Facing policy on live place only — BlockEditSystem / SubmitBlockEdit with raw Blocks.Chest stay as-given.
         if (Blocks.IsChest(runtimeId))
@@ -167,6 +189,15 @@ partial class InGameSessionHandler
         }
 
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
+        var heldKind = Blocks.Catalog.KindOf(runtimeId);
+        if (heldKind == BlockKind.Slab && world.GetBlock(blockX, blockY, blockZ) is var clickedForMerge &&
+            BlockShapes.TryMergeInto(clickedForMerge, runtimeId, requireOppositeHalf: false, blockFace, out var mergedAtClick))
+        {
+            // Second slab onto the open half of the slab that was clicked: the clicked cell becomes a double slab.
+            SubmitPlacement(session, player, blockX, blockY, blockZ, mergedAtClick, hotbarSlot, stack.Id);
+            return;
+        }
+
         if (!Blocks.IsChest(runtimeId))
         {
             // State-bearing families (stairs, slabs, logs, torches) get the state the placement context implies;
@@ -182,6 +213,10 @@ partial class InGameSessionHandler
 
         if (Blocks.IsChest(runtimeId))
             runtimeId = ChestPairing.AlignFacingWithNeighbor(world, tx, ty, tz, runtimeId);
+
+        if (heldKind == BlockKind.Slab &&
+            BlockShapes.TryMergeInto(world.GetBlock(tx, ty, tz), runtimeId, requireOppositeHalf: true, null, out var mergedAtTarget))
+            runtimeId = mergedAtTarget;
 
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot, stack.Id);
         if (!intent.IsInWorldBounds())
@@ -201,6 +236,20 @@ partial class InGameSessionHandler
             session.Context.Logger.Debug(
                 $"Place queued from {player.Username} @ {tx},{ty},{tz} rid={runtimeId}");
         }
+    }
+
+    private static void SubmitPlacement(
+        NetworkSession session, Player.Player player, int x, int y, int z, int runtimeId, int hotbarSlot, StackId held)
+    {
+        var intent = BlockEditIntent.Set(x, y, z, runtimeId, hotbarSlot, held);
+        if (!intent.IsInWorldBounds() || !player.Intents.SubmitBlockEdit(intent))
+        {
+            session.Context.Logger.Debug($"Dropped merge place from {player.Username} @ {x},{y},{z}");
+            return;
+        }
+
+        PlayerVisibility.RelaySwingArm(player, session.Context.PlayerManager.SnapshotOnline(), swingSource: "build");
+        session.Context.Logger.Debug($"Place queued from {player.Username} @ {x},{y},{z} rid={runtimeId}");
     }
 
     private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch
