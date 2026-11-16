@@ -15,7 +15,8 @@ public class ChestLidTests
     [Fact]
     public void Opener_refcount_open_on_0_to_1_close_on_1_to_0()
     {
-        var store = new ChestStore();
+        var store = new World.World(new InMemoryChunkStorage()).Chests;
+        Assert.True(store.TryEnsure(1, 2, 3));
         Assert.True(store.TryAddOpener(1, 2, 3, 10));
         Assert.Equal(1, store.OpenerCount(1, 2, 3));
 
@@ -32,7 +33,8 @@ public class ChestLidTests
     [Fact]
     public void TryAddOpener_same_player_is_idempotent()
     {
-        var store = new ChestStore();
+        var store = new World.World(new InMemoryChunkStorage()).Chests;
+        Assert.True(store.TryEnsure(0, 0, 0));
         Assert.True(store.TryAddOpener(0, 0, 0, 5));
         Assert.False(store.TryAddOpener(0, 0, 0, 5));
         Assert.Equal(1, store.OpenerCount(0, 0, 0));

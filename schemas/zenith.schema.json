@@ -97,13 +97,6 @@
           "default": 4,
           "description": "Fixed, bounded worker-pool size for CPU-bound base-column generation (ADR §111). Not an automatic ProcessorCount scale-up — raise only after measuring tick headroom."
         },
-        "chunk-generation-cache-columns": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 65536,
-          "default": 1024,
-          "description": "Maximum immutable base columns retained in memory for shared warm reads (ADR §111). Zero disables the cache; does not persist terrain."
-        },
         "terrain": {
           "type": "string",
           "enum": ["flat", "noise"],

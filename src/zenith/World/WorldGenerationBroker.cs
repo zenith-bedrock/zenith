@@ -13,8 +13,8 @@ sealed class WorldGenerationBroker : IAsyncDisposable
     private const int QueueCapacity = 4096;
 
     private readonly Channel<Request> _queue;
-    private readonly ConcurrentDictionary<ChunkCoord, TaskCompletionSource<ColumnReadResult>> _inFlight = new();
-    private readonly Func<ChunkCoord, ValueTask<ColumnReadResult>> _generate;
+    private readonly ConcurrentDictionary<ChunkCoord, TaskCompletionSource<WorldColumn>> _inFlight = new();
+    private readonly Func<ChunkCoord, ValueTask<WorldColumn>> _generate;
     private readonly WorldGenerationDiagnostics? _diagnostics;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly Task[] _workers;
@@ -23,7 +23,7 @@ sealed class WorldGenerationBroker : IAsyncDisposable
 
     public WorldGenerationBroker(
         int workerCount,
-        Func<ChunkCoord, ValueTask<ColumnReadResult>> generate,
+        Func<ChunkCoord, ValueTask<WorldColumn>> generate,
         WorldGenerationDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(generate);
@@ -44,14 +44,14 @@ sealed class WorldGenerationBroker : IAsyncDisposable
             _workers[i] = Task.Run(RunWorkerAsync);
     }
 
-    public async ValueTask<(Task<ColumnReadResult> Task, bool Coalesced)> RequestAsync(ChunkCoord coordinate)
+    public async ValueTask<(Task<WorldColumn> Task, bool Coalesced)> RequestAsync(ChunkCoord coordinate)
     {
         while (true)
         {
             if (_inFlight.TryGetValue(coordinate, out var existing))
                 return (existing.Task, true);
 
-            var completion = new TaskCompletionSource<ColumnReadResult>(
+            var completion = new TaskCompletionSource<WorldColumn>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             if (!_inFlight.TryAdd(coordinate, completion))
                 continue;
@@ -151,11 +151,11 @@ sealed class WorldGenerationBroker : IAsyncDisposable
         }
     }
 
-    private bool Remove(ChunkCoord coordinate, TaskCompletionSource<ColumnReadResult> completion) =>
-        ((ICollection<KeyValuePair<ChunkCoord, TaskCompletionSource<ColumnReadResult>>>)_inFlight)
-            .Remove(new KeyValuePair<ChunkCoord, TaskCompletionSource<ColumnReadResult>>(coordinate, completion));
+    private bool Remove(ChunkCoord coordinate, TaskCompletionSource<WorldColumn> completion) =>
+        ((ICollection<KeyValuePair<ChunkCoord, TaskCompletionSource<WorldColumn>>>)_inFlight)
+            .Remove(new KeyValuePair<ChunkCoord, TaskCompletionSource<WorldColumn>>(coordinate, completion));
 
     private readonly record struct Request(
         ChunkCoord Coordinate,
-        TaskCompletionSource<ColumnReadResult> Completion);
+        TaskCompletionSource<WorldColumn> Completion);
 }

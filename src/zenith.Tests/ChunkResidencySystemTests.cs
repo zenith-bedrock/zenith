@@ -16,7 +16,7 @@ public sealed class ChunkResidencySystemTests
         var world = new World.World(storage);
         world.SetBlock(1, 64, 2, Blocks.Stone);
         await world.GetOrCreateColumnAsync(0, 0);
-        Assert.Contains((0, 0), world.CopyHydratedChunks());
+        Assert.Contains((0, 0), world.CopyLoadedColumns());
 
         var system = new ChunkResidencySystem(world, sweepIntervalTicks: 10);
         var clock = new GameClock();
@@ -24,7 +24,7 @@ public sealed class ChunkResidencySystemTests
 
         system.Tick(clock, []);
 
-        Assert.DoesNotContain((0, 0), world.CopyHydratedChunks());
+        Assert.DoesNotContain((0, 0), world.CopyLoadedColumns());
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class ChunkResidencySystemTests
 
         system.Tick(clock, []);
 
-        Assert.Contains((0, 0), world.CopyHydratedChunks());
+        Assert.Contains((0, 0), world.CopyLoadedColumns());
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class ChunkResidencySystemTests
 
         system.Tick(clock, []);
 
-        Assert.Contains((0, 0), world.CopyHydratedChunks());
+        Assert.Contains((0, 0), world.CopyLoadedColumns());
         Assert.Equal(Blocks.Stone, world.GetBlock(1, 64, 2));
     }
 }

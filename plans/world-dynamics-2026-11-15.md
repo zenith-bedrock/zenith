@@ -69,7 +69,7 @@ Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support 
 ## Step 7 — Dimensions (Nether and End)
 
 - Today dimensions are protocol ids only. Needs: a dimension registry (`Dimension` already exists in `World/` for
-  terrain), per-dimension chunk store and overlay, `ChangeDimension` + load-screen handshake, portal blocks and
+  terrain), per-dimension chunk store (columns, ADR §167), `ChangeDimension` + load-screen handshake, portal blocks and
   the portal frame logic (not generation), Nether/End terrain generators, per-dimension spawn rules and coordinates
   scaling. This is a world-model change, not a feature — plan it separately with an ADR before touching code.
 

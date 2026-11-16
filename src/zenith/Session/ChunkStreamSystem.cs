@@ -68,11 +68,11 @@ sealed class ChunkStreamSystem : IGameSystem
             var radius = player.Chunks.Radius;
             if (radius < 0) continue;
 
-            if (player.Chunks.NeedsOverlayResync)
+            if (player.Chunks.NeedsColumnResync)
             {
                 player.Chunks.CopyKnown(_knownScratch);
-                ColumnSend.EmitOverlaysToSession(player.Session, _world, _knownScratch);
-                player.Chunks.NeedsOverlayResync = false;
+                ColumnSend.ResyncColumns(player.Session, _world, _knownScratch);
+                player.Chunks.NeedsColumnResync = false;
             }
 
             var cx = PlayerChunkTracker.BlockToChunk(player.PositionX);
@@ -256,7 +256,6 @@ sealed class ChunkStreamSystem : IGameSystem
                 var orderChannel = publication.SpawnReleased
                     ? NetworkSession.WorldStreamOrderChannel
                     : NetworkSession.DefaultOrderChannel;
-                _world.ApplyChunkHydration(publication.PendingColumn.Base.Coord.X, publication.PendingColumn.Base.Coord.Z);
                 if (!session.QueueWorldColumn(publication.PendingColumn, orderChannel, out var sequence))
                     return;
 
@@ -264,8 +263,8 @@ sealed class ChunkStreamSystem : IGameSystem
                 publication.HasPendingColumn = false;
                 publication.ColumnIndex++;
                 publication.LastQueuedSequence = sequence;
-                if (Math.Abs(column.Base.Coord.X - snapshot.CenterChunkX) <= snapshot.ReadyRadius
-                    && Math.Abs(column.Base.Coord.Z - snapshot.CenterChunkZ) <= snapshot.ReadyRadius)
+                if (Math.Abs(column.Coord.X - snapshot.CenterChunkX) <= snapshot.ReadyRadius
+                    && Math.Abs(column.Coord.Z - snapshot.CenterChunkZ) <= snapshot.ReadyRadius)
                 {
                     publication.ReadyColumnsQueued++;
                     if (publication.ReadyColumnsQueued >= publication.ReadyColumnsRequired)
@@ -274,10 +273,10 @@ sealed class ChunkStreamSystem : IGameSystem
                 // Residency for this coord was already acquired up front in StartPendingPreSpawn
                 // (the whole pre-spawn square, before streaming/hydration started) — RememberMany
                 // here only updates _known, no separate Acquire.
-                player.Chunks.RememberMany([(column.Base.Coord.X, column.Base.Coord.Z)]);
-                publication.PayloadBytes += column.Base.ExtraPayload.LongLength;
+                player.Chunks.RememberMany([(column.Coord.X, column.Coord.Z)]);
+                publication.PayloadBytes += column.GetWire().Payload.LongLength;
                 publication.Envelopes++;
-                _generationDiagnostics?.RecordPreSpawnPublished(1, column.Base.ExtraPayload.LongLength);
+                _generationDiagnostics?.RecordPreSpawnPublished(1, column.GetWire().Payload.LongLength);
                 columnsSent++;
             }
 
@@ -369,7 +368,7 @@ sealed class ChunkStreamSystem : IGameSystem
         public long PayloadBytes { get; set; }
         public int Envelopes { get; set; }
         public bool HasPendingColumn { get; set; }
-        public ColumnReadResult PendingColumn { get; set; }
+        public WorldColumn PendingColumn { get; set; } = null!;
         public int ReadyColumnsRequired { get; }
         public int ReadyColumnsQueued { get; set; }
         public long ReadyBarrierSequence { get; set; }
@@ -384,7 +383,7 @@ sealed class ChunkStreamSystem : IGameSystem
         public PreSpawnLoad(PlayerChunkTracker.PreSpawnSnapshot snapshot)
         {
             Snapshot = snapshot;
-            var channel = Channel.CreateBounded<ColumnReadResult>(new BoundedChannelOptions(32)
+            var channel = Channel.CreateBounded<WorldColumn>(new BoundedChannelOptions(32)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
@@ -396,8 +395,8 @@ sealed class ChunkStreamSystem : IGameSystem
         }
 
         public PlayerChunkTracker.PreSpawnSnapshot Snapshot { get; }
-        public ChannelReader<ColumnReadResult> Reader { get; }
-        public ChannelWriter<ColumnReadResult> Writer { get; }
+        public ChannelReader<WorldColumn> Reader { get; }
+        public ChannelWriter<WorldColumn> Writer { get; }
         public CancellationToken CancellationToken => _shutdown.Token;
         public Exception? Error { get; private set; }
         public long LoadElapsedMilliseconds { get; private set; }
@@ -461,8 +460,7 @@ sealed class ChunkStreamSystem : IGameSystem
                 continue;
             }
 
-            _world.ApplyChunkHydration(completion.ChunkX, completion.ChunkZ);
-            if (!player.Session.QueueWorldColumn(completion.Column, NetworkSession.WorldStreamOrderChannel))
+            if (!player.Session.QueueWorldColumn(completion.Column!, NetworkSession.WorldStreamOrderChannel))
             {
                 if (tracker.TryAbandon(completion.ChunkX, completion.ChunkZ, completion.Epoch))
                 {

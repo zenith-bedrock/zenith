@@ -488,9 +488,9 @@ sealed class InventorySystem : IGameSystem
 
         if (chestView is { } openChest)
         {
-            _world.PersistChest(openChest.PrimaryX, openChest.PrimaryY, openChest.PrimaryZ);
+            _world.MarkBlockEntityDirty(openChest.PrimaryX, openChest.PrimaryZ);
             if (openChest.TryGetPartner(out var ppx, out var ppy, out var ppz))
-                _world.PersistChest(ppx, ppy, ppz);
+                _world.MarkBlockEntityDirty(ppx, ppz);
         }
     }
 

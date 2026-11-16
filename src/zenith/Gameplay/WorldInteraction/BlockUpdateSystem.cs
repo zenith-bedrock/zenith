@@ -20,8 +20,6 @@ sealed class BlockUpdateSystem : IGameSystem
     /// <summary>Scheduled cells evaluated per tick.</summary>
     public const int MaxScheduledPerTick = 256;
 
-    private const int MaxY = 320;
-
     private static readonly (int Dx, int Dy, int Dz)[] Neighbours =
     [
         (0, 0, 0), (0, 1, 0), (0, -1, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1)
@@ -69,9 +67,8 @@ sealed class BlockUpdateSystem : IGameSystem
         IReadOnlyList<global::Zenith.Player.Player> online,
         List<(int X, int Y, int Z, int BlockRuntimeId)> updates)
     {
-        if (y < Blocks.FlatMinY || y > MaxY) return;
-        var id = _world.GetBlock(x, y, z);
-        if (id == World.World.AirRuntimeId) return;
+        // A cell in a chunk nobody has loaded is not ours to wake: it is re-evaluated when the chunk streams in and a neighbour changes.
+        if (!_world.TryGetBlock(x, y, z, out var id) || id == World.World.AirRuntimeId) return;
 
         if (!BlockShapes.CanExist(_world, x, y, z, id))
         {
@@ -82,7 +79,7 @@ sealed class BlockUpdateSystem : IGameSystem
         // Neighbour-dependent shape (wall connections): rewrite in place when it changed. A reshape depends on what the
         // neighbours are, not on how they are shaped, so it does not wake them again.
         var shaped = BlockShapes.UpdateShape(_world, x, y, z, id);
-        if (shaped != id && _world.CanAcceptBlockWrite(x, y, z, shaped) && _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
+        if (shaped != id && _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
             updates.Add((x, y, z, shaped));
     }
 
@@ -91,8 +88,7 @@ sealed class BlockUpdateSystem : IGameSystem
         IReadOnlyList<global::Zenith.Player.Player> online,
         List<(int X, int Y, int Z, int BlockRuntimeId)> updates)
     {
-        if (!_world.CanAcceptBlockWrite(x, y, z, World.World.AirRuntimeId) ||
-            !_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
+        if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
             return;
 
         updates.Add((x, y, z, World.World.AirRuntimeId));

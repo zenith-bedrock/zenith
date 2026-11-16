@@ -28,9 +28,7 @@ public sealed class WorldGenerationBrokerTests
                     firstStarted.SetResult();
                 await release.Task.ConfigureAwait(false);
                 Interlocked.Decrement(ref active);
-                return new ColumnReadResult(
-                    new ChunkColumnData(coordinate, 0, 0, Array.Empty<byte>()),
-                    Array.Empty<BlockOverride>());
+                return new WorldColumn(coordinate, dimensionId: 0, biomeNetworkId: 1);
             });
 
         var first = await broker.RequestAsync(new ChunkCoord(0, 0));

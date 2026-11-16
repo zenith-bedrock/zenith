@@ -5,13 +5,10 @@ using Zenith.LevelDB;
 namespace Zenith.World;
 
 /// <summary>
-/// Backend LevelDB — Zenith keys via <see cref="WorldStorageKeys"/> (not Mojang BDS format, though
-/// the overlay/chest key layout mirrors BDS's fixed-width chunk-prefix shape — ADR §114).
-/// Colunas: <c>c:x:z</c> (unchanged, exact single-key lookup). Overlay/chest keys are now binary,
-/// chunk-prefixed (<see cref="WorldStorageKeys.ChunkPrefix"/>), enabling <see cref="LoadOverlaysForChunkAsync"/>
-/// / <see cref="LoadChestsForChunkAsync"/> as a Seek + prefix walk instead of a full-table scan.
+/// Backend LevelDB — Zenith keys via <see cref="WorldStorageKeys"/> (not Mojang BDS format). A column is one blob under
+/// <c>c:x:z</c> (<see cref="ColumnCodec"/>: sections, biome and block entities together, ADR §167).
 /// <para/>
-/// Overlay/chest/inventory/armor/playerdata/world-metadata Puts all enqueue onto one write queue and
+/// Column/inventory/armor/playerdata/world-metadata Puts all enqueue onto one write queue and
 /// return without waiting on disk (ADR §41 — GameLoop never waits); a single background worker drains
 /// it at a bounded interval (<see cref="WriteWorkerPollMs"/>), not on unbounded thread-pool scheduling
 /// (ADR §124 — replaces the earlier per-call <c>Task.Run</c> pattern, which had no bound on how long a
@@ -46,197 +43,18 @@ sealed class LevelDbChunkStorage : IChunkStorage, IDisposable
         _writeWorker.Start();
     }
 
-    public ValueTask<ChunkColumnData?> GetAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
+    public ValueTask<byte[]?> GetColumnAsync(ChunkCoord coord, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<ChunkColumnData?>(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            ReadOnlyMemory<byte> mem;
-            lock (_gate)
-            {
-                if (!_db.TryGet(ColumnKey(coord), out mem)) return null;
-            }
-
-            var bytes = mem.ToArray();
-            if (bytes.Length < 8) return null;
-            var subChunkCount = BitConverter.ToInt32(bytes, 0);
-            var dimensionId = BitConverter.ToInt32(bytes, 4);
-            var payload = bytes.AsSpan(8).ToArray();
-            return new ChunkColumnData(coord, dimensionId, subChunkCount, payload);
-        }, cancellationToken));
-    }
-
-    public ValueTask PutAsync(ChunkColumnData column, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var blob = new byte[8 + column.ExtraPayload.Length];
-            BitConverter.TryWriteBytes(blob.AsSpan(0, 4), column.SubChunkCount);
-            BitConverter.TryWriteBytes(blob.AsSpan(4, 4), column.DimensionId);
-            column.ExtraPayload.CopyTo(blob.AsSpan(8));
-            lock (_gate)
-            {
-                _db.Put(ColumnKey(column.Coord), blob);
-            }
-        }, cancellationToken));
+        return new ValueTask<byte[]?>(GetKeyBlobAwaitedAsync(ColumnKey(coord), cancellationToken));
     }
 
     /// <summary>Enfileira o Put; completa quando o item está na fila, não quando o disco terminou.</summary>
-    public ValueTask PutOverlayAsync(int x, int y, int z, int blockRuntimeId, CancellationToken cancellationToken = default)
+    public ValueTask PutColumnAsync(ChunkCoord coord, byte[] blob, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        EnqueueWrite(WorldStorageKeys.Overlay(x, y, z), BitConverter.GetBytes(blockRuntimeId), delete: false);
+        EnqueueWrite(ColumnKey(coord), blob, delete: false);
         return ValueTask.CompletedTask;
-    }
-
-    /// <summary>Enfileira Delete de <c>ov:</c> (compactação quando rid == base flat — ADR §36 SoftCap).</summary>
-    public ValueTask DeleteOverlayAsync(int x, int y, int z, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        EnqueueWrite(WorldStorageKeys.Overlay(x, y, z), null, delete: true);
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask ForEachOverlayAsync(Action<int, int, int, int> visitor, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                using var it = _db.CreateIterator();
-                it.SeekToFirst();
-                while (it.IsValid())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key().Span;
-                    if (WorldStorageKeys.TryParseOverlay(keyBytes, out var x, out var y, out var z))
-                    {
-                        var value = it.Value().Span;
-                        if (value.Length >= 4)
-                            visitor(x, y, z, BitConverter.ToInt32(value));
-                    }
-
-                    it.Next();
-                }
-            }
-        }, cancellationToken));
-    }
-
-    /// <summary>Per-chunk seek: chunkX/chunkZ occupy a fixed 8-byte key prefix (ADR §114), so
-    /// finding one chunk's overlays is a Seek + StartsWith walk instead of a full-table scan.</summary>
-    public ValueTask<IReadOnlyList<BlockOverride>> LoadOverlaysForChunkAsync(int chunkX, int chunkZ, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<IReadOnlyList<BlockOverride>>(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var prefix = WorldStorageKeys.ChunkPrefix(chunkX, chunkZ);
-            var results = new List<BlockOverride>();
-            lock (_gate)
-            {
-                using var it = _db.CreateIterator();
-                it.Seek(prefix);
-                while (it.IsValid())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key().Span;
-                    if (!keyBytes.StartsWith(prefix))
-                        break;
-
-                    if (WorldStorageKeys.TryParseOverlay(keyBytes, out var x, out var y, out var z))
-                    {
-                        var value = it.Value().Span;
-                        if (value.Length >= 4)
-                            results.Add(new BlockOverride(x, y, z, BitConverter.ToInt32(value)));
-                    }
-
-                    it.Next();
-                }
-            }
-
-            return (IReadOnlyList<BlockOverride>)results;
-        }, cancellationToken));
-    }
-
-    public ValueTask PutChestAsync(int x, int y, int z, byte[] blob, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        EnqueueWrite(WorldStorageKeys.Chest(x, y, z), blob, delete: false);
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask DeleteChestAsync(int x, int y, int z, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        EnqueueWrite(WorldStorageKeys.Chest(x, y, z), null, delete: true);
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask ForEachChestAsync(Action<int, int, int, byte[]> visitor, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            lock (_gate)
-            {
-                using var it = _db.CreateIterator();
-                it.SeekToFirst();
-                while (it.IsValid())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key().Span;
-                    if (WorldStorageKeys.TryParseChest(keyBytes, out var x, out var y, out var z))
-                    {
-                        var value = it.Value();
-                        if (value.Length > 0)
-                            visitor(x, y, z, value.ToArray());
-                    }
-
-                    it.Next();
-                }
-            }
-        }, cancellationToken));
-    }
-
-    /// <summary>Per-chunk seek, mirrors <see cref="LoadOverlaysForChunkAsync"/> (ADR §114).</summary>
-    public ValueTask<IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>> LoadChestsForChunkAsync(int chunkX, int chunkZ, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return new ValueTask<IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>>(Task.Run(() =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var prefix = WorldStorageKeys.ChunkPrefix(chunkX, chunkZ);
-            var results = new List<(int, int, int, byte[])>();
-            lock (_gate)
-            {
-                using var it = _db.CreateIterator();
-                it.Seek(prefix);
-                while (it.IsValid())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var keyBytes = it.Key().Span;
-                    if (!keyBytes.StartsWith(prefix))
-                        break;
-
-                    if (WorldStorageKeys.TryParseChest(keyBytes, out var x, out var y, out var z))
-                    {
-                        var value = it.Value();
-                        if (value.Length > 0)
-                            results.Add((x, y, z, value.ToArray()));
-                    }
-
-                    it.Next();
-                }
-            }
-
-            return (IReadOnlyList<(int X, int Y, int Z, byte[] Blob)>)results;
-        }, cancellationToken));
     }
 
     public ValueTask PutInventoryAsync(Guid uuid, byte[] blob, CancellationToken cancellationToken = default)

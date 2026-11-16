@@ -3,7 +3,7 @@ using Zenith.World;
 
 namespace Zenith.Benchmarks;
 
-/// <summary>Tick authority RAM overlay: Set/Get + column scan cost vs overlay count.</summary>
+/// <summary>Resident column Set/Get cost vs number of edited cells.</summary>
 [MemoryDiagnoser]
 public class WorldOverlayBenchmarks
 {
@@ -21,7 +21,7 @@ public class WorldOverlayBenchmarks
         Blocks.EnsureLoaded();
         _world = new global::Zenith.World.World(new InMemoryChunkStorage());
 
-        // Pack into chunk (0,0) so GetOverlaysInColumn scales with OverlayCount.
+        // Pack into chunk (0,0).
         for (var i = 0; i < OverlayCount; i++)
         {
             var x = i % 16;
@@ -55,5 +55,5 @@ public class WorldOverlayBenchmarks
     public int GetBlock() => _world.GetBlock(_hitX, _hitY, _hitZ);
 
     [Benchmark]
-    public int GetOverlaysInColumn() => _world.GetOverlaysInColumn(0, 0).Count;
+    public int GetWire() => _world.TryGetLoadedColumn(0, 0, out var c) ? c.GetWire().Payload.Length : 0;
 }

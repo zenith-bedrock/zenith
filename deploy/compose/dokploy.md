@@ -55,7 +55,6 @@ world:
   pre-spawn-columns-per-tick: 8
   chunk-stream-columns-per-tick: 4
   chunk-generation-workers: 4
-  chunk-generation-cache-columns: 1024
   terrain: noise
   seed: 42
 auth:

@@ -1,135 +1,82 @@
-using System.Threading;
 using Zenith.Player;
-using Zenith.Logging;
 
 namespace Zenith.World;
 
 /// <summary>
-/// RAM chest inventories keyed by block position (ADR §28 / §36 / §56).
-/// Per-cell size is always <see cref="SingleSize"/>; open UI may be 27 or 54 via <see cref="OpenChestView"/>.
+/// Chest inventories, as a view over the <see cref="ContainerEntity"/> each chest cell carries in its
+/// <see cref="WorldColumn"/> (ADR §167). The entity owns the slots and the list of players who have it open; this class
+/// is what the inventory systems talk to: single or double chest views (<see cref="OpenChestView"/>), rollback snapshots,
+/// and "what falls out when it breaks". Per-cell size is always <see cref="SingleSize"/>; an open UI may be 27 or 54.
 /// </summary>
 sealed class ChestStore
 {
-    public const int SingleSize = 27;
-    public const int DoubleSize = 54;
+    public const int SingleSize = ContainerEntity.SlotCount;
+    public const int DoubleSize = SingleSize * 2;
 
-    /// <summary>Per-cell slot count (persist / Ensure). Prefer <see cref="SingleSize"/> in new code.</summary>
-    public const int Size = SingleSize;
+    private readonly World _world;
 
-    internal const int SoftCap = 10_000;
+    public ChestStore(World world) => _world = world;
 
-    private readonly Dictionary<(int X, int Y, int Z), InventorySlot[]> _chests = new();
-    /// <summary>Open UI viewers per cell (runtime id) — lid BlockEvent on 0→1 / 1→0 (§28).</summary>
-    private readonly Dictionary<(int X, int Y, int Z), HashSet<long>> _openers = new();
-    /// <summary>
-    /// Secondary index by chunk (ADR §114 — resident-chunk-state eviction needs "which chests are in
-    /// this chunk" without scanning all of <see cref="_chests"/>). SSOT remains <see cref="_chests"/>;
-    /// both updated only via <see cref="TryEnsure"/> / <see cref="RemoveAndDump"/>, mirroring
-    /// <c>World._overlaysByChunk</c>'s no-drift discipline.
-    /// </summary>
-    private readonly Dictionary<(int Cx, int Cz), HashSet<(int X, int Y, int Z)>> _byChunk = new();
-    private readonly ILogger? _logger;
-    private int _softCapWarned;
+    private bool TryGet(int x, int y, int z, out ContainerEntity container) =>
+        _world.TryGetBlockEntity(x, y, z, out container);
 
-    public ChestStore(ILogger? logger = null) => _logger = logger;
-
-    public int Count => _chests.Count;
-
-    public int OpenerCount(int x, int y, int z) =>
-        _openers.TryGetValue((x, y, z), out var set) ? set.Count : 0;
+    public int OpenerCount(int x, int y, int z) => TryGet(x, y, z, out var container) ? container.Openers.Count : 0;
 
     /// <summary>Returns true when this was the first opener (0→1) — animate lid open.</summary>
     public bool TryAddOpener(int x, int y, int z, long playerRuntimeId)
     {
-        var key = (x, y, z);
-        if (!_openers.TryGetValue(key, out var set))
-        {
-            set = new HashSet<long>();
-            _openers[key] = set;
-        }
-
-        if (!set.Add(playerRuntimeId))
-            return false;
-        return set.Count == 1;
+        if (!TryGet(x, y, z, out var container)) return false;
+        return container.Openers.Add(playerRuntimeId) && container.Openers.Count == 1;
     }
 
     /// <summary>Returns true when this was the last opener (1→0) — animate lid close.</summary>
     public bool TryRemoveOpener(int x, int y, int z, long playerRuntimeId)
     {
-        var key = (x, y, z);
-        if (!_openers.TryGetValue(key, out var set))
-            return false;
-        if (!set.Remove(playerRuntimeId))
-            return false;
-        if (set.Count > 0)
-            return false;
-        _openers.Remove(key);
-        return true;
+        if (!TryGet(x, y, z, out var container)) return false;
+        return container.Openers.Remove(playerRuntimeId) && container.Openers.Count == 0;
     }
 
-    /// <summary>Clears all openers; returns true if the lid was open (count &gt; 0).</summary>
+    /// <summary>Clears all openers; returns true if the lid was open.</summary>
     public bool ClearOpeners(int x, int y, int z)
     {
-        var key = (x, y, z);
-        if (!_openers.Remove(key, out var set))
-            return false;
-        return set.Count > 0;
-    }
-
-    /// <summary>True when <see cref="TryEnsure"/> would accept a new cell (or cell already exists).</summary>
-    public bool CanAcceptNew(int x, int y, int z) =>
-        _chests.ContainsKey((x, y, z)) || _chests.Count < SoftCap;
-
-    /// <summary>
-    /// Ensure a 27-slot chest cell. SoftCap refuses <b>new</b> cells (§36) — existing keys always OK.
-    /// Hydrate via <see cref="TryLoadFromBlob"/> bypasses SoftCap.
-    /// </summary>
-    public bool TryEnsure(int x, int y, int z)
-    {
-        var key = (x, y, z);
-        if (_chests.ContainsKey(key)) return true;
-        if (_chests.Count >= SoftCap)
-        {
-            if (Interlocked.Exchange(ref _softCapWarned, 1) == 0)
-            {
-                _logger?.Warning(
-                    $"ChestStore at SoftCap ({SoftCap}): refusing new chest cells.");
-            }
-
-            return false;
-        }
-
-        CreateCell(key);
+        if (!TryGet(x, y, z, out var container) || container.Openers.Count == 0) return false;
+        container.Openers.Clear();
         return true;
     }
 
-    /// <summary>Creates an empty cell, no SoftCap check: <see cref="TryEnsure"/> checks it first, hydrate (<see cref="TryLoadFromBlob"/>) never does.</summary>
-    private InventorySlot[] CreateCell((int X, int Y, int Z) key)
+    /// <summary>Makes sure the chest cell has its 27 slots; existing contents are untouched.</summary>
+    public bool TryEnsure(int x, int y, int z)
     {
-        var slots = new InventorySlot[SingleSize];
-        for (var i = 0; i < SingleSize; i++)
-            slots[i] = InventorySlot.Empty;
-        _chests[key] = slots;
-        AddToChunkIndex(key.X, key.Z, key);
-        return slots;
+        if (TryGet(x, y, z, out _)) return true;
+        _world.SetBlockEntity(x, y, z, new ContainerEntity());
+        return true;
     }
 
-    public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots) =>
-        _chests.TryGetValue((x, y, z), out slots!);
+    public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots)
+    {
+        if (TryGet(x, y, z, out var container))
+        {
+            slots = container.Slots;
+            return true;
+        }
+
+        slots = [];
+        return false;
+    }
 
     public InventorySlot Get(int x, int y, int z, int slot)
     {
         if ((uint)slot >= SingleSize) return InventorySlot.Empty;
-        if (!_chests.TryGetValue((x, y, z), out var slots)) return InventorySlot.Empty;
-        return slots[slot];
+        return TryGet(x, y, z, out var container) ? container.Slots[slot] : InventorySlot.Empty;
     }
 
     public bool TrySet(int x, int y, int z, int slot, InventorySlot value)
     {
         if ((uint)slot >= SingleSize) return false;
-        if (!_chests.TryGetValue((x, y, z), out var slots)) return false;
-        if (!ItemStackLimits.CanReplace(slots[slot], value)) return false;
-        slots[slot] = value.IsEmpty ? InventorySlot.Empty : value;
+        if (!TryGet(x, y, z, out var container)) return false;
+        if (!ItemStackLimits.CanReplace(container.Slots[slot], value)) return false;
+        container.Slots[slot] = value.IsEmpty ? InventorySlot.Empty : value;
+        _world.MarkBlockEntityDirty(x, z);
         return true;
     }
 
@@ -177,91 +124,34 @@ sealed class ChestStore
             else if (view.TryGetPartner(out var x, out var y, out var z) && TryGetSlots(x, y, z, out var partner))
                 partner[i - SingleSize] = snapshot[i];
         }
+
+        _world.MarkBlockEntityDirty(view.PrimaryX, view.PrimaryZ);
+        if (view.TryGetPartner(out var partnerX, out _, out var partnerZ))
+            _world.MarkBlockEntityDirty(partnerX, partnerZ);
     }
 
-    /// <summary>Remove o baú e devolve o conteúdo não-vazio como lista (StackId, count).</summary>
+    /// <summary>Removes the chest and returns what was inside as (StackId, count) pairs.</summary>
     public List<(StackId Id, int Count)> RemoveAndDump(int x, int y, int z)
     {
-        ClearOpeners(x, y, z);
         var list = new List<(StackId, int)>();
-        if (!_chests.Remove((x, y, z), out var slots))
+        if (!_world.RemoveBlockEntity(x, y, z, out var removed) || removed is not ContainerEntity container)
             return list;
 
-        RemoveFromChunkIndex(x, z, (x, y, z));
-
-        foreach (var s in slots)
+        foreach (var slot in container.Slots)
         {
-            if (!s.IsEmpty)
-                list.Add((s.Id, s.Count));
+            if (!slot.IsEmpty)
+                list.Add((slot.Id, slot.Count));
         }
 
         return list;
     }
 
-    /// <summary>Chest positions currently resident in chunk (chunkX, chunkZ) — ADR §114 eviction sweep.</summary>
-    public IReadOnlyCollection<(int X, int Y, int Z)> PositionsInChunk(int chunkX, int chunkZ) =>
-        _byChunk.TryGetValue((chunkX, chunkZ), out var bucket) ? bucket : Array.Empty<(int, int, int)>();
-
-    /// <summary>Removes a chest from RAM without dumping its contents or clearing openers — used by
-    /// eviction (ADR §114), which persists first via <c>World.PersistChest</c> and must not drop
-    /// items or disturb an open UI (callers gate on <see cref="OpenerCount"/> == 0 first).</summary>
-    public bool Evict(int x, int y, int z)
-    {
-        if (!_chests.Remove((x, y, z)))
-            return false;
-        RemoveFromChunkIndex(x, z, (x, y, z));
-        return true;
-    }
-
-    private void AddToChunkIndex(int x, int z, (int X, int Y, int Z) key)
-    {
-        var chunk = (ChunkMath.BlockToChunk(x), ChunkMath.BlockToChunk(z));
-        if (!_byChunk.TryGetValue(chunk, out var bucket))
-        {
-            bucket = new HashSet<(int, int, int)>();
-            _byChunk[chunk] = bucket;
-        }
-        bucket.Add(key);
-    }
-
-    private void RemoveFromChunkIndex(int x, int z, (int X, int Y, int Z) key)
-    {
-        var chunk = (ChunkMath.BlockToChunk(x), ChunkMath.BlockToChunk(z));
-        if (!_byChunk.TryGetValue(chunk, out var bucket))
-            return;
-        bucket.Remove(key);
-        if (bucket.Count == 0)
-            _byChunk.Remove(chunk);
-    }
-
     public InventorySlot[] CaptureSnapshot(int x, int y, int z)
     {
-        if (!_chests.TryGetValue((x, y, z), out var slots))
+        if (!TryGet(x, y, z, out var container))
             return Array.Empty<InventorySlot>();
         var copy = new InventorySlot[SingleSize];
-        Array.Copy(slots, copy, SingleSize);
+        Array.Copy(container.Slots, copy, SingleSize);
         return copy;
     }
-
-    public byte[]? PackBlob(int x, int y, int z)
-    {
-        if (!_chests.TryGetValue((x, y, z), out var slots))
-            return null;
-        return SlotBlob.Pack(slots);
-    }
-
-    public bool TryLoadFromBlob(int x, int y, int z, ReadOnlySpan<byte> data)
-    {
-        Span<InventorySlot> slots = new InventorySlot[SingleSize];
-        if (!SlotBlob.TryUnpack(data, slots))
-            return false;
-        var key = (x, y, z);
-        var cell = _chests.TryGetValue(key, out var existing) ? existing : CreateCell(key);
-        slots.CopyTo(cell);
-        return true;
-    }
-
-    /// <summary>Owner-only hydration seed; live inventory/openers always win over a stale disk read.</summary>
-    public bool TrySeedFromBlob(int x, int y, int z, ReadOnlySpan<byte> data) =>
-        !_chests.ContainsKey((x, y, z)) && TryLoadFromBlob(x, y, z, data);
 }

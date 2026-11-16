@@ -96,15 +96,14 @@ public sealed class WorldGenerationDiagnosticsTests
     }
 
     [Fact]
-    public async Task World_reuses_bounded_base_column_cache_after_generation_completes()
+    public async Task World_serves_a_resident_column_without_generating_it_again()
     {
         var (diagnostics, runtime) = CreateDiagnostics();
         var terrain = new CountingTerrainProvider();
         var world = new World.World(
             new InMemoryChunkStorage(),
             terrain: terrain,
-            generationDiagnostics: diagnostics,
-            generationCacheColumns: 1);
+            generationDiagnostics: diagnostics);
 
         await world.GetOrCreateColumnAsync(3, 4);
         await world.GetOrCreateColumnAsync(3, 4);
@@ -168,7 +167,7 @@ public sealed class WorldGenerationDiagnosticsTests
             _ = chunkZ;
             Started.Set();
             Release.Wait();
-            return new TerrainColumn(1, [1]);
+            return new TerrainColumn(new Section?[WorldColumn.SectionCount], 1);
         }
 
         public int SampleBaseBlock(int x, int y, int z) => 0;
@@ -191,7 +190,7 @@ public sealed class WorldGenerationDiagnosticsTests
             _ = chunkX;
             _ = chunkZ;
             Interlocked.Increment(ref Calls);
-            return new TerrainColumn(1, [1]);
+            return new TerrainColumn(new Section?[WorldColumn.SectionCount], 1);
         }
 
         public int SampleBaseBlock(int x, int y, int z) => 0;

@@ -29,14 +29,14 @@ public class ChunkStreamIntentTests
 {
 
     [Fact]
-    public void ChunkStreamSystem_overlay_resync_on_NeedsOverlayResync()
+    public void ChunkStreamSystem_overlay_resync_on_NeedsColumnResync()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("resync");
         player.Chunks.Radius = 1;
         player.Chunks.RememberMany([(0, 0)]);
         fx.World.SetBlock(3, 64, 3, Blocks.OakPlanks);
-        player.Chunks.NeedsOverlayResync = true;
+        player.Chunks.NeedsColumnResync = true;
 
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
@@ -44,14 +44,14 @@ public class ChunkStreamIntentTests
         new ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        Assert.False(player.Chunks.NeedsOverlayResync);
+        Assert.False(player.Chunks.NeedsColumnResync);
         Assert.True(fx.Transport.Captured.Count >= 1,
-            "NeedsOverlayResync must emit UpdateBlock for known-column overlays");
+            "NeedsColumnResync must emit UpdateBlock for known-column overlays");
     }
 
 
     [Fact]
-    public void ChunkStreamSystem_floor_drop_catchup_on_NeedsOverlayResync()
+    public void ChunkStreamSystem_floor_drop_catchup_on_NeedsColumnResync()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("dropresync");
@@ -59,7 +59,7 @@ public class ChunkStreamIntentTests
         player.Chunks.RememberMany([(0, 0)]);
         Assert.True(fx.World.FloorDrops.TryAddOrMerge(
             3, 64, 3, StackId.FromBlock(Blocks.Dirt), 2, entityRuntimeIdIfNew: 77, out _));
-        player.Chunks.NeedsOverlayResync = true;
+        player.Chunks.NeedsColumnResync = true;
 
         FlushRaknet(fx.Players);
         while (fx.Transport.Captured.TryDequeue(out _)) { }
@@ -67,10 +67,10 @@ public class ChunkStreamIntentTests
         new ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
-        Assert.False(player.Chunks.NeedsOverlayResync);
+        Assert.False(player.Chunks.NeedsColumnResync);
         Assert.Equal(1, fx.World.FloorDrops.Count);
         Assert.True(fx.Transport.Captured.Count >= 1,
-            "NeedsOverlayResync must emit AddItemActor for floor drops in known columns");
+            "NeedsColumnResync must emit AddItemActor for floor drops in known columns");
     }
 
 

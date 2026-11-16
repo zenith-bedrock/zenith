@@ -17,17 +17,17 @@ public class LevelChunkEncodeBenchmarks
     public void Setup()
     {
         Blocks.EnsureLoaded();
-        var (flatCount, flatPayload) = ChunkPayloads.BuildFlatOverworld();
+        var flat = ChunkPayloads.BuildFlatOverworld().Wire();
         _flat = new LevelChunkPacket
         {
             ChunkX = 0,
             ChunkZ = 0,
             DimensionId = DimensionId.Overworld,
-            SubChunkCount = flatCount,
-            ExtraPayload = flatPayload
+            SubChunkCount = flat.SubChunkCount,
+            ExtraPayload = flat.Payload
         };
 
-        var noise = new NoiseTerrainProvider(seed: 42).GetBaseColumn(0, 0);
+        var noise = new NoiseTerrainProvider(seed: 42).GetBaseColumn(0, 0).Wire();
         _noise = new LevelChunkPacket
         {
             ChunkX = 0,

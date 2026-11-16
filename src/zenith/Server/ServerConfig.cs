@@ -62,11 +62,6 @@ sealed class ServerConfig
         /// </summary>
         public int ChunkGenerationWorkers { get; set; } = 4;
 
-        /// <summary>
-        /// Maximum number of immutable base columns retained in memory for shared warm reads.
-        /// Zero disables the cache; the default is bounded and does not persist terrain.
-        /// </summary>
-        public int ChunkGenerationCacheColumns { get; set; } = 1024;
 
         /// <summary>
         /// Maximum LevelChunk columns queued for a player before PLAYER_SPAWN in one gameplay tick.
@@ -378,9 +373,6 @@ sealed class ServerConfig
         if (World.ChunkGenerationWorkers is < 1 or > 64)
             throw new InvalidOperationException(
                 $"world.chunk-generation-workers must be 1..64 (got {World.ChunkGenerationWorkers}).");
-        if (World.ChunkGenerationCacheColumns is < 0 or > 65_536)
-            throw new InvalidOperationException(
-                $"world.chunk-generation-cache-columns must be 0..65536 (got {World.ChunkGenerationCacheColumns}).");
         if (World.PreSpawnColumnsPerTick is < 1 or > 64)
             throw new InvalidOperationException(
                 $"world.pre-spawn-columns-per-tick must be 1..64 (got {World.PreSpawnColumnsPerTick}).");

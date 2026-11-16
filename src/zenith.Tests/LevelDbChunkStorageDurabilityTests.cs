@@ -39,13 +39,13 @@ public sealed class LevelDbChunkStorageDurabilityTests
     }
 
     [Fact]
-    public async Task Chest_put_lands_via_the_background_worker_alone_without_FlushAsync()
+    public async Task Column_put_lands_via_the_background_worker_alone_without_FlushAsync()
     {
         var dir = NewTempDir();
         try
         {
             using var storage = new LevelDbChunkStorage(dir);
-            await storage.PutChestAsync(1, 2, 3, [9, 9, 9]);
+            await storage.PutColumnAsync(new ChunkCoord(1, 2), [9, 9, 9]);
 
             // No FlushAsync, no Get* call (which would force-drain itself) — only the periodic
             // worker can be responsible for this landing. Bound is generous vs. the 50ms poll to
@@ -94,15 +94,14 @@ public sealed class LevelDbChunkStorageDurabilityTests
             {
                 using var storage = new LevelDbChunkStorage(dir);
                 for (var i = 0; i < 50; i++)
-                    await storage.PutChestAsync(i, 0, 0, [(byte)i]);
+                    await storage.PutColumnAsync(new ChunkCoord(i, 0), [(byte)i]);
                 await storage.PutInventoryAsync(uuid, [42]);
                 // No FlushAsync — Dispose (below, via `using`) must still drain everything.
             }
 
             using var reopened = new LevelDbChunkStorage(dir);
-            var seen = 0;
-            await reopened.ForEachChestAsync((_, _, _, _) => seen++);
-            Assert.Equal(50, seen);
+            for (var i = 0; i < 50; i++)
+                Assert.Equal(new[] { (byte)i }, await reopened.GetColumnAsync(new ChunkCoord(i, 0)));
 
             var inv = await reopened.GetInventoryAsync(uuid);
             Assert.NotNull(inv);

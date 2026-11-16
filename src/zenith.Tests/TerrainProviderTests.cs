@@ -7,15 +7,24 @@ public class TerrainProviderTests
 {
     public TerrainProviderTests() => Blocks.EnsureLoaded();
 
+    /// <summary>A terrain with one recognisable layer: dirt at Y=0, air everywhere else.</summary>
     private sealed class MarkerTerrain : ITerrainProvider
     {
-        public byte[] Payload { get; } = [8, 1, 2, 3, 4, 5];
+        public const int DirtLayerSection = (0 - WorldColumn.MinY) >> 4;
 
         public TerrainColumn GetBaseColumn(int chunkX, int chunkZ)
         {
             _ = chunkX;
             _ = chunkZ;
-            return new TerrainColumn(SubChunkCount: 1, Payload);
+            var ids = new int[Section.Volume];
+            Array.Fill(ids, Blocks.Air);
+            for (var x = 0; x < 16; x++)
+                for (var z = 0; z < 16; z++)
+                    ids[Section.IndexOf(x, 0, z)] = Blocks.Dirt;
+
+            var sections = new Section?[WorldColumn.SectionCount];
+            sections[DirtLayerSection] = Section.FromIds(ids);
+            return new TerrainColumn(sections, BiomeNetworkId: 1);
         }
 
         public int SampleBaseBlock(int x, int y, int z)
@@ -41,10 +50,10 @@ public class TerrainProviderTests
 
         var column = await world.GetOrCreateColumnAsync(12, -3);
 
-        Assert.Equal(1, column.Base.SubChunkCount);
-        Assert.Equal(marker.Payload, column.Base.ExtraPayload);
-        Assert.Equal(12, column.Base.Coord.X);
-        Assert.Equal(-3, column.Base.Coord.Z);
+        Assert.Equal(MarkerTerrain.DirtLayerSection + 1, column.GetWire().SubChunkCount);
+        Assert.Equal(marker.GetBaseColumn(12, -3).Wire().Payload, column.GetWire().Payload);
+        Assert.Equal(12, column.Coord.X);
+        Assert.Equal(-3, column.Coord.Z);
     }
 
     [Fact]
@@ -56,57 +65,6 @@ public class TerrainProviderTests
     }
 
     [Fact]
-    public void WorldStorageKeys_round_trip_overlay_and_chest()
-    {
-        var ov = WorldStorageKeys.Overlay(1, -60, 2);
-        Assert.True(WorldStorageKeys.TryParseOverlay(ov, out var x, out var y, out var z));
-        Assert.Equal((1, -60, 2), (x, y, z));
-
-        var ct = WorldStorageKeys.Chest(-3, 10, 4);
-        Assert.True(WorldStorageKeys.TryParseChest(ct, out x, out y, out z));
-        Assert.Equal((-3, 10, 4), (x, y, z));
-    }
-
-    [Fact]
-    public void WorldStorageKeys_round_trip_negative_coordinates_across_chunk_boundaries()
-    {
-        foreach (var (x, y, z) in new[] { (-1, -64, -1), (-16, 0, -16), (-17, 320, -17), (0, -63, 0), (15, 100, -15) })
-        {
-            var ov = WorldStorageKeys.Overlay(x, y, z);
-            Assert.True(WorldStorageKeys.TryParseOverlay(ov, out var px, out var py, out var pz));
-            Assert.Equal((x, y, z), (px, py, pz));
-
-            var ct = WorldStorageKeys.Chest(x, y, z);
-            Assert.True(WorldStorageKeys.TryParseChest(ct, out px, out py, out pz));
-            Assert.Equal((x, y, z), (px, py, pz));
-        }
-    }
-
-    [Fact]
-    public void WorldStorageKeys_overlay_and_chest_share_the_same_chunk_prefix()
-    {
-        var ov = WorldStorageKeys.Overlay(20, 5, -20);
-        var ct = WorldStorageKeys.Chest(21, 5, -19);
-        var prefix = WorldStorageKeys.ChunkPrefix(1, -2);
-
-        Assert.True(ov.AsSpan().StartsWith(prefix));
-        Assert.True(ct.AsSpan().StartsWith(prefix));
-
-        var otherChunkPrefix = WorldStorageKeys.ChunkPrefix(2, -2);
-        Assert.False(ov.AsSpan().StartsWith(otherChunkPrefix));
-    }
-
-    [Fact]
-    public void WorldStorageKeys_TryParseOverlay_rejects_a_chest_key_and_vice_versa()
-    {
-        var ov = WorldStorageKeys.Overlay(1, 2, 3);
-        var ct = WorldStorageKeys.Chest(1, 2, 3);
-
-        Assert.False(WorldStorageKeys.TryParseChest(ov, out _, out _, out _));
-        Assert.False(WorldStorageKeys.TryParseOverlay(ct, out _, out _, out _));
-    }
-
-    [Fact]
     public void FlatTerrainProvider_matches_legacy_flat_sample()
     {
         var flat = FlatTerrainProvider.Instance;
@@ -114,9 +72,9 @@ public class TerrainProviderTests
         Assert.Equal(Blocks.GrassBlock, flat.SampleBaseBlock(0, Blocks.FlatGrassY, 0));
         Assert.Equal(Blocks.Air, flat.SampleBaseBlock(0, Blocks.FlatSpawnY, 0));
         var col = flat.GetBaseColumn(0, 0);
-        Assert.True(col.SubChunkCount > 0);
-        Assert.True(col.Payload.Length >= 3);
-        Assert.Equal(ChunkPayloads.SubChunkVersion, col.Payload[0]);
+        Assert.True(col.Wire().SubChunkCount > 0);
+        Assert.True(col.Wire().Payload.Length >= 3);
+        Assert.Equal(SubChunkWire.Version, col.Wire().Payload[0]);
     }
 
     [Fact]
@@ -214,10 +172,10 @@ public class TerrainProviderTests
         var noise = new NoiseTerrainProvider(12);
         var col = noise.GetBaseColumn(0, 0);
         // Surface ~64 ⇒ several sections above Y -64.
-        Assert.True(col.SubChunkCount >= 6);
-        Assert.Equal(ChunkPayloads.SubChunkVersion, col.Payload[0]);
+        Assert.True(col.Wire().SubChunkCount >= 6);
+        Assert.Equal(SubChunkWire.Version, col.Wire().Payload[0]);
         var other = noise.GetBaseColumn(3, -2);
-        Assert.NotEqual(col.Payload, other.Payload);
+        Assert.NotEqual(col.Wire().Payload, other.Wire().Payload);
     }
 
     [Fact]
@@ -235,16 +193,16 @@ public class TerrainProviderTests
     public async Task StreamRadiusAsync_preserves_radius_order_without_changing_column_results()
     {
         var world = new World.World(new InMemoryChunkStorage(), terrain: new MarkerTerrain());
-        var streamed = new List<ColumnReadResult>();
+        var streamed = new List<WorldColumn>();
         await foreach (var column in world.StreamRadiusAsync(10, -4, radius: 2))
             streamed.Add(column);
 
         var materialized = await world.GetRadiusAsync(10, -4, radius: 2);
         Assert.Equal(materialized.Count, streamed.Count);
-        Assert.Equal(materialized.Select(column => column.Base.Coord), streamed.Select(column => column.Base.Coord));
+        Assert.Equal(materialized.Select(column => column.Coord), streamed.Select(column => column.Coord));
         Assert.Equal(
-            materialized.Select(column => column.Base.ExtraPayload),
-            streamed.Select(column => column.Base.ExtraPayload));
+            materialized.Select(column => column.GetWire().Payload),
+            streamed.Select(column => column.GetWire().Payload));
     }
 
     [Fact]
@@ -261,11 +219,11 @@ public class TerrainProviderTests
         Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
         var n = new NoiseTerrainProvider(1);
         var t = n.GetBaseColumn(0, 0);
-        Assert.True(t.Payload.Length > 0);
+        Assert.True(t.Wire().Payload.Length > 0);
         Assert.NotEqual(Blocks.Air, n.SampleBaseBlock(0, Blocks.FlatSpawnY, 0));
         var spawnY = n.SampleSpawnFeetY(0, 0);
         Assert.True(spawnY >= OverworldTerrainSampler.SeaLevel,
-            $"noise spawn Y={spawnY} payloadBytes={t.Payload.Length} sub={t.SubChunkCount}");
+            $"noise spawn Y={spawnY} payloadBytes={t.Wire().Payload.Length} sub={t.Wire().SubChunkCount}");
         Assert.Equal(Blocks.Air, n.SampleBaseBlock(0, spawnY, 0));
         Assert.Equal(Blocks.Air, n.SampleBaseBlock(0, spawnY + 1, 0));
     }
@@ -359,8 +317,8 @@ public class TerrainProviderTests
                 // Section index must reach canopyTop (OverworldMinSubChunkIndex = -4).
                 var sectionForCanopy = (canopyTop >> 4) - (-4);
                 Assert.True(
-                    col.SubChunkCount > sectionForCanopy,
-                    $"neighbor SubChunkCount {col.SubChunkCount} must cover canopy section {sectionForCanopy}");
+                    col.Wire().SubChunkCount > sectionForCanopy,
+                    $"neighbor SubChunkCount {col.Wire().SubChunkCount} must cover canopy section {sectionForCanopy}");
                 return;
             }
         }

@@ -127,8 +127,7 @@ class ZenithServer
                 serverLogger,
                 terrain,
                 diagnostics.Worldgen,
-                config.World.ChunkGenerationWorkers,
-                config.World.ChunkGenerationCacheColumns);
+                config.World.ChunkGenerationWorkers);
             startupCleanup.Push(() => world.StopGenerationAsync().AsTask().GetAwaiter().GetResult());
             world.LoadGameRules();
             var spawner = new MobSpawner();
@@ -178,7 +177,7 @@ class ZenithServer
             {
                 var actors = entities.Entities.AliveCount +
                              world.FallingBlocks.Active.Count + world.FloorDrops.Count;
-                diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.OverrideCount,
+                diagnostics.RecordRuntimeHealth(elapsed, clock.MeasuredTps, players.Count, actors, world.LoadedColumnCount,
                     diagnostics.Systems.Count, TransportStatistics());
                 _telemetry.RecordTick(elapsed, players.Count, actors, TransportStatistics());
 

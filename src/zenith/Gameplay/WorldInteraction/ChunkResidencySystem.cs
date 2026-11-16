@@ -3,14 +3,16 @@ using Zenith.Gameplay.Runtime;
 namespace Zenith.Gameplay.WorldInteraction;
 
 /// <summary>
-/// ADR §114 — periodic eviction sweep. Every <see cref="Server.ServerConfig.WorldConfig.ChunkResidencySweepIntervalTicks"/>
-/// ticks, drops overlays/chests for chunks nobody currently has in view from <see cref="World.World"/>'s
-/// RAM side-tables (<see cref="World.World.TryEvictChunk"/>). This does not shrink ZLDB's own
-/// always-resident dataset (ADR §11/§61 — non-goal to change); it removes the duplicate copy
-/// <see cref="World.World"/>/<see cref="World.ChestStore"/> keep on top of it.
+/// ADR §114/§167 — periodic residency sweep. Every <see cref="Server.ServerConfig.WorldConfig.ChunkResidencySweepIntervalTicks"/>
+/// ticks it first queues the edited columns for the disk (a bounded number, so a busy world never stalls one tick), then drops
+/// the columns nobody has in view from <see cref="World.World"/> (<see cref="World.World.TryEvictChunk"/>), which also saves
+/// whatever was edited since.
 /// </summary>
 sealed class ChunkResidencySystem : IGameSystem
 {
+    /// <summary>Edited columns encoded per sweep; the rest wait for the next one (eviction and shutdown save any that are left).</summary>
+    public const int MaxColumnsSavedPerSweep = 64;
+
     private readonly World.World _world;
     private readonly int _sweepIntervalTicks;
     private readonly List<(int X, int Z)> _candidatesScratch = new();
@@ -26,8 +28,10 @@ sealed class ChunkResidencySystem : IGameSystem
         if (clock.CurrentTick % (ulong)_sweepIntervalTicks != 0)
             return;
 
+        _ = _world.PersistDirtyColumns(MaxColumnsSavedPerSweep);
+
         _candidatesScratch.Clear();
-        _candidatesScratch.AddRange(_world.CopyHydratedChunks());
+        _candidatesScratch.AddRange(_world.CopyLoadedColumns());
         foreach (var (x, z) in _candidatesScratch)
             _world.TryEvictChunk(x, z);
 

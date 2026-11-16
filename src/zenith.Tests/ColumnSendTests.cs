@@ -43,64 +43,53 @@ public class ColumnSendTests
     }
 
     [Fact]
-    public void EmitOverlaysToSession_with_no_columns_sends_nothing()
+    public void ResyncColumns_with_no_columns_sends_nothing()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("no-columns");
 
-        ColumnSend.EmitOverlaysToSession(player.Session, fx.World, []);
+        ColumnSend.ResyncColumns(player.Session, fx.World, []);
         player.Session.Transport.FlushOutgoing();
 
         Assert.Empty(fx.Transport.Captured);
     }
 
     [Fact]
-    public void EmitOverlaysToSession_sends_overlays_present_in_the_requested_columns()
+    public async Task ResyncColumns_resends_a_column_edited_after_it_was_sent_and_only_that_one()
     {
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("overlay-catchup");
-        fx.World.SetBlock(5, 64, 5, Blocks.Stone);
-
-        ColumnSend.EmitOverlaysToSession(player.Session, fx.World, [(0, 0)]);
+        var player = fx.AddInGamePlayer("resync");
+        var column = await fx.World.GetOrCreateColumnAsync(0, 0);
+        ColumnSend.EmitToSession(player.Session, column, orderChannel: 0);
         player.Session.Transport.FlushOutgoing();
+        var afterFirstSend = BytesSentTo(fx, player);
 
-        Assert.NotEmpty(fx.Transport.Captured);
+        ColumnSend.ResyncColumns(player.Session, fx.World, [(0, 0)]);
+        player.Session.Transport.FlushOutgoing();
+        Assert.Equal(afterFirstSend, BytesSentTo(fx, player)); // unchanged since it was sent: nothing to repeat
+
+        fx.World.SetBlock(5, 64, 5, Blocks.Stone);
+        ColumnSend.ResyncColumns(player.Session, fx.World, [(0, 0)]);
+        player.Session.Transport.FlushOutgoing();
+        Assert.True(BytesSentTo(fx, player) > afterFirstSend);
     }
 
     /// <summary>
-    /// Regression for a real desync found via a reference-parity audit: a background-streamed
-    /// column's overlay list used to be captured once, at read time, and could sit in a bounded
-    /// channel/worker queue for a while before actually being sent — a block edited by another
-    /// player in that window would never reach this joining client for that cell. EmitToSession
-    /// must re-read overlays live at send time, not trust whatever ColumnReadResult.Overlays held
-    /// when the column was originally read.
+    /// A client must never receive a column older than the world: the LevelChunk is serialised from the live sections
+    /// at send time, so an edit made after the column was read is already in it (and in its edit version).
     /// </summary>
     [Fact]
-    public async Task EmitToSession_reflects_a_live_edit_that_landed_after_the_column_was_read()
+    public async Task A_column_sent_after_an_edit_carries_the_edit()
     {
         var fx = new IntentTestFixture();
-        var baselinePlayer = fx.AddInGamePlayer("baseline");
-        var lateEditPlayer = fx.AddInGamePlayer("late-edit");
-
-        // Baseline: no live edit between read and send — establishes what "just LevelChunk" looks
-        // like. Compares total bytes sent, not datagram count: RakNet can batch multiple queued
-        // frames into one UDP datagram under the MTU, so an extra UpdateBlock might not add a whole
-        // extra datagram, but it always adds bytes.
-        var baselineColumn = await fx.World.GetOrCreateColumnAsync(0, 0);
-        ColumnSend.EmitToSession(baselinePlayer.Session, baselineColumn, orderChannel: 0);
-        baselinePlayer.Session.Transport.FlushOutgoing();
-        var baselineBytes = BytesSentTo(fx, baselinePlayer);
-
-        // Same read, but this time a live edit lands in the window between the read and the send —
-        // exactly the race window a background-streamed join sits in for its outer view radius.
         var column = await fx.World.GetOrCreateColumnAsync(0, 0);
+        var before = column.GetWire();
+
         fx.World.SetBlock(5, 64, 5, Blocks.Stone);
+        var after = column.GetWire();
 
-        ColumnSend.EmitToSession(lateEditPlayer.Session, column, orderChannel: 0);
-        lateEditPlayer.Session.Transport.FlushOutgoing();
-        var lateEditBytes = BytesSentTo(fx, lateEditPlayer);
-
-        Assert.True(lateEditBytes > baselineBytes);
+        Assert.NotEqual(before.Payload, after.Payload);
+        Assert.True(after.Version > before.Version);
     }
 
     private static int BytesSentTo(IntentTestFixture fx, Zenith.Player.Player player)

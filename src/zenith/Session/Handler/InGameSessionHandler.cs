@@ -51,7 +51,7 @@ partial class InGameSessionHandler : ISessionHandler
             session.Player.IsSpawning = false;
             session.Player.IsInGame = true;
             // Catch-up overlays placed while we were PreSpawn/SpawnResponse (§14).
-            session.Player.Chunks.NeedsOverlayResync = true;
+            session.Player.Chunks.NeedsColumnResync = true;
         }
         session.Context.Logger.Info($"{session.Player?.Username} is now in-game.");
     }

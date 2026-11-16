@@ -57,176 +57,108 @@ public class BlockEditQueueTests
 public class InMemoryChunkStorageTests
 {
     [Fact]
-    public async Task Put_then_Get_returns_same_column()
+    public async Task Put_then_Get_returns_same_column_bytes()
     {
         var storage = new InMemoryChunkStorage();
-        var column = new ChunkColumnData(new ChunkCoord(1, 2), 0, 0, [1, 2, 3]);
-        await storage.PutAsync(column);
-        var got = await storage.GetAsync(new ChunkCoord(1, 2));
-        Assert.NotNull(got);
-        Assert.Equal(column.Coord, got!.Coord);
-        Assert.Equal(column.ExtraPayload, got.ExtraPayload);
+        await storage.PutColumnAsync(new ChunkCoord(1, 2), [1, 2, 3]);
+        var got = await storage.GetColumnAsync(new ChunkCoord(1, 2));
+        Assert.Equal(new byte[] { 1, 2, 3 }, got);
+        Assert.Null(await storage.GetColumnAsync(new ChunkCoord(9, 9)));
     }
 }
 
-public class WorldOverlayTests
+public class WorldColumnModelTests
 {
+    public WorldColumnModelTests() => Blocks.EnsureLoaded();
+
     [Fact]
-    public async Task GetOrCreateColumn_returns_flat_base_then_overlays_on_read()
+    public async Task GetOrCreateColumn_returns_flat_terrain_with_edits_applied()
     {
         var world = new World.World(new InMemoryChunkStorage());
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
 
         var column = await world.GetOrCreateColumnAsync(0, 0);
-        Assert.True(column.Base.SubChunkCount > 0);
-        Assert.Single(column.Overlays);
-        Assert.Equal(3, column.Overlays[0].X);
-        Assert.Equal(Blocks.Stone, column.Overlays[0].BlockRuntimeId);
+        Assert.True(column.GetWire().SubChunkCount > 0);
         Assert.Equal(Blocks.Stone, world.GetBlock(3, Blocks.FlatSpawnY, 5));
         Assert.Equal(Blocks.GrassBlock, world.GetBlock(0, Blocks.FlatGrassY, 0));
     }
 
     [Fact]
-    public void GetOverlaysInColumn_isolates_distinct_chunks()
+    public void Edits_in_distinct_chunks_stay_isolated()
     {
         var world = new World.World(new InMemoryChunkStorage());
-        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);   // chunk (0,0)
-        world.SetBlock(20, Blocks.FlatSpawnY, 5, Blocks.Dirt);   // chunk (1,0)
+        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
+        world.SetBlock(20, Blocks.FlatSpawnY, 5, Blocks.Dirt);
 
-        var c00 = world.GetOverlaysInColumn(0, 0);
-        var c10 = world.GetOverlaysInColumn(1, 0);
-        var empty = world.GetOverlaysInColumn(2, 2);
-
-        Assert.Single(c00);
-        Assert.Equal(3, c00[0].X);
-        Assert.Equal(Blocks.Stone, c00[0].BlockRuntimeId);
-
-        Assert.Single(c10);
-        Assert.Equal(20, c10[0].X);
-        Assert.Equal(Blocks.Dirt, c10[0].BlockRuntimeId);
-
-        Assert.Empty(empty);
-        Assert.Equal(2, world.OverrideCount);
+        Assert.Equal(Blocks.Stone, world.GetBlock(3, Blocks.FlatSpawnY, 5));
+        Assert.Equal(Blocks.Dirt, world.GetBlock(20, Blocks.FlatSpawnY, 5));
+        Assert.Equal(Blocks.Air, world.GetBlock(3 + 16, Blocks.FlatSpawnY, 5));
+        Assert.Equal(2, world.LoadedColumnCount);
     }
 
     [Fact]
-    public void SetBlock_overwrite_keeps_single_index_entry()
+    public void Overwrite_and_restore_round_trip()
     {
         var world = new World.World(new InMemoryChunkStorage());
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Dirt);
-
-        var column = world.GetOverlaysInColumn(0, 0);
-        Assert.Single(column);
-        Assert.Equal(Blocks.Dirt, column[0].BlockRuntimeId);
         Assert.Equal(Blocks.Dirt, world.GetBlock(3, Blocks.FlatSpawnY, 5));
-        Assert.Equal(1, world.OverrideCount);
-    }
-
-    [Fact]
-    public void SetBlock_restore_base_compacts_overlay()
-    {
-        // FlatSpawnY base is air — stone→air matches base → remove key (§36 SoftCap).
-        var world = new World.World(new InMemoryChunkStorage());
-        world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Stone);
-        Assert.Equal(1, world.OverrideCount);
         world.SetBlock(3, Blocks.FlatSpawnY, 5, Blocks.Air);
-
-        Assert.Empty(world.GetOverlaysInColumn(0, 0));
-        Assert.Equal(0, world.OverrideCount);
         Assert.Equal(Blocks.Air, world.GetBlock(3, Blocks.FlatSpawnY, 5));
     }
 
     [Fact]
-    public void SetBlock_break_base_terrain_keeps_air_overlay()
+    public void Breaking_base_terrain_sticks()
     {
         var world = new World.World(new InMemoryChunkStorage());
         world.SetBlock(0, Blocks.FlatGrassY, 0, Blocks.Air);
-
-        var column = world.GetOverlaysInColumn(0, 0);
-        Assert.Single(column);
-        Assert.Equal(Blocks.Air, column[0].BlockRuntimeId);
         Assert.Equal(Blocks.Air, world.GetBlock(0, Blocks.FlatGrassY, 0));
     }
 
     [Fact]
-    public void TrySetBlock_softcap_refuses_new_key_allows_overwrite()
+    public void There_is_no_cap_on_edited_cells()
     {
         var world = new World.World(new InMemoryChunkStorage());
-        for (var i = 0; i < World.World.OverrideSoftCap; i++)
-            Assert.True(world.TrySetBlock(i, Blocks.FlatSpawnY, 0, Blocks.Stone));
-
-        Assert.Equal(World.World.OverrideSoftCap, world.OverrideCount);
-        Assert.False(world.TrySetBlock(World.World.OverrideSoftCap, Blocks.FlatSpawnY, 0, Blocks.Dirt));
-        Assert.Equal(World.World.OverrideSoftCap, world.OverrideCount);
-        Assert.True(world.TrySetBlock(0, Blocks.FlatSpawnY, 0, Blocks.Dirt)); // overwrite
-        Assert.True(world.TrySetBlock(0, Blocks.FlatSpawnY, 0, Blocks.Air)); // compact frees a slot
-        Assert.Equal(World.World.OverrideSoftCap - 1, world.OverrideCount);
-        Assert.True(world.TrySetBlock(World.World.OverrideSoftCap, Blocks.FlatSpawnY, 0, Blocks.Sand));
+        for (var i = 0; i < 12_000; i++)
+            Assert.True(world.TrySetBlock(i % 16, -60 + (i / 256) % 16, (i / 16) % 16, i % 2 == 0 ? Blocks.Stone : Blocks.Dirt));
     }
 
     [Fact]
-    public async Task LevelDb_persists_overlays_across_World_instances()
+    public void Writes_outside_the_height_range_are_refused()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "zenith-ov-" + Guid.NewGuid().ToString("N"));
+        var world = new World.World(new InMemoryChunkStorage());
+        Assert.False(world.TrySetBlock(0, 400, 0, Blocks.Stone));
+        Assert.False(world.TrySetBlock(0, -100, 0, Blocks.Stone));
+    }
+
+    [Fact]
+    public async Task LevelDb_persists_edits_across_World_instances()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "zenith-col-" + Guid.NewGuid().ToString("N"));
         try
         {
             {
                 var storage = new LevelDbChunkStorage(dir);
                 var world = new World.World(storage);
                 world.SetBlock(1, -60, 2, Blocks.Stone);
-                world.SetBlock(20, -60, 2, Blocks.Dirt); // chunk (1,0) — hydrate must rebuild index
-                await world.GetOrCreateColumnAsync(0, 0);
+                world.SetBlock(20, -60, 2, Blocks.Dirt);
+                await world.FlushPersistenceAsync();
                 storage.Dispose();
             }
 
             {
                 using var storage = new LevelDbChunkStorage(dir);
                 var world = new World.World(storage);
-                var column = await world.GetOrCreateColumnAsync(0, 0); // ADR §114 — hydrate on first touch
+                await world.GetOrCreateColumnAsync(0, 0);
                 await world.GetOrCreateColumnAsync(1, 0);
                 Assert.Equal(Blocks.Stone, world.GetBlock(1, -60, 2));
                 Assert.Equal(Blocks.Dirt, world.GetBlock(20, -60, 2));
-                Assert.Contains(column.Overlays, o => o.X == 1 && o.Z == 2 && o.BlockRuntimeId == Blocks.Stone);
-                Assert.DoesNotContain(column.Overlays, o => o.X == 20);
-                Assert.Single(world.GetOverlaysInColumn(1, 0));
             }
         }
         finally
         {
             try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
         }
-    }
-}
-
-public class ColumnTerrainEmitterTests
-{
-    [Fact]
-    public void Emit_sends_LevelChunk_before_UpdateBlocks_for_that_column()
-    {
-        var bas = new ChunkColumnData(new ChunkCoord(2, 3), 0, 1, [9]);
-        var overlays = new[]
-        {
-            new BlockOverride(32, 64, 48, Blocks.Stone),
-            new BlockOverride(33, 64, 48, Blocks.GrassBlock)
-        };
-
-        var sequence = new List<string>();
-        ColumnTerrainEmitter.Emit(
-            bas,
-            overlays,
-            sendLevelChunk: c =>
-            {
-                sequence.Add($"chunk:{c.Coord.X},{c.Coord.Z}");
-            },
-            sendUpdateBlock: (x, y, z, id) =>
-            {
-                sequence.Add($"block:{x},{y},{z}");
-            });
-
-        Assert.Equal(
-            new[] { "chunk:2,3", "block:32,64,48", "block:33,64,48" },
-            sequence);
     }
 }
 
@@ -445,14 +377,17 @@ public class PlayerInventoryTests
 public class ChunkPayloadsTests
 {
     [Fact]
-    public void Flat_payload_starts_with_subchunk_header()
+    public void Flat_wire_starts_with_subchunk_header()
     {
-        var (count, payload) = ChunkPayloads.BuildFlatOverworld();
-        Assert.Equal(1, count);
-        Assert.True(payload.Length > 2);
-        Assert.Equal(ChunkPayloads.SubChunkVersion, payload[0]);
-        Assert.Equal(1, payload[1]);
-        Assert.Equal(unchecked((byte)-4), payload[2]); // v9 absolute subchunk Y
-        Assert.Equal(0, payload[^1]); // border
+        Blocks.EnsureLoaded();
+        var terrain = ChunkPayloads.BuildFlatOverworld();
+        var terrainBiome = terrain.BiomeNetworkId;
+        var column = new WorldColumn(new ChunkCoord(0, 0), 0, terrainBiome);
+        for (var i = 0; i < terrain.Sections.Length; i++)
+            if (terrain.Sections[i] is { } s) column.SetSection(i, s);
+        var wire = column.GetWire();
+        Assert.True(wire.SubChunkCount >= 1);
+        Assert.Equal(SubChunkWire.Version, wire.Payload[0]);
+        Assert.Equal(0, wire.Payload[^1]); // border
     }
 }

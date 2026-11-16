@@ -96,7 +96,7 @@ public class BiomeSamplerTests
         Assert.NotEqual(
             OverworldBiomeSampler.NetworkIdAt((desert.X >> 4) * 16 + 8, (desert.Z >> 4) * 16 + 8, seed),
             OverworldBiomeSampler.NetworkIdAt((forest.X >> 4) * 16 + 8, (forest.Z >> 4) * 16 + 8, seed));
-        Assert.NotEqual(desertCol.Payload[^32..], forestCol.Payload[^32..]);
+        Assert.NotEqual(desertCol.Wire().Payload[^32..], forestCol.Wire().Payload[^32..]);
     }
 
     [Fact]

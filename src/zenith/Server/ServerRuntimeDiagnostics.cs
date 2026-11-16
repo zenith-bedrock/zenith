@@ -212,13 +212,13 @@ sealed class ServerRuntimeDiagnostics : IDisposable
     }
 
     public void RecordRuntimeHealth(
-        TimeSpan elapsed, double tps, int players, int actors, int chunkOverlays, int systems, TransportStatistics transport)
+        TimeSpan elapsed, double tps, int players, int actors, int loadedColumns, int systems, TransportStatistics transport)
     {
         if (elapsed.TotalMilliseconds > 50d) Runtime.Increment(_overBudgetTicks);
         Runtime.Set(_tps, (long)Math.Round(tps * 1_000d));
         Runtime.Set(_players, players);
         Runtime.Set(_actors, actors);
-        Runtime.Set(_chunks, chunkOverlays);
+        Runtime.Set(_chunks, loadedColumns);
         Runtime.Set(_systems, systems);
         Runtime.Set(_allocations, GC.GetAllocatedBytesForCurrentThread());
         Runtime.Set(_managedBytes, GC.GetTotalMemory(forceFullCollection: false));

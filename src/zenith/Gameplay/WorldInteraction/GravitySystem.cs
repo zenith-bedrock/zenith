@@ -108,8 +108,6 @@ sealed class GravitySystem : IGameSystem
             return;
         if (!IsUnsupported(x, y, z))
             return;
-        if (!_world.CanAcceptBlockWrite(x, y, z, World.World.AirRuntimeId))
-            return;
         if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
             return;
 
@@ -242,8 +240,7 @@ sealed class GravitySystem : IGameSystem
             }
         }
 
-        if (!_world.CanAcceptBlockWrite(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId) ||
-            !_world.TrySetBlock(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId))
+        if (!_world.TrySetBlock(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId))
             return; // Best-effort: something else claimed the cell mid-fall — block is lost (rare, §95 non-goal).
 
         updates.Add((entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId));

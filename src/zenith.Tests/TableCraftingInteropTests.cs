@@ -44,38 +44,6 @@ public class TableCraftingInteropTests
         Assert.Equal(actual, after);
     }
 
-    [Fact]
-    public void Refused_new_chest_open_cannot_redirect_transfer_to_previous_chest()
-    {
-        var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("refused-open");
-        player.Inventory.Clear(); player.PositionX = 1; player.PositionY = 64; player.PositionZ = 1;
-        fx.World.SetBlock(1, 64, 1, Blocks.Chest); fx.World.SetBlock(3, 64, 1, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
-        Assert.True(fx.World.Chests.TrySet(1, 64, 1, 0, new InventorySlot(StackId.FromBlock(Blocks.Dirt), 1)));
-        player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
-        for (var i = 0; i < ChestStore.SoftCap - 1; i++)
-            Assert.True(fx.World.Chests.TryEnsure(100 + i, 64, 100));
-        Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 1)));
-        Send(player, Transfer(-1, 7, 0, 28, 0));
-        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.True(player.Inventory.Get(0).IsEmpty);
-        Assert.Equal(1, fx.World.Chests.Get(1, 64, 1, 0).Count);
-
-        // A failed intermediate open must also allow a following open of the still-visible UI
-        // to establish its reserved generation, without sending a duplicate ContainerOpen.
-        Open(fx, player, false);
-        player.Inventory.TrySetBlock(0, Blocks.OakPlanks, 1);
-        Send(player, Transfer(-3, 28, 0, 13, 28));
-        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.True(player.Inventory.Get(0).IsEmpty);
-        Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(3, 64, 1)));
-        Open(fx, player, false);
-        Send(player, Transfer(-5, 13, 28, 28, 0));
-        fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(1, player.Inventory.Get(0).Count);
-        Assert.True(player.Windows.CraftUi.GetGrid(0).IsEmpty);
-    }
-
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

@@ -152,7 +152,9 @@ public class ItemStackCapacityTests
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
         var sword = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:diamond_sword"));
         var slots = new InventorySlot[ChestStore.SingleSize]; slots[0] = new(sword, 4);
-        Assert.True(fx.World.Chests.TryLoadFromBlob(1, 64, 1, SlotBlob.Pack(slots)));
+        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        Assert.True(fx.World.Chests.TryGetSlots(1, 64, 1, out var cell));
+        slots.CopyTo(cell, 0);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         player.Intents.SubmitInventoryStack(InventoryStackIntent.Create(1304, [
             InventoryStackAction.Transfer(InventorySlotReference.OpenContainer(0), InventorySlotReference.Player(0), 1),

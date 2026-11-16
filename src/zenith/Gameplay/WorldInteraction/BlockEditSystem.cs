@@ -136,11 +136,10 @@ sealed class BlockEditSystem : IGameSystem
                 return false;
             }
 
-            if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
-                (Blocks.IsChest(edit.BlockRuntimeId) && !_world.Chests.CanAcceptNew(edit.X, edit.Y, edit.Z)))
+            if (!World.WorldColumn.InRange(edit.Y))
             {
                 player.Level.Logger?.Debug(
-                    $"Place refused (store SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    $"Place refused (outside the world's height) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                 ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
                 return false;
             }
@@ -192,7 +191,7 @@ sealed class BlockEditSystem : IGameSystem
                     return false;
                 }
 
-                _world.PersistChest(edit.X, edit.Y, edit.Z);
+                _world.MarkBlockEntityDirty(edit.X, edit.Z);
             }
 
             inventoryChanged = consumedPlacementStack;
@@ -300,11 +299,10 @@ sealed class BlockEditSystem : IGameSystem
                 }
             }
 
-            if (!_world.CanAcceptBlockWrite(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId) ||
-                !_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
+            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
             {
                 player.Level.Logger?.Debug(
-                    $"Break refused (overlay SoftCap) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                    $"Break refused (outside the world's height) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
                 RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
                 return false;
             }
@@ -350,7 +348,6 @@ sealed class BlockEditSystem : IGameSystem
                     ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
 
                 _ = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
-                _world.DeletePersistedChest(edit.X, edit.Y, edit.Z);
                 // Contents and block loot are already in the prevalidated ground-drop plan.
             }
         }
@@ -383,8 +380,7 @@ sealed class BlockEditSystem : IGameSystem
         for (var i = _extra.Count - 1; i >= 0; i--)
         {
             var write = _extra[i];
-            if (!_world.CanAcceptBlockWrite(write.X, write.Y, write.Z, write.BlockRuntimeId) ||
-                !_world.TrySetBlock(write.X, write.Y, write.Z, write.BlockRuntimeId, flags))
+            if (!_world.TrySetBlock(write.X, write.Y, write.Z, write.BlockRuntimeId, flags))
                 _extra.RemoveAt(i);
         }
     }

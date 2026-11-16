@@ -61,20 +61,13 @@ public class SlotBlobPersistTests
         var got = await storage.GetInventoryAsync(uuid);
         Assert.NotNull(got);
 
-        var chestSlots = new InventorySlot[ChestStore.Size];
+        var chestSlots = new InventorySlot[ChestStore.SingleSize];
         chestSlots[0] = InventorySlot.OfBlock(Blocks.Stone, 1);
         var chestBlob = SlotBlob.Pack(chestSlots);
-        await storage.PutChestAsync(1, 2, 3, chestBlob);
+        await storage.PutColumnAsync(new ChunkCoord(1, 2), chestBlob);
 
-        var seen = false;
-        await storage.ForEachChestAsync((x, y, z, blob) =>
-        {
-            Assert.Equal(1, x);
-            Assert.Equal(2, y);
-            Assert.Equal(3, z);
-            seen = true;
-        });
-        Assert.True(seen);
+        Assert.Equal(chestBlob, await storage.GetColumnAsync(new ChunkCoord(1, 2)));
+        Assert.Null(await storage.GetColumnAsync(new ChunkCoord(3, 4)));
     }
 
     [Fact]

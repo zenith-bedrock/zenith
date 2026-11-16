@@ -72,10 +72,10 @@ public class CreativeCatalogCompletenessTests
         Assert.Equal(player.Inventory.Get(0), restored.Get(0));
         Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
         Assert.True(fx.World.Chests.TrySet(1, 64, 1, 0, restored.Get(0)));
-        var chest = fx.World.Chests.PackBlob(1, 64, 1);
-        Assert.NotNull(chest);
-        Assert.True(fx.World.Chests.TryLoadFromBlob(2, 64, 1, chest));
-        Assert.Equal(book.Id, fx.World.Chests.Get(2, 64, 1, 0).Id);
+        Assert.True(fx.World.Chests.TryGetSlots(1, 64, 1, out var chestSlots));
+        var chestCopy = new InventorySlot[ChestStore.SingleSize];
+        Assert.True(SlotBlob.TryUnpack(SlotBlob.Pack(chestSlots), chestCopy));
+        Assert.Equal(book.Id, chestCopy[0].Id);
 
         var descriptor = player.Session.Protocol.Inventory.DescribeStack(book.Id, 1);
         var writer = new BinaryStream(); descriptor.WriteItemStack(ref writer);

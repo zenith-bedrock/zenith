@@ -21,9 +21,7 @@ sealed class NoiseTerrainProvider : ITerrainProvider
 
         using (caves)
         {
-            var (subChunkCount, payload) = ChunkPayloads.BuildNoiseOverworldColumn(
-                chunkX, chunkZ, _seed, caves, _generationDiagnostics);
-            return new TerrainColumn(subChunkCount, payload);
+            return ChunkPayloads.BuildNoiseOverworldColumn(chunkX, chunkZ, _seed, caves, _generationDiagnostics);
         }
     }
 

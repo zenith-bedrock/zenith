@@ -96,10 +96,10 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
     /// transmission. The bounded queue is deliberately specific to the post-spawn world stream;
     /// latency-sensitive gameplay remains on the owning tick and default channel.
     /// </summary>
-    internal bool QueueWorldColumn(in ColumnReadResult column, byte orderChannel)
-        => QueueWorldColumn(in column, orderChannel, out _);
+    internal bool QueueWorldColumn(WorldColumn column, byte orderChannel)
+        => QueueWorldColumn(column, orderChannel, out _);
 
-    internal bool QueueWorldColumn(in ColumnReadResult column, byte orderChannel, out long sequence)
+    internal bool QueueWorldColumn(WorldColumn column, byte orderChannel, out long sequence)
     {
         sequence = Interlocked.Increment(ref _nextWorldStreamSequence);
         Interlocked.Increment(ref _pendingWorldStreamColumns);
@@ -115,6 +115,15 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
     internal long WorldStreamCompletedThrough => Volatile.Read(ref _completedWorldStreamSequence);
     internal bool TryConsumePublishedColumn(out ChunkCoord coord) => _publishedWorldColumns.Reader.TryRead(out coord);
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ChunkCoord, int> _sentColumnVersions = new();
+
+    /// <summary>Remembers which <see cref="WorldColumn.EditVersion"/> of a column this client was last sent.</summary>
+    internal void RecordColumnSent(ChunkCoord coord, int version) => _sentColumnVersions[coord] = version;
+
+    /// <summary>True when the client has this column at exactly <paramref name="version"/>.</summary>
+    internal bool HasColumnVersion(ChunkCoord coord, int version) =>
+        _sentColumnVersions.TryGetValue(coord, out var sent) && sent == version;
+
     private async Task ProcessWorldStreamAsync()
     {
         try
@@ -126,7 +135,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
                 try
                 {
                     ColumnSend.EmitToSession(this, work.Column, work.OrderChannel);
-                    await _publishedWorldColumns.Writer.WriteAsync(work.Column.Base.Coord, _worldStreamShutdown.Token).ConfigureAwait(false);
+                    await _publishedWorldColumns.Writer.WriteAsync(work.Column.Coord, _worldStreamShutdown.Token).ConfigureAwait(false);
                     Volatile.Write(ref _completedWorldStreamSequence, work.Sequence);
                 }
                 finally
@@ -162,7 +171,7 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
             TaskScheduler.Default);
     }
 
-    private readonly record struct WorldStreamWork(ColumnReadResult Column, byte OrderChannel, long Sequence);
+    private readonly record struct WorldStreamWork(WorldColumn Column, byte OrderChannel, long Sequence);
 
     /// <summary>Troca o handler ativo, disparando OnDisable no antigo e OnEnable no novo.</summary>
     public void SetHandler(ISessionHandler handler)

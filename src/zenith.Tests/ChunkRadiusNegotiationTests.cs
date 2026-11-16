@@ -108,7 +108,7 @@ public sealed class ChunkRadiusNegotiationTests
         Assert.True(handler.HandleDataPacket(player.Session,
             new DataPacket.HeaderInfo { Id = (int)ProtocolInfo.CLIENT_CAMERA_AIM_ASSIST_PACKET }, ref stream));
         Assert.Equal(0UL, fx.Clock.CurrentTick);
-        Assert.Equal(0, fx.World.OverrideCount);
+        Assert.Equal(0, fx.World.LoadedColumnCount);
     }
 
     private static bool Request(ISessionHandler handler, NetworkSession session, int radius)

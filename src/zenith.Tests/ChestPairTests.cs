@@ -158,13 +158,11 @@ public class ChestPairTests
         Assert.True(world.Chests.TryEnsure(11, 64, 10));
         Assert.True(world.Chests.TrySet(10, 64, 10, 1, InventorySlot.OfBlock(Blocks.Dirt, 9)));
         Assert.True(world.Chests.TrySet(11, 64, 10, 2, InventorySlot.OfBlock(Blocks.Sand, 3)));
-        world.PersistChest(10, 64, 10);
-        world.PersistChest(11, 64, 10);
+        world.PersistDirtyColumns(int.MaxValue);
         await world.FlushPersistenceAsync();
 
         var reloaded = new World.World(storage);
-        await reloaded.GetOrCreateColumnAsync(0, 0); // ADR §114 — chests hydrate lazily on first touch
-        reloaded.ApplyChunkHydration(0, 0); // ADR §162 — the owner applies the fetched bytes.
+        await reloaded.GetOrCreateColumnAsync(0, 0); // block entities come back with their column (ADR §167)
         Assert.Equal(9, reloaded.Chests.Get(10, 64, 10, 1).Count);
         Assert.Equal(3, reloaded.Chests.Get(11, 64, 10, 2).Count);
         Assert.Equal(Blocks.Dirt, reloaded.Chests.Get(10, 64, 10, 1).Id.Value);
@@ -174,7 +172,7 @@ public class ChestPairTests
     [Fact]
     public void GetOpen_concatenates_primary_then_partner()
     {
-        var store = new ChestStore();
+        var store = new World.World(new InMemoryChunkStorage()).Chests;
         Assert.True(store.TryEnsure(0, 1, 0));
         Assert.True(store.TryEnsure(1, 1, 0));
         Assert.True(store.TrySet(0, 1, 0, 0, InventorySlot.OfBlock(Blocks.Dirt, 1)));

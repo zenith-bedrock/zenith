@@ -1,4 +1,4 @@
-# ADR 166: Data-driven block definitions and SetBlockFlags
+# ADR §166 — Data-driven block definitions and SetBlockFlags
 
 ## Context
 Block rules (kind, tool, tier, drops, slab pairing) were derived at startup from name heuristics. That put string

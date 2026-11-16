@@ -29,10 +29,10 @@ public class WorldGenOrderAndSeamTests
         var b2 = noiseBA.GetBaseColumn(-1, 4);
         var a2 = noiseBA.GetBaseColumn(4, -1);
 
-        Assert.Equal(a1.SubChunkCount, a2.SubChunkCount);
-        Assert.Equal(a1.Payload, a2.Payload);
-        Assert.Equal(b1.SubChunkCount, b2.SubChunkCount);
-        Assert.Equal(b1.Payload, b2.Payload);
+        Assert.Equal(a1.Wire().SubChunkCount, a2.Wire().SubChunkCount);
+        Assert.Equal(a1.Wire().Payload, a2.Wire().Payload);
+        Assert.Equal(b1.Wire().SubChunkCount, b2.Wire().SubChunkCount);
+        Assert.Equal(b1.Wire().Payload, b2.Wire().Payload);
     }
 
     [Fact]
@@ -54,8 +54,8 @@ public class WorldGenOrderAndSeamTests
         _ = withNeighbors.GetBaseColumn(11, 11);
         var afterNeighbors = withNeighbors.GetBaseColumn(10, 10);
 
-        Assert.Equal(untouched.SubChunkCount, afterNeighbors.SubChunkCount);
-        Assert.Equal(untouched.Payload, afterNeighbors.Payload);
+        Assert.Equal(untouched.Wire().SubChunkCount, afterNeighbors.Wire().SubChunkCount);
+        Assert.Equal(untouched.Wire().Payload, afterNeighbors.Wire().Payload);
     }
 
     /// <summary>

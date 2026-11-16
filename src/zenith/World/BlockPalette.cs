@@ -39,6 +39,18 @@ sealed class BlockPalette
     /// <summary>All properties of a runtime id (empty for stateless blocks); false when the id is unknown.</summary>
     public bool TryGetState(int networkId, out BlockState state) => _stateByRuntime.TryGetValue(networkId, out state!);
 
+    /// <summary>
+    /// Version-independent identity of a runtime id (name plus sorted properties), the form stored on disk so a saved
+    /// world survives a palette that renumbers its ids. Null for an id the palette does not know.
+    /// </summary>
+    public string? CanonicalKeyOf(int networkId) =>
+        _stateByRuntime.TryGetValue(networkId, out var state) && _nameByRuntime.TryGetValue(networkId, out var name)
+            ? state.CanonicalKey(name)
+            : null;
+
+    /// <summary>Inverse of <see cref="CanonicalKeyOf"/>.</summary>
+    public bool TryGetByCanonicalKey(string key, out int networkId) => _byFullState.TryGetValue(key, out networkId);
+
     /// <summary>Exact lookup of the runtime id for a name plus its complete property set.</summary>
     public bool TryGetExact(string name, BlockState state, out int networkId) =>
         _byFullState.TryGetValue(state.CanonicalKey(name), out networkId);

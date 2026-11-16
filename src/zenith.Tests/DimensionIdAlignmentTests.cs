@@ -23,6 +23,6 @@ public class DimensionIdAlignmentTests
         var world = new World.World(new InMemoryChunkStorage(), terrain: FlatTerrainProvider.Instance);
         Assert.Equal(DimensionId.Overworld, world.Overworld.WireId);
         var col = await world.GetOrCreateColumnAsync(0, 0);
-        Assert.Equal(DimensionId.Overworld, col.Base.DimensionId);
+        Assert.Equal(DimensionId.Overworld, col.DimensionId);
     }
 }

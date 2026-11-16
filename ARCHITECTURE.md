@@ -159,7 +159,7 @@ B Stack identity    StackId(Kind=Block|Item, Value) — inventário/chest/floor
 C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarquia Item/Block
 ```
 
-- Overlay / `GetBlock` = só `BlockRuntimeId`.
+- `GetBlock` = só `BlockRuntimeId`.
 - Dig Survival sem entrada em `DigProfiles` = sem auth (não inventar DestroySpeed).
 - Protocol mapeia `StackId` → `NetworkItemStack` (`ItemNetworkId` + `BlockRuntimeId` + `StackNetworkId` ISR).
 - Recipes = exact `StackId` (sem merge de facing).
@@ -168,12 +168,12 @@ C Capability maps   DigProfiles / Tools (= ToolProfiles façade) — sem hierarq
 
 ## Notas deste estágio
 
-- PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: `LevelChunk` (base) → `UpdateBlock` dos overlays.
-- Mutação de bloco: **overlay esparso permanente** (`ov:` no LevelDB) + `UpdateBlock` — nunca reescreve subchunk. `_blockOverrides` em RAM: SoftCap `10_000` em chaves **novas** + compactação quando rid == base flat (ADR §36); overwrite sempre ok. `FloorDropStore` SoftCap refuse em células novas; chests SoftCap `10_000` em células novas.
+- PreSpawn **lê** colunas via `World`/`IChunkStorage` (thread-safe, `ValueTask`); Protocol só transmite. Por coluna: um `LevelChunk` serializado das seções vivas (ADR §167); edits posteriores reenviam a coluna (`ColumnSend.ResyncColumns`).
+- Mutação de bloco: a coluna residente (`WorldColumn`, 24 `Section`s) é a fonte da verdade; sem teto de células editadas. Persistência write-behind, um blob por coluna (`ColumnCodec`), só colunas sujas (ADR §167). `FloorDropStore` SoftCap refuse em células novas.
 - Terreno base via `ITerrainProvider` on a **Dimension** (default overworld — ADR §71); `noise` = FastNoiseLite height + continuous climate bias + worm caves + ore + surface features (§63–§67/§71/§72); edits = diff sobre a base (§62). Base chunks nunca são persistidos (miss = regenera do provider — §45); por isso seed/generator mode são commitados uma única vez como identidade do mundo e nunca sobrescritos silenciosamente por config (`WorldIdentity.Reconcile`, §108).
 - **NBT:** `Zenith.Nbt` no fundo do grafo de deps (LE / Network / BigEndian). Palette `src/zenith/data/block_palette.nbt` = gzip + **BigEndian** (dump BDS/Java-style); gunzip → decode → `network_id` por nome. `Blocks.*` no boot. PropertyData = NBT **Network**.
 - **LevelDB:** `Zenith.LevelDB` (managed, no mesmo fundo do grafo que Nbt) — KV próprio; **dataset ⊆ RAM** enquanto aberto (snapshot+WAL); **não** lê mundos vanilla Mojang nem DBs do NuGet antigo. `LevelDbChunkStorage`; `world.path` no YAML. Sem silent fallback. Chaves via `WorldStorageKeys` (`c:` / `ov:` / `ct:` / `inv:` / `pd:` — pose+xp+vitals v3, health/hunger/saturation/exhaustion, ADR §109 / `wm:` — identidade do mundo, seed+generator, ADR §108). Detalhes: [`libs/leveldb/README.md`](libs/leveldb/README.md). Abrir/converter mundos BDS = backend/`IChunkStorage` + conversor offline (ADR §61) — não reescrever ZLDB como LSM Mojang.
-- **World subdomains (§62/§71):** Dimension (terrain + wire id) · overlay grid · persistence port · block registry · containers · floor/gravity · packed blobs — `World` is the façade; files stay under `World/` until a later cut.
+- **World subdomains (§62/§71/§167):** Dimension (terrain + wire id) · colunas/seções mutáveis · block entities · persistence port · block registry · floor/gravity — `World` is the façade; files stay under `World/` until a later cut.
 - Chat: `ChatProtocol` + rate limit por player; comandos `/` fora de escopo.
 - **Config:** `zenith.yml` ao lado do executável (`AppContext.BaseDirectory`), ou `{ZENITH_DATA}/zenith.yml` quando `ZENITH_DATA` está definido (Docker/Dokploy — volume único em `/data`). Sem matriz `ZENITH_*` além desse root.
 - JWT: parse + skin opcional; `auth.accept` no YAML (xbox / self-signed / offline); aviso no boot se não for só `xbox`.
@@ -292,9 +292,9 @@ flowchart LR
 
 Não significa “produto completo”: fecha place/break + inventário 36 + ISR rearrange no domínio do **jogador**.
 
-- Intent de dig → `BlockDigSystem`; intent de edição → `BlockEditSystem` → overlay + `UpdateBlock`; place consome hotbar.
+- Intent de dig → `BlockDigSystem`; intent de edição → `BlockEditSystem` → seção da coluna + `UpdateBlock`; place consome hotbar.
 - Bounds de coordenada, slot `0..8` e stack count no handler.
-- Overlay permanente (não CoW de coluna).
+- Colunas mutáveis in-place (ADR §167); wire cacheado por `EditVersion`.
 - Tick authority: reach (olhos + `MaxBlockReach`), place só em air, break só se `TryAdd` couber — smoke 6/8 assumem rejeição correta (sem voidar item / sem overwrite ocupado).
 - Storage 9–35 no domínio (`TryAdd` / sync `SendInventoryContent`); place / consume permanece 0–8.
 - Rearrange 0–35 via ISR: intent → `InventorySystem` tick → `ItemStackResponse` (SAI on; net IDs no Protocol).

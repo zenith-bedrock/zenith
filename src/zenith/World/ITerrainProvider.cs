@@ -1,17 +1,19 @@
 namespace Zenith.World;
 
-/// <summary>Base column from terrain (ADR §62) — not overlays, not storage.</summary>
-readonly record struct TerrainColumn(int SubChunkCount, byte[] Payload);
+/// <summary>
+/// A freshly generated column's sections (<see cref="WorldColumn.SectionCount"/> slots, null above the last generated one)
+/// and biome. The caller owns the sections: they are mutable, so a provider must hand out new instances every time.
+/// </summary>
+readonly record struct TerrainColumn(Section?[] Sections, int BiomeNetworkId);
 
 /// <summary>
-/// Supplies base terrain for column miss / heal and SoftCap base-rid sampling.
-/// Default: <see cref="FlatTerrainProvider"/>. Gen plugs here; BDS stays on <see cref="IChunkStorage"/> (§61).
+/// Generates the columns the world has no stored copy of. Default: <see cref="FlatTerrainProvider"/>.
 /// </summary>
 interface ITerrainProvider
 {
     TerrainColumn GetBaseColumn(int chunkX, int chunkZ);
 
-    /// <summary>Block at cell if no overlay — must match <see cref="GetBaseColumn"/> semantics.</summary>
+    /// <summary>The generated block at a cell — must match <see cref="GetBaseColumn"/>; tests and tools only, the world reads its columns.</summary>
     int SampleBaseBlock(int x, int y, int z);
 
     /// <summary>Domain feet Y for first join / respawn above base surface at (x,z).</summary>
@@ -26,19 +28,15 @@ sealed class FlatTerrainProvider : ITerrainProvider
 {
     public static FlatTerrainProvider Instance { get; } = new();
 
-    private readonly int _subChunkCount;
-    private readonly byte[] _payload;
-
     private FlatTerrainProvider()
     {
-        (_subChunkCount, _payload) = ChunkPayloads.BuildFlatOverworld();
     }
 
     public TerrainColumn GetBaseColumn(int chunkX, int chunkZ)
     {
         _ = chunkX;
         _ = chunkZ;
-        return new TerrainColumn(_subChunkCount, _payload);
+        return ChunkPayloads.BuildFlatOverworld();
     }
 
     public int SampleBaseBlock(int x, int y, int z)

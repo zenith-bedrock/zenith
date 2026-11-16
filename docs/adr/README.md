@@ -181,5 +181,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 164 | [Block update foundation](0164-block-update-foundation.md) |
 | 165 | [Typed block states and per-kind shapes](0165-typed-block-states-and-shapes.md) |
 | 166 | [Data-driven block definitions and SetBlockFlags](0166-data-driven-block-definitions.md) |
+| 167 | [Mutable world columns with block entities](0167-mutable-world-columns-and-block-entities.md) |
 
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

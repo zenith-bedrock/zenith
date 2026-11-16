@@ -27,17 +27,17 @@ public class WorldgenColumnBenchmarks
         _noise = new NoiseTerrainProvider(Seed);
         _caveQueries = OverworldCaveContext.ForColumn(0, 0, Seed);
 
-        var (flatCount, flatPayload) = ChunkPayloads.BuildFlatOverworld();
+        var flat = ChunkPayloads.BuildFlatOverworld().Wire();
         _flatPacket = new LevelChunkPacket
         {
             ChunkX = 0,
             ChunkZ = 0,
             DimensionId = DimensionId.Overworld,
-            SubChunkCount = flatCount,
-            ExtraPayload = flatPayload
+            SubChunkCount = flat.SubChunkCount,
+            ExtraPayload = flat.Payload
         };
 
-        var noise = _noise.GetBaseColumn(0, 0);
+        var noise = _noise.GetBaseColumn(0, 0).Wire();
         _noisePacket = new LevelChunkPacket
         {
             ChunkX = 0,
@@ -52,8 +52,8 @@ public class WorldgenColumnBenchmarks
     [Benchmark(Baseline = true)]
     public int Flat_BuildOverworldColumn()
     {
-        var (count, payload) = ChunkPayloads.BuildFlatOverworld();
-        return count + payload.Length;
+        var wire = ChunkPayloads.BuildFlatOverworld().Wire();
+        return wire.SubChunkCount + wire.Payload.Length;
     }
 
     /// <summary>Full noise column (caves + single-pass payload, ADR §69).</summary>
@@ -61,7 +61,7 @@ public class WorldgenColumnBenchmarks
     public int Noise_GetBaseColumn()
     {
         var x = _chunkCursor++;
-        return _noise.GetBaseColumn(x, 0).Payload.Length;
+        return _noise.GetBaseColumn(x, 0).Wire().Payload.Length;
     }
 
     /// <summary>Cave segment grid only — isolate CSR cost from paletted write.</summary>

@@ -457,17 +457,6 @@ public class ServerConfigLoaderTests
     }
 
     [Fact]
-    public void Validate_rejects_invalid_chunk_generation_cache_size()
-    {
-        var config = new ServerConfig();
-        config.World.ChunkGenerationCacheColumns = -1;
-
-        var ex = Assert.Throws<InvalidOperationException>(() => config.Validate());
-
-        Assert.Contains("chunk-generation-cache-columns", ex.Message);
-    }
-
-    [Fact]
     public void Validate_rejects_unsupported_gamemode()
     {
         var config = new ServerConfig();

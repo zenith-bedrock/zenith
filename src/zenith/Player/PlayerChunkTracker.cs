@@ -82,9 +82,9 @@ sealed class PlayerChunkTracker
     public int LastPublisherChunkZ { get; private set; } = int.MinValue;
 
     /// <summary>
-    /// Set on InGame enable — ChunkStreamSystem re-sends overlays for known columns once (§14).
+    /// Set on InGame enable — ChunkStreamSystem re-sends the known columns that changed while the client was loading (§14).
     /// </summary>
-    public bool NeedsOverlayResync { get; set; }
+    public bool NeedsColumnResync { get; set; }
 
     /// <summary>True if this player already received (or began streaming) the column.</summary>
     public bool Knows(int chunkX, int chunkZ)
@@ -159,7 +159,7 @@ sealed class PlayerChunkTracker
     /// Accepts an asynchronous column-read result. The I/O continuation may only enqueue here;
     /// stream validity, player state and protocol emission stay owned by the GameLoop.
     /// </summary>
-    public void CompleteStream(int chunkX, int chunkZ, int epoch, ColumnReadResult column)
+    public void CompleteStream(int chunkX, int chunkZ, int epoch, WorldColumn column)
     {
         lock (_gate)
             _completedStreams.Enqueue(StreamCompletion.Success(chunkX, chunkZ, epoch, column));
@@ -276,12 +276,12 @@ sealed class PlayerChunkTracker
         int ChunkX,
         int ChunkZ,
         int Epoch,
-        ColumnReadResult Column,
+        WorldColumn? Column,
         string? Error)
     {
         public bool Succeeded => Error is null;
 
-        public static StreamCompletion Success(int chunkX, int chunkZ, int epoch, ColumnReadResult column) =>
+        public static StreamCompletion Success(int chunkX, int chunkZ, int epoch, WorldColumn column) =>
             new(chunkX, chunkZ, epoch, column, null);
 
         public static StreamCompletion Failure(int chunkX, int chunkZ, int epoch, string error) =>
