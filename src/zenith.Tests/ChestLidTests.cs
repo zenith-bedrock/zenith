@@ -16,7 +16,7 @@ public class ChestLidTests
     public void Opener_refcount_open_on_0_to_1_close_on_1_to_0()
     {
         var store = new World.World(new InMemoryChunkStorage()).Chests;
-        Assert.True(store.TryEnsure(1, 2, 3));
+        store.Ensure(1, 2, 3);
         Assert.True(store.TryAddOpener(1, 2, 3, 10));
         Assert.Equal(1, store.OpenerCount(1, 2, 3));
 
@@ -34,7 +34,7 @@ public class ChestLidTests
     public void TryAddOpener_same_player_is_idempotent()
     {
         var store = new World.World(new InMemoryChunkStorage()).Chests;
-        Assert.True(store.TryEnsure(0, 0, 0));
+        store.Ensure(0, 0, 0);
         Assert.True(store.TryAddOpener(0, 0, 0, 5));
         Assert.False(store.TryAddOpener(0, 0, 0, 5));
         Assert.Equal(1, store.OpenerCount(0, 0, 0));
@@ -45,7 +45,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("opener");
-        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
+        fx.World.Chests.Ensure(4, 64, 4);
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -68,7 +68,7 @@ public class ChestLidTests
         var fx = new IntentTestFixture();
         var a = fx.AddInGamePlayer("alice");
         var b = fx.AddInGamePlayer("bob");
-        Assert.True(fx.World.Chests.TryEnsure(2, 70, 2));
+        fx.World.Chests.Ensure(2, 70, 2);
 
         Assert.True(a.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(2, 70, 2)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -102,7 +102,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("reopener");
-        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
+        fx.World.Chests.Ensure(4, 64, 4);
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -125,7 +125,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("quirky-close");
-        Assert.True(fx.World.Chests.TryEnsure(4, 64, 4));
+        fx.World.Chests.Ensure(4, 64, 4);
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(4, 64, 4)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -158,7 +158,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stale-window-type");
-        Assert.True(fx.World.Chests.TryEnsure(7, 73, 33));
+        fx.World.Chests.Ensure(7, 73, 33);
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(7, 73, 33)));
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
@@ -202,7 +202,7 @@ public class ChestLidTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("disconnect-opener");
-        Assert.True(fx.World.Chests.TryEnsure(6, 64, 6));
+        fx.World.Chests.Ensure(6, 64, 6);
         var inventory = fx.CreateInventorySystem();
 
         Assert.True(player.Windows.SubmitWindowIntent(InventoryWindowIntent.OpenChest(6, 64, 6)));

@@ -88,7 +88,7 @@ public class ItemStackRequestIntentTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("open-chest-then-transfer");
         fx.World.SetBlock(2, 64, 2, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(2, 64, 2));
+        fx.World.Chests.Ensure(2, 64, 2);
         StandNear(player, 2, 64, 2);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 2));
 

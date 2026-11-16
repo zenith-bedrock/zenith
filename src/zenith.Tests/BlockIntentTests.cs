@@ -323,7 +323,7 @@ public class BlockIntentTests
         }
 
         fx.World.SetBlock(1, 90, 0, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 90, 0));
+        fx.World.Chests.Ensure(1, 90, 0);
         Assert.True(fx.World.Chests.TrySet(1, 90, 0, 0, InventorySlot.OfBlock(Blocks.Stone, 1)));
         QueueReadyBreak(fx.Clock, fx.World, player, 1, 90, 0);
         new BlockEditSystem(fx.Players, fx.World, fx.Context.Durability).Tick(fx.Clock, fx.Players.Online);
@@ -362,7 +362,7 @@ public class BlockIntentTests
         var player = fx.AddInGamePlayer("creachest", GameMode.Creative);
         StandNear(player, 5, 64, 5);
         fx.World.SetBlock(5, 64, 5, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(5, 64, 5));
+        fx.World.Chests.Ensure(5, 64, 5);
         Assert.True(fx.World.Chests.TrySet(5, 64, 5, 0, InventorySlot.OfBlock(Blocks.Dirt, 7)));
 
         Assert.True(player.Intents.SubmitBlockEdit(BlockEditIntent.Set(5, 64, 5, Blocks.Air)));
@@ -910,7 +910,7 @@ public class BlockIntentTests
         var north = Blocks.ChestForFacing(Blocks.CardinalNorth);
         Assert.NotEqual(Blocks.Chest, north);
         fx.World.SetBlock(5, 64, 5, north);
-        Assert.True(fx.World.Chests.TryEnsure(5, 64, 5));
+        fx.World.Chests.Ensure(5, 64, 5);
 
         // Starter kit already has chests in hotbar slot 5 — merge target.
         var before = player.Inventory.Get(5).Count;

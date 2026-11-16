@@ -187,7 +187,7 @@ public class InventorySystemIntentTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("loot");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         StandNear(player, 1, 64, 1);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
@@ -212,7 +212,7 @@ public class InventorySystemIntentTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("farloot");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         player.PositionX = 100;
         player.PositionY = 64;
@@ -236,8 +236,8 @@ public class InventorySystemIntentTests
         var player = fx.AddInGamePlayer("stale-window");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
         fx.World.SetBlock(3, 64, 1, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
-        Assert.True(fx.World.Chests.TryEnsure(3, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
+        fx.World.Chests.Ensure(3, 64, 1);
         StandNear(player, 3, 64, 1);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Dirt, 10));
 
@@ -300,7 +300,7 @@ public class InventorySystemIntentTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("stalechest");
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));
         StandNear(player, 1, 64, 1);
         fx.World.SetBlock(1, 64, 1, Blocks.Air);
@@ -324,8 +324,8 @@ public class InventorySystemIntentTests
         var south = Blocks.ChestForFacing(Blocks.CardinalSouth);
         fx.World.SetBlock(1, 64, 1, south);
         fx.World.SetBlock(2, 64, 1, south);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
-        Assert.True(fx.World.Chests.TryEnsure(2, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
+        fx.World.Chests.Ensure(2, 64, 1);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Double(new ChestPair(1, 64, 1, 2, 64, 1)));
         StandNear(player, 1, 64, 1);
         fx.World.SetBlock(2, 64, 1, Blocks.Air);

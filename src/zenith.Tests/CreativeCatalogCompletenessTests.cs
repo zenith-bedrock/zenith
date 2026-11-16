@@ -70,7 +70,7 @@ public class CreativeCatalogCompletenessTests
         var blob = player.Inventory.PackMainBlob(); Assert.Equal(SlotBlob.Version5, blob[0]);
         var restored = new PlayerInventory(); Assert.True(restored.TryLoadMainFromBlob(blob));
         Assert.Equal(player.Inventory.Get(0), restored.Get(0));
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         Assert.True(fx.World.Chests.TrySet(1, 64, 1, 0, restored.Get(0)));
         Assert.True(fx.World.Chests.TryGetSlots(1, 64, 1, out var chestSlots));
         var chestCopy = new InventorySlot[ChestStore.SingleSize];

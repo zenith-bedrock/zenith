@@ -33,7 +33,7 @@ public sealed class ChunkResidencyEvictionTests
         var storage = new InMemoryChunkStorage();
         var world = new World.World(storage);
         world.SetBlock(1, 64, 2, Blocks.Stone);
-        Assert.True(world.Chests.TryEnsure(3, 64, 4));
+        world.Chests.Ensure(3, 64, 4);
         Assert.True(world.Chests.TrySet(3, 64, 4, 0, InventorySlot.OfBlock(Blocks.Dirt, 5)));
 
         Assert.True(world.TryEvictChunk(0, 0));
@@ -64,7 +64,7 @@ public sealed class ChunkResidencyEvictionTests
     {
         var world = new World.World(new InMemoryChunkStorage());
         await world.GetOrCreateColumnAsync(0, 0);
-        Assert.True(world.Chests.TryEnsure(1, 64, 2));
+        world.Chests.Ensure(1, 64, 2);
         Assert.True(world.Chests.TryAddOpener(1, 64, 2, playerRuntimeId: 42));
 
         Assert.False(world.TryEvictChunk(0, 0));

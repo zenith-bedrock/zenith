@@ -181,16 +181,7 @@ sealed class BlockEditSystem : IGameSystem
 
             if (Blocks.IsChest(edit.BlockRuntimeId))
             {
-                if (!_world.Chests.TryEnsure(edit.X, edit.Y, edit.Z))
-                {
-                    _ = _world.TrySetBlock(edit.X, edit.Y, edit.Z, World.World.AirRuntimeId);
-                    if (consumedPlacementStack)
-                        player.Inventory.RestoreSnapshot(placementSnapshot);
-
-                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-
+                _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
                 _world.MarkBlockEntityDirty(edit.X, edit.Z);
             }
 

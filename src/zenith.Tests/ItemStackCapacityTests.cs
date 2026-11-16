@@ -71,7 +71,7 @@ public class ItemStackCapacityTests
         fx.CreateInventorySystem().Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(16, player.Inventory.Get(0).Count); Assert.Equal(16, player.Inventory.Cursor.Count);
         Assert.False(player.Inventory.TrySet(1, bucket, 17));
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         Assert.False(fx.World.Chests.TrySet(1, 64, 1, 0, new InventorySlot(bucket, 17)));
         Assert.True(fx.World.Chests.Get(1, 64, 1, 0).IsEmpty);
         player.Windows.CraftUi.TrySetGrid(0, new InventorySlot(bucket, 16));
@@ -152,7 +152,7 @@ public class ItemStackCapacityTests
         fx.World.SetBlock(1, 64, 1, Blocks.Chest);
         var sword = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:diamond_sword"));
         var slots = new InventorySlot[ChestStore.SingleSize]; slots[0] = new(sword, 4);
-        Assert.True(fx.World.Chests.TryEnsure(1, 64, 1));
+        fx.World.Chests.Ensure(1, 64, 1);
         Assert.True(fx.World.Chests.TryGetSlots(1, 64, 1, out var cell));
         slots.CopyTo(cell, 0);
         player.Windows.OpenChestContainer(2, 0, OpenChestView.Single(1, 64, 1));

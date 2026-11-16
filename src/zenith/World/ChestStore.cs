@@ -45,11 +45,10 @@ sealed class ChestStore
     }
 
     /// <summary>Makes sure the chest cell has its 27 slots; existing contents are untouched.</summary>
-    public bool TryEnsure(int x, int y, int z)
+    public void Ensure(int x, int y, int z)
     {
-        if (TryGet(x, y, z, out _)) return true;
-        _world.SetBlockEntity(x, y, z, new ContainerEntity());
-        return true;
+        if (!TryGet(x, y, z, out _))
+            _world.SetBlockEntity(x, y, z, new ContainerEntity());
     }
 
     public bool TryGetSlots(int x, int y, int z, out InventorySlot[] slots)

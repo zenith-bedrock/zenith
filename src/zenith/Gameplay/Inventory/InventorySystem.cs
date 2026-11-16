@@ -112,20 +112,13 @@ sealed class InventorySystem : IGameSystem
 
             case InventoryWindowIntent.Kind.OpenChest:
                 var view = ChestPairing.ViewFor(_world, intent.X, intent.Y, intent.Z);
-                // A chest block whose storage cell does not exist yet gets one here, unless the store is at its SoftCap: then the
-                // window is refused (the current one stays) instead of showing a chest that would silently reject every move.
-                var cellsReady = _world.Chests.TryEnsure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
+                // A chest block whose storage cell does not exist yet gets one here.
+                _world.Chests.Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
                 var partnerX = 0;
                 var partnerY = 0;
                 var partnerZ = 0;
-                if (cellsReady && view.TryGetPartner(out partnerX, out partnerY, out partnerZ))
-                    cellsReady = _world.Chests.TryEnsure(partnerX, partnerY, partnerZ);
-                if (!cellsReady)
-                {
-                    player.Level.Logger?.Warning(
-                        $"Chest open refused for {player.Username} @ {intent.X},{intent.Y},{intent.Z}: chest store at SoftCap");
-                    break;
-                }
+                if (view.TryGetPartner(out partnerX, out partnerY, out partnerZ))
+                    _world.Chests.Ensure(partnerX, partnerY, partnerZ);
 
                 if (player.Windows.OpenChest is { } previous &&
                     !previous.Contains(intent.X, intent.Y, intent.Z))
