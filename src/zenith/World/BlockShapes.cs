@@ -30,6 +30,8 @@ static class BlockShapes
 
     public static BlockShape For(int runtimeId) => ByKind[(int)Blocks.Catalog.KindOf(runtimeId)];
 
+    public static BlockShape ForKind(BlockKind kind) => ByKind[(int)kind];
+
     /// <summary>The state to place for a held block clicked on <paramref name="face"/> with the cursor at <paramref name="cursorY"/> (0..1).</summary>
     public static bool TryResolve(int heldRuntimeId, byte face, float cursorY, float yawDegrees, out int placedRuntimeId)
     {

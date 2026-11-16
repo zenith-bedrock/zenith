@@ -3,6 +3,8 @@ namespace Zenith.World;
 /// <summary>Half from the click; a second slab of the same type on the open half merges into a double slab.</summary>
 sealed class SlabShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.VerticalHalf];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
         States.TrySet(ref runtimeId, StateKeys.VerticalHalf, context.UpperHalf ? VerticalHalf.Top : VerticalHalf.Bottom);
 
@@ -43,5 +45,7 @@ sealed class SlabShape : BlockShape
 /// <summary>Two slabs in one cell: only ever produced by merging, never placed from an item.</summary>
 sealed class DoubleSlabShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.VerticalHalf];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) => false;
 }

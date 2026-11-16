@@ -180,5 +180,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 163 | [Authoritative player-drop toss](0163-authoritative-player-drop-toss.md) |
 | 164 | [Block update foundation](0164-block-update-foundation.md) |
 | 165 | [Typed block states and per-kind shapes](0165-typed-block-states-and-shapes.md) |
+| 166 | [Data-driven block definitions and SetBlockFlags](0166-data-driven-block-definitions.md) |
 
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

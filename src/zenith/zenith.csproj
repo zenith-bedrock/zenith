@@ -54,6 +54,9 @@
     <EmbeddedResource Include="data\mobs.json">
       <LogicalName>mobs.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\block_definitions.json">
+      <LogicalName>block_definitions.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\block_properties.json">
       <LogicalName>block_properties.json</LogicalName>
     </EmbeddedResource>

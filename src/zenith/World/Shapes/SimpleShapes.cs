@@ -11,6 +11,8 @@ sealed class CubeShape : BlockShape;
 
 sealed class PillarShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.PillarAxis];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context)
     {
         var axis = context.Face switch
@@ -25,6 +27,8 @@ sealed class PillarShape : BlockShape
 
 sealed class StairsShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.StairFacing, StateKeys.UpsideDown];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
         States.TrySet(ref runtimeId, StateKeys.StairFacing, context.Look) &&
         States.TrySet(ref runtimeId, StateKeys.UpsideDown, context.UpperHalf);
@@ -46,6 +50,8 @@ sealed class PlantShape : BlockShape
 /// <summary>Hangs on the block opposite its facing, or stands on the one below.</summary>
 sealed class TorchShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.TorchFacing];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context)
     {
         TorchFacing facing;

@@ -10,7 +10,8 @@ code under `src/zenith/World/`; this page explains the model.
 | Palette | `BlockPalette.cs`, `BlockState.cs` | All 1477 block types / 22,091 states from `block_palette.nbt`: name ↔ runtime id and each id's property set as strings. The string API is for loading and diagnostics; runtime code uses the typed layer below. |
 | States | `States/` | `StateKeys` is the single place that names a property and spells its values (`open_bit`, `minecraft:cardinal_direction`…); `BlockFamily` lays each block type out as a mixed-radix table, so `BlockStateTable.TrySet(ref id, StateKeys.Open, true)` finds the new runtime id by arithmetic — typed, 0 B allocated, ~13 ns. `Cardinal`/`Face` replace direction strings. |
 | Properties | `BlockProperties.cs`, `data/block_properties.json` | Hardness, blast resistance, light, flammability per block name (1321 names). Imported from the PocketMine-derived table in `essential-reference` (LGPL-3.0); obsidian/crying obsidian overridden to 50 per the Bedrock wiki. Not a BDS capture — treat as reviewed-but-unverified. |
-| Catalog | `BlockCatalog.cs`, `BlockRules.cs` | At build time classifies every family into a `BlockKind`, derives its dig profile and `BlockTraits` (soil, needs-soil, redstone-only, wall-connectable). Runtime queries are lock-free lookups. Name heuristics live only here. |
+| Definitions | `data/block_definitions.json`, `World/Definitions/BlockDefinition.cs` | One hand-editable row per supported block: kind, tool, tier, traits, drop, `mergesInto`. A block with no row is Unsupported. Regenerate missing rows with `ZENITH_REGEN_BLOCK_DEFINITIONS=<path> dotnet test --filter Regenerate_when_asked` (existing rows are never overwritten; the name heuristics live only in the test project). |
+| Catalog | `BlockCatalog.cs` | At build time applies the definitions to every family, validates each kind against its shape's `RequiredKeys` (throws with the full list of problems) and derives the dig profile. Runtime queries are lock-free lookups; no name matching. |
 | Shapes | `Shapes/`, `BlockShapes.cs` | One `BlockShape` per kind owns its rules: placement state, `CanExist` (support), `HasRoom`, `UpdateShape` (neighbour-dependent state), `TryInteract`, door halves. `BlockShapes` routes an id to its shape; shapes read the world and report `BlockWrite`s, the gameplay tick commits them. |
 | Updates | `BlockUpdateQueue.cs`, `ScheduledTicks.cs`, `BlockUpdateSystem.cs` | World writes queue their cell; the tick asks each neighbour `CanExist` (break + drop if not) and `UpdateShape` (rewrite if it changed). ADR §164. |
 | Drops | `BlockLoot.cs` | Ore drops, redirects (stone → cobblestone, grass → dirt, double slab → 2 slabs) and "drops nothing" (glass, leaves, ice). |
@@ -48,7 +49,7 @@ half-working.
   (`plans/world-dynamics-2026-11-15.md`). Beds and signs need block entities.
 - Door/trapdoor/gate orientation and wall shapes follow the PocketMine state encoding; none of it has been checked in a
   rendered client yet (only exact runtime ids on the wire).
-- Tool classification is a name heuristic (`BlockToolRules`) with exact vanilla values for the common families;
+- Tool/kind/drop data was generated once from name heuristics and is now reviewed by hand in `block_definitions.json`; the heuristics are test tooling only;
   hoe/shears/sword-effective blocks (leaves, hay, cobweb) are treated as "any tool".
 - Support reactions exist (plants, torches, doors break when what they hang on goes — `BlockUpdateSystem`, ADR §164); gravity, liquids, fire, growth and random ticks are still separate or missing.
 - Hardness data comes from an unverified third-party table (see above).

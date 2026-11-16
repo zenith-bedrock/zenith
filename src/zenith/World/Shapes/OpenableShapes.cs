@@ -29,6 +29,8 @@ abstract class OpenableShape : BlockShape
 
 sealed class TrapdoorShape : OpenableShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.Open, StateKeys.UpsideDown, StateKeys.TrapdoorFacing];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
         States.TrySet(ref runtimeId, StateKeys.TrapdoorFacing, context.Look.Opposite()) &&
         States.TrySet(ref runtimeId, StateKeys.UpsideDown, context.UpperHalf) &&
@@ -37,6 +39,8 @@ sealed class TrapdoorShape : OpenableShape
 
 sealed class FenceGateShape : OpenableShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.Open, StateKeys.CardinalDirection];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
         States.TrySet(ref runtimeId, StateKeys.CardinalDirection, context.Look) &&
         States.TrySet(ref runtimeId, StateKeys.Open, false);
@@ -45,6 +49,8 @@ sealed class FenceGateShape : OpenableShape
 /// <summary>Two blocks tall: the lower half is placed, the upper half follows it, and they open and break together.</summary>
 sealed class DoorShape : OpenableShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.Open, StateKeys.UpperBlock, StateKeys.CardinalDirection];
+
     public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
         // The cardinal of a door is the player's look turned clockwise (a door facing north is encoded "east").
         States.TrySet(ref runtimeId, StateKeys.CardinalDirection, context.Look.Clockwise()) &&

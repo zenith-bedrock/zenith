@@ -56,25 +56,48 @@ sealed class BlockCatalog
 {
     private readonly FrozenDictionary<string, BlockProperty> _properties;
 
-    public BlockCatalog(BlockPalette palette, FrozenDictionary<string, BlockProperty> properties)
+    public BlockCatalog(
+        BlockPalette palette,
+        FrozenDictionary<string, BlockProperty> properties,
+        FrozenDictionary<string, BlockDefinition> definitions)
     {
         Palette = palette;
         _properties = properties;
         States = BlockStateTable.Build(palette);
 
+        var problems = new List<string>();
         foreach (var family in States.Families)
         {
-            family.Kind = Classify(family);
-            family.Traits = BlockSupportRules.TraitsOf(family);
-            family.Dig = DeriveDig(family);
+            // A block the definitions do not list stays Unsupported: neither placeable nor breakable.
+            if (!definitions.TryGetValue(family.Name, out var definition)) continue;
+            family.Definition = definition;
+            family.Kind = definition.Kind;
+            family.Traits = definition.Traits;
+            Validate(family, definition, problems);
+            family.Dig = DeriveDig(family, definition);
         }
 
-        // Slabs know the double slab they merge into, so merging never builds a name at runtime.
-        foreach (var family in States.Families)
+        if (problems.Count > 0)
+            throw new InvalidOperationException(
+                $"block_definitions.json does not match the palette ({problems.Count} problems): " +
+                string.Join("; ", problems.Take(12)));
+    }
+
+    /// <summary>Definitions are data, so a kind that the block cannot honour is caught here, loudly, rather than at placement.</summary>
+    private void Validate(BlockFamily family, BlockDefinition definition, List<string> problems)
+    {
+        foreach (var key in BlockShapes.ForKind(definition.Kind).RequiredKeys)
+            if (!family.Has(key))
+                problems.Add($"{family.Name} is {definition.Kind} but has no '{key.Name}'");
+
+        if (definition.MergesInto is { } merged)
         {
-            if (family.Kind != BlockKind.Slab) continue;
-            var doubled = string.Concat(family.Name.AsSpan(0, family.Name.Length - "_slab".Length), "_double_slab");
-            if (States.TryGetFamily(doubled, out var doubleFamily)) family.DoubleSlab = doubleFamily;
+            if (States.TryGetFamily(merged, out var target)) family.DoubleSlab = target;
+            else problems.Add($"{family.Name} merges into unknown block '{merged}'");
+        }
+        else if (definition.Kind == BlockKind.Slab)
+        {
+            problems.Add($"{family.Name} is a slab without 'mergesInto'");
         }
     }
 
@@ -110,52 +133,15 @@ sealed class BlockCatalog
         return true;
     }
 
-    private DigProfile? DeriveDig(BlockFamily family)
+    private DigProfile? DeriveDig(BlockFamily family, BlockDefinition definition)
     {
-        if (family.Kind == BlockKind.Unsupported) return null;
+        if (definition.Kind == BlockKind.Unsupported) return null;
         if (!_properties.TryGetValue(family.Name, out var property) || property.IsUnbreakable) return null;
 
-        var (tool, requires, tier) = BlockToolRules.Classify(family.Name);
         // BreakDuration divides by DestroySpeed, so instant blocks use the smallest positive speed (indistinguishable
         // from instant at 20 TPS) — the same convention as the curated ground-cover rows (ADR §137).
         var speed = property.Hardness <= 0 ? 0.1 : property.Hardness;
-        return new DigProfile(speed, requires ? tool : ToolKind.None, tool, requires, tier);
-    }
-
-    private static BlockKind Classify(BlockFamily f)
-    {
-        var name = f.Name;
-        if (BlockSupportRules.IsExcluded(name)) return BlockKind.Unsupported;
-        var count = f.Properties.Length;
-
-        if (count == 0)
-            return BlockSupportRules.IsPlant(name) ? BlockKind.Plant : BlockKind.Cube;
-
-        if (count == 3 && f.Has(StateKeys.StairFacing) && f.Has(StateKeys.UpsideDown) && f.Has(StateKeys.StairCorner))
-            return BlockKind.Stairs;
-
-        if (f.Has(StateKeys.PillarAxis) && f.Properties.All(p => p.Key == StateKeys.PillarAxis || p.Key == StateKeys.Deprecated))
-            return BlockKind.Pillar;
-
-        if (f.Has(StateKeys.WallPost)) return BlockKind.Wall;
-        if (f.Has(StateKeys.UpperBlock) && f.Has(StateKeys.DoorHinge) && BlockNames.IsDoor(name)) return BlockKind.Door;
-        if (f.Has(StateKeys.Open) && f.Has(StateKeys.UpsideDown) && f.Has(StateKeys.TrapdoorFacing) && BlockNames.IsTrapdoor(name))
-            return BlockKind.Trapdoor;
-        if (f.Has(StateKeys.Open) && f.Has(StateKeys.InWall) && BlockNames.IsFenceGate(name)) return BlockKind.FenceGate;
-
-        if (count == 1)
-        {
-            if (f.Has(StateKeys.VerticalHalf))
-            {
-                if (BlockNames.IsDoubleSlab(name)) return BlockKind.DoubleSlab;
-                return BlockNames.IsSlab(name) ? BlockKind.Slab : BlockKind.Unsupported;
-            }
-            if (f.Has(StateKeys.PillarAxis)) return BlockKind.Pillar;
-            if (f.Has(StateKeys.Age) && BlockSupportRules.IsPlant(name)) return BlockKind.Plant;
-            if (f.Has(StateKeys.TorchFacing) && BlockSupportRules.IsTorch(name)) return BlockKind.Torch;
-        }
-
-        // Panes/leaves carry cosmetic state only: the default permutation is exactly what vanilla places.
-        return BlockSupportRules.IsCosmeticState(f) ? BlockKind.Cube : BlockKind.Unsupported;
+        var requires = definition.RequiresTool;
+        return new DigProfile(speed, requires ? definition.Tool : ToolKind.None, definition.Tool, requires, definition.Tier);
     }
 }

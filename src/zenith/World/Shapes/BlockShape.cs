@@ -31,6 +31,9 @@ abstract class BlockShape
 {
     protected static BlockStateTable States => Blocks.Catalog.States;
 
+    /// <summary>State properties a block must have to be this kind; the catalog refuses a definition whose block lacks them.</summary>
+    public virtual IReadOnlyList<StateKey> RequiredKeys => [];
+
     /// <summary>Right click toggles or opens it (doors, trapdoors, fence gates).</summary>
     public virtual bool IsInteractive => false;
 

@@ -146,7 +146,7 @@ static class Blocks
     {
         var b = new Loaded();
         b.Palette = palette;
-        b.Catalog = new BlockCatalog(palette, DefaultProperties.Value);
+        b.Catalog = new BlockCatalog(palette, DefaultProperties.Value, DefaultDefinitions.Value);
         b.Air = palette.Require("minecraft:air");
         b.Stone = palette.Require("minecraft:stone");
         b.GrassBlock = palette.Require("minecraft:grass_block");
@@ -429,6 +429,9 @@ static class Blocks
 
     private static readonly Lazy<System.Collections.Frozen.FrozenDictionary<string, BlockProperty>> DefaultProperties =
         new(() => BlockPropertiesLoader.FromEmbeddedResource());
+
+    private static readonly Lazy<System.Collections.Frozen.FrozenDictionary<string, BlockDefinition>> DefaultDefinitions =
+        new(() => BlockDefinitionLoader.FromEmbeddedResource());
 
     /// <summary>State-driven classification, placement kinds and derived dig profiles for the loaded palette.</summary>
     internal static BlockCatalog Catalog => Current.Catalog;

@@ -6,6 +6,9 @@ namespace Zenith.World;
 /// </summary>
 sealed class WallShape : BlockShape
 {
+    public override IReadOnlyList<StateKey> RequiredKeys =>
+        [StateKeys.WallPost, .. StateKeys.WallConnections];
+
     private const int NorthSouth = 1 << (int)Cardinal.North | 1 << (int)Cardinal.South;
     private const int EastWest = 1 << (int)Cardinal.East | 1 << (int)Cardinal.West;
 

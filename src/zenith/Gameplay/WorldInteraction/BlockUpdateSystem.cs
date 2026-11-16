@@ -79,9 +79,10 @@ sealed class BlockUpdateSystem : IGameSystem
             return;
         }
 
-        // Neighbour-dependent shape (wall connections): rewrite in place when it changed.
+        // Neighbour-dependent shape (wall connections): rewrite in place when it changed. A reshape depends on what the
+        // neighbours are, not on how they are shaped, so it does not wake them again.
         var shaped = BlockShapes.UpdateShape(_world, x, y, z, id);
-        if (shaped != id && _world.CanAcceptBlockWrite(x, y, z, shaped) && _world.TrySetBlock(x, y, z, shaped))
+        if (shaped != id && _world.CanAcceptBlockWrite(x, y, z, shaped) && _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
             updates.Add((x, y, z, shaped));
     }
 

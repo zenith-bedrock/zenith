@@ -498,7 +498,11 @@ sealed class World
     /// SoftCap: refuse only when inserting a <b>new</b> key at <see cref="OverrideSoftCap"/>.
     /// Writing the flat base rid removes the overlay (compaction). Existing keys always overwrite.
     /// </summary>
-    public bool TrySetBlock(int x, int y, int z, int blockRuntimeId)
+    public bool TrySetBlock(int x, int y, int z, int blockRuntimeId) =>
+        TrySetBlock(x, y, z, blockRuntimeId, SetBlockFlags.Default);
+
+    /// <summary>As above; <paramref name="flags"/> says what the write sets in motion (see <see cref="SetBlockFlags"/>).</summary>
+    public bool TrySetBlock(int x, int y, int z, int blockRuntimeId, SetBlockFlags flags)
     {
         var cell = (x, y, z);
         var baseRid = _overworld.Terrain.SampleBaseBlock(x, y, z);
@@ -512,7 +516,7 @@ sealed class World
                 WriteBehind(_storage.DeleteOverlayAsync(x, y, z), "DeleteOverlay");
             }
 
-            _ = BlockUpdates.Enqueue(x, y, z);
+            if ((flags & SetBlockFlags.NotifyNeighbors) != 0) _ = BlockUpdates.Enqueue(x, y, z);
             return true;
         }
 
@@ -530,7 +534,7 @@ sealed class World
 
         StoreOverlay(x, y, z, blockRuntimeId);
         WriteBehind(_storage.PutOverlayAsync(x, y, z, blockRuntimeId), "PutOverlay");
-        _ = BlockUpdates.Enqueue(x, y, z);
+        if ((flags & SetBlockFlags.NotifyNeighbors) != 0) _ = BlockUpdates.Enqueue(x, y, z);
         return true;
     }
 

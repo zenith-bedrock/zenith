@@ -96,6 +96,9 @@ sealed class BlockFamily
 
     public DigProfile? Dig { get; internal set; }
 
+    /// <summary>The data row this family was classified from; null for blocks the definitions file does not list.</summary>
+    public BlockDefinition? Definition { get; internal set; }
+
     /// <summary>For a slab: the double-slab family it merges into.</summary>
     public BlockFamily? DoubleSlab { get; internal set; }
 

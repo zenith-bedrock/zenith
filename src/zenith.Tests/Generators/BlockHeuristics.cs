@@ -180,3 +180,48 @@ static class BlockToolRules
         return (ToolKind.None, false, ToolTier.None);
     }
 }
+
+/// <summary>Name-driven exceptions to "a broken block drops itself", matched on flattened Bedrock names.</summary>
+static class BlockDropRules
+{
+    public static bool TryRedirect(string name, out string redirect, out int count)
+    {
+        redirect = "";
+        count = 1;
+        switch (name)
+        {
+            case "minecraft:stone": redirect = "minecraft:cobblestone"; return true;
+            case "minecraft:deepslate": redirect = "minecraft:cobbled_deepslate"; return true;
+            case "minecraft:grass_block":
+            case "minecraft:podzol":
+            case "minecraft:mycelium":
+            case "minecraft:farmland":
+            case "minecraft:grass_path":
+            case "minecraft:dirt_path":
+                redirect = "minecraft:dirt";
+                return true;
+            case "minecraft:short_grass":
+            case "minecraft:fern":
+            case "minecraft:dead_bush":
+                count = 0;
+                return true;
+        }
+
+        if (name.Contains("glass", StringComparison.Ordinal) && !name.Contains("glazed", StringComparison.Ordinal) ||
+            name.Contains("leaves", StringComparison.Ordinal) ||
+            name == "minecraft:ice")
+        {
+            count = 0;
+            return true;
+        }
+
+        if (name.EndsWith("_double_slab", StringComparison.Ordinal))
+        {
+            redirect = name[..^"_double_slab".Length] + "_slab";
+            count = 2;
+            return true;
+        }
+
+        return false;
+    }
+}

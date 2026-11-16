@@ -378,13 +378,13 @@ sealed class BlockEditSystem : IGameSystem
     }
 
     /// <summary>Applies the shape writes a placement/removal produced (the other half of a door); drops those a world refuses.</summary>
-    private void CommitExtraWrites()
+    private void CommitExtraWrites(SetBlockFlags flags = SetBlockFlags.Default)
     {
         for (var i = _extra.Count - 1; i >= 0; i--)
         {
             var write = _extra[i];
             if (!_world.CanAcceptBlockWrite(write.X, write.Y, write.Z, write.BlockRuntimeId) ||
-                !_world.TrySetBlock(write.X, write.Y, write.Z, write.BlockRuntimeId))
+                !_world.TrySetBlock(write.X, write.Y, write.Z, write.BlockRuntimeId, flags))
                 _extra.RemoveAt(i);
         }
     }
@@ -394,7 +394,8 @@ sealed class BlockEditSystem : IGameSystem
     {
         if (!edit.IsInWorldBounds() || !IsWithinReach(player, edit.X, edit.Y, edit.Z)) return false;
         if (!BlockShapes.TryInteract(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
-        CommitExtraWrites();
+        // Opening or closing changes nothing a neighbour depends on.
+        CommitExtraWrites(SetBlockFlags.None);
         return _extra.Count > 0;
     }
 
