@@ -6,11 +6,11 @@ namespace Zenith.Tests;
 public sealed class KnownBlockTests
 {
     [Theory]
-    [InlineData(KnownBlock.Air, "minecraft:air")]
-    [InlineData(KnownBlock.GrassBlock, "minecraft:grass_block")]
-    [InlineData(KnownBlock.DeepslateRedstoneOre, "minecraft:deepslate_redstone_ore")]
-    public void A_wire_name_is_the_members_words_in_snake_case(KnownBlock block, string expected) =>
-        Assert.Equal(expected, KnownBlocks.WireName(block));
+    [InlineData("Air", "minecraft:air")]
+    [InlineData("GrassBlock", "minecraft:grass_block")]
+    [InlineData("DeepslateRedstoneOre", "minecraft:deepslate_redstone_ore")]
+    public void A_wire_name_is_the_members_words_in_snake_case(string member, string expected) =>
+        Assert.Equal(expected, KnownBlocks.WireName(Enum.Parse<KnownBlock>(member)));
 
     [Fact]
     public void Every_known_block_resolves_and_has_its_own_id()
