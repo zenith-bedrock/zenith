@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Replication;
 using Zenith.Player;
 using Zenith.Session;
 using Zenith.World;
@@ -41,7 +42,22 @@ static class ColumnSend
                 EmitToSession(session, column, NetworkSession.WorldStreamOrderChannel);
 
             EmitFloorDropsInColumn(session, world, cx, cz);
+            EmitChestActorsInColumn(session, world, cx, cz);
         }
+    }
+
+    /// <summary>The chest tiles of one column, so a double chest streamed in later still draws as one.</summary>
+    public static void EmitChestActorsInColumn(NetworkSession session, World.World world, int chunkX, int chunkZ)
+    {
+        if (!world.TryGetLoadedColumn(chunkX, chunkZ, out var column)) return;
+        var originX = ChunkMath.ChunkOrigin(chunkX);
+        var originZ = ChunkMath.ChunkOrigin(chunkZ);
+        var channel = session.Protocol.World;
+        column.ForEachEntity((lx, y, lz, entity) =>
+        {
+            if (entity is ContainerEntity)
+                ChestActorFanout.Describe(channel, world, originX + lx, y, originZ + lz);
+        });
     }
 
     /// <summary>AddItemActor for floor drops in one column (late join / stream catch-up, §26 wire).</summary>

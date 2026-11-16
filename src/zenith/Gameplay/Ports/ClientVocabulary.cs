@@ -22,3 +22,6 @@ enum SoundCue : byte
     EndermanTeleport,
     IronGolemAttack,
 }
+
+/// <summary>The other half of a double chest, as the client needs to be told: where it is, and whether this cell leads the pair.</summary>
+readonly record struct ChestLink(int PartnerX, int PartnerZ, bool Lead);

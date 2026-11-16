@@ -67,7 +67,7 @@ internal sealed class IntentTestFixture
         var itemPalette = ItemPaletteLoader.FromEmbeddedResource();
         Players = new PlayerManager();
         Log = new RecordingLogger();
-        World = new World.World(new InMemoryChunkStorage());
+        World = new World.World(new InMemoryChunkStorage(), Log);
         Context = new ServerContext(
             Log,
             Players,

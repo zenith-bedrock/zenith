@@ -52,6 +52,16 @@ readonly record struct OpenChestView(
         return true;
     }
 
+    /// <summary>The cell of the pair that is not the given one (the given cell must be one of the two).</summary>
+    public bool TryGetOther(int x, int y, int z, out int otherX, out int otherY, out int otherZ)
+    {
+        otherX = otherY = otherZ = 0;
+        if (!IsDouble || !Contains(x, y, z)) return false;
+        var isPrimary = PrimaryX == x && PrimaryY == y && PrimaryZ == z;
+        (otherX, otherY, otherZ) = isPrimary ? (PartnerX!.Value, PartnerY!.Value, PartnerZ!.Value) : (PrimaryX, PrimaryY, PrimaryZ);
+        return true;
+    }
+
     /// <summary>True if <paramref name="x"/>,<paramref name="y"/>,<paramref name="z"/> is primary or partner.</summary>
     public bool Contains(int x, int y, int z) =>
         (PrimaryX == x && PrimaryY == y && PrimaryZ == z) ||
@@ -81,6 +91,21 @@ static class ChestPairing
         if (TryPartnerAt(world, x, y, z, facing, x - dx, y, z - dz, out pair))
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// Where this chest's partner is, if it has one. The pair's primary cell (smaller x, then z) leads, which is how the client
+    /// picks the half that draws the lid.
+    /// </summary>
+    public static bool TryGetLink(World world, int x, int y, int z, out int partnerX, out int partnerZ, out bool lead)
+    {
+        partnerX = partnerZ = 0;
+        lead = false;
+        if (!TryResolve(world, x, y, z, out var pair)) return false;
+        lead = pair.PrimaryX == x && pair.PrimaryZ == z;
+        partnerX = lead ? pair.PartnerX : pair.PrimaryX;
+        partnerZ = lead ? pair.PartnerZ : pair.PrimaryZ;
+        return true;
     }
 
     /// <summary>Build <see cref="OpenChestView"/> for the clicked cell (27 or 54).</summary>

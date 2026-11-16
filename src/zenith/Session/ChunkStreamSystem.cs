@@ -53,7 +53,10 @@ sealed class ChunkStreamSystem : IGameSystem
             PumpPreSpawnPublication(player);
             while (player.Session.TryConsumePublishedColumn(out var published))
                 if (player.Chunks.Knows(published.X, published.Z))
+                {
                     ColumnSend.EmitFloorDropsInColumn(player.Session, _world, published.X, published.Z);
+                    ColumnSend.EmitChestActorsInColumn(player.Session, _world, published.X, published.Z);
+                }
             ApplySpawnReady(player, online);
             player.Chunks.ApplyPendingRadius();
             DrainCompletedStreams(player);

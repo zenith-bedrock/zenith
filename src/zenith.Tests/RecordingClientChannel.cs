@@ -102,6 +102,7 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId) => owner.Calls.Add(("World", "SendUpdateBlock", [x, y, z, blockRuntimeId]));
         public void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates) => owner.Calls.Add(("World", "PublishUpdateBlocks", [updates]));
         public void SendLevelSoundEvent(string sound, float x, float y, float z, int extraData = -1, bool isGlobal = false) => owner.Calls.Add(("World", "SendLevelSoundEvent", [sound, x, y, z, extraData, isGlobal]));
+        public void SendChestActor(int x, int y, int z, ChestLink? link) => owner.Calls.Add(("World", "SendChestActor", [x, y, z, link]));
         public void SendSoundCue(SoundCue cue, float x, float y, float z) => owner.Calls.Add(("World", "SendSoundCue", [cue, x, y, z]));
         public void SendExplosionParticles(float x, float y, float z) => owner.Calls.Add(("World", "SendExplosionParticles", [x, y, z]));
         public void SendChestLidOpen(int blockX, int blockY, int blockZ) => owner.Calls.Add(("World", "SendChestLidOpen", [blockX, blockY, blockZ]));

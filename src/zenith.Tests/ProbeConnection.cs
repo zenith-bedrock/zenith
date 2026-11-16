@@ -137,8 +137,8 @@ sealed class ClientPacket(int id, BodyWriter body) : DataPacket
             writer.WriteVarString("");
         });
 
-    /// <summary>InventoryTransaction / ItemUse with the "destroy block" action, laid out as <c>InventoryTransactionPacket.Decode</c> reads it.</summary>
-    public static ClientPacket DestroyBlock(int x, int y, int z, byte face = 1) => new(
+    /// <summary>InventoryTransaction / ItemUse laid out as <c>InventoryTransactionPacket.Decode</c> reads it.</summary>
+    public static ClientPacket UseItem(int action, int x, int y, int z, byte face, int hotbarSlot, NetworkItemStack held) => new(
         (int)ProtocolInfo.INVENTORY_TRANSACTION_PACKET,
         (ref Zenith.Binary.BinaryStream w) =>
         {
@@ -146,23 +146,25 @@ sealed class ClientPacket(int id, BodyWriter body) : DataPacket
             w.WriteBool(false);                                 // no legacy slots
             w.WriteUnsignedVarInt((int)InventoryTransactionPacket.TypeItemUse);
             w.WriteUnsignedVarInt(0);                           // no inventory actions
-            w.WriteVarInt(InventoryTransactionPacket.UseDestroyBlock);
+            w.WriteVarInt(action);
             w.WriteByte(0);                                     // trigger
             w.WriteVarInt(x);
             w.WriteVarInt(y);
             w.WriteVarInt(z);
             w.WriteByte(face);
-            w.WriteVarInt(0);                                   // hotbar slot
+            w.WriteVarInt(hotbarSlot);
             w.WriteByte(InventoryTransactionPacket.HandMainhand);
-            w.WriteShort(0, Zenith.Binary.BinaryStream.Endianess.Little);   // held item: air
-            w.WriteUShort(0, Zenith.Binary.BinaryStream.Endianess.Little);
-            w.WriteUnsignedVarInt(0);
-            w.WriteBool(false);
-            w.WriteUnsignedVarInt(0);
-            w.WriteUnsignedVarInt(0);
+            held.WriteNetworkItemStackDescriptor(ref w);        // what the client believes it holds
             for (var i = 0; i < 6; i++) w.WriteFloat(0f, Zenith.Binary.BinaryStream.Endianess.Little);
             w.WriteUnsignedVarInt(0);                           // clicked block runtime id: none supplied
             w.WriteByte(0);
             w.WriteByte(0);
         });
+
+    public static ClientPacket DestroyBlock(int x, int y, int z, NetworkItemStack held, byte face = 1) =>
+        UseItem(InventoryTransactionPacket.UseDestroyBlock, x, y, z, face, 0, held);
+
+    /// <summary>Right-click on the face of block (x,y,z): place what is held against it.</summary>
+    public static ClientPacket ClickBlock(int x, int y, int z, byte face, NetworkItemStack held, int hotbarSlot = 0) =>
+        UseItem(InventoryTransactionPacket.UseClickBlock, x, y, z, face, hotbarSlot, held);
 }

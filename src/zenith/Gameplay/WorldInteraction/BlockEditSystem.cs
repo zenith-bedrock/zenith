@@ -188,6 +188,7 @@ sealed class BlockEditSystem : IGameSystem
         {
             _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
             _world.MarkBlockEntityDirty(edit.X, edit.Z);
+            ChestActorFanout.PublishWithPartner(online, _world, edit.X, edit.Y, edit.Z);
         }
 
         BlockSoundFanout.Place(online, player.Client, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
@@ -350,7 +351,7 @@ sealed class BlockEditSystem : IGameSystem
         var partnerX = 0;
         var partnerY = 0;
         var partnerZ = 0;
-        if (pairView.TryGetPartner(out partnerX, out partnerY, out partnerZ))
+        if (pairView.TryGetOther(edit.X, edit.Y, edit.Z, out partnerX, out partnerY, out partnerZ))
             lidPartner = _world.Chests.ClearOpeners(partnerX, partnerY, partnerZ);
 
         foreach (var peer in online)
@@ -365,6 +366,10 @@ sealed class BlockEditSystem : IGameSystem
             ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
 
         _ = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
+
+        // The partner is a single chest again.
+        if (pairView.TryGetOther(edit.X, edit.Y, edit.Z, out partnerX, out partnerY, out partnerZ))
+            ChestActorFanout.Publish(online, _world, partnerX, partnerY, partnerZ);
     }
 
     /// <summary>Applies the shape writes a placement/removal produced (the other half of a door); drops those a world refuses.</summary>

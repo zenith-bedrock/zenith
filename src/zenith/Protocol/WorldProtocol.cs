@@ -236,6 +236,25 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
             DataLayerId = dataLayerId
         };
 
+    public void SendChestActor(int x, int y, int z, ChestLink? link)
+    {
+        var tile = new Zenith.Nbt.NbtCompound();
+        tile.SetString("id", "Chest");
+        tile.SetInt("x", x);
+        tile.SetInt("y", y);
+        tile.SetInt("z", z);
+        tile.SetBool("isMovable", true);
+        tile.SetBool("findable", false);
+        if (link is { } pair)
+        {
+            tile.SetInt("pairx", pair.PartnerX);
+            tile.SetInt("pairz", pair.PartnerZ);
+            tile.SetBool("pairlead", pair.Lead);
+        }
+
+        _session.SendDataPacket(new BlockActorDataPacket { X = x, Y = y, Z = z, Data = tile });
+    }
+
     public void SendExplosionParticles(float x, float y, float z) =>
         SendLevelEvent(LevelEventPacket.EventParticleExplosion, x, y, z);
 

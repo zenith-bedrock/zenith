@@ -144,6 +144,8 @@ interface IWorldChannel
     void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates);
 
     void SendLevelSoundEvent(string sound, float x, float y, float z, int extraData = -1, bool isGlobal = false);
+    /// <summary>The chest tile at this cell; <paramref name="link"/> is set when it is one half of a double chest.</summary>
+    void SendChestActor(int x, int y, int z, ChestLink? link);
     void SendSoundCue(SoundCue cue, float x, float y, float z);
     void SendExplosionParticles(float x, float y, float z);
     void SendChestLidOpen(int blockX, int blockY, int blockZ);
