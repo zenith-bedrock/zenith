@@ -114,6 +114,7 @@ sealed class ServerRuntimeDiagnostics : IDisposable
             ["knockback"] = builder.Timing("tick.system.knockback", "tick"),
             ["block-dig"] = builder.Timing("tick.system.block-dig", "tick"),
             ["block-edit"] = builder.Timing("tick.system.block-edit", "tick"),
+            ["bucket"] = builder.Timing("tick.system.bucket", "tick"),
             ["gravity"] = builder.Timing("tick.system.gravity", "tick"),
             ["block-update"] = builder.Timing("tick.system.block-update", "tick"),
             ["random-tick"] = builder.Timing("tick.system.random-tick", "tick"),

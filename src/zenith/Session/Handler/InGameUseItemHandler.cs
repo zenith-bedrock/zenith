@@ -6,6 +6,7 @@ using Zenith.Protocol;
 using Zenith.Player;
 using Zenith.World;
 using Zenith.Gameplay.Survival;
+using Zenith.Gameplay.WorldInteraction.Fluids;
 
 namespace Zenith.Session.Handler;
 
@@ -125,6 +126,16 @@ partial class InGameSessionHandler
             return;
         }
 
+        // A bucket works on water as much as on blocks, so it never falls through to block placement.
+        if (session.Context.Buckets.IsBucket(stack.Id))
+        {
+            if (!player.Intents.SubmitBucket(new BucketIntent(blockX, blockY, blockZ, blockFace, hotbarSlot, stack.Id)))
+                session.Context.Logger.Debug($"Dropped bucket use from {player.Username}: queue full.");
+            else
+                PlayerVisibility.RelaySwingArm(player, session.Context.PlayerManager.SnapshotOnline(), swingSource: "build");
+            return;
+        }
+
         // Chest / crafting table interact (§56 / ADR §139): empty-hand or non-sneak → open;
         // sneak + held placeable → place on face. Prefer pending AuthInput sneak (same packet as
         // UseItem) over last-tick IsSneaking.
@@ -188,7 +199,7 @@ partial class InGameSessionHandler
             return;
         }
 
-        var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
+        var (tx, ty, tz) = BlockFaces.Offset(blockX, blockY, blockZ, blockFace);
         var heldKind = Blocks.Catalog.KindOf(runtimeId);
         if (heldKind == BlockKind.Slab && world.GetBlock(blockX, blockY, blockZ) is var clickedForMerge &&
             BlockShapes.TryMergeSlab(clickedForMerge, runtimeId, requireOppositeHalf: false, blockFace, out var mergedAtClick))
@@ -252,15 +263,5 @@ partial class InGameSessionHandler
         session.Context.Logger.Debug($"Place queued from {player.Username} @ {x},{y},{z} rid={runtimeId}");
     }
 
-    private static (int X, int Y, int Z) FaceOffset(int x, int y, int z, byte face) => face switch
-    {
-        0 => (x, y - 1, z),
-        1 => (x, y + 1, z),
-        2 => (x, y, z - 1),
-        3 => (x, y, z + 1),
-        4 => (x - 1, y, z),
-        5 => (x + 1, y, z),
-        _ => (x, y, z)
-    };
 
 }

@@ -129,4 +129,55 @@ public sealed class WaterFlowTests
         Assert.Equal(1, DepthAt(fx, 0, Level, 8));
         Assert.Equal(loads, fx.World.SyncLoadCount);
     }
+
+    [Fact]
+    public async Task Water_runs_towards_a_drop_off_within_four_blocks_instead_of_everywhere()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(11, Floor, 8, Blocks.Air); // a pit three blocks east of the source
+        fx.World.SetBlock(8, Level, 8, WaterOf(0));
+
+        Run(fx, 12);
+
+        Assert.Equal(1, DepthAt(fx, 9, Level, 8));
+        Assert.Equal(-1, DepthAt(fx, 7, Level, 8));
+        Assert.Equal(-1, DepthAt(fx, 8, Level, 9));
+    }
+
+    [Fact]
+    public async Task Water_with_no_drop_off_in_reach_spreads_every_way()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(14, Floor, 8, Blocks.Air); // six blocks away: out of reach
+        fx.World.SetBlock(8, Level, 8, WaterOf(0));
+
+        Run(fx, 12);
+
+        foreach (var (x, z) in new[] { (9, 8), (7, 8), (8, 9), (8, 7) }) Assert.Equal(1, DepthAt(fx, x, Level, z));
+    }
+
+    [Fact]
+    public async Task Water_washes_a_plant_away()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(9, Level, 8, Blocks.Dandelion);
+        fx.World.SetBlock(8, Level, 8, WaterOf(0));
+
+        Run(fx, 12);
+
+        Assert.Equal(1, DepthAt(fx, 9, Level, 8));
+    }
+
+    [Fact]
+    public async Task A_source_is_not_overwritten_by_water_flowing_into_it()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, WaterOf(0));
+        fx.World.SetBlock(10, Level, 8, WaterOf(0));
+
+        Run(fx, 120);
+
+        Assert.Equal(0, DepthAt(fx, 8, Level, 8));
+        Assert.Equal(0, DepthAt(fx, 10, Level, 8));
+    }
 }

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.Gameplay.Entities;
 using Zenith.Event;
 using Zenith.Diagnostics;
@@ -26,6 +27,7 @@ class ServerContext
     public IBlockRegistry BlockRegistry { get; }
     public ItemPalette ItemPalette { get; }
     public RecipeRegistry Recipes { get; }
+    public BucketItems Buckets { get; }
     public ItemDurability Durability { get; }
     public CreativeCatalog Creative { get; }
     public CommandRuntime Commands { get; }
@@ -56,6 +58,7 @@ class ServerContext
         BlockRegistry = new BlockRegistry();
         ItemPalette = itemPalette;
         Recipes = recipes;
+        Buckets = new BucketItems(itemPalette);
         Durability = durability;
         Creative = creative;
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();

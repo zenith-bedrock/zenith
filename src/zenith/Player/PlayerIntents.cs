@@ -12,6 +12,7 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, Pl
 {
     public const int MaxPendingBlockEdits = 8;
     public const int MaxPendingInventoryStacks = 8;
+    public const int MaxPendingBuckets = 4;
     public const int MaxPendingChat = 8;
 
     private readonly Lock _movementInputLock = new();
@@ -26,6 +27,7 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, Pl
     private readonly PendingSignal _cancelFoodUseOverflow = new();
     private readonly PendingValue<long> _interact = new();
     private readonly PendingMailbox<BlockEditIntent> _blockEdits = new(MaxPendingBlockEdits);
+    private readonly PendingMailbox<BucketIntent> _buckets = new(MaxPendingBuckets);
     private readonly PendingMailbox<string> _chat = new(MaxPendingChat);
     private readonly PendingValue<GameMode> _gameMode = new();
     private readonly PendingSignal _respawn = new();
@@ -93,6 +95,11 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, Pl
     public bool SubmitBlockEdit(in BlockEditIntent intent) => _blockEdits.Submit(intent);
 
     public bool TryConsumeBlockEdit(out BlockEditIntent intent) => _blockEdits.TryConsume(out intent);
+
+    /// <summary>Queues a bucket use on a block (FIFO). Overflow rejects the newest.</summary>
+    public bool SubmitBucket(in BucketIntent intent) => _buckets.Submit(intent);
+
+    public bool TryConsumeBucket(out BucketIntent intent) => _buckets.TryConsume(out intent);
 
     /// <summary>Queues a rearrange ISR (FIFO). Overflow rejects the newest.</summary>
     public bool SubmitInventoryStack(in InventoryStackIntent intent) => windows.SubmitInventoryStack(intent);

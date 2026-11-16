@@ -42,7 +42,7 @@ Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support 
 - First consumers: grass spread/decay, leaves decay (persistent_bit/update_bit already in the palette), farmland
   hydration, sapling growth. Each consumer is its own change.
 
-## Step 3 — Liquids — WATER FLOW DONE, ADR §171 (buckets, swimming, drowning and lava still open)
+## Step 3 — Liquids — WATER FLOW DONE, ADR §171 (vanilla spread rules and buckets done; swimming, drowning and lava still open)
 
 - Water and lava as blocks with `liquid_depth`, flowing via scheduled ticks (water 5 ticks, lava 30 in the
   overworld), source/flow/fall rules, infinite water sources, lava+water → obsidian/cobblestone/stone.

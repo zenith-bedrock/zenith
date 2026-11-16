@@ -31,12 +31,13 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = new();
     private readonly WaterFlow _water;
     private ulong _now;
+    private IReadOnlyList<global::Zenith.Player.Player> _online = [];
 
     public BlockUpdateSystem(World.World world, PlayerManager players)
     {
         _world = world;
         _players = players;
-        _water = new WaterFlow(world, _updates);
+        _water = new WaterFlow(world, _updates, DropWashedAway);
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
@@ -44,6 +45,7 @@ sealed class BlockUpdateSystem : IGameSystem
         var updates = _updates;
         updates.Clear();
         _now = clock.CurrentTick;
+        _online = online;
 
         var changed = 0;
         while (changed < MaxChangedCellsPerTick && _world.BlockUpdates.TryDequeue(out var x, out var y, out var z))
@@ -105,10 +107,9 @@ sealed class BlockUpdateSystem : IGameSystem
             return;
 
         updates.Add((x, y, z, World.World.AirRuntimeId));
-        if (!_world.Rules.DoTileDrops || !BlockShapes.YieldsDrop(id)) return;
-        var drop = BlockLoot.DropOf(id);
-        if (drop.Count > 0)
-            _ = FloorDropFanout.TryDepositBatch(_world, _players, online, x, y, z,
-                [new FloorDropFanout.DepositRequest(drop.Id, drop.Count)]);
+        BlockSpill.Drop(_world, _players, online, x, y, z, id);
     }
+
+    /// <summary>Water is about to take a cell that held a block: it drops what it would drop broken.</summary>
+    private void DropWashedAway(int x, int y, int z, int id) => BlockSpill.Drop(_world, _players, _online, x, y, z, id);
 }

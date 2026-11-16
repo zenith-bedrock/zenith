@@ -5,6 +5,7 @@ using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Survival;
 using Zenith.Gameplay.WorldInteraction;
+using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.Server;
 using Zenith.Server.Composition;
 using Zenith.Session;
@@ -44,7 +45,7 @@ public sealed class GameplayCompositionTests
             typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem),
             typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
-            typeof(GameRuleSyncSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem),
+            typeof(GameRuleSyncSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem),
             typeof(InventorySystem), typeof(HungerSystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem)
         ];
         Assert.Equal(expected, loop.Systems.Select(system => system.GetType()).ToArray());
