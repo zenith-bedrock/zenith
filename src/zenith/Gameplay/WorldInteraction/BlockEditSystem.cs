@@ -108,261 +108,263 @@ sealed class BlockEditSystem : IGameSystem
             return false;
         }
 
-        var creative = player.GameMode == GameMode.Creative;
-        var inventoryChanged = false;
+        var applied = edit.BlockRuntimeId != World.World.AirRuntimeId
+            ? TryPlace(player, edit, online)
+            : TryBreak(player, edit, clock, online);
+        if (!applied) return false;
+
+        NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+        return true;
+    }
+
+    /// <summary>A refused placement: the placer's client gets the cell's real state back.</summary>
+    private bool RejectPlace(global::Zenith.Player.Player player, in BlockEditIntent edit)
+    {
+        ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
+        return false;
+    }
+
+    /// <summary>A refused break: stop the crack, drop the dig target, and resync the cell.</summary>
+    private bool RejectBreak(global::Zenith.Player.Player player, IReadOnlyList<global::Zenith.Player.Player> online, in BlockEditIntent edit, string? reason = null)
+    {
+        if (reason is not null)
+            player.Level.Logger?.Debug($"{reason} for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+        RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
+        return false;
+    }
+
+    private bool TryPlace(global::Zenith.Player.Player player, in BlockEditIntent edit, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (!Blocks.IsPlaceable(edit.BlockRuntimeId) &&
+            Blocks.Catalog.KindOf(edit.BlockRuntimeId) != BlockKind.DoubleSlab)
+            return RejectPlace(player, edit);
+
+        var existing = _world.GetBlock(edit.X, edit.Y, edit.Z);
+        if (!BlockShapes.CanPlace(_world, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId, existing))
+            return RejectPlace(player, edit);
+
+        // Body / peer obstruction before consume — avoid self-trap and hotbar steal (§15).
+        if (IsPlaceObstructedByPlayers(player, edit.X, edit.Y, edit.Z, online))
+            return RejectPlace(player, edit);
+
+        if (!World.WorldColumn.InRange(edit.Y))
+        {
+            player.Level.Logger?.Debug(
+                $"Place refused (outside the world's height) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+            return RejectPlace(player, edit);
+        }
+
         var consumedPlacementStack = false;
         InventorySnapshot placementSnapshot = default;
-        List<FloorDropFanout.DepositRequest>? floorDropRequests = null;
-        if (edit.BlockRuntimeId != World.World.AirRuntimeId)
+        if (player.GameMode != GameMode.Creative)
         {
-            if (!Blocks.IsPlaceable(edit.BlockRuntimeId) &&
-                Blocks.Catalog.KindOf(edit.BlockRuntimeId) != BlockKind.DoubleSlab)
-            {
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                return false;
-            }
+            var slot = edit.HotbarSlot;
+            if (!PlayerInventory.IsValidHotbarSlot(slot) ||
+                (edit.HasExpectedPlacementStackId &&
+                 player.Inventory.Get(slot).Id != edit.ExpectedPlacementStackId))
+                return RejectPlace(player, edit);
 
-            var existing = _world.GetBlock(edit.X, edit.Y, edit.Z);
-            if (!BlockShapes.CanPlace(_world, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId, existing))
-            {
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            // Body / peer obstruction before consume — avoid self-trap and hotbar steal (§15).
-            if (IsPlaceObstructedByPlayers(player, edit.X, edit.Y, edit.Z, online))
-            {
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            if (!World.WorldColumn.InRange(edit.Y))
-            {
-                player.Level.Logger?.Debug(
-                    $"Place refused (outside the world's height) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            if (!creative)
-            {
-                var slot = edit.HotbarSlot;
-                if (!PlayerInventory.IsValidHotbarSlot(slot) ||
-                    (edit.HasExpectedPlacementStackId &&
-                     player.Inventory.Get(slot).Id != edit.ExpectedPlacementStackId))
-                {
-                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-
-                placementSnapshot = player.Inventory.CaptureSnapshot();
-                if (!player.Inventory.TryConsumeOne(slot))
-                {
-                    ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-                consumedPlacementStack = true;
-            }
-
-            var placedId = edit.BlockRuntimeId;
-            BlockShapes.OnPlaced(_world, edit.X, edit.Y, edit.Z, placedId, _extra);
-            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, placedId))
-            {
-                if (consumedPlacementStack)
-                    player.Inventory.RestoreSnapshot(placementSnapshot);
-
-                _extra.Clear();
-                ResyncCellToBreaker(player, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            _appliedId = placedId;
-            CommitExtraWrites();
-
-            if (Blocks.IsChest(edit.BlockRuntimeId))
-            {
-                _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
-                _world.MarkBlockEntityDirty(edit.X, edit.Z);
-            }
-
-            inventoryChanged = consumedPlacementStack;
-
-            BlockSoundFanout.Place(
-                online, player.Client, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
-        }
-        else
-        {
-            var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
-            if (previous == World.World.AirRuntimeId)
-            {
-                RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            if (!creative)
-            {
-                var held = player.Inventory.Get(player.SelectedHotbarSlot);
-                var heldId = held.IsEmpty ? default : held.Id;
-                var need = edit.DigAuthorized
-                    ? edit.DigRequiredTicks
-                    : Blocks.BreakTicks(previous, heldId);
-                // need < 0 = no DigProfile (ADR §55); need > 0 requires dig auth + elapsed.
-                if (need < 0 || (need > 0 && !edit.DigAuthorized))
-                {
-                    player.Level.Logger?.Debug(
-                        $"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-
-                if (need > 0)
-                {
-                    var elapsed = clock.CurrentTick >= edit.DigStartedTick
-                        ? clock.CurrentTick - edit.DigStartedTick
-                        : 0;
-                    // Inclusive last mining tick: client often sends predict_destroy when progress
-                    // completes on tick (need-1) relative to DigStartedTick (AuthInput start).
-                    // Requiring elapsed >= need made crack UI finish while the gate still rejected.
-                    var minElapsed = need > 1 ? (ulong)(need - 1) : (ulong)need;
-                    if (elapsed < minElapsed)
-                    {
-                        player.Level.Logger?.Debug(
-                            $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks (min={minElapsed})");
-                        RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                        return false;
-                    }
-                }
-            }
-
-            // Resolve pair + SoftCap check while the broken cell still has its chest rid (§56 / §36).
-            var wasChest = Blocks.IsChest(previous);
-            OpenChestView pairView = default;
-            if (wasChest)
-                pairView = ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z);
-
-            // A bounded floor store is part of the authoritative destination for a concrete
-            // block drop. Refuse before removing the source when the floor cannot receive it;
-            // accepted breaks publish ground loot before the ordinary pickup lifecycle.
-            var shouldDrop = !creative && _world.Rules.DoTileDrops && ShouldDropBrokenBlock(previous, player);
-            var dropId = default(StackId);
-            if (wasChest)
-            {
-                floorDropRequests = [];
-                if (_world.Chests.TryGetSlots(edit.X, edit.Y, edit.Z, out var chestSlots))
-                {
-                    foreach (var stack in chestSlots)
-                    {
-                        if (stack.IsEmpty) continue;
-                        var id = stack.Id.IsBlock
-                            ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stack.Id.Value))
-                            : stack.Id;
-                        floorDropRequests.Add(new FloorDropFanout.DepositRequest(id, stack.Count));
-                    }
-                }
-
-                if (shouldDrop)
-                {
-                    dropId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
-                    floorDropRequests.Add(new FloorDropFanout.DepositRequest(dropId, 1));
-                }
-
-                if (floorDropRequests.Count > 0 &&
-                    !FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, floorDropRequests))
-                {
-                    player.Level.Logger?.Debug(
-                        $"Break refused (no chest-loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-            }
-            else if (shouldDrop)
-            {
-                var drop = BlockLoot.DropOf(previous);
-                dropId = drop.Id;
-                if (drop.Count > 0)
-                    floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, drop.Count)];
-                if (drop.Count > 0 && !FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, drop.Count))
-                {
-                    player.Level.Logger?.Debug(
-                        $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                    RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                    return false;
-                }
-            }
-
-            if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
-            {
-                player.Level.Logger?.Debug(
-                    $"Break refused (outside the world's height) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
-                RejectBreakToBreaker(player, online, edit.X, edit.Y, edit.Z);
-                return false;
-            }
-
-            _appliedId = World.World.AirRuntimeId;
-            BlockShapes.OnRemoved(_world, edit.X, edit.Y, edit.Z, previous, _extra);
-            CommitExtraWrites();
-
-            // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
-            // Creative skip). Small per-block value: mining alone barely dents hunger in vanilla
-            // either, sprinting dominates.
-            if (!creative)
-            {
-                player.Exhaustion += HungerSystem.MiningExhaustionPerBlock;
-                WearHeldTool(player);
-            }
-
-            // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
-            BlockCrackFanout.Stop(online, player.Client, edit.X, edit.Y, edit.Z);
-            BlockSoundFanout.Break(online, player.Client, edit.X, edit.Y, edit.Z, previous);
-            if (player.Dig.IsBreakTarget(edit.X, edit.Y, edit.Z))
-                player.Dig.AbortBreak();
-
-            if (wasChest)
-            {
-                var lidBroken = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
-                var lidPartner = false;
-                var partnerX = 0;
-                var partnerY = 0;
-                var partnerZ = 0;
-                if (pairView.TryGetPartner(out partnerX, out partnerY, out partnerZ))
-                    lidPartner = _world.Chests.ClearOpeners(partnerX, partnerY, partnerZ);
-
-                foreach (var peer in online)
-                {
-                    if (peer.Windows.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
-                        _ = peer.Windows.TryClearOpenContainer(out _);
-                }
-
-                if (lidBroken)
-                    ChestLidFanout.Close(online, player.Client, edit.X, edit.Y, edit.Z);
-                if (lidPartner)
-                    ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
-
-                _ = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
-                // Contents and block loot are already in the prevalidated ground-drop plan.
-            }
+            placementSnapshot = player.Inventory.CaptureSnapshot();
+            if (!player.Inventory.TryConsumeOne(slot))
+                return RejectPlace(player, edit);
+            consumedPlacementStack = true;
         }
 
-        if (floorDropRequests is { Count: > 0 })
+        var placedId = edit.BlockRuntimeId;
+        BlockShapes.OnPlaced(_world, edit.X, edit.Y, edit.Z, placedId, _extra);
+        if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, placedId))
         {
-            if (!FloorDropFanout.TryDepositBatch(_world, _players, online,
-                    edit.X, edit.Y, edit.Z, floorDropRequests))
-            {
-                throw new InvalidOperationException("Prevalidated block-drop floor commit failed.");
-            }
+            if (consumedPlacementStack)
+                player.Inventory.RestoreSnapshot(placementSnapshot);
 
-            player.Level.Logger?.Debug(
-                $"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+            _extra.Clear();
+            return RejectPlace(player, edit);
         }
 
-        if (inventoryChanged)
+        _appliedId = placedId;
+        CommitExtraWrites();
+
+        if (Blocks.IsChest(edit.BlockRuntimeId))
+        {
+            _world.Chests.Ensure(edit.X, edit.Y, edit.Z);
+            _world.MarkBlockEntityDirty(edit.X, edit.Z);
+        }
+
+        BlockSoundFanout.Place(online, player.Client, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+
+        if (consumedPlacementStack)
         {
             player.Client.Inventory.SendInventoryContent(player.Inventory);
             _world.Persistence.PersistInventory(player);
         }
 
-        NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
         return true;
+    }
+
+    private bool TryBreak(global::Zenith.Player.Player player, in BlockEditIntent edit, GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        var previous = _world.GetBlock(edit.X, edit.Y, edit.Z);
+        if (previous == World.World.AirRuntimeId)
+            return RejectBreak(player, online, edit);
+
+        var creative = player.GameMode == GameMode.Creative;
+        if (!creative && !IsBreakAuthorized(player, edit, previous, clock))
+            return RejectBreak(player, online, edit);
+
+        // Resolve pair + SoftCap check while the broken cell still has its chest rid (§56 / §36).
+        var wasChest = Blocks.IsChest(previous);
+        var pairView = wasChest ? ChestPairing.ViewFor(_world, edit.X, edit.Y, edit.Z) : default;
+
+        var shouldDrop = !creative && _world.Rules.DoTileDrops && ShouldDropBrokenBlock(previous, player);
+        if (!TryPlanDrops(player, edit, previous, wasChest, shouldDrop, out var floorDropRequests))
+            return RejectBreak(player, online, edit);
+
+        if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId))
+            return RejectBreak(player, online, edit, "Break refused (outside the world's height)");
+
+        _appliedId = World.World.AirRuntimeId;
+        BlockShapes.OnRemoved(_world, edit.X, edit.Y, edit.Z, previous, _extra);
+        CommitExtraWrites();
+
+        // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
+        // Creative skip). Small per-block value: mining alone barely dents hunger in vanilla
+        // either, sprinting dominates.
+        if (!creative)
+        {
+            player.Exhaustion += HungerSystem.MiningExhaustionPerBlock;
+            WearHeldTool(player);
+        }
+
+        // Stop crack at the broken cell — dig target may already be cleared after queue (§27).
+        BlockCrackFanout.Stop(online, player.Client, edit.X, edit.Y, edit.Z);
+        BlockSoundFanout.Break(online, player.Client, edit.X, edit.Y, edit.Z, previous);
+        if (player.Dig.IsBreakTarget(edit.X, edit.Y, edit.Z))
+            player.Dig.AbortBreak();
+
+        if (wasChest)
+            ReleaseBrokenChest(player, edit, pairView, online);
+
+        if (floorDropRequests is { Count: > 0 })
+        {
+            if (!FloorDropFanout.TryDepositBatch(_world, _players, online, edit.X, edit.Y, edit.Z, floorDropRequests))
+                throw new InvalidOperationException("Prevalidated block-drop floor commit failed.");
+
+            player.Level.Logger?.Debug($"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Survival digging gate. A block with no dig profile (need &lt; 0, ADR §55) cannot be broken, and one that takes time needs the
+    /// dig authorization the dig system prepared and the elapsed ticks it recorded.
+    /// </summary>
+    private bool IsBreakAuthorized(global::Zenith.Player.Player player, in BlockEditIntent edit, int previous, GameClock clock)
+    {
+        var held = player.Inventory.Get(player.SelectedHotbarSlot);
+        var heldId = held.IsEmpty ? default : held.Id;
+        var need = edit.DigAuthorized
+            ? edit.DigRequiredTicks
+            : Blocks.BreakTicks(previous, heldId);
+        if (need < 0 || (need > 0 && !edit.DigAuthorized))
+        {
+            player.Level.Logger?.Debug($"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+            return false;
+        }
+
+        if (need == 0) return true;
+
+        var elapsed = clock.CurrentTick >= edit.DigStartedTick
+            ? clock.CurrentTick - edit.DigStartedTick
+            : 0;
+        // Inclusive last mining tick: client often sends predict_destroy when progress
+        // completes on tick (need-1) relative to DigStartedTick (AuthInput start).
+        // Requiring elapsed >= need made crack UI finish while the gate still rejected.
+        var minElapsed = need > 1 ? (ulong)(need - 1) : (ulong)need;
+        if (elapsed >= minElapsed) return true;
+
+        player.Level.Logger?.Debug(
+            $"Break rejected (early) for {player.Username}: {elapsed}/{need} ticks (min={minElapsed})");
+        return false;
+    }
+
+    /// <summary>
+    /// What the break would put on the floor, and whether the floor can take it. A bounded floor store is part of the authoritative
+    /// destination for a concrete block drop, so the break is refused before the source is removed when it cannot; accepted breaks
+    /// publish ground loot before the ordinary pickup lifecycle. A chest's contents are always part of the plan.
+    /// </summary>
+    private bool TryPlanDrops(
+        global::Zenith.Player.Player player, in BlockEditIntent edit, int previous, bool wasChest, bool shouldDrop,
+        out List<FloorDropFanout.DepositRequest>? requests)
+    {
+        requests = null;
+        if (wasChest)
+        {
+            requests = [];
+            if (_world.Chests.TryGetSlots(edit.X, edit.Y, edit.Z, out var chestSlots))
+            {
+                foreach (var stack in chestSlots)
+                {
+                    if (stack.IsEmpty) continue;
+                    var id = stack.Id.IsBlock
+                        ? StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(stack.Id.Value))
+                        : stack.Id;
+                    requests.Add(new FloorDropFanout.DepositRequest(id, stack.Count));
+                }
+            }
+
+            if (shouldDrop)
+            {
+                var chestId = StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(Blocks.Chest));
+                requests.Add(new FloorDropFanout.DepositRequest(chestId, 1));
+            }
+
+            if (requests.Count > 0 && !FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, requests))
+            {
+                player.Level.Logger?.Debug(
+                    $"Break refused (no chest-loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!shouldDrop) return true;
+
+        var drop = BlockLoot.DropOf(previous);
+        if (drop.Count <= 0) return true;
+
+        requests = [new FloorDropFanout.DepositRequest(drop.Id, drop.Count)];
+        if (FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, drop.Id, drop.Count)) return true;
+
+        player.Level.Logger?.Debug(
+            $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
+        return false;
+    }
+
+    /// <summary>Closes the lids, clears every viewer's open window on the chest, and dumps its storage (the loot is already planned).</summary>
+    private void ReleaseBrokenChest(global::Zenith.Player.Player player, in BlockEditIntent edit, OpenChestView pairView, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        var lidBroken = _world.Chests.ClearOpeners(edit.X, edit.Y, edit.Z);
+        var lidPartner = false;
+        var partnerX = 0;
+        var partnerY = 0;
+        var partnerZ = 0;
+        if (pairView.TryGetPartner(out partnerX, out partnerY, out partnerZ))
+            lidPartner = _world.Chests.ClearOpeners(partnerX, partnerY, partnerZ);
+
+        foreach (var peer in online)
+        {
+            if (peer.Windows.OpenChest is { } open && open.Contains(edit.X, edit.Y, edit.Z))
+                _ = peer.Windows.TryClearOpenContainer(out _);
+        }
+
+        if (lidBroken)
+            ChestLidFanout.Close(online, player.Client, edit.X, edit.Y, edit.Z);
+        if (lidPartner)
+            ChestLidFanout.Close(online, player.Client, partnerX, partnerY, partnerZ);
+
+        _ = _world.Chests.RemoveAndDump(edit.X, edit.Y, edit.Z);
     }
 
     /// <summary>Applies the shape writes a placement/removal produced (the other half of a door); drops those a world refuses.</summary>
