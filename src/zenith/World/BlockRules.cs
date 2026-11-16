@@ -70,16 +70,45 @@ static class BlockSupportRules
     /// <summary>
     /// States that only change appearance (pane connections, leaf bookkeeping bits): the default permutation is placed.
     /// </summary>
-    public static bool IsCosmeticState(IReadOnlyDictionary<string, List<string>> properties)
+    public static bool IsCosmeticState(BlockFamily family)
     {
-        foreach (var key in properties.Keys)
+        foreach (var property in family.Properties)
         {
-            if (!(key.StartsWith("minecraft:connection_", StringComparison.Ordinal) ||
-                  key is "persistent_bit" or "update_bit" or "deprecated"))
+            if (!(property.Name.StartsWith("minecraft:connection_", StringComparison.Ordinal) ||
+                  property.Name is "persistent_bit" or "update_bit" or "deprecated"))
                 return false;
         }
         return true;
     }
+
+    /// <summary>State-independent facts about a block type, decided once when the catalog is built (needs the kind already set).</summary>
+    public static BlockTraits TraitsOf(BlockFamily family)
+    {
+        var name = family.Name;
+        var traits = BlockTraits.None;
+        if (IsSoil(name)) traits |= BlockTraits.Soil;
+        if (family.Kind == BlockKind.Plant && NeedsSoil(name)) traits |= BlockTraits.NeedsSoil;
+        if (name.StartsWith("minecraft:iron_", StringComparison.Ordinal)) traits |= BlockTraits.RedstoneOnly;
+        // Walls, fences and panes join full opaque blocks, not glass or foliage.
+        if (family.Kind is BlockKind.Cube or BlockKind.Pillar &&
+            !name.Contains("glass", StringComparison.Ordinal) && !name.Contains("leaves", StringComparison.Ordinal))
+            traits |= BlockTraits.WallConnectable;
+        return traits;
+    }
+}
+
+/// <summary>Name suffixes that tell block families of the same state signature apart.</summary>
+static class BlockNames
+{
+    public static bool IsDoor(string name) => name.EndsWith("_door", StringComparison.Ordinal);
+
+    public static bool IsTrapdoor(string name) => name.EndsWith("trapdoor", StringComparison.Ordinal);
+
+    public static bool IsFenceGate(string name) => name.EndsWith("fence_gate", StringComparison.Ordinal);
+
+    public static bool IsSlab(string name) => name.EndsWith("_slab", StringComparison.Ordinal);
+
+    public static bool IsDoubleSlab(string name) => name.EndsWith("_double_slab", StringComparison.Ordinal);
 }
 
 /// <summary>

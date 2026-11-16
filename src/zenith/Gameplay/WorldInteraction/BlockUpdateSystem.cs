@@ -7,7 +7,8 @@ namespace Zenith.Gameplay.WorldInteraction;
 
 /// <summary>
 /// Reacts to world changes (ADR §164): every cell written since last tick is fanned out to its six neighbours, each
-/// neighbour is asked whether it lost what it hangs on (<see cref="BlockBehaviors"/>), and unsupported blocks break
+/// neighbour is asked whether it can still stand (<see cref="BlockShapes.CanExist"/>) and whether its shape changed
+/// (<see cref="BlockShapes.UpdateShape"/>); unsupported blocks break
 /// and drop like any other. Cascades (a door's upper half after its lower half, a plant on a plant) continue through the
 /// same queue, bounded per tick. Also drains <see cref="ScheduledTicks"/> that came due. Runs after block edits and gravity.
 /// </summary>
@@ -70,13 +71,31 @@ sealed class BlockUpdateSystem : IGameSystem
     {
         if (y < Blocks.FlatMinY || y > MaxY) return;
         var id = _world.GetBlock(x, y, z);
-        if (id == World.World.AirRuntimeId || !BlockBehaviors.LostSupport(_world, x, y, z, id)) return;
+        if (id == World.World.AirRuntimeId) return;
+
+        if (!BlockShapes.CanExist(_world, x, y, z, id))
+        {
+            BreakUnsupported(x, y, z, id, online, updates);
+            return;
+        }
+
+        // Neighbour-dependent shape (wall connections): rewrite in place when it changed.
+        var shaped = BlockShapes.UpdateShape(_world, x, y, z, id);
+        if (shaped != id && _world.CanAcceptBlockWrite(x, y, z, shaped) && _world.TrySetBlock(x, y, z, shaped))
+            updates.Add((x, y, z, shaped));
+    }
+
+    private void BreakUnsupported(
+        int x, int y, int z, int id,
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        List<(int X, int Y, int Z, int BlockRuntimeId)> updates)
+    {
         if (!_world.CanAcceptBlockWrite(x, y, z, World.World.AirRuntimeId) ||
             !_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
             return;
 
         updates.Add((x, y, z, World.World.AirRuntimeId));
-        if (!_world.Rules.DoTileDrops || BlockBehaviors.IsDoorUpperHalf(id)) return;
+        if (!_world.Rules.DoTileDrops || !BlockShapes.YieldsDrop(id)) return;
         var drop = BlockLoot.DropOf(id);
         if (drop.Count > 0)
             _ = FloorDropFanout.TryDepositBatch(_world, _players, online, x, y, z,

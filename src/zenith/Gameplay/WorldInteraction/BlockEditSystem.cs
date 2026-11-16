@@ -19,7 +19,7 @@ sealed class BlockEditSystem : IGameSystem
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _joinerSubsetScratch = new();
     private readonly World.World _world;
     private readonly ItemDurability _durability;
-    private readonly List<BlockShapes.Write> _extra = new();
+    private readonly List<BlockWrite> _extra = new();
     private int _appliedId;
 
     public BlockEditSystem(PlayerManager players, World.World world, ItemDurability durability)
@@ -165,7 +165,8 @@ sealed class BlockEditSystem : IGameSystem
                 consumedPlacementStack = true;
             }
 
-            var placedId = BlockShapes.Finalize(_world, edit.X, edit.Y, edit.Z, edit.BlockRuntimeId, _extra);
+            var placedId = edit.BlockRuntimeId;
+            BlockShapes.OnPlaced(_world, edit.X, edit.Y, edit.Z, placedId, _extra);
             if (!_world.TrySetBlock(edit.X, edit.Y, edit.Z, placedId))
             {
                 if (consumedPlacementStack)
@@ -309,7 +310,7 @@ sealed class BlockEditSystem : IGameSystem
             }
 
             _appliedId = World.World.AirRuntimeId;
-            BlockShapes.AfterRemoval(_world, edit.X, edit.Y, edit.Z, previous, _extra);
+            BlockShapes.OnRemoved(_world, edit.X, edit.Y, edit.Z, previous, _extra);
             CommitExtraWrites();
 
             // Phase XXV — mining exhaustion source (survival only, matching HungerSystem's own
@@ -376,7 +377,7 @@ sealed class BlockEditSystem : IGameSystem
         return true;
     }
 
-    /// <summary>Applies the shape writes a placement/removal produced (door upper half, wall neighbours); drops those a world refuses.</summary>
+    /// <summary>Applies the shape writes a placement/removal produced (the other half of a door); drops those a world refuses.</summary>
     private void CommitExtraWrites()
     {
         for (var i = _extra.Count - 1; i >= 0; i--)
@@ -392,7 +393,7 @@ sealed class BlockEditSystem : IGameSystem
     private bool ApplyToggle(global::Zenith.Player.Player player, in BlockEditIntent edit)
     {
         if (!edit.IsInWorldBounds() || !IsWithinReach(player, edit.X, edit.Y, edit.Z)) return false;
-        if (!BlockShapes.TryToggle(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
+        if (!BlockShapes.TryInteract(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
         CommitExtraWrites();
         return _extra.Count > 0;
     }

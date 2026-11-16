@@ -7,7 +7,7 @@ cell again in N ticks" — so they share one foundation instead of each inventin
 
 **Decision.** `World.TrySetBlock` feeds `BlockUpdateQueue` (bounded 8192, deduplicated, FIFO) on every successful write,
 O(1). `BlockUpdateSystem` runs after block edits and gravity: per tick it drains at most 256 changed cells, evaluates
-each cell and its six neighbours with `BlockBehaviors.LostSupport` (pure, by `BlockKind`), and breaks and drops the
+each cell and its six neighbours with `BlockShapes.CanExist` and `BlockShapes.UpdateShape` (pure, per-kind shapes — see §165), and breaks and drops the
 unsupported ones; breaks are world writes, so cascades (door upper half, plant on a plant) continue through the same
 queue and spill to the next tick when over budget. `ScheduledTicks` (min-heap by due tick, one entry per cell, earliest
 wins, bounded 8192) is drained in the same system and re-evaluates the cell; it has no other consumer until liquids.

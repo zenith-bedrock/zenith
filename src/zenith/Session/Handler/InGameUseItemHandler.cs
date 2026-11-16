@@ -146,8 +146,8 @@ partial class InGameSessionHandler
             }
         }
 
-        // Doors, trapdoors and fence gates open and close on right click (iron variants answer to redstone only).
-        if (Blocks.Catalog.KindOf(clicked) is BlockKind.Door or BlockKind.Trapdoor or BlockKind.FenceGate)
+        // Doors, trapdoors and fence gates open and close on right click (sneaking with a block in hand places instead).
+        if (BlockShapes.IsInteractive(clicked))
         {
             var sneakingAtDoor = player.IsSneaking;
             if (player.Intents.TryPeekMovementInput(out var doorMove))
@@ -191,7 +191,7 @@ partial class InGameSessionHandler
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
         var heldKind = Blocks.Catalog.KindOf(runtimeId);
         if (heldKind == BlockKind.Slab && world.GetBlock(blockX, blockY, blockZ) is var clickedForMerge &&
-            BlockShapes.TryMergeInto(clickedForMerge, runtimeId, requireOppositeHalf: false, blockFace, out var mergedAtClick))
+            BlockShapes.TryMergeSlab(clickedForMerge, runtimeId, requireOppositeHalf: false, blockFace, out var mergedAtClick))
         {
             // Second slab onto the open half of the slab that was clicked: the clicked cell becomes a double slab.
             SubmitPlacement(session, player, blockX, blockY, blockZ, mergedAtClick, hotbarSlot, stack.Id);
@@ -200,10 +200,10 @@ partial class InGameSessionHandler
 
         if (!Blocks.IsChest(runtimeId))
         {
-            // State-bearing families (stairs, slabs, logs, torches) get the state the placement context implies;
-            // plants are refused without ground so nothing floats.
-            if (!BlockPlacement.TryResolve(runtimeId, blockFace, clickY, player.Yaw, out runtimeId) ||
-                !BlockPlacement.HasSupport(world, tx, ty, tz, runtimeId))
+            // The block's shape picks the state the placement implies (stairs, slabs, doors…) and refuses a spot
+            // where it could not stand (a flower without ground, a torch without a wall) so nothing floats.
+            if (!BlockShapes.TryResolve(runtimeId, blockFace, clickY, player.Yaw, out runtimeId) ||
+                !BlockShapes.CanExist(world, tx, ty, tz, runtimeId))
             {
                 session.Context.Logger.Debug($"Rejected place: no valid state/support at {tx},{ty},{tz} for {player.Username}");
                 session.Protocol.World.SendUpdateBlock(tx, ty, tz, world.GetBlock(tx, ty, tz));
@@ -215,7 +215,7 @@ partial class InGameSessionHandler
             runtimeId = ChestPairing.AlignFacingWithNeighbor(world, tx, ty, tz, runtimeId);
 
         if (heldKind == BlockKind.Slab &&
-            BlockShapes.TryMergeInto(world.GetBlock(tx, ty, tz), runtimeId, requireOppositeHalf: true, null, out var mergedAtTarget))
+            BlockShapes.TryMergeSlab(world.GetBlock(tx, ty, tz), runtimeId, requireOppositeHalf: true, null, out var mergedAtTarget))
             runtimeId = mergedAtTarget;
 
         var intent = BlockEditIntent.Set(tx, ty, tz, runtimeId, hotbarSlot, stack.Id);

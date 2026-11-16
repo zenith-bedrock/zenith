@@ -12,12 +12,16 @@ public class BlockUpdateTests
         return id;
     }
 
-    private static int WithState(string name, string key, string value)
+    private static int With(int id, BitKey key, bool value)
     {
-        var id = Id(name);
-        var changed = BlockShapes.WithState(id, (key, value));
-        Assert.NotNull(changed);
-        return changed.Value;
+        Assert.True(Blocks.Catalog.States.TrySet(ref id, key, value));
+        return id;
+    }
+
+    private static int With<T>(int id, EnumKey<T> key, T value) where T : unmanaged, Enum
+    {
+        Assert.True(Blocks.Catalog.States.TrySet(ref id, key, value));
+        return id;
     }
 
     private static void Settle(IntentTestFixture fx, BlockUpdateSystem system, int ticks = 4)
@@ -100,7 +104,7 @@ public class BlockUpdateTests
         var fx = new IntentTestFixture();
         var system = new BlockUpdateSystem(fx.World, fx.Players);
         var lower = Id("minecraft:wooden_door");
-        var upper = WithState("minecraft:wooden_door", "upper_block_bit", "1");
+        var upper = With(Id("minecraft:wooden_door"), StateKeys.UpperBlock, true);
         fx.World.TrySetBlock(9, 70, 9, Blocks.Stone);
         fx.World.TrySetBlock(9, 71, 9, lower);
         fx.World.TrySetBlock(9, 72, 9, upper);
@@ -120,8 +124,8 @@ public class BlockUpdateTests
         var fx = new IntentTestFixture();
         var system = new BlockUpdateSystem(fx.World, fx.Players);
         // Placed by clicking the north face of the block at z+1: the torch cell is one north of it, facing "north".
-        var wallTorch = WithState("minecraft:torch", "torch_facing_direction", "north");
-        var standing = WithState("minecraft:torch", "torch_facing_direction", "top");
+        var wallTorch = With(Id("minecraft:torch"), StateKeys.TorchFacing, TorchFacing.North);
+        var standing = With(Id("minecraft:torch"), StateKeys.TorchFacing, TorchFacing.Top);
         fx.World.TrySetBlock(2, 70, 11, Blocks.Stone);
         fx.World.TrySetBlock(2, 70, 10, wallTorch);
         fx.World.TrySetBlock(6, 69, 6, Blocks.Stone);

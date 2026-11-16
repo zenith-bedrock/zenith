@@ -1,192 +1,79 @@
 namespace Zenith.World;
 
 /// <summary>
-/// World-dependent block shape rules: the second half of a door, wall connections, slab merging and open/close
-/// toggling. Everything here is a pure function of the world snapshot that returns the writes to perform — the caller
-/// (the gameplay tick) owns the actual mutation, so the single-writer rule holds.
+/// The one entry point to block rules. Each <see cref="BlockKind"/> has a <see cref="BlockShape"/> in <c>Shapes/</c>
+/// that owns its placement, support, reshaping and interaction; this class only routes a runtime id to its shape and
+/// holds the few rules that span two blocks (replacing air, slab merging). Everything here is read-only against the
+/// world: the writes it reports are committed by the gameplay tick.
 /// </summary>
 static class BlockShapes
 {
-    /// <summary>One cell write produced by a shape rule.</summary>
-    public readonly record struct Write(int X, int Y, int Z, int BlockRuntimeId);
+    private static readonly BlockShape[] ByKind = BuildTable();
 
-    private static readonly (int Dx, int Dz, string Key)[] Sides =
-    [
-        (0, -1, "wall_connection_type_north"),
-        (0, 1, "wall_connection_type_south"),
-        (1, 0, "wall_connection_type_east"),
-        (-1, 0, "wall_connection_type_west")
-    ];
-
-    /// <summary>The state of <paramref name="runtimeId"/> with the given properties replaced; null when it has no such state.</summary>
-    public static int? WithState(int runtimeId, params (string Key, string Value)[] overrides)
+    private static BlockShape[] BuildTable()
     {
-        var palette = Blocks.Palette;
-        if (!palette.TryGetName(runtimeId, out var name) || !palette.TryGetState(runtimeId, out var state)) return null;
-        var map = new Dictionary<string, string>(overrides.Length);
-        foreach (var (key, value) in overrides) map[key] = value;
-        var merged = state.With(map);
-        return merged is not null && palette.TryGetExact(name, merged, out var id) ? id : null;
+        var table = new BlockShape[Enum.GetValues<BlockKind>().Length];
+        Array.Fill(table, new CubeShape());
+        table[(int)BlockKind.Unsupported] = new CuratedShape();
+        table[(int)BlockKind.Pillar] = new PillarShape();
+        table[(int)BlockKind.Stairs] = new StairsShape();
+        table[(int)BlockKind.Slab] = new SlabShape();
+        table[(int)BlockKind.DoubleSlab] = new DoubleSlabShape();
+        table[(int)BlockKind.Plant] = new PlantShape();
+        table[(int)BlockKind.Torch] = new TorchShape();
+        table[(int)BlockKind.Door] = new DoorShape();
+        table[(int)BlockKind.Trapdoor] = new TrapdoorShape();
+        table[(int)BlockKind.FenceGate] = new FenceGateShape();
+        table[(int)BlockKind.Wall] = new WallShape();
+        return table;
     }
 
-    /// <summary>Whether a placement of <paramref name="runtimeId"/> at the cell is legal for this world (door needs headroom).</summary>
+    public static BlockShape For(int runtimeId) => ByKind[(int)Blocks.Catalog.KindOf(runtimeId)];
+
+    /// <summary>The state to place for a held block clicked on <paramref name="face"/> with the cursor at <paramref name="cursorY"/> (0..1).</summary>
+    public static bool TryResolve(int heldRuntimeId, byte face, float cursorY, float yawDegrees, out int placedRuntimeId)
+    {
+        placedRuntimeId = heldRuntimeId;
+        return For(heldRuntimeId).TryResolve(ref placedRuntimeId, new PlaceContext(Directions.ToFace(face), cursorY, yawDegrees));
+    }
+
+    /// <summary>Whether the block can stand at the cell given what is around it.</summary>
+    public static bool CanExist(World world, int x, int y, int z, int runtimeId) =>
+        For(runtimeId).CanExist(world, x, y, z, runtimeId);
+
+    /// <summary>Whether <paramref name="runtimeId"/> may be written over <paramref name="existing"/>: air (with room for the block), or a slab merging.</summary>
     public static bool CanPlace(World world, int x, int y, int z, int runtimeId, int existing)
     {
-        if (IsSlabMerge(existing, runtimeId)) return true;
+        if (SlabShape.IsMerge(existing, runtimeId)) return true;
         // A double slab only ever comes from merging into a single slab, never into open air.
         if (existing != World.AirRuntimeId || Blocks.Catalog.KindOf(runtimeId) == BlockKind.DoubleSlab) return false;
-        return Blocks.Catalog.KindOf(runtimeId) != BlockKind.Door || world.GetBlock(x, y + 1, z) == World.AirRuntimeId;
+        return For(runtimeId).HasRoom(world, x, y, z, runtimeId);
     }
 
-    /// <summary>
-    /// Final id for the cell being placed plus any extra writes the placement implies (door upper half, neighbour wall
-    /// updates). Returns the id to write at the cell itself.
-    /// </summary>
-    public static int Finalize(World world, int x, int y, int z, int runtimeId, List<Write> extra)
-    {
-        switch (Blocks.Catalog.KindOf(runtimeId))
-        {
-            case BlockKind.Door:
-                if (WithState(runtimeId, ("upper_block_bit", "1")) is { } upper)
-                    extra.Add(new Write(x, y + 1, z, upper));
-                return runtimeId;
+    public static void OnPlaced(World world, int x, int y, int z, int runtimeId, List<BlockWrite> extra) =>
+        For(runtimeId).OnPlaced(world, x, y, z, runtimeId, extra);
 
-            case BlockKind.Wall:
-                var wall = ReshapeWall(world, x, y, z, runtimeId);
-                RefreshNeighbourWalls(world, x, y, z, extra, selfId: wall);
-                return wall;
+    public static void OnRemoved(World world, int x, int y, int z, int removedRuntimeId, List<BlockWrite> extra) =>
+        For(removedRuntimeId).OnRemoved(world, x, y, z, removedRuntimeId, extra);
 
-            default:
-                return runtimeId;
-        }
-    }
+    /// <summary>The state the block at the cell should have given its neighbours; the same id when nothing changes.</summary>
+    public static int UpdateShape(World world, int x, int y, int z, int runtimeId) =>
+        For(runtimeId).UpdateShape(world, x, y, z, runtimeId);
 
-    /// <summary>Writes that bring neighbouring walls in line after the cell was cleared.</summary>
-    public static void AfterRemoval(World world, int x, int y, int z, int removedRuntimeId, List<Write> extra)
-    {
-        var kind = Blocks.Catalog.KindOf(removedRuntimeId);
-        if (kind == BlockKind.Door)
-        {
-            // Breaking either half takes the whole door with it.
-            foreach (var dy in new[] { 1, -1 })
-            {
-                var partner = world.GetBlock(x, y + dy, z);
-                if (SameDoor(removedRuntimeId, partner))
-                    extra.Add(new Write(x, y + dy, z, World.AirRuntimeId));
-            }
-        }
-        RefreshNeighbourWalls(world, x, y, z, extra, selfId: World.AirRuntimeId);
-    }
+    public static bool IsInteractive(int runtimeId) => For(runtimeId).IsInteractive;
 
-    /// <summary>
-    /// Open/close toggle for a right-clicked door, trapdoor or fence gate; false when the block does not toggle by hand
-    /// (iron variants answer to redstone only).
-    /// </summary>
-    public static bool TryToggle(World world, int x, int y, int z, List<Write> writes)
+    /// <summary>Right click on the block at the cell; true when it produced <paramref name="writes"/>.</summary>
+    public static bool TryInteract(World world, int x, int y, int z, List<BlockWrite> writes)
     {
         var id = world.GetBlock(x, y, z);
-        var kind = Blocks.Catalog.KindOf(id);
-        if (kind is not (BlockKind.Door or BlockKind.Trapdoor or BlockKind.FenceGate)) return false;
-        if (!Blocks.Catalog.Palette.TryGetName(id, out var name) || name.StartsWith("minecraft:iron_", StringComparison.Ordinal))
-            return false;
-        if (!Blocks.Catalog.Palette.TryGetState(id, out var state)) return false;
-
-        var open = state.Get("open_bit") == "1" ? "0" : "1";
-        if (WithState(id, ("open_bit", open)) is not { } toggled) return false;
-        writes.Add(new Write(x, y, z, toggled));
-
-        if (kind == BlockKind.Door)
-        {
-            var dy = state.Get("upper_block_bit") == "1" ? -1 : 1;
-            var partner = world.GetBlock(x, y + dy, z);
-            if (SameDoor(id, partner) && WithState(partner, ("open_bit", open)) is { } partnerToggled)
-                writes.Add(new Write(x, y + dy, z, partnerToggled));
-        }
-        return true;
+        return For(id).TryInteract(world, x, y, z, id, writes);
     }
 
-    /// <summary>The double slab that replaces <paramref name="existing"/> when a second slab joins it, if any.</summary>
-    public static bool TryMergeInto(int existing, int placedSlab, bool requireOppositeHalf, int? clickedFace, out int doubleSlab)
-    {
-        doubleSlab = 0;
-        var catalog = Blocks.Catalog;
-        if (catalog.KindOf(existing) != BlockKind.Slab || catalog.KindOf(placedSlab) != BlockKind.Slab) return false;
-        var palette = catalog.Palette;
-        if (!palette.TryGetName(existing, out var existingName) || !palette.TryGetName(placedSlab, out var placedName) ||
-            existingName != placedName) return false;
-        if (!palette.TryGetState(existing, out var existingState) || !palette.TryGetState(placedSlab, out var placedState)) return false;
+    public static bool YieldsDrop(int runtimeId) => For(runtimeId).YieldsDrop(runtimeId);
 
-        var existingHalf = existingState.Get("minecraft:vertical_half");
-        if (requireOppositeHalf && existingHalf == placedState.Get("minecraft:vertical_half")) return false;
-        if (clickedFace is { } face && !(face == 1 && existingHalf == "bottom" || face == 0 && existingHalf == "top")) return false;
+    /// <inheritdoc cref="SlabShape.TryMerge"/>
+    public static bool TryMergeSlab(int existing, int placed, bool requireOppositeHalf, byte? clickedFace, out int doubleSlab) =>
+        SlabShape.TryMerge(existing, placed, requireOppositeHalf, clickedFace is { } face ? Directions.ToFace(face) : null, out doubleSlab);
 
-        var doubleName = existingName[..^"_slab".Length] + "_double_slab";
-        return palette.TryGet(doubleName, out doubleSlab);
-    }
-
-    /// <summary>True when <paramref name="placed"/> is the double slab that a single <paramref name="existing"/> slab becomes.</summary>
-    public static bool IsSlabMerge(int existing, int placed)
-    {
-        var catalog = Blocks.Catalog;
-        if (catalog.KindOf(existing) != BlockKind.Slab || catalog.KindOf(placed) != BlockKind.DoubleSlab) return false;
-        var palette = catalog.Palette;
-        return palette.TryGetName(existing, out var single) && palette.TryGetName(placed, out var doubled) &&
-               doubled == single[..^"_slab".Length] + "_double_slab";
-    }
-
-    private static bool SameDoor(int a, int b)
-    {
-        var palette = Blocks.Catalog.Palette;
-        return Blocks.Catalog.KindOf(b) == BlockKind.Door && palette.TryGetName(a, out var na) &&
-               palette.TryGetName(b, out var nb) && na == nb;
-    }
-
-    private static void RefreshNeighbourWalls(World world, int x, int y, int z, List<Write> extra, int selfId)
-    {
-        foreach (var (dx, dz, _) in Sides)
-        {
-            var nx = x + dx;
-            var nz = z + dz;
-            var neighbour = world.GetBlock(nx, y, nz);
-            if (Blocks.Catalog.KindOf(neighbour) != BlockKind.Wall) continue;
-            var reshaped = ReshapeWall(world, nx, y, nz, neighbour, overrideCell: (x, y, z, selfId));
-            if (reshaped != neighbour) extra.Add(new Write(nx, y, nz, reshaped));
-        }
-    }
-
-    // A wall connects to walls, fence gates and opaque full blocks; "tall" when something sits on top of the wall.
-    private static int ReshapeWall(
-        World world, int x, int y, int z, int wallId,
-        (int X, int Y, int Z, int Id)? overrideCell = null)
-    {
-        int Read(int cx, int cy, int cz) =>
-            overrideCell is { } o && o.X == cx && o.Y == cy && o.Z == cz ? o.Id : world.GetBlock(cx, cy, cz);
-
-        var aboveId = Read(x, y + 1, z);
-        var aboveSolid = aboveId != World.AirRuntimeId && !Blocks.IsFluid(aboveId) && !Blocks.IsPassableDecoration(aboveId);
-        var overrides = new List<(string, string)>(5);
-        var connected = new bool[4];
-        for (var i = 0; i < Sides.Length; i++)
-        {
-            var (dx, dz, key) = Sides[i];
-            connected[i] = ConnectsTo(Read(x + dx, y, z + dz));
-            overrides.Add((key, !connected[i] ? "none" : aboveSolid ? "tall" : "short"));
-        }
-
-        // Post unless the wall runs straight through (north–south or east–west with nothing else) and is not capped.
-        var straight = connected[0] && connected[1] && !connected[2] && !connected[3] ||
-                       connected[2] && connected[3] && !connected[0] && !connected[1];
-        overrides.Add(("wall_post_bit", straight && !aboveSolid ? "0" : "1"));
-        return WithState(wallId, overrides.ToArray()) ?? wallId;
-    }
-
-    private static bool ConnectsTo(int id)
-    {
-        var kind = Blocks.Catalog.KindOf(id);
-        if (kind is BlockKind.Wall or BlockKind.FenceGate) return true;
-        if (kind is not (BlockKind.Cube or BlockKind.Pillar)) return false;
-        if (!Blocks.Catalog.Palette.TryGetName(id, out var name)) return false;
-        return Blocks.BlocksMovement(id) && !name.Contains("glass", StringComparison.Ordinal) &&
-               !name.Contains("leaves", StringComparison.Ordinal);
-    }
+    public static bool IsSlabMerge(int existing, int placed) => SlabShape.IsMerge(existing, placed);
 }

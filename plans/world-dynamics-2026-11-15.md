@@ -21,7 +21,7 @@ but they share one foundation instead of each inventing a queue like gravity did
 
 ## Step 1 — Block update foundation (prerequisite for everything else) — DONE, ADR §164
 
-Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support rules in `BlockBehaviors`; the plant-support hack moved onto it, gravity deliberately stayed on its own store; no behaviour registry until liquids need one. Measured p99 0.54 ms at 256 changed cells/tick. The original design notes follow.
+Implemented: `BlockUpdateQueue`, `ScheduledTicks`, `BlockUpdateSystem`, support rules in the per-kind shapes (ADR §165); the plant-support hack moved onto it, gravity deliberately stayed on its own store; no behaviour registry until liquids need one. Measured p99 0.54 ms at 256 changed cells/tick. The original design notes follow.
 
 - `BlockUpdateQueue`: bounded, deduplicated set of cells to re-evaluate, fed by every successful world write
   (place, break, gravity landing, explosions). Neighbour fan-out (6 faces) happens when a cell is drained, not when

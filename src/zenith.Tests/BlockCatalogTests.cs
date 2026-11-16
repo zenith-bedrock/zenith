@@ -66,17 +66,17 @@ public class BlockCatalogTests
     public void Stairs_take_direction_from_yaw_and_half_from_the_cursor()
     {
         var held = Id("minecraft:oak_stairs");
-        Assert.True(BlockPlacement.TryResolve(held, 1, 0.5f, 0f, out var south));      // yaw 0 = looking south
-        Assert.True(BlockPlacement.TryResolve(held, 1, 0.5f, 90f, out var west));
+        Assert.True(BlockShapes.TryResolve(held, 1, 0.5f, 0f, out var south));      // yaw 0 = looking south
+        Assert.True(BlockShapes.TryResolve(held, 1, 0.5f, 90f, out var west));
         Assert.NotEqual(south, west);
         Assert.True(Blocks.Palette.TryGetState(south, out var s));
         Assert.Equal("2", s.Get("weirdo_direction"));
         Assert.Equal("0", s.Get("upside_down_bit"));
 
-        Assert.True(BlockPlacement.TryResolve(held, 2, 0.9f, 0f, out var upper)); // side face, cursor high
+        Assert.True(BlockShapes.TryResolve(held, 2, 0.9f, 0f, out var upper)); // side face, cursor high
         Assert.True(Blocks.Palette.TryGetState(upper, out var u));
         Assert.Equal("1", u.Get("upside_down_bit"));
-        Assert.True(BlockPlacement.TryResolve(held, 0, 0.2f, 0f, out var ceiling));  // under a block
+        Assert.True(BlockShapes.TryResolve(held, 0, 0.2f, 0f, out var ceiling));  // under a block
         Assert.True(Blocks.Palette.TryGetState(ceiling, out var c));
         Assert.Equal("1", c.Get("upside_down_bit"));
     }
@@ -84,28 +84,28 @@ public class BlockCatalogTests
     [Fact]
     public void Slabs_logs_and_torches_resolve_their_states_from_the_face()
     {
-        Assert.True(BlockPlacement.TryResolve(Id("minecraft:oak_slab"), 1, 0.5f, 0f, out var bottom));
-        Assert.True(BlockPlacement.TryResolve(Id("minecraft:oak_slab"), 0, 0.5f, 0f, out var top));
+        Assert.True(BlockShapes.TryResolve(Id("minecraft:oak_slab"), 1, 0.5f, 0f, out var bottom));
+        Assert.True(BlockShapes.TryResolve(Id("minecraft:oak_slab"), 0, 0.5f, 0f, out var top));
         Assert.True(Blocks.Palette.TryGetState(bottom, out var b));
         Assert.True(Blocks.Palette.TryGetState(top, out var t));
         Assert.Equal("bottom", b.Get("minecraft:vertical_half"));
         Assert.Equal("top", t.Get("minecraft:vertical_half"));
 
-        Assert.True(BlockPlacement.TryResolve(Id("minecraft:oak_log"), 4, 0.5f, 0f, out var log));
+        Assert.True(BlockShapes.TryResolve(Id("minecraft:oak_log"), 4, 0.5f, 0f, out var log));
         Assert.True(Blocks.Palette.TryGetState(log, out var l));
         Assert.Equal("x", l.Get("pillar_axis"));
 
-        Assert.True(BlockPlacement.TryResolve(Id("minecraft:torch"), 5, 0.5f, 0f, out var torch));
+        Assert.True(BlockShapes.TryResolve(Id("minecraft:torch"), 5, 0.5f, 0f, out var torch));
         Assert.True(Blocks.Palette.TryGetState(torch, out var tt));
         Assert.Equal("east", tt.Get("torch_facing_direction"));
-        Assert.False(BlockPlacement.TryResolve(Id("minecraft:torch"), 0, 0.5f, 0f, out _));
+        Assert.False(BlockShapes.TryResolve(Id("minecraft:torch"), 0, 0.5f, 0f, out _));
     }
 
     [Fact]
     public void Double_slabs_and_unsupported_blocks_cannot_be_placed_from_an_item()
     {
-        Assert.False(BlockPlacement.TryResolve(Id("minecraft:oak_double_slab"), 1, 0.5f, 0f, out _));
-        Assert.False(BlockPlacement.TryResolve(Id("minecraft:furnace"), 1, 0.5f, 0f, out _));
+        Assert.False(BlockShapes.TryResolve(Id("minecraft:oak_double_slab"), 1, 0.5f, 0f, out _));
+        Assert.False(BlockShapes.TryResolve(Id("minecraft:furnace"), 1, 0.5f, 0f, out _));
     }
 
     [Fact]

@@ -30,6 +30,9 @@ sealed class BlockPalette
     private readonly Dictionary<string, int> _byFullState = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, List<string>>> _propertyValues = new(StringComparer.Ordinal);
 
+    /// <summary>Every state with full property data, for building typed lookup tables.</summary>
+    internal IEnumerable<KeyValuePair<int, BlockState>> AllStates => _stateByRuntime;
+
     /// <summary>Total number of distinct block states (runtime ids) with full property data.</summary>
     public int StateCount => _stateByRuntime.Count;
 
