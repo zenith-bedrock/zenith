@@ -7,7 +7,7 @@
 - Effort: M across six independently reviewable phases
 - Risk: MED. The danger is not the seam, it is the writers: a veto that leaves a writer retrying forever, drops an item while the block stays, or builds half a structure is worse than no veto.
 - Depends on: plan 001 phases 0-3 (done)
-- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phase 4b (gravity under policy) and Phase 1 do not start without an explicit go-ahead. Decision 3(b), the void as the single named exit, is approved.
+- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block persistence) is approved and closed. Phase 1 (the seam, Explosion, the shared fault log) is implemented. You delegated the order of the rest ("choose the best approach"): the order stays 2, 3, 4b, 5, each its own commit. Decision 3(b), the void as the single named exit, is approved.
 
 Revision 2 changes, from review plus a second reading of the code: the cause list now follows the meaning of the change, not the system that makes it; the proposal is per cell; what happens after a protection is lifted is stated; gravity has explicit invariants (and the code has a pre-existing conservation hole there); tree growth is a planned multi-cell unit, which the per-cell rule alone would break; the ratchet is an IL call-site scan, not text search; policy faults get rate-limited logging; the `EnvironmentChanged` fact and region flags are deferred.
 
@@ -126,12 +126,21 @@ Per-cell lookups run in fluid, fire and random ticks. Protect's lookup is a line
 Each phase is one reviewable commit with tests that assert the world and the items, not only a return value.
 
 - **Phase 0, the ratchet. DONE, see "Phase 0 result".**
-- **Phase 1, seam + Explosion + fault log.** The types, composition, Protect implementation, `CreeperSystem` per cell, the shared fault-log helper adopted by the three sets, the first measurement. Tests: a crater stops at the boundary; protected blocks untouched, others carved; a faulty policy denies safely and logs boundedly; frozen after composition.
+- **Phase 1, seam + Explosion + fault log. DONE, see "Phase 1 result".** The types, composition, Protect implementation, `CreeperSystem` per cell, the shared fault-log helper adopted by the three sets, the first measurement. Tests: a crater stops at the boundary; protected blocks untouched, others carved; a faulty policy denies safely and logs boundedly; frozen after composition.
 - **Phase 2, FluidFlow + Fire (incl. lava ignition).** Veto in the predicates. Tests: liquid and fire do not enter a region; no washed-away drop for a vetoed cell (item conservation); quiet afterwards (no re-queued tick for the vetoed cell); after the region is removed, resumption happens on the next neighbour update and not before (the documented semantics).
 - **Phase 3, SupportLoss.** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
 - **Phase 4a, falling-block durability. DONE, awaiting review; see "Phase 4a result".**
 - **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests. Not started.
 - **Phase 5, random ticks: Growth, Decay, Spread.** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
+
+## Phase 1 result
+
+- **Seam.** `EnvironmentCause`, `EnvironmentChangeProposal(Cause, Tick, Cell)`, `IEnvironmentChangePolicy` and `EnvironmentChangePolicies` (register, freeze, first denial wins, a throw denies) in `Gameplay/Policy/EnvironmentChangePolicy.cs`. `Allows(cause, tick, x, y, z, before, after)` is the call writers use. Composition mirrors the other two sets: `ServerServices` and `ServerContext` carry the set, `ZenithServer` creates it, `ProtectModule.Compose/Install` registers `ProtectEnvironmentPolicy`, `GameplayComposition.Register` freezes it.
+- **Protect.** `ProtectEnvironmentPolicy` vetoes every cause inside a region and none outside; no actor, so no bypass. Strict, as decided.
+- **Fault log, shared.** `PolicyFaultLog` replaced the one-line error each set wrote per failure: the first three failures of a policy type in full, then one line per thousand, with the running count. The block-edit and container sets use it too. Reason: environment policies run per cell per tick, and a throwing policy would otherwise write thousands of lines a second.
+- **First writer.** `CreeperSystem.BreakBlocksInRadius` asks per cell under `Explosion`; a vetoed cell is left exactly as it is and the rest of the crater is carved. `WorldWriterInventoryTests` has a new kind, `EnvironmentPoliced`, and pins that five environment writers remain unpoliced (was six).
+- **Tests (`EnvironmentPolicyTests`).** First denial wins, empty set allows; a throwing policy denies and logs 5 lines for 2500 failures; the block-edit set logs 4 for 1500; frozen after composition; Protect vetoes all eight causes inside and none outside; without a region the crater is the full sphere; a crater straddling a region carves exactly the cells outside it and keeps exactly the cells inside (both counts non-zero, so the test cannot pass vacuously); a throwing policy leaves every cell. Removing the policy call from the creeper fails two of them.
+- **Measurement (first, and as a number, not an adjective).** Cost of `Allows` on the frozen set, per cell, release-like loop on this machine: 61 ns with no regions, 105 ns with 1, 312 ns with 16, 3.5 microseconds with 256 (the cap). `ProtectRegions.TryFind` is a linear scan, so cost grows with the region count. A creeper crater is at most about 120 cells, so the worst case is about 0.4 ms once; fluid flow and fire write fewer cells per tick but every tick. This is below the stop condition ("beyond noise in tick diagnostics"), so no chunk index yet; the number to watch is cells asked per tick times region count. Re-measure in Phase 2 with real flow.
 
 ## Phase 0 result
 

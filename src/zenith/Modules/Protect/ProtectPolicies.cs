@@ -22,6 +22,22 @@ sealed class ProtectBlockEditPolicy(ProtectRegions regions, PermissionAuthority 
     }
 }
 
+/// <summary>
+/// Keeps the environment out of a protected cell: no explosion, liquid, fire, falling block, support loss or growth changes it. There is
+/// no actor and so no bypass. Strict in v1: every cause is vetoed the same way.
+/// </summary>
+sealed class ProtectEnvironmentPolicy(ProtectRegions regions) : IEnvironmentChangePolicy
+{
+    public PolicyDecision Evaluate(in EnvironmentChangeProposal proposal)
+    {
+        if (regions.Snapshot.IsEmpty) return PolicyDecision.Allow;
+        var cell = proposal.Cell;
+        return regions.TryFind(cell.X, cell.Y, cell.Z, out var region)
+            ? PolicyDecision.Deny($"This area is protected ({region.Name}).")
+            : PolicyDecision.Allow;
+    }
+}
+
 /// <summary>Keeps containers inside a protected region closed and untouchable (opening and moving items), either half of a double chest counting.</summary>
 sealed class ProtectContainerAccessPolicy(ProtectRegions regions, PermissionAuthority authority) : IContainerAccessPolicy
 {

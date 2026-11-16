@@ -37,6 +37,7 @@ class ServerContext
     public AuthorityGate Gate { get; }
     public BlockEditPolicies BlockPolicies { get; }
     public ContainerAccessPolicies ContainerPolicies { get; }
+    public EnvironmentChangePolicies EnvironmentPolicies { get; }
     public CommandRuntime Commands { get; }
     public Zenith.Modules.Protect.ProtectModule Protect { get; }
     public ServerRuntimeDiagnostics Diagnostics { get; }
@@ -58,6 +59,7 @@ class ServerContext
         PermissionAuthority? permissions = null,
         BlockEditPolicies? blockPolicies = null,
         ContainerAccessPolicies? containerPolicies = null,
+        EnvironmentChangePolicies? environmentPolicies = null,
         Zenith.Modules.Protect.ProtectModule? protect = null)
     {
         Logger = logger;
@@ -78,8 +80,9 @@ class ServerContext
         Gate = new AuthorityGate(Permissions, playerManager);
         BlockPolicies = blockPolicies ?? PermissionsComposition.CreateBlockPolicies(Permissions, logger);
         ContainerPolicies = containerPolicies ?? PermissionsComposition.CreateContainerPolicies(Permissions, logger);
+        EnvironmentPolicies = environmentPolicies ?? PermissionsComposition.CreateEnvironmentPolicies(logger);
         // Internal modules compose here, before the policy sets and the command catalog freeze.
-        Protect = protect ?? Zenith.Modules.Protect.ProtectModule.Compose(Permissions, BlockPolicies, ContainerPolicies);
+        Protect = protect ?? Zenith.Modules.Protect.ProtectModule.Compose(Permissions, BlockPolicies, ContainerPolicies, EnvironmentPolicies);
         Commands = new CommandRuntime(
             playerManager, Permissions, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner,
             contributions: [Protect.Command]);

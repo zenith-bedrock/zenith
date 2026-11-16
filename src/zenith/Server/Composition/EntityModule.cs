@@ -25,7 +25,7 @@ sealed class EntityModule : IGameplayModule
         var cow = new CowSystem(world, players, entities, palette);
         var spider = new SpiderSystem(world, players, entities, palette);
         var fish = new FishSystem(world, players, entities, palette);
-        var creeper = new CreeperSystem(world, players, entities, palette);
+        var creeper = new CreeperSystem(world, players, entities, palette, s.EnvironmentPolicies);
         var enderman = new EndermanSystem(world, players, entities, palette);
         var golem = new GolemSystem(world, players, entities, palette);
         var projectile = new ProjectileSystem(world, players, entities, damage, s.PlayerSpatial);

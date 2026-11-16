@@ -22,7 +22,7 @@ public sealed class CreeperSystemTests
         var first = fx.AddInGamePlayer("first-fuse");
         first.Chunks.Radius = -1;
         var firstClient = new RecordingClientChannel(); first.AttachClient(firstClient);
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var id = system.SpawnCreeper(first.PositionX, first.PositionY, first.PositionZ + (fusing ? 1f : 10f));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(fusing, IsFusing(system, id));
@@ -66,7 +66,7 @@ public sealed class CreeperSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("target");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
 
         system.Tick(fx.Clock, fx.Players.Online);
@@ -80,7 +80,7 @@ public sealed class CreeperSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("victim");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
 
         system.Tick(fx.Clock, fx.Players.Online); // tick 0: ignites
@@ -108,7 +108,7 @@ public sealed class CreeperSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("retreater");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
 
         system.Tick(fx.Clock, fx.Players.Online);
@@ -126,7 +126,7 @@ public sealed class CreeperSystemTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("slayer");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var id = system.SpawnCreeper(player.PositionX + 1, player.PositionY, player.PositionZ);
         Assert.True(system.Stores.Health.TryGet(id, out var healthComponent));
         var maxHealth = healthComponent.State.Maximum;
@@ -152,7 +152,7 @@ public sealed class CreeperSystemTests
         var fx = new IntentTestFixture();
         var first = fx.AddInGamePlayer("first");
         first.Chunks.Radius = -1;
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         system.SpawnCreeper(first.PositionX + 5, first.PositionY, first.PositionZ);
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(1, system.ReplicatedSpawnCount);
@@ -172,7 +172,7 @@ public sealed class CreeperSystemTests
         var fx = new IntentTestFixture();
         var owner = fx.AddInGamePlayer("hunter");
         var stores = new EntityRuntime();
-        var creepers = new CreeperSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette);
+        var creepers = new CreeperSystem(fx.World, fx.Players, stores, fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
         var damage = new DamageDispatch();
         damage.Register(creepers.Owns, creepers.TryApplyDamage);
         var projectiles = new ProjectileSystem(fx.World, fx.Players, stores, damage, new PlayerSpatialIndex());

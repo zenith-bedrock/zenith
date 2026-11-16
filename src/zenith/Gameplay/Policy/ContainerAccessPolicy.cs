@@ -39,6 +39,7 @@ interface IContainerAccessPolicy
 sealed class ContainerAccessPolicies(Zenith.Logging.ILogger? logger = null)
 {
     private readonly List<IContainerAccessPolicy> _policies = [];
+    private readonly PolicyFaultLog _faults = new(logger, "Container access policy", "denying access");
     private IContainerAccessPolicy[]? _frozen;
 
     public void Register(IContainerAccessPolicy policy)
@@ -58,7 +59,7 @@ sealed class ContainerAccessPolicies(Zenith.Logging.ILogger? logger = null)
             try { decision = policy.Evaluate(proposal); }
             catch (Exception ex)
             {
-                logger?.Error($"Container access policy {policy.GetType().Name} failed; denying access: {ex.Message}");
+                _faults.Report(policy, ex);
                 return PolicyDecision.Deny("Policy error.");
             }
 

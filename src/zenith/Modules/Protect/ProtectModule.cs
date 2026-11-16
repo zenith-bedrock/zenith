@@ -35,6 +35,7 @@ sealed class ProtectModule
     public IBlockEditPolicy BlockPolicy { get; }
 
     public IContainerAccessPolicy ContainerPolicy { get; }
+    public IEnvironmentChangePolicy EnvironmentPolicy { get; }
 
     public CommandBinding Command { get; }
 
@@ -64,24 +65,26 @@ sealed class ProtectModule
         }
         BlockPolicy = new ProtectBlockEditPolicy(Regions, authority);
         ContainerPolicy = new ProtectContainerAccessPolicy(Regions, authority);
+        EnvironmentPolicy = new ProtectEnvironmentPolicy(Regions);
         Command = CreateCommand();
     }
 
     /// <summary>Builds the module and installs it into the policy sets; call before they freeze.</summary>
     public static ProtectModule Compose(
         PermissionAuthority authority, BlockEditPolicies blocks, ContainerAccessPolicies containers,
-        IModuleStateStore? state = null)
+        EnvironmentChangePolicies environment, IModuleStateStore? state = null)
     {
         var module = new ProtectModule(authority, state);
-        module.Install(blocks, containers);
+        module.Install(blocks, containers, environment);
         return module;
     }
 
     /// <summary>Adds the module's vetoes. Called during composition, before the policy sets freeze.</summary>
-    public void Install(BlockEditPolicies blocks, ContainerAccessPolicies containers)
+    public void Install(BlockEditPolicies blocks, ContainerAccessPolicies containers, EnvironmentChangePolicies environment)
     {
         blocks.Register(BlockPolicy);
         containers.Register(ContainerPolicy);
+        environment.Register(EnvironmentPolicy);
     }
 
     private CommandBinding CreateCommand()

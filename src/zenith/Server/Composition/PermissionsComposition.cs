@@ -28,6 +28,9 @@ static class PermissionsComposition
         return policies;
     }
 
+    /// <summary>The policies every environment-driven change passes through. None is built in (there is no actor to check); modules add theirs.</summary>
+    public static EnvironmentChangePolicies CreateEnvironmentPolicies(Zenith.Logging.ILogger? logger) => new(logger);
+
     /// <summary>The policies every container open/transfer passes through, permission first; modules add theirs during composition.</summary>
     public static ContainerAccessPolicies CreateContainerPolicies(PermissionAuthority permissions, Zenith.Logging.ILogger? logger)
     {

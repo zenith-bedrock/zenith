@@ -53,6 +53,7 @@ interface IBlockEditPolicy
 sealed class BlockEditPolicies(Zenith.Logging.ILogger? logger = null)
 {
     private readonly List<IBlockEditPolicy> _policies = [];
+    private readonly PolicyFaultLog _faults = new(logger, "Block edit policy", "denying the edit");
     private IBlockEditPolicy[]? _frozen;
 
     public void Register(IBlockEditPolicy policy)
@@ -75,7 +76,7 @@ sealed class BlockEditPolicies(Zenith.Logging.ILogger? logger = null)
             catch (Exception ex)
             {
                 // Fail closed: a policy that cannot answer must not let the edit through.
-                logger?.Error($"Block edit policy {policy.GetType().Name} failed; denying the edit: {ex.Message}");
+                _faults.Report(policy, ex);
                 return PolicyDecision.Deny("Policy error.");
             }
 

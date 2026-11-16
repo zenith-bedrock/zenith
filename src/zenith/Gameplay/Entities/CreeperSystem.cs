@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
@@ -43,11 +44,13 @@ sealed class CreeperSystem : MobSystem<CreeperState>
     private const float ExplosionDamage = 10f;
 
     private readonly GroundMobBody _body;
+    private readonly EnvironmentChangePolicies _environment;
 
-    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, EnvironmentChangePolicies environment)
         : base(MobDefinitions.Creeper, world, players, stores, itemPalette)
     {
         _body = new GroundMobBody(world, stores, players);
+        _environment = environment;
     }
 
     internal IReadOnlyList<EntityId> Creepers => Entities;
@@ -160,7 +163,7 @@ sealed class CreeperSystem : MobSystem<CreeperState>
             PlayerDamage.ApplyCore(player, _players, DamageSource.Generic, damage, currentTick).Conclude(online);
         }
 
-        var blockUpdates = BreakBlocksInRadius(explosionX, explosionY, explosionZ);
+        var blockUpdates = BreakBlocksInRadius(explosionX, explosionY, explosionZ, currentTick);
 
         foreach (var peer in online)
         {
@@ -178,8 +181,11 @@ sealed class CreeperSystem : MobSystem<CreeperState>
     /// blast-resistance/ray-casting simulation) — every solid, non-bedrock block within
     /// <see cref="ExplosionRadius"/> becomes air. No item drops for destroyed terrain, matching
     /// vanilla's default (mobGriefing-independent) "no block drops from mob-caused explosions".
+    /// <para/>
+    /// Each cell is asked of the environment policies first (cause <see cref="EnvironmentCause.Explosion"/>): a vetoed cell is
+    /// left exactly as it is and the rest of the crater is carved, so a protected region has a clean edge.
     /// </summary>
-    private List<(int X, int Y, int Z, int BlockRuntimeId)> BreakBlocksInRadius(float centerX, float centerY, float centerZ)
+    private List<(int X, int Y, int Z, int BlockRuntimeId)> BreakBlocksInRadius(float centerX, float centerY, float centerZ, ulong tick)
     {
         var updates = new List<(int, int, int, int)>();
         var radius = (int)MathF.Ceiling(ExplosionRadius);
@@ -199,6 +205,7 @@ sealed class CreeperSystem : MobSystem<CreeperState>
                     var z = cz + dz;
                     var current = _world.GetBlock(x, y, z);
                     if (current == World.World.AirRuntimeId || current == Blocks.Bedrock) continue;
+                    if (!_environment.Allows(EnvironmentCause.Explosion, tick, x, y, z, current, World.World.AirRuntimeId)) continue;
                     if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId)) continue;
                     updates.Add((x, y, z, World.World.AirRuntimeId));
                 }

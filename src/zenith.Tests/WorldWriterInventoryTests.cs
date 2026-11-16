@@ -22,7 +22,10 @@ public sealed class WorldWriterInventoryTests
         /// <summary>A player's edit; judged by <c>IBlockEditPolicy</c> before any effect.</summary>
         PlayerEditPoliced,
 
-        /// <summary>Changes the world with no player; will be judged by the environment policy under the named cause.</summary>
+        /// <summary>Changes the world with no player and asks the environment policies, per cell, under the named cause. Proven by a behavioural test.</summary>
+        EnvironmentPoliced,
+
+        /// <summary>Changes the world with no player; will be judged by the environment policy under the named cause, not yet.</summary>
         Environment,
 
         /// <summary>Builds or stores the world itself (generation, loading, the write API and its backing storage). Not gameplay.</summary>
@@ -41,8 +44,10 @@ public sealed class WorldWriterInventoryTests
         [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryScoop")] = new(Kind.PlayerEditPoliced, "bucket scoop, judged as a break"),
         [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryPour")] = new(Kind.PlayerEditPoliced, "bucket pour, judged as a place"),
 
+        // Environment writers that ask the environment policies. Proven by EnvironmentPolicyTests.
+        [("Zenith.Gameplay.Entities.CreeperSystem", "BreakBlocksInRadius")] = new(Kind.EnvironmentPoliced, "Explosion"),
+
         // Environment writers: not yet policed. Each names its cause in plan 002.
-        [("Zenith.Gameplay.Entities.CreeperSystem", "BreakBlocksInRadius")] = new(Kind.Environment, "Explosion"),
         [("Zenith.Gameplay.WorldInteraction.Fluids.FluidFlow", "Write")] = new(Kind.Environment, "FluidFlow"),
         [("Zenith.Gameplay.WorldInteraction.Fire.FireSpread", "Write")] = new(Kind.Environment, "Fire"),
         [("Zenith.Gameplay.WorldInteraction.GravitySystem", "BeginFall")] = new(Kind.Environment, "Gravity (origin)"),
@@ -118,7 +123,7 @@ public sealed class WorldWriterInventoryTests
         // Pins the size of the remaining gap: moving a writer from Environment to a policed kind is a deliberate edit of this test.
         var environment = CellWriters.Where(entry => entry.Value.Kind == Kind.Environment).Select(entry => entry.Key.Type.Split('.')[^1]).Distinct().Order();
         Assert.Equal(
-            ["BlockUpdateSystem", "CreeperSystem", "FireSpread", "FluidFlow", "GravitySystem", "RandomTickContext"],
+            ["BlockUpdateSystem", "FireSpread", "FluidFlow", "GravitySystem", "RandomTickContext"],
             environment);
     }
 }
