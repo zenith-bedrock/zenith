@@ -12,7 +12,7 @@ namespace Zenith.Gameplay.Entities;
 /// and only <see cref="VillagerState"/> (the offer, the trade cooldown, the wander heading) is its own. The trade is the first
 /// consumer of <c>InventoryTransactionPacket.ActorInteract</c>; see <see cref="TryHandleInteraction"/>.
 /// </summary>
-sealed class VillagerSystem : IGameSystem
+sealed class VillagerSystem : MobSystem<VillagerState>
 {
     private const float MovePerTick = 0.04f;
     private const int MinWanderTicks = 60;
@@ -20,77 +20,39 @@ sealed class VillagerSystem : IGameSystem
     private const float AttackDamage = 4f;
     private const float InteractDistance = 2.25f; // Same reach as melee: no separate "interact range" concept exists yet.
     private const int TradeCooldownTicks = 200; // 10s @ 20 TPS: stops a held right-click from redeeming the same ware repeatedly.
-    private const float DespawnRadius = 64f;
 
-    private readonly PlayerManager _players;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<VillagerState> _villagers;
-    private readonly MobCore _mob;
     private readonly GroundMobBody _body;
-    private readonly ActorReplication _replication;
     private readonly StackId _ware;
     private readonly StackId _requestedWare;
     private readonly Random _random;
-    private readonly List<EntityId> _tickScratch = [];
 
     internal long TradeCount { get; private set; }
 
     public VillagerSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+        : base(MobDefinitions.Villager, world, players, stores, itemPalette)
     {
-        _players = players;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Villager, world, players, stores, itemPalette);
-        _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
-        _villagers = new ComponentStore<VillagerState>(stores.Entities);
         // The ware a trade gives back; independent of what a kill drops (the loot table).
         _ware = StackId.FromItem(itemPalette.Require("minecraft:emerald"));
         _requestedWare = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
         _random = random ?? new Random();
     }
 
-    internal IReadOnlyList<EntityId> Villagers => _villagers.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<VillagerState> VillagerStates => _villagers;
-
-    /// <summary>Cross-species dispatch seam: "is this ECS entity a villager," nothing more.</summary>
-    internal bool Owns(EntityId id) => _villagers.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedMoveCount => _replication.MoveCount;
-    internal long ReplicatedMoveSkippedCount => _replication.MoveSkippedCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
-    internal long DespawnCount => _replication.DespawnCount;
+    internal IReadOnlyList<EntityId> Villagers => Entities;
+    internal ComponentStore<VillagerState> VillagerStates => States;
 
     internal EntityId SpawnVillager(float x, float y, float z)
     {
         var id = _mob.Spawn(x, y, z);
-        _villagers.Set(id, new VillagerState { Ware = _ware, RequestedWare = _requestedWare });
+        States.Set(id, new VillagerState { Ware = _ware, RequestedWare = _requestedWare });
         return id;
     }
 
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _replication.BeginTick(online);
-        if (online.Count == 0) return;
-
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_villagers.Entities);
-
-        foreach (var id in _tickScratch)
-        {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (_replication.TryDespawn(id, clock, online, DespawnRadius)) continue;
-            _replication.Reconcile(id, online);
-            _mob.ApplyPlayerAttacks(id, online, clock.CurrentTick, TryApplyDamage);
-            if (!_stores.Entities.IsAlive(id)) continue;
-            TryHandleInteraction(id, online, clock);
-            Wander(id, clock);
-            _body.ApplyGravity(id);
-            _replication.Reconcile(id, online);
-        }
-
-        _replication.Prune(_villagers.Entities, online);
-        _replication.ReplicateMoves(_villagers.Entities, online);
+        TryHandleInteraction(id, online, clock);
+        Wander(id, clock);
+        _body.ApplyGravity(id);
     }
 
     /// <summary>
@@ -100,7 +62,7 @@ sealed class VillagerSystem : IGameSystem
     /// </summary>
     private void TryHandleInteraction(EntityId id, IReadOnlyList<Player.Player> online, GameClock clock)
     {
-        var state = _villagers.GetRef(id);
+        var state = States.GetRef(id);
         if (clock.CurrentTick < state.NextTradeTick) return;
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
@@ -115,7 +77,7 @@ sealed class VillagerSystem : IGameSystem
             if (!player.Intents.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
 
             if (TryTrade(state, player))
-                _villagers.GetRef(id).NextTradeTick = clock.CurrentTick + TradeCooldownTicks;
+                States.GetRef(id).NextTradeTick = clock.CurrentTick + TradeCooldownTicks;
             return; // At most one interact resolved per tick: the intent itself is already one-shot.
         }
     }
@@ -138,7 +100,7 @@ sealed class VillagerSystem : IGameSystem
     }
 
     /// <summary>Concrete Villager health/removal operation: no retaliation, but a hit is remembered for the golem's aggro rule.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    public override bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
         // Vanilla-parity golem aggro trigger (see Player.LastVillagerAttack): recorded whether or not the hit is accepted below, since
         // a player swinging at a villager is provocative even if e.g. loot capacity later refuses it.
@@ -146,20 +108,20 @@ sealed class VillagerSystem : IGameSystem
             _players.GetByRuntimeId(attackerId) is { } attacker)
             attacker.LastVillagerAttack = (currentTick, pos.X, pos.Z);
 
-        return _mob.TryApplyDamage(id, source, amount, online, currentTick);
+        return base.TryApplyDamage(id, source, amount, online, currentTick);
     }
 
     /// <summary>Peaceful AI: pick a random heading periodically, walk it, retry sooner if blocked. Same shape as Cow's wander.</summary>
     private void Wander(EntityId id, GameClock clock)
     {
-        if (clock.CurrentTick >= _villagers.GetRef(id).WanderChangeAtTick)
+        if (clock.CurrentTick >= States.GetRef(id).WanderChangeAtTick)
             PickNewHeading(id, clock);
 
-        var state = _villagers.GetRef(id);
+        var state = States.GetRef(id);
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         if (!_body.TryMove(id, pos.X + state.WanderDirectionX * MovePerTick, pos.Z + state.WanderDirectionZ * MovePerTick))
         {
-            _villagers.GetRef(id).WanderChangeAtTick = clock.CurrentTick; // blocked: choose a fresh heading next tick
+            States.GetRef(id).WanderChangeAtTick = clock.CurrentTick; // blocked: choose a fresh heading next tick
             return;
         }
 
@@ -169,7 +131,7 @@ sealed class VillagerSystem : IGameSystem
 
     private void PickNewHeading(EntityId id, GameClock clock)
     {
-        ref var state = ref _villagers.GetRef(id);
+        ref var state = ref States.GetRef(id);
         var angle = _random.NextSingle() * MathF.PI * 2f;
         state.WanderDirectionX = MathF.Cos(angle);
         state.WanderDirectionZ = MathF.Sin(angle);

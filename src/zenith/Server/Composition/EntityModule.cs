@@ -33,17 +33,17 @@ sealed class EntityModule : IGameplayModule
         var bat = new BatSystem(world, players, entities, palette);
         var villager = new VillagerSystem(world, players, entities, palette);
 
-        damage.Register(zombie.Owns, zombie.TryApplyDamage);
+        damage.Register(zombie);
         damage.Register(minecart.Owns, minecart.TryApplyDamage);
-        damage.Register(cow.Owns, cow.TryApplyDamage);
-        damage.Register(spider.Owns, spider.TryApplyDamage);
-        damage.Register(fish.Owns, fish.TryApplyDamage);
-        damage.Register(creeper.Owns, creeper.TryApplyDamage);
-        damage.Register(enderman.Owns, enderman.TryApplyDamage);
-        damage.Register(golem.Owns, golem.TryApplyDamage);
+        damage.Register(cow);
+        damage.Register(spider);
+        damage.Register(fish);
+        damage.Register(creeper);
+        damage.Register(enderman);
+        damage.Register(golem);
         damage.Register(skeleton.Owns, skeleton.TryApplyDamage);
-        damage.Register(bat.Owns, bat.TryApplyDamage);
-        damage.Register(villager.Owns, villager.TryApplyDamage);
+        damage.Register(bat);
+        damage.Register(villager);
 
         // Pushes move actors before any species ticks, so a push is replicated by that species' move batch.
         s.Register(new KnockbackSystem(world, entities), "knockback");

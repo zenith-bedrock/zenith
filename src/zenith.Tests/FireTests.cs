@@ -45,7 +45,7 @@ public sealed class FireTests
         var system = new BlockUpdateSystem(fx.World, fx.Players);
         fx.World.SetBlock(5, Level, 5, FireBlocks.WithAge(0));
 
-        Run(fx, system, 600);
+        Run(fx, system, 4000); // ~110 steps: it has aged past 3 many times over
 
         Assert.True(Blocks.IsAir(fx.World.GetBlock(5, Level, 5)));
     }

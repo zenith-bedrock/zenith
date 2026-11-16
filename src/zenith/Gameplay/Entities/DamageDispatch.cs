@@ -28,6 +28,8 @@ sealed class DamageDispatch
         Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage) =>
         _handlers.Add((owns, tryApplyDamage));
 
+    public void Register(IDamageableSpecies species) => Register(species.Owns, species.TryApplyDamage);
+
     /// <summary>Dispatches to whichever registered system owns <paramref name="id"/>; false if none does.</summary>
     public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {

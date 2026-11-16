@@ -31,7 +31,7 @@ namespace Zenith.Gameplay.Entities;
 /// and multi-target slam needed no new ECS primitive — both already operated on world-space
 /// coordinates and <see cref="PlayerDamage"/>, independent of what backs Golem's own storage.
 /// </summary>
-sealed class GolemSystem : IGameSystem
+sealed class GolemSystem : MobSystem<GolemState>
 {
     private const float SpawnDistance = 6f;
     private const float DetectionDistance = 20f;
@@ -50,109 +50,54 @@ sealed class GolemSystem : IGameSystem
     /// villager near them.
     /// </summary>
     private const int ProvokeWindowTicks = 200; // 10s @ 20 TPS.
-    private const float DespawnRadius = 64f;
 
-    private readonly World.World _world;
-    private readonly PlayerManager _players;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<GolemState> _golems;
-    private readonly MobCore _mob;
     private readonly GroundMobBody _body;
-    private readonly ActorReplication _replication;
-    private readonly List<EntityId> _tickScratch = [];
     private ulong _currentTick;
 
     public GolemSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+        : base(MobDefinitions.Golem, world, players, stores, itemPalette)
     {
-        _world = world;
-        _players = players;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Golem, world, players, stores, itemPalette);
-        _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
-        _golems = new ComponentStore<GolemState>(stores.Entities);
     }
 
-    internal IReadOnlyList<EntityId> Golems => _golems.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<GolemState> GolemStates => _golems;
+    internal IReadOnlyList<EntityId> Golems => Entities;
+    internal ComponentStore<GolemState> GolemStates => States;
 
-    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a golem," nothing more.</summary>
-    internal bool Owns(EntityId id) => _golems.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedMoveCount => _replication.MoveCount;
-    internal long ReplicatedMoveSkippedCount => _replication.MoveSkippedCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
-    internal long DespawnCount => _replication.DespawnCount;
     internal long SlamCount { get; private set; }
 
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+    protected override void BeginTick(GameClock clock) => _currentTick = clock.CurrentTick;
+
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _replication.BeginTick(online);
-        _currentTick = clock.CurrentTick;
-        if (online.Count == 0) return;
+        if (!_stores.Health.TryGet(id, out var healthComponent)) return;
+        ref var state = ref States.GetRef(id);
+        state.IsEnraged = healthComponent.State.Current <= healthComponent.State.Maximum * EnrageHealthFraction;
 
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_golems.Entities);
-
-        foreach (var id in _tickScratch)
+        var target = FindProvokedTarget(id, online);
+        if (target is not null)
         {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (TryDespawn(id, clock, online)) continue;
-            ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online);
-            if (!_stores.Entities.IsAlive(id)) continue;
-
-            if (!_stores.Health.TryGet(id, out var healthComponent)) continue;
-            ref var state = ref _golems.GetRef(id);
-            state.IsEnraged = healthComponent.State.Current <= healthComponent.State.Maximum * EnrageHealthFraction;
-
-            var target = FindProvokedTarget(id, online);
-            if (target is not null)
-            {
-                AdvanceTowardTarget(id, target);
-                TryAttackPlayer(id, target, clock, online);
-            }
-            if (state.IsEnraged)
-                TrySlam(id, online, clock);
-
-            _body.ApplyGravity(id);
-            ReconcileViewers(id, online);
+            AdvanceTowardTarget(id, target);
+            TryAttackPlayer(id, target, clock, online);
         }
+        if (state.IsEnraged)
+            TrySlam(id, online, clock);
 
-        _replication.Prune(_golems.Entities, online);
-        _replication.ReplicateMoves(_golems.Entities, online);
+        _body.ApplyGravity(id);
     }
-
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
-    internal EntityId SpawnGolem(float x, float y, float z)
-    {
-        var id = _mob.Spawn(x, y, z);
-        _golems.Set(id, new GolemState());
-        return id;
-    }
-
-    /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
-        _replication.TryDespawn(id, clock, online, DespawnRadius);
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online);
-
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _mob.ApplyPlayerAttacks(id, online, _currentTick, TryApplyDamage);
+    internal EntityId SpawnGolem(float x, float y, float z) => SpawnWith(x, y, z);
 
     /// <summary>Concrete Golem health/removal operation — same shape as every other migrated actor's. A player attacker provokes retaliation (self-defense — vanilla golems always fight back).</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
+    public override bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick)
     {
-        if (source.OwnerRuntimeId is { } attackerId && _golems.Has(id))
+        if (source.OwnerRuntimeId is { } attackerId && States.Has(id))
         {
-            ref var state = ref _golems.GetRef(id);
+            ref var state = ref States.GetRef(id);
             state.TargetPlayerRuntimeId = attackerId;
         }
 
-        return _mob.TryApplyDamage(id, source, amount, online, currentTick);
+        return base.TryApplyDamage(id, source, amount, online, currentTick);
     }
 
     /// <summary>
@@ -162,7 +107,7 @@ sealed class GolemSystem : IGameSystem
     /// </summary>
     private Player.Player? FindProvokedTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _golems.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (!_stores.Positions.TryGet(id, out var pos)) return null;
 
         if (state.TargetPlayerRuntimeId is { } retainedId)
@@ -217,8 +162,6 @@ sealed class GolemSystem : IGameSystem
         }
     }
 
-
-
     private void TryAttackPlayer(EntityId id, Player.Player target, GameClock clock, IReadOnlyList<Player.Player> online) =>
         _mob.TryMeleeAttack(id, target, clock.CurrentTick, online);
 
@@ -230,7 +173,7 @@ sealed class GolemSystem : IGameSystem
     /// </summary>
     private void TrySlam(EntityId id, IReadOnlyList<Player.Player> online, GameClock clock)
     {
-        ref var state = ref _golems.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (clock.CurrentTick < state.NextSlamTick) return;
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         if (!_stores.Identities.TryGet(id, out var identity)) return;
@@ -250,12 +193,11 @@ sealed class GolemSystem : IGameSystem
         }
 
         if (!hitAny) return;
-        ref var s = ref _golems.GetRef(id);
+        ref var s = ref States.GetRef(id);
         s.NextSlamTick = clock.CurrentTick + SlamCooldownTicks;
         SlamCount++;
         foreach (var peer in online)
             if (peer.IsInGame)
                 peer.Client.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
     }
-
 }

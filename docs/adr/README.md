@@ -187,5 +187,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 170 | [Leaves decay and sapling growth](0170-leaves-decay-and-sapling-growth.md) |
 | 171 | [Liquids flow on scheduled ticks, buckets, drowning](0171-water-flow-on-scheduled-ticks.md) |
 | 172 | [Fire spreads on scheduled ticks; lava lights it](0172-fire-and-lava-ignition.md) |
+| 173 | [One life cycle for every ECS mob species](0173-mob-system-base.md) |
 
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

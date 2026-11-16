@@ -20,96 +20,36 @@ namespace Zenith.Gameplay.Entities;
 /// <see cref="FishState"/> (wander heading) is feature-specific and owned here — same shape as
 /// <see cref="SpiderState"/>. Being on <see cref="DamageDispatch"/> means arrows can hit a fish like any other actor.
 /// </summary>
-sealed class FishSystem : IGameSystem
+sealed class FishSystem : MobSystem<FishState>
 {
     private const float SpawnOffsetX = 4f;
     private const float MovePerTick = 0.06f;
     private const int MinWanderTicks = 30;
     private const int MaxWanderTicks = 80;
-    private const float DespawnRadius = 64f;
 
-    private readonly World.World _world;
-    private readonly PlayerManager _players;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<FishState> _fish;
-    private readonly MobCore _mob;
     private readonly Random _random;
-    private readonly ActorReplication _replication;
-    private readonly List<EntityId> _tickScratch = [];
 
     public FishSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+        : base(MobDefinitions.Fish, world, players, stores, itemPalette)
     {
-        _world = world;
-        _players = players;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Fish, world, players, stores, itemPalette);
-        _replication = _mob.Replication;
-        _fish = new ComponentStore<FishState>(stores.Entities);
         _random = random ?? new Random();
     }
 
-    internal IReadOnlyList<EntityId> Fish => _fish.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<FishState> FishStates => _fish;
+    internal IReadOnlyList<EntityId> Fish => Entities;
+    internal ComponentStore<FishState> FishStates => States;
 
-    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a fish," nothing more.</summary>
-    internal bool Owns(EntityId id) => _fish.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
-    internal long DespawnCount => _replication.DespawnCount;
-
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _replication.BeginTick(online);
-        if (online.Count == 0) return;
-
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_fish.Entities);
-
-        foreach (var id in _tickScratch)
-        {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (TryDespawn(id, clock, online)) continue;
-            ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online, clock.CurrentTick);
-            if (!_stores.Entities.IsAlive(id)) continue;
-            Wander(id, clock, online);
-            ReconcileViewers(id, online);
-        }
-
-        _replication.Prune(_fish.Entities, online);
-        _replication.ReplicateMoves(_fish.Entities, online);
+        Wander(id, clock, online);
     }
-
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
-    internal EntityId SpawnFish(float x, float y, float z)
-    {
-        var id = _mob.Spawn(x, y, z);
-        _fish.Set(id, new FishState());
-        return id;
-    }
-
-    /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. Same shape as every other migrated actor's despawn — position/visibility-based, not water-based.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
-        _replication.TryDespawn(id, clock, online, DespawnRadius);
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online);
-
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
-    {
-        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
-    }
-
-    /// <summary>Concrete Fish health/removal operation — same shape as every other migrated actor's, one loot item, no retaliation.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        _mob.TryApplyDamage(id, source, amount, online, currentTick);
+    internal EntityId SpawnFish(float x, float y, float z) => SpawnWith(x, y, z);
 
     /// <summary>3D wander, structurally identical to Bat's — the difference is entirely in <see cref="TrySwim"/>'s validity rule, not in how a heading is picked or walked.</summary>
     private void Wander(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _fish.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (clock.CurrentTick >= state.WanderChangeAtTick)
             PickNewHeading(id, clock);
 
@@ -128,7 +68,7 @@ sealed class FishSystem : IGameSystem
 
     private void PickNewHeading(EntityId id, GameClock clock)
     {
-        ref var state = ref _fish.GetRef(id);
+        ref var state = ref States.GetRef(id);
         var yaw = _random.NextSingle() * MathF.PI * 2f;
         var horizontal = MathF.Cos(_random.NextSingle() * MathF.PI * 0.5f);
         state.WanderDirectionX = MathF.Cos(yaw) * horizontal;

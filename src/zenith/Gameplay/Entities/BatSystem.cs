@@ -12,77 +12,31 @@ namespace Zenith.Gameplay.Entities;
 /// flight rule are its own. Movement is bespoke 3D flight, not <see cref="GroundMobMovement"/>: a bat has no supporting-block
 /// requirement and wanders on a vertical axis no ground mob uses.
 /// </summary>
-sealed class BatSystem : IGameSystem
+sealed class BatSystem : MobSystem<BatState>
 {
     private const float MovePerTick = 0.1f;
     private const int MinWanderTicks = 30;
     private const int MaxWanderTicks = 80;
     private const float WanderVerticalBias = 0.5f; // Keeps the random heading from drifting mostly sideways.
     private const float AttackDamage = 4f;
-    private const float DespawnRadius = 64f;
 
-    private readonly World.World _world;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<BatState> _bats;
-    private readonly MobCore _mob;
-    private readonly ActorReplication _replication;
     private readonly Random _random;
-    private readonly List<EntityId> _tickScratch = [];
 
     public BatSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+        : base(MobDefinitions.Bat, world, players, stores, itemPalette, withVelocity: false)
     {
-        _world = world;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Bat, world, players, stores, itemPalette, withVelocity: false);
-        _replication = _mob.Replication;
-        _bats = new ComponentStore<BatState>(stores.Entities);
         _random = random ?? new Random();
     }
 
-    internal IReadOnlyList<EntityId> Bats => _bats.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<BatState> BatStates => _bats;
+    internal IReadOnlyList<EntityId> Bats => Entities;
+    internal ComponentStore<BatState> BatStates => States;
 
-    /// <summary>Cross-species dispatch seam — "is this ECS entity a bat," nothing more.</summary>
-    internal bool Owns(EntityId id) => _bats.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedMoveCount => _replication.MoveCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
-    internal long DespawnCount => _replication.DespawnCount;
+    internal EntityId SpawnBat(float x, float y, float z) => SpawnWith(x, y, z);
 
-    internal EntityId SpawnBat(float x, float y, float z)
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        var id = _mob.Spawn(x, y, z);
-        _bats.Set(id, new BatState());
-        return id;
+        Wander(id, clock);
     }
-
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        _replication.BeginTick(online);
-        if (online.Count == 0) return;
-
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_bats.Entities);
-
-        foreach (var id in _tickScratch)
-        {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (_replication.TryDespawn(id, clock, online, DespawnRadius)) continue;
-            _replication.Reconcile(id, online);
-            _mob.ApplyPlayerAttacks(id, online, clock.CurrentTick, TryApplyDamage);
-            if (!_stores.Entities.IsAlive(id)) continue;
-            Wander(id, clock);
-            _replication.Reconcile(id, online);
-        }
-
-        _replication.Prune(_bats.Entities, online);
-        _replication.ReplicateMoves(_bats.Entities, online);
-    }
-
-    /// <summary>Concrete Bat health/removal operation: one loot item, no retaliation.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     /// <summary>
     /// Bespoke 3D wander: picks a random heading including a vertical component, walks it, retries sooner if blocked. The one real
@@ -90,10 +44,10 @@ sealed class BatSystem : IGameSystem
     /// </summary>
     private void Wander(EntityId id, GameClock clock)
     {
-        if (clock.CurrentTick >= _bats.GetRef(id).WanderChangeAtTick)
+        if (clock.CurrentTick >= States.GetRef(id).WanderChangeAtTick)
             PickNewHeading(id, clock);
 
-        var state = _bats.GetRef(id);
+        var state = States.GetRef(id);
         if (!_stores.Positions.TryGet(id, out var pos)) return;
         if (TryFly(id, pos.X + state.WanderDirectionX * MovePerTick, pos.Y + state.WanderDirectionY * MovePerTick, pos.Z + state.WanderDirectionZ * MovePerTick))
         {
@@ -101,12 +55,12 @@ sealed class BatSystem : IGameSystem
             p.Yaw = LookMath.MoveYawTowards(p.Yaw, LookMath.YawTowards(state.WanderDirectionX, state.WanderDirectionZ), LookMath.DefaultMaxTurnDegreesPerTick);
         }
         else
-            _bats.GetRef(id).WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
+            States.GetRef(id).WanderChangeAtTick = clock.CurrentTick; // blocked — choose a fresh heading next tick
     }
 
     private void PickNewHeading(EntityId id, GameClock clock)
     {
-        ref var state = ref _bats.GetRef(id);
+        ref var state = ref States.GetRef(id);
         var yaw = _random.NextSingle() * MathF.PI * 2f;
         var horizontal = MathF.Cos(_random.NextSingle() * MathF.PI * WanderVerticalBias);
         state.WanderDirectionX = MathF.Cos(yaw) * horizontal;

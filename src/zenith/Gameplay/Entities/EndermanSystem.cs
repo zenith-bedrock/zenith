@@ -24,7 +24,7 @@ namespace Zenith.Gameplay.Entities;
 /// not use <c>Velocity.Y</c> for gravity either — every landing spot is validated directly via
 /// <see cref="GroundMobMovement.IsSupportedGroundCell"/>, unchanged by this migration.
 /// </summary>
-sealed class EndermanSystem : IGameSystem
+sealed class EndermanSystem : MobSystem<EndermanState>
 {
     private const float SpawnDistance = 5f;
     private float AttackDistance => _mob.Definition.Melee!.Reach;
@@ -35,94 +35,46 @@ sealed class EndermanSystem : IGameSystem
     private const float PassiveTeleportRadius = 8f;
     private const float AggroTeleportRadius = 2f; // Lands just outside melee reach of the target.
     private const int TeleportCandidateAttempts = 6;
-    private const float DespawnRadius = 64f;
 
-    private readonly World.World _world;
-    private readonly PlayerManager _players;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<EndermanState> _endermen;
-    private readonly MobCore _mob;
     private readonly Random _random;
-    private readonly ActorReplication _replication;
-    private readonly List<EntityId> _tickScratch = [];
 
     public EndermanSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+        : base(MobDefinitions.Enderman, world, players, stores, itemPalette, trackPoses: false, withVelocity: false)
     {
-        _world = world;
-        _players = players;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Enderman, world, players, stores, itemPalette, trackPoses: false, withVelocity: false);
-        _replication = _mob.Replication;
-        _endermen = new ComponentStore<EndermanState>(stores.Entities);
         _random = random ?? new Random();
     }
 
-    internal IReadOnlyList<EntityId> Endermen => _endermen.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<EndermanState> EndermanStates => _endermen;
+    /// <summary>It teleports: its moves are announced by the teleport itself, not streamed.</summary>
+    protected override bool ReplicatesMoves => false;
 
-    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity an enderman," nothing more.</summary>
-    internal bool Owns(EntityId id) => _endermen.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
+    internal IReadOnlyList<EntityId> Endermen => Entities;
+    internal ComponentStore<EndermanState> EndermanStates => States;
+
     internal long TeleportCount { get; private set; }
-    internal long DespawnCount => _replication.DespawnCount;
 
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _replication.BeginTick(online);
-        if (online.Count == 0) return;
+        ref var state = ref States.GetRef(id);
+        if (state.AggroTicksRemaining > 0)
+            state.AggroTicksRemaining--;
 
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_endermen.Entities);
-
-        foreach (var id in _tickScratch)
+        if (state.AggroTicksRemaining > 0)
         {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (TryDespawn(id, clock, online)) continue;
-            ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online, clock.CurrentTick);
-            if (!_stores.Entities.IsAlive(id)) continue;
-
-            ref var state = ref _endermen.GetRef(id);
-            if (state.AggroTicksRemaining > 0)
-                state.AggroTicksRemaining--;
-
-            if (state.AggroTicksRemaining > 0)
-            {
-                TickAggro(id, clock, online);
-            }
-            else
-            {
-                ref var cleared = ref _endermen.GetRef(id);
-                cleared.AggroTargetRuntimeId = null;
-                TickPassiveTeleport(id, clock, online);
-            }
-
-            ReconcileViewers(id, online);
+            TickAggro(id, clock, online);
         }
-
-        _replication.Prune(_endermen.Entities, online);
+        else
+        {
+            ref var cleared = ref States.GetRef(id);
+            cleared.AggroTargetRuntimeId = null;
+            TickPassiveTeleport(id, clock, online);
+        }
     }
-
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
-    internal EntityId SpawnEnderman(float x, float y, float z)
-    {
-        var id = _mob.Spawn(x, y, z);
-        _endermen.Set(id, new EndermanState());
-        return id;
-    }
-
-    /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
-        _replication.TryDespawn(id, clock, online, DespawnRadius);
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
-        _replication.Reconcile(id, online);
+    internal EntityId SpawnEnderman(float x, float y, float z) => SpawnWith(x, y, z);
 
     /// <summary>A landed player hit both damages the Enderman and provokes it — the one place aggro is triggered.</summary>
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
+    protected override void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
         _mob.ApplyPlayerAttacks(id, online, currentTick,
             (eid, source, amount, peers, tick) => TryApplyDamageAndProvoke(eid, source, amount, peers, tick));
 
@@ -131,20 +83,17 @@ sealed class EndermanSystem : IGameSystem
         var applied = TryApplyDamage(id, source, amount, online, currentTick);
         if (applied && _stores.Entities.IsAlive(id) && source.OwnerRuntimeId is { } attackerId)
         {
-            ref var state = ref _endermen.GetRef(id);
+            ref var state = ref States.GetRef(id);
             state.AggroTargetRuntimeId = attackerId;
             state.AggroTicksRemaining = AggroDurationTicks;
         }
         return applied;
     }
 
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        _mob.TryApplyDamage(id, source, amount, online, currentTick);
-
     /// <summary>Neutral state: no target, just an occasional random short teleport.</summary>
     private void TickPassiveTeleport(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _endermen.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (clock.CurrentTick < state.NextPassiveTeleportTick) return;
         state.NextPassiveTeleportTick =
             clock.CurrentTick + (ulong)_random.Next(MinPassiveTeleportTicks, MaxPassiveTeleportTicks);
@@ -158,7 +107,7 @@ sealed class EndermanSystem : IGameSystem
     /// <summary>Hostile state: teleport toward the last attacker and swing once in reach, on cooldown.</summary>
     private void TickAggro(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _endermen.GetRef(id);
+        ref var state = ref States.GetRef(id);
         var target = state.AggroTargetRuntimeId is { } targetId ? _players.GetByRuntimeId(targetId) : null;
         if (target is null || !target.IsInGame || target.IsDead)
         {

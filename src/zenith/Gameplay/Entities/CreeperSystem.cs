@@ -26,7 +26,7 @@ namespace Zenith.Gameplay.Entities;
 /// world-space coordinates and calls <see cref="PlayerDamage.ApplyCore"/> per player, independent
 /// of what backs the Creeper's own storage.
 /// </summary>
-sealed class CreeperSystem : IGameSystem
+sealed class CreeperSystem : MobSystem<CreeperState>
 {
     private const float SpawnDistance = 6f;
     private const float DetectionDistance = 16f;
@@ -43,114 +43,53 @@ sealed class CreeperSystem : IGameSystem
     private const int FuseDurationTicks = 30; // 1.5s @ 20 TPS, vanilla-parity.
     private const float ExplosionRadius = 3f;
     private const float ExplosionDamage = 10f;
-    private const float DespawnRadius = 64f;
 
-    private readonly World.World _world;
-    private readonly PlayerManager _players;
-    private readonly EntityRuntime _stores;
-    private readonly ComponentStore<CreeperState> _creepers;
-    private readonly MobCore _mob;
     private readonly GroundMobBody _body;
-    private readonly ActorReplication _replication;
-    private readonly List<EntityId> _tickScratch = [];
 
     public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
+        : base(MobDefinitions.Creeper, world, players, stores, itemPalette)
     {
-        _world = world;
-        _players = players;
-        _stores = stores;
-        _mob = new MobCore(MobDefinitions.Creeper, world, players, stores, itemPalette);
-        _replication = _mob.Replication;
         _body = new GroundMobBody(world, stores, players);
-        _creepers = new ComponentStore<CreeperState>(stores.Entities);
     }
 
-    internal IReadOnlyList<EntityId> Creepers => _creepers.Entities;
-    internal EntityRuntime Stores => _stores;
-    internal ComponentStore<CreeperState> CreeperStates => _creepers;
+    internal IReadOnlyList<EntityId> Creepers => Entities;
+    internal ComponentStore<CreeperState> CreeperStates => States;
 
-    /// <summary>Cross-species dispatch seam (Phase XXII) — "is this ECS entity a creeper," nothing more.</summary>
-    internal bool Owns(EntityId id) => _creepers.Has(id);
-    internal long ReplicatedSpawnCount => _replication.SpawnCount;
-    internal long ReplicatedRemovalCount => _replication.RemovalCount;
     internal long ExplosionCount { get; private set; }
-    internal long DespawnCount => _replication.DespawnCount;
 
-    public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
+    protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        _replication.BeginTick(online);
-        if (online.Count == 0) return;
-
-        _tickScratch.Clear();
-        _tickScratch.AddRange(_creepers.Entities);
-
-        foreach (var id in _tickScratch)
+        var target = FindOrAcquireTarget(id, online);
+        ref var state = ref States.GetRef(id);
+        var exitThreshold = state.IsFusing ? DefuseDistance : IgniteDistance;
+        if (target is null)
         {
-            if (!_stores.Entities.IsAlive(id)) continue;
-            if (TryDespawn(id, clock, online)) continue;
-            ReconcileViewers(id, online);
-            ApplyPlayerAttacks(id, online, clock.CurrentTick);
-            if (!_stores.Entities.IsAlive(id)) continue;
-
-            var target = FindOrAcquireTarget(id, online);
-            ref var state = ref _creepers.GetRef(id);
-            var exitThreshold = state.IsFusing ? DefuseDistance : IgniteDistance;
-            if (target is null)
-            {
-                Defuse(id, online);
-            }
-            else if (DistanceSquared(id, target) > exitThreshold * exitThreshold)
-            {
-                Defuse(id, online);
-                AdvanceTowardTarget(id, target);
-            }
-            else
-            {
-                TickFuse(id, clock, online);
-            }
-
-            if (_stores.Entities.IsAlive(id))
-            {
-                _body.ApplyGravity(id);
-                ReconcileViewers(id, online);
-            }
+            Defuse(id, online);
+        }
+        else if (DistanceSquared(id, target) > exitThreshold * exitThreshold)
+        {
+            Defuse(id, online);
+            AdvanceTowardTarget(id, target);
+        }
+        else
+        {
+            TickFuse(id, clock, online);
         }
 
-        _replication.Prune(_creepers.Entities, online);
-        _replication.ReplicateMoves(_creepers.Entities, online);
+        if (_stores.Entities.IsAlive(id))
+            _body.ApplyGravity(id);
     }
-
 
     /// <summary>The feature-specific composition step every migrated actor needs on top of <see cref="EntityRuntime.CreateActor"/>.</summary>
-    internal EntityId SpawnCreeper(float x, float y, float z)
-    {
-        var id = _mob.Spawn(x, y, z);
-        _creepers.Set(id, new CreeperState());
-        return id;
-    }
+    internal EntityId SpawnCreeper(float x, float y, float z) => SpawnWith(x, y, z);
 
-    /// <summary>
-    /// No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death. A fusing
-    /// creeper can never actually reach this: a player must be within ignite range (3) to fuse,
-    /// which is always inside despawn range (64), so <see cref="DespawnLifecycle.EvaluateDespawn"/>
-    /// naturally returns false for it without any special-casing here.
-    /// </summary>
-    private bool TryDespawn(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online) =>
-        _replication.TryDespawn(id, clock, online, DespawnRadius);
-
-    private void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
+    /// <summary>A viewer that arrives while the fuse is lit must see it lit. (A fusing creeper is never despawned: it needs a player within 3 to fuse, well inside the despawn radius.)</summary>
+    protected override void ReconcileViewers(EntityId id, IReadOnlyList<Player.Player> online) =>
         _replication.Reconcile(id, online, (peer, identity) =>
         {
-            if (_creepers.TryGet(id, out var state) && state.IsFusing)
+            if (States.TryGet(id, out var state) && state.IsFusing)
                 peer.Client.Entity.SendActorIgnited(identity.ActorRuntimeId, true);
         });
-
-    private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        _mob.ApplyPlayerAttacks(id, online, currentTick, TryApplyDamage);
-
-    /// <summary>Player kills it with a weapon before the fuse completes — ordinary shared bookkeeping.</summary>
-    public bool TryApplyDamage(EntityId id, DamageSource source, float amount, IReadOnlyList<Player.Player> online, ulong currentTick) =>
-        _mob.TryApplyDamage(id, source, amount, online, currentTick);
 
     /// <summary>
     /// Phase XXIII fix — Creeper never broadcast its Ignited state at all, so a real client never
@@ -161,7 +100,7 @@ sealed class CreeperSystem : IGameSystem
     /// </summary>
     private void SetIgnited(EntityId id, bool ignited, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _creepers.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (state.IsFusing == ignited) return;
         state.IsFusing = ignited;
 
@@ -175,11 +114,11 @@ sealed class CreeperSystem : IGameSystem
 
     private void TickFuse(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _creepers.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (!state.IsFusing)
         {
             SetIgnited(id, true, online);
-            ref var restarted = ref _creepers.GetRef(id);
+            ref var restarted = ref States.GetRef(id);
             restarted.FuseStartedTick = clock.CurrentTick;
             return;
         }
@@ -271,7 +210,7 @@ sealed class CreeperSystem : IGameSystem
 
     private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)
     {
-        ref var state = ref _creepers.GetRef(id);
+        ref var state = ref States.GetRef(id);
         if (state.TargetPlayerRuntimeId is { } retainedId)
         {
             var retained = _players.GetByRuntimeId(retainedId);
@@ -295,7 +234,7 @@ sealed class CreeperSystem : IGameSystem
             target = player;
         }
 
-        ref var updated = ref _creepers.GetRef(id);
+        ref var updated = ref States.GetRef(id);
         updated.TargetPlayerRuntimeId = target?.RuntimeId;
         return target;
     }
