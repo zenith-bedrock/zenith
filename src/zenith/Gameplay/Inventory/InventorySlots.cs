@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Ports;
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
@@ -18,7 +19,13 @@ sealed class InventorySlots
 {
     private readonly World.World _world;
 
-    public InventorySlots(World.World world) => _world = world;
+    private readonly ContainerAccessGuard _access;
+
+    public InventorySlots(World.World world, ContainerAccessGuard access)
+    {
+        _world = world;
+        _access = access;
+    }
 
     public InventorySlot GetSlot(global::Zenith.Player.Player player, in InventorySlotReference reference) =>
         InventorySlotResolver.GetSlot(player, _world, reference);
@@ -117,7 +124,8 @@ sealed class InventorySlots
         {
             InventorySlotArea.OpenContainer => player.Windows.OpenContainer is
                 { Target: OpenContainerSession.TargetKind.Chest, Chest: { } view } &&
-                reference.Index >= 0 && reference.Index < view.SlotCount && IsOpenChestAccessible(player, view),
+                reference.Index >= 0 && reference.Index < view.SlotCount && IsOpenChestAccessible(player, view) &&
+                _access.Check(player, view, ContainerAccessKind.Transfer).IsAllowed,
             InventorySlotArea.CraftGrid => reference.Index >= 0 && reference.Index < PlayerCraftUi.GridSize,
             InventorySlotArea.TableCraftGrid => player.Windows.IsAtCraftingTable &&
                 reference.Index >= 0 && reference.Index < PlayerTableCraftUi.GridSize,

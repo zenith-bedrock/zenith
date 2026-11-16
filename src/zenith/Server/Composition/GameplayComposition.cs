@@ -32,6 +32,7 @@ sealed record ServerServices(
     AuthorityGate Gate,
     EventBus Events,
     BlockEditPolicies BlockPolicies,
+    ContainerAccessPolicies ContainerPolicies,
     int ChunkResidencySweepIntervalTicks)
 {
     /// <summary>Registers <paramref name="system"/> on the loop under its diagnostics timing name: the one place that pairs the two.</summary>
@@ -79,6 +80,7 @@ static class GameplayComposition
 
         // Composition is over: no module may add a policy once the loop runs.
         services.BlockPolicies.Freeze();
+        services.ContainerPolicies.Freeze();
         return world ?? throw new InvalidOperationException("The gameplay composition has no world module.");
     }
 }

@@ -136,6 +136,7 @@ class ZenithServer
             var permissions = PermissionsComposition.Create(config);
             var gate = new AuthorityGate(permissions, players);
             var blockPolicies = PermissionsComposition.CreateBlockPolicies(permissions, serverLogger);
+            var containerPolicies = PermissionsComposition.CreateContainerPolicies(permissions, serverLogger);
             var spawner = new MobSpawner(gate);
             var services = new ServerServices(
                 gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
@@ -143,12 +144,13 @@ class ZenithServer
                 gate,
                 eventBus,
                 blockPolicies,
+                containerPolicies,
                 config.World.ChunkResidencySweepIntervalTicks);
             var compositionStarted = Stopwatch.GetTimestamp();
             var worldModule = GameplayComposition.Register(services);
             serverLogger.Info($"startup: gameplay registration validated in {Stopwatch.GetElapsedTime(compositionStarted).TotalMilliseconds:F1} ms");
 
-            Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner, permissions, blockPolicies);
+            Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner, permissions, blockPolicies, containerPolicies);
             GameLoop = gameLoop;
             _gravity = worldModule.Gravity;
 

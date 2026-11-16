@@ -87,7 +87,7 @@ internal sealed class IntentTestFixture
     public RecordingLogger Log { get; }
 
     public InventorySystem CreateInventorySystem() =>
-        new(Players, World, Context.Recipes, Context.Creative);
+        new(Players, World, Context.Recipes, Context.Creative, Context.ContainerPolicies);
 
     public Player.Player AddInGamePlayer(string name, GameMode gameMode = GameMode.Survival) =>
         AddPlayer(name, gameMode, isInGame: true);

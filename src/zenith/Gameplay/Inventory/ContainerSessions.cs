@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Ports;
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
@@ -14,7 +15,30 @@ sealed class ContainerSessions
 {
     private readonly World.World _world;
 
-    public ContainerSessions(World.World world) => _world = world;
+    private readonly ContainerAccessGuard _access;
+
+    public ContainerSessions(World.World world, ContainerAccessGuard access)
+    {
+        _world = world;
+        _access = access;
+    }
+
+    /// <summary>
+    /// Keeps a window that is already open honest: when the player may no longer use the chest they have open, the window is closed
+    /// (lid and opener released, client told) and false is returned so the caller refuses whatever they were doing in it.
+    /// </summary>
+    public bool EnforceAccess(global::Zenith.Player.Player player, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (player.Windows.OpenChest is not { } view || _access.Check(player, view, ContainerAccessKind.Transfer).IsAllowed)
+            return true;
+        if (player.Windows.OpenContainer is not { } active) return true;
+
+        ChestLidFanout.ReleaseOpener(online, _world, player);
+        player.Client.Inventory.EndOpenContainerSession();
+        player.Client.Inventory.SendContainerClose(active.WindowId, active.WindowType);
+        player.Level.Logger?.Debug($"Container access withdrawn for {player.Username}; window closed.");
+        return false;
+    }
 
     public void Apply(
         global::Zenith.Player.Player player,
@@ -50,6 +74,14 @@ sealed class ContainerSessions
 
             case InventoryWindowIntent.Kind.OpenChest:
                 var view = ChestPairing.ViewFor(_world, intent.X, intent.Y, intent.Z);
+                // Judged before anything opens: no storage created, no opener registered, no lid, no contents sent.
+                var access = _access.Check(player, view, ContainerAccessKind.Open);
+                if (!access.IsAllowed)
+                {
+                    player.Level.Logger?.Debug($"Chest open denied for {player.Username} @ {intent.X},{intent.Y},{intent.Z}: {access.Reason}");
+                    return;
+                }
+
                 // A chest block whose storage cell does not exist yet gets one here.
                 _world.Chests.Ensure(view.PrimaryX, view.PrimaryY, view.PrimaryZ);
                 var partnerX = 0;

@@ -30,7 +30,7 @@ sealed class WorldModule : IGameplayModule
         s.Register(new BlockUpdateSystem(s.World, s.Players), "block-update");
         s.Register(new RandomTickSystem(s.World, RandomTickBehaviors.Default()), "random-tick");
         s.Register(new FloorDropSystem(s.World), "floor-drop");
-        s.Register(new InventorySystem(s.Players, s.World, s.Recipes, s.Creative), "inventory");
+        s.Register(new InventorySystem(s.Players, s.World, s.Recipes, s.Creative, s.ContainerPolicies), "inventory");
         // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
         s.Register(new HungerSystem(s.ItemPalette, s.Players), "hunger");
         // After movement and hunger: judges where the player ended up this tick (breath, lava).

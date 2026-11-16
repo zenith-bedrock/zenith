@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Ports;
 using System.Collections.Generic;
 using Zenith.Gameplay.Runtime;
@@ -20,17 +21,23 @@ sealed class InventorySystem : IGameSystem
     private readonly ContainerSessions _windows;
     private readonly StackRequestApplier _requests;
 
-    public InventorySystem(PlayerManager players, World.World world, RecipeRegistry recipes, CreativeCatalog creative)
+    private readonly ContainerAccessGuard _access;
+
+    /// <param name="containerPolicies">Who may open and use containers; none means nothing can refuse (composition always supplies the permission policy).</param>
+    public InventorySystem(
+        PlayerManager players, World.World world, RecipeRegistry recipes, CreativeCatalog creative,
+        ContainerAccessPolicies? containerPolicies = null)
     {
         _players = players;
         _world = world;
-        _windows = new ContainerSessions(world);
-        _requests = new StackRequestApplier(players, world, recipes, creative, new InventorySlots(world));
+        _access = new ContainerAccessGuard(containerPolicies);
+        _windows = new ContainerSessions(world, _access);
+        _requests = new StackRequestApplier(players, world, recipes, creative, new InventorySlots(world, _access));
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        _ = clock;
+        _access.Tick = clock.CurrentTick;
 
         // Disconnect is produced by the network lifecycle, but ChestStore opener state remains
         // gameplay-owned. Drain even when the departing player has already left Online.
@@ -70,7 +77,13 @@ sealed class InventorySystem : IGameSystem
                             _windows.Apply(player, lifecycle, online);
                     }
                     else if (!player.IsDead && stack is { } transaction)
-                        _requests.Apply(player, transaction, online);
+                    {
+                        // A window opened before a right was withdrawn is closed, and what the player tried to do in it is refused.
+                        if (_windows.EnforceAccess(player, online))
+                            _requests.Apply(player, transaction, online);
+                        else
+                            _requests.Refuse(player, transaction, "container access withdrawn");
+                    }
                 }
                 finally { player.Windows.CompleteInventoryWindow(); }
             }

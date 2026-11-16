@@ -26,4 +26,12 @@ static class PermissionsComposition
         policies.Register(new PermissionBlockEditPolicy(permissions));
         return policies;
     }
+
+    /// <summary>The policies every container open/transfer passes through, permission first; modules add theirs during composition.</summary>
+    public static ContainerAccessPolicies CreateContainerPolicies(PermissionAuthority permissions, Zenith.Logging.ILogger? logger)
+    {
+        var policies = new ContainerAccessPolicies(logger);
+        policies.Register(new PermissionContainerAccessPolicy(permissions));
+        return policies;
+    }
 }

@@ -269,6 +269,9 @@ sealed class StackRequestApplier
         }
     }
 
+    /// <summary>Refuses a request the owner will not run (for example access was withdrawn): the client is told and resynced.</summary>
+    public void Refuse(global::Zenith.Player.Player player, in InventoryStackIntent intent, string reason) => Reject(player, intent, reason);
+
     /// <summary>Tells the client the request failed and resends every store it may have shown stale, optionally logging why.</summary>
     private void Reject(global::Zenith.Player.Player player, in InventoryStackIntent intent, string? reason)
     {

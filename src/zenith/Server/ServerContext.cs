@@ -36,6 +36,7 @@ class ServerContext
     public PermissionAuthority Permissions { get; }
     public AuthorityGate Gate { get; }
     public BlockEditPolicies BlockPolicies { get; }
+    public ContainerAccessPolicies ContainerPolicies { get; }
     public CommandRuntime Commands { get; }
     public ServerRuntimeDiagnostics Diagnostics { get; }
 
@@ -54,7 +55,8 @@ class ServerContext
         ServerRuntimeDiagnostics? diagnostics = null,
         MobSpawner? spawner = null,
         PermissionAuthority? permissions = null,
-        BlockEditPolicies? blockPolicies = null)
+        BlockEditPolicies? blockPolicies = null,
+        ContainerAccessPolicies? containerPolicies = null)
     {
         Logger = logger;
         PlayerManager = playerManager;
@@ -73,6 +75,7 @@ class ServerContext
         Permissions = permissions ?? PermissionsComposition.Create(config);
         Gate = new AuthorityGate(Permissions, playerManager);
         BlockPolicies = blockPolicies ?? PermissionsComposition.CreateBlockPolicies(Permissions, logger);
+        ContainerPolicies = containerPolicies ?? PermissionsComposition.CreateContainerPolicies(Permissions, logger);
         Commands = new CommandRuntime(playerManager, Permissions, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner);
     }
 }
