@@ -1,4 +1,5 @@
 using Zenith.Gameplay.Commands;
+using Zenith.Gameplay.Modules;
 using Zenith.Gameplay.Permissions;
 using Zenith.Gameplay.Policy;
 
@@ -37,17 +38,41 @@ sealed class ProtectModule
 
     public CommandBinding Command { get; }
 
-    public ProtectModule(PermissionAuthority authority)
+    /// <summary>The name this module saves its state under.</summary>
+    public const string StateName = "protect.regions";
+
+    private readonly IModuleStateStore? _state;
+    private readonly object _changes = new();
+
+    /// <param name="state">Where regions are kept between runs (with the world); none means they live only as long as the process.</param>
+    /// <exception cref="InvalidDataException">Saved regions exist but cannot be read: the server must not start unprotected.</exception>
+    public ProtectModule(PermissionAuthority authority, IModuleStateStore? state = null)
     {
+        _state = state;
+        if (state?.Load(StateName) is { } saved)
+        {
+            try
+            {
+                foreach (var region in ProtectRegionCodec.Decode(saved))
+                    Regions.TryAdd(region, out _);
+            }
+            catch (InvalidDataException ex)
+            {
+                throw new InvalidDataException(
+                    $"The saved protect regions are unusable ({ex.Message}). The server will not start without its protection.", ex);
+            }
+        }
         BlockPolicy = new ProtectBlockEditPolicy(Regions, authority);
         ContainerPolicy = new ProtectContainerAccessPolicy(Regions, authority);
         Command = CreateCommand();
     }
 
     /// <summary>Builds the module and installs it into the policy sets; call before they freeze.</summary>
-    public static ProtectModule Compose(PermissionAuthority authority, BlockEditPolicies blocks, ContainerAccessPolicies containers)
+    public static ProtectModule Compose(
+        PermissionAuthority authority, BlockEditPolicies blocks, ContainerAccessPolicies containers,
+        IModuleStateStore? state = null)
     {
-        var module = new ProtectModule(authority);
+        var module = new ProtectModule(authority, state);
         module.Install(blocks, containers);
         return module;
     }
@@ -73,6 +98,12 @@ sealed class ProtectModule
         return new CommandBinding(definition, Execute);
     }
 
+    /// <summary>
+    /// Hands the current set to the state store after a change (callers hold the change lock, so what is saved is always the latest
+    /// set). The change is already in force; the bytes reach disk with the world's other writes.
+    /// </summary>
+    private void Persist() => _state?.Save(StateName, ProtectRegionCodec.Encode(Regions.Snapshot));
+
     private CommandFeedback Execute(in CommandInvocation invocation)
     {
         var arguments = invocation.Arguments;
@@ -83,14 +114,22 @@ sealed class ProtectModule
                     (string)arguments["name"],
                     (int)arguments["x1"], (int)arguments["y1"], (int)arguments["z1"],
                     (int)arguments["x2"], (int)arguments["y2"], (int)arguments["z2"]);
-                return Regions.TryAdd(region, out var error)
-                    ? new("Protect", $"Protected {region.Name}.", CommandOutcome.Applied)
-                    : new("Protect", error, CommandOutcome.Rejected);
+                lock (_changes)
+                {
+                    if (!Regions.TryAdd(region, out var error))
+                        return new("Protect", error, CommandOutcome.Rejected);
+                    Persist();
+                    return new("Protect", $"Protected {region.Name}.", CommandOutcome.Applied);
+                }
             case "remove":
                 var name = (string)arguments["name"];
-                return Regions.TryRemove(name)
-                    ? new("Protect", $"Removed {name}.", CommandOutcome.Applied)
-                    : new("Protect", $"No region named '{name}'.", CommandOutcome.Rejected);
+                lock (_changes)
+                {
+                    if (!Regions.TryRemove(name))
+                        return new("Protect", $"No region named '{name}'.", CommandOutcome.Rejected);
+                    Persist();
+                    return new("Protect", $"Removed {name}.", CommandOutcome.Applied);
+                }
             default:
                 var all = Regions.Snapshot;
                 return new("Protect", all.IsEmpty ? "No protected regions." : string.Join(", ", all.Select(r => r.Name)), CommandOutcome.Applied);

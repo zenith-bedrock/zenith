@@ -119,6 +119,13 @@ sealed class World
             _logger?.Warning($"Stored game rules ignored (unknown name or changed type): {string.Join(", ", ignored)}.");
     }
 
+    /// <summary>A module's saved bytes, or null. Boot only: it waits for the storage.</summary>
+    public byte[]? LoadModuleState(string module) => _storage.GetModuleStateAsync(module).AsTask().GetAwaiter().GetResult();
+
+    /// <summary>Hands a module's bytes to the write-behind storage; they reach the disk with the world's other writes.</summary>
+    public void PersistModuleState(string module, byte[] state) =>
+        _writes.Observe(_storage.PutModuleStateAsync(module, state), $"PutModuleState:{module}");
+
     public void PersistGameRules() => _writes.Observe(_storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot)), "PutGameRules");
 
     /// <summary>

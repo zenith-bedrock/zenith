@@ -17,6 +17,12 @@ enum RecordKind : byte
 
     /// <summary>The world's game rules in <see cref="GameRuleCodec"/> bytes. One per world.</summary>
     GameRules = 0x11,
+
+    /// <summary>
+    /// Opaque state a server module keeps with the world (for example protected regions), one record per module, keyed by
+    /// <see cref="RecordKey.Module"/>. The world stores the bytes and never reads them.
+    /// </summary>
+    ModuleState = 0x12,
 }
 
 /// <summary>
@@ -28,6 +34,7 @@ readonly record struct RecordKey(RecordKind Kind, long A = 0, long B = 0)
 {
     private const int ColumnLength = 1 + 2 * sizeof(int);
     private const int PlayerLength = 1 + 16;
+    private const int ModuleLength = 1 + sizeof(long);
 
     public static RecordKey Column(ChunkCoord coord) => new(RecordKind.Column, coord.X, coord.Z);
 
@@ -40,10 +47,24 @@ readonly record struct RecordKey(RecordKind Kind, long A = 0, long B = 0)
 
     public static RecordKey Singleton(RecordKind kind) => new(kind);
 
+    /// <summary>
+    /// The record of one module. The name is hashed (FNV-1a, 64 bit) into the key, so the world needs no list of modules; the
+    /// hash is part of the on-disk format, which is why it is spelled out here rather than taken from a runtime hash code.
+    /// </summary>
+    public static RecordKey Module(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var hash = 14695981039346656037UL;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(name))
+            hash = (hash ^ b) * 1099511628211UL;
+        return new RecordKey(RecordKind.ModuleState, unchecked((long)hash));
+    }
+
     public int EncodedLength => Kind switch
     {
         RecordKind.Column => ColumnLength,
         RecordKind.Inventory or RecordKind.Armor or RecordKind.Offhand or RecordKind.PlayerData => PlayerLength,
+        RecordKind.ModuleState => ModuleLength,
         _ => 1,
     };
 
@@ -51,15 +72,18 @@ readonly record struct RecordKey(RecordKind Kind, long A = 0, long B = 0)
     public void WriteTo(Span<byte> destination)
     {
         destination[0] = (byte)Kind;
-        switch (EncodedLength)
+        switch (Kind)
         {
-            case ColumnLength:
+            case RecordKind.Column:
                 BinaryPrimitives.WriteUInt32BigEndian(destination[1..], (uint)(int)A ^ 0x8000_0000u);
                 BinaryPrimitives.WriteUInt32BigEndian(destination[5..], (uint)(int)B ^ 0x8000_0000u);
                 break;
-            case PlayerLength:
+            case RecordKind.Inventory or RecordKind.Armor or RecordKind.Offhand or RecordKind.PlayerData:
                 BinaryPrimitives.WriteInt64BigEndian(destination[1..], A);
                 BinaryPrimitives.WriteInt64BigEndian(destination[9..], B);
+                break;
+            case RecordKind.ModuleState:
+                BinaryPrimitives.WriteInt64BigEndian(destination[1..], A);
                 break;
         }
     }

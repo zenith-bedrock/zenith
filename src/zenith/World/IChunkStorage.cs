@@ -76,6 +76,13 @@ static class ChunkStorageExtensions
     public static ValueTask PutGameRulesAsync(this IChunkStorage storage, byte[] blob, CancellationToken ct = default) =>
         storage.PutAsync(RecordKey.Singleton(RecordKind.GameRules), blob, ct);
 
+    /// <summary>A module's opaque state; null until the module first saves.</summary>
+    public static ValueTask<byte[]?> GetModuleStateAsync(this IChunkStorage storage, string module, CancellationToken ct = default) =>
+        storage.GetAsync(RecordKey.Module(module), ct);
+
+    public static ValueTask PutModuleStateAsync(this IChunkStorage storage, string module, byte[] blob, CancellationToken ct = default) =>
+        storage.PutAsync(RecordKey.Module(module), blob, ct);
+
     /// <summary>
     /// World identity (generator mode + seed): set once, the first time a world is opened, and never overwritten
     /// (Phase XXIV: the seed is world identity, not a per-restart config knob). Null means a brand-new world.

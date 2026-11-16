@@ -138,7 +138,9 @@ class ZenithServer
             var blockPolicies = PermissionsComposition.CreateBlockPolicies(permissions, serverLogger);
             var containerPolicies = PermissionsComposition.CreateContainerPolicies(permissions, serverLogger);
             // Modules add their vetoes now: the world composition below freezes the policy sets.
-            var protect = Zenith.Modules.Protect.ProtectModule.Compose(permissions, blockPolicies, containerPolicies);
+            var protect = Zenith.Modules.Protect.ProtectModule.Compose(
+                permissions, blockPolicies, containerPolicies,
+                new WorldModuleStateStore(world));
             var spawner = new MobSpawner(gate);
             var services = new ServerServices(
                 gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
