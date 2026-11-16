@@ -21,6 +21,6 @@ sealed class PlayerInputModule : IGameplayModule
         // ItemUseOnActor player targets are resolved after movement established this tick's pose.
         s.Register(new PlayerMeleeSystem(s.Players, s.ItemPalette), "player-melee");
         s.Register(new ChatSystem(), "chat");
-        s.Register(new GameModeSystem(), "game-mode");
+        s.Register(new GameModeSystem(s.Gate), "game-mode");
     }
 }

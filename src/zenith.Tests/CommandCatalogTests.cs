@@ -1,4 +1,6 @@
 using Zenith.Gameplay.Commands;
+using Zenith.Server;
+using Zenith.Server.Composition;
 using Zenith.Diagnostics;
 using Zenith.Player;
 using Xunit;
@@ -12,7 +14,7 @@ public sealed class CommandCatalogTests
     {
         var catalog = CreateCatalog();
 
-        var result = catalog.Parse("/gm creative Alice", CommandPermission.Any);
+        var result = catalog.Parse("/gm creative Alice", _ => true);
 
         Assert.Equal(CommandParseStatus.Success, result.Status);
         Assert.Equal("gamemode", result.Definition!.Name);
@@ -25,9 +27,9 @@ public sealed class CommandCatalogTests
     {
         var catalog = CreateCatalog();
 
-        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/sample 20", CommandPermission.Any).Status);
-        Assert.Equal(CommandParseStatus.Invalid, catalog.Parse("/sample 21", CommandPermission.Any).Status);
-        Assert.Equal(CommandParseStatus.Invalid, catalog.Parse("/gm adventure", CommandPermission.Any).Status);
+        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/sample 20", _ => true).Status);
+        Assert.Equal(CommandParseStatus.Invalid, catalog.Parse("/sample 21", _ => true).Status);
+        Assert.Equal(CommandParseStatus.Invalid, catalog.Parse("/gm adventure", _ => true).Status);
     }
 
     [Fact]
@@ -35,8 +37,9 @@ public sealed class CommandCatalogTests
     {
         var catalog = CreateCatalog();
 
-        Assert.Equal(CommandParseStatus.Denied, catalog.Parse("/stop", CommandPermission.Any).Status);
-        Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/missing", CommandPermission.Operator).Status);
+        Assert.Equal(CommandParseStatus.Denied, catalog.Parse("/stop", node => node == "test.any").Status);
+        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/stop", node => node == "test.admin").Status);
+        Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/missing", _ => true).Status);
     }
 
     [Fact]
@@ -44,23 +47,23 @@ public sealed class CommandCatalogTests
     {
         var catalog = CreateCatalog();
 
-        Assert.Equal(["gamemode", "gm"], catalog.Suggest("g"));
+        Assert.Equal(["gamemode", "gm"], catalog.Suggest("g", _ => true));
     }
 
     [Fact]
     public void Diagnostics_command_is_exposed_as_a_concrete_command()
     {
-        var runtime = new CommandRuntime(new PlayerManager(), CreateDiagnostics());
+        var runtime = new CommandRuntime(new PlayerManager(), PermissionsComposition.Create(new ServerConfig()), CreateDiagnostics());
 
-        Assert.Equal(CommandParseStatus.Success, runtime.Catalog.Parse("/diagnostics snapshot", CommandPermission.Any).Status);
-        Assert.Equal(CommandParseStatus.Invalid, runtime.Catalog.Parse("/diagnostics missing", CommandPermission.Any).Status);
+        Assert.Equal(CommandParseStatus.Success, runtime.Catalog.Parse("/diagnostics snapshot", _ => true).Status);
+        Assert.Equal(CommandParseStatus.Invalid, runtime.Catalog.Parse("/diagnostics missing", _ => true).Status);
     }
 
     [Fact]
     public void Diagnostics_command_capturesBaselineAndComparesWithoutGameplayMutation()
     {
         var fixture = new IntentTestFixture();
-        var player = fixture.AddInGamePlayer("operator");
+        var player = fixture.AddOperator("operator");
 
         var snapshot = fixture.Context.Commands.Execute(player, "/diagnostics snapshot");
         var comparison = fixture.Context.Commands.Execute(player, "/diagnostics compare");
@@ -84,23 +87,23 @@ public sealed class CommandCatalogTests
             ["survival"] = GameMode.Survival, ["creative"] = GameMode.Creative
         };
         var catalog = new CommandCatalog();
-        catalog.Register(new CommandDefinition("gamemode", "Set game mode", CommandPermission.Any,
+        catalog.Register(new CommandDefinition("gamemode", "Set game mode", ["test.any"],
             [new CommandOverload(new EnumCommandArgument("mode", modes), new PlayerCommandArgument("target", name => name, Optional: true))], ["gm"]));
-        catalog.Register(new CommandDefinition("sample", "Range proof", CommandPermission.Any,
+        catalog.Register(new CommandDefinition("sample", "Range proof", "test.any",
             new CommandOverload(new IntegerCommandArgument("ticks", 1, 20))));
-        catalog.Register(new CommandDefinition("stop", "Permission proof", CommandPermission.Operator,
+        catalog.Register(new CommandDefinition("stop", "Permission proof", "test.admin",
             new CommandOverload()));
         return catalog;
     }
 
     private static CommandDefinition Def(string name, params string[] aliases) =>
-        new(name, "test", CommandPermission.Any, [new CommandOverload()], aliases);
+        new(name, "test", ["test.any"], [new CommandOverload()], aliases);
 
     private static void AssertUnchanged(CommandCatalog catalog, int definitions, params string[] unknown)
     {
         Assert.Equal(definitions, catalog.Definitions.Count);
         foreach (var name in unknown)
-            Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/" + name, CommandPermission.Operator).Status);
+            Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/" + name, _ => true).Status);
     }
 
     [Theory]
@@ -117,7 +120,7 @@ public sealed class CommandCatalogTests
         Assert.ThrowsAny<Exception>(() => catalog.Register(Def(name, aliases)));
 
         AssertUnchanged(catalog, 1, name, aliases.FirstOrDefault(a => a.Length > 0 && !a.Contains(' ')) ?? "zzz");
-        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/ex", CommandPermission.Any).Status);
+        Assert.Equal(CommandParseStatus.Success, catalog.Parse("/ex", _ => true).Status);
     }
 
     [Fact]
@@ -150,11 +153,27 @@ public sealed class CommandCatalogTests
     {
         var aliases = new List<string> { "o" };
         var catalog = new CommandCatalog();
-        catalog.Register(new CommandDefinition("one", "t", CommandPermission.Any, [new CommandOverload()], aliases));
+        catalog.Register(new CommandDefinition("one", "t", ["test.any"], [new CommandOverload()], aliases));
 
         aliases.Add("sneaky");
 
-        Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/sneaky", CommandPermission.Operator).Status);
+        Assert.Equal(CommandParseStatus.Unknown, catalog.Parse("/sneaky", _ => true).Status);
         Assert.Single(catalog.Definitions[0].Aliases);
+    }
+
+    [Fact]
+    public void Suggestions_and_help_show_only_what_the_sender_may_use()
+    {
+        var catalog = CreateCatalog();
+
+        Assert.Equal(["sample"], catalog.Suggest("s", node => node == "test.any"));
+        Assert.Equal(["sample", "stop"], catalog.Suggest("s", _ => true));
+    }
+
+    [Fact]
+    public void A_definition_without_a_permission_node_is_rejected()
+    {
+        var catalog = new CommandCatalog();
+        Assert.Throws<ArgumentException>(() => catalog.Register(new CommandDefinition("bare", "t", [], [new CommandOverload()], [])));
     }
 }

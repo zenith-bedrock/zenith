@@ -23,7 +23,7 @@ public sealed class GameplayCompositionTests
         var services = new ServerServices(
             loop, diagnostics, fx.Players, fx.World, fx.Context.ItemPalette, fx.Context.Recipes, fx.Context.Durability,
             fx.Context.Creative, new EntityRuntime(), new PlayerSpatialIndex(),
-            new MobSpawner(), ChunkResidencySweepIntervalTicks: 200);
+            new MobSpawner(), fx.Context.Gate, ChunkResidencySweepIntervalTicks: 200);
         return (loop, GameplayComposition.Register(services), services);
     }
 

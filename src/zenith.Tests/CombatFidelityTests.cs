@@ -69,7 +69,7 @@ public class CombatFidelityTests
     {
         var fx = new IntentTestFixture(); var player = fx.AddInGamePlayer("clear-wire");
         var client = new RecordingClientChannel(); player.AttachClient(client);
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
         foreach (var type in new[] { EffectType.Poison, EffectType.Regeneration })
         {
             player.Effects.SubmitEffect(EffectIntent.Give(type, 0, 100)); system.Tick(fx.Clock, fx.Players.Online);

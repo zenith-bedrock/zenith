@@ -184,7 +184,7 @@ public class ChatAndGameModeIntentTests
         alice.Intents.SubmitGameMode(GameMode.Creative);
 
         var before = fx.Transport.Captured.Count;
-        new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
+        new GameModeSystem(fx.Context.Gate).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Equal(GameMode.Creative, alice.GameMode);
@@ -213,7 +213,7 @@ public class ChatAndGameModeIntentTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         alice.Intents.SubmitGameMode(GameMode.Creative);
-        new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
+        new GameModeSystem(fx.Context.Gate).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
 
         Assert.Equal(GameMode.Creative, alice.GameMode);
@@ -235,7 +235,7 @@ public class ChatAndGameModeIntentTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         player.Intents.SubmitGameMode(GameMode.Creative);
-        new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
+        new GameModeSystem(fx.Context.Gate).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
         Assert.Equal(GameMode.Creative, player.GameMode);
         Assert.Contains(ReassembleApplicationPackets(fx), msg => msg.AsSpan().IndexOf(creativePayload) >= 0);
@@ -243,7 +243,7 @@ public class ChatAndGameModeIntentTests
         while (fx.Transport.Captured.TryDequeue(out _)) { }
 
         player.Intents.SubmitGameMode(GameMode.Survival);
-        new GameModeSystem().Tick(fx.Clock, fx.Players.Online);
+        new GameModeSystem(fx.Context.Gate).Tick(fx.Clock, fx.Players.Online);
         FlushRaknet(fx.Players);
         Assert.Equal(GameMode.Survival, player.GameMode);
         Assert.Contains(ReassembleApplicationPackets(fx), msg => msg.AsSpan().IndexOf(creativePayload) >= 0);

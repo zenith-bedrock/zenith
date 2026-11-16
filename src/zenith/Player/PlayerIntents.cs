@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Permissions;
 using Zenith.Gameplay.Survival;
 
 namespace Zenith.Player;
@@ -29,7 +30,7 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, Pl
     private readonly PendingMailbox<BlockEditIntent> _blockEdits = new(MaxPendingBlockEdits);
     private readonly PendingMailbox<BucketIntent> _buckets = new(MaxPendingBuckets);
     private readonly PendingMailbox<string> _chat = new(MaxPendingChat);
-    private readonly PendingValue<GameMode> _gameMode = new();
+    private readonly PendingValue<GameModeRequest> _gameMode = new();
     private readonly PendingSignal _respawn = new();
     private readonly PendingSignal _spawnReady = new();
 
@@ -117,14 +118,14 @@ sealed class PlayerIntents(Func<bool> isDead, Func<GameMode> currentGameMode, Pl
     }
 
     /// <summary>Overwrite-latest runtime mode (§52). Applied on the GameLoop, not by handlers.</summary>
-    public void SubmitGameMode(GameMode mode)
+    public void SubmitGameMode(GameMode mode, Authorization? issuer = null)
     {
         if (isDead()) return;
-        _gameMode.Submit(mode);
+        _gameMode.Submit(new GameModeRequest(mode, issuer));
     }
 
     /// <summary>No pending change reports the current mode (not <c>default</c>) so callers always get a real value.</summary>
-    public bool TryConsumeGameMode(out GameMode mode) => _gameMode.TryConsume(currentGameMode(), out mode);
+    public bool TryConsumeGameMode(out GameModeRequest request) => _gameMode.TryConsume(new GameModeRequest(currentGameMode(), null), out request);
 
     /// <summary>Client Respawn CLIENT_READY / PlayerAction RESPAWN: overwrite-latest one-shot.</summary>
     public void SubmitRespawn()

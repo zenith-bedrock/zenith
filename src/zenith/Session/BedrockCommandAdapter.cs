@@ -12,11 +12,13 @@ static class BedrockCommandAdapter
     private const uint Target = 8;
     private const uint String = 58;
 
-    public static AvailableCommandsPacket CreateMetadata(CommandCatalog catalog)
+    /// <summary>The command list one player is told about: only what <paramref name="holds"/> says they may use.</summary>
+    public static AvailableCommandsPacket CreateMetadata(CommandCatalog catalog, Func<string, bool> holds)
     {
         var packet = new AvailableCommandsPacket();
         foreach (var definition in catalog.Definitions)
         {
+            if (!CommandCatalog.IsUsable(definition, holds)) continue;
             var aliasIndex = uint.MaxValue;
             if (definition.Aliases.Count > 0)
             {
@@ -26,7 +28,7 @@ static class BedrockCommandAdapter
             var overloads = definition.Overloads.Select(overload => new AvailableCommandOverload(
                 overload.Arguments.Select(argument => ProjectArgument(packet, argument)).ToArray())).ToArray();
             packet.Commands.Add(new AvailableCommand(definition.Name, definition.Description,
-                definition.RequiredPermission == CommandPermission.Operator ? "gamedirectors" : "any", aliasIndex, overloads));
+                "any", aliasIndex, overloads));
         }
         return packet;
     }

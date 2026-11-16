@@ -35,7 +35,7 @@ sealed class WorldModule : IGameplayModule
         s.Register(new HungerSystem(s.ItemPalette, s.Players), "hunger");
         // After movement and hunger: judges where the player ended up this tick (breath, lava).
         s.Register(new AirSupplySystem(s.Players), "air-supply");
-        s.Register(new EffectSystem(s.Players), "effect");
+        s.Register(new EffectSystem(s.Players, s.Gate), "effect");
         // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
         s.Register(new EquipmentSystem(), "equipment");
         s.Register(new ChunkStreamSystem(s.World, s.Diagnostics.Worldgen), "chunk-stream");

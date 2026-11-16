@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Permissions;
 using System.Collections.Concurrent;
 using System.Net;
 using Zenith.Event;
@@ -93,7 +94,22 @@ internal sealed class IntentTestFixture
 
     /// <summary>Registered in <see cref="Players"/> but not yet spawned — mirrors the window between
     /// login accept and <c>InGameSessionHandler</c> setting <c>IsInGame</c> (e.g. mid resource-pack).</summary>
-    public Player.Player AddPlayer(string name, GameMode gameMode = GameMode.Survival, bool isInGame = false)
+    public Player.Player AddPlayer(string name, GameMode gameMode = GameMode.Survival, bool isInGame = false) =>
+        AddPlayer(name, gameMode, isInGame, IdentityTrust.Ephemeral);
+
+    private readonly List<Guid> _operators = [];
+
+    /// <summary>An in-game player whose verified identity is listed as an administrator, as a configured operator would be.</summary>
+    public Player.Player AddOperator(string name, GameMode gameMode = GameMode.Survival)
+    {
+        var player = AddPlayer(name, gameMode, isInGame: true, IdentityTrust.Authenticated);
+        _operators.Add(player.Uuid);
+        Context.Permissions.Replace(PermissionPolicy.Create(
+            Context.Permissions.Registry, _operators.Select(id => id.ToString()), null, null, trustSelfAsserted: false));
+        return player;
+    }
+
+    public Player.Player AddPlayer(string name, GameMode gameMode, bool isInGame, IdentityTrust trust)
     {
         var rak = new RakNetSession
         {
@@ -103,7 +119,7 @@ internal sealed class IntentTestFixture
             MTU = 1400
         };
         var session = new NetworkSession(new Zenith.Network.RakNet.RakNetGameConnection(rak), new StubSessionHandler(), Context);
-        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode, level: World, itemPalette: Context.ItemPalette)
+        var player = new Player.Player(name, session, Players.AllocateRuntimeId(), Guid.NewGuid(), gameMode, level: World, itemPalette: Context.ItemPalette, trust: trust)
         {
             IsInGame = isInGame
         };

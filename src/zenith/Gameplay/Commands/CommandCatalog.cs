@@ -19,6 +19,8 @@ sealed class CommandCatalog
             throw new InvalidOperationException("CommandCatalog is frozen; register before Freeze().");
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentException.ThrowIfNullOrWhiteSpace(definition.Name);
+        if (definition.Permissions.Count == 0 || definition.Permissions.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException($"Command '{definition.Name}' must name at least one permission node.", nameof(definition));
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in definition.Aliases.Prepend(definition.Name))
@@ -33,6 +35,7 @@ sealed class CommandCatalog
 
         var owned = definition with
         {
+            Permissions = [.. definition.Permissions],
             Aliases = [.. definition.Aliases],
             Overloads = [.. definition.Overloads]
         };
@@ -47,19 +50,29 @@ sealed class CommandCatalog
     /// </summary>
     internal void Freeze() => _frozen = true;
 
-    public CommandParseResult Parse(string line, CommandPermission permission)
+    /// <summary>
+    /// Parses a line for a sender. <paramref name="holds"/> says which permission nodes the sender has; a command is usable when the
+    /// sender holds any node the definition lists, and is otherwise reported as denied (never as unknown, so a typo and a refusal differ).
+    /// </summary>
+    public CommandParseResult Parse(string line, Func<string, bool> holds)
     {
         var tokens = Tokenize(line);
         if (tokens.Length == 0) return CommandParseResult.Unknown();
         if (!_names.TryGetValue(tokens[0], out var definition)) return CommandParseResult.Unknown();
-        if (permission < definition.RequiredPermission) return CommandParseResult.Denied(definition);
+        if (!IsUsable(definition, holds)) return CommandParseResult.Denied(definition);
         var values = tokens[1..];
         foreach (var overload in definition.Overloads)
             if (overload.TryParse(values, out var arguments)) return CommandParseResult.Success(definition, overload, arguments);
         return CommandParseResult.Invalid(definition);
     }
 
-    public IReadOnlyList<string> Suggest(string prefix) => _definitions.SelectMany(d => new[] { d.Name }.Concat(d.Aliases))
+    /// <summary>Whether a sender holding what <paramref name="holds"/> reports may use (and so should be shown) the command.</summary>
+    public static bool IsUsable(CommandDefinition definition, Func<string, bool> holds) => definition.Permissions.Any(holds);
+
+    /// <summary>Names and aliases starting with the prefix that the sender may use: discovery follows authorization.</summary>
+    public IReadOnlyList<string> Suggest(string prefix, Func<string, bool> holds) => _definitions
+        .Where(d => IsUsable(d, holds))
+        .SelectMany(d => new[] { d.Name }.Concat(d.Aliases))
         .Where(name => name.StartsWith(prefix.TrimStart('/'), StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase).ToArray();
 
     private static string[] Tokenize(string line)
@@ -71,11 +84,13 @@ sealed class CommandCatalog
     }
 }
 
-enum CommandPermission { Any, Operator }
-
-sealed record CommandDefinition(string Name, string Description, CommandPermission RequiredPermission, IReadOnlyList<CommandOverload> Overloads, IReadOnlyList<string> Aliases)
+/// <summary>
+/// A command and the permission nodes that unlock it: a sender holding <i>any</i> of <see cref="Permissions"/> may use it (finer
+/// distinctions, like acting on others, are checked by the executor against its own node).
+/// </summary>
+sealed record CommandDefinition(string Name, string Description, IReadOnlyList<string> Permissions, IReadOnlyList<CommandOverload> Overloads, IReadOnlyList<string> Aliases)
 {
-    public CommandDefinition(string name, string description, CommandPermission permission, params CommandOverload[] overloads) : this(name, description, permission, overloads, []) { }
+    public CommandDefinition(string name, string description, string permission, params CommandOverload[] overloads) : this(name, description, [permission], overloads, []) { }
 }
 
 sealed record CommandOverload(IReadOnlyList<CommandArgument> Arguments)

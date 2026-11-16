@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Zenith.Gameplay.Permissions;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 
@@ -8,7 +9,7 @@ namespace Zenith.Gameplay.Replication;
 /// Aplica <see cref="Player.Player.Intents.SubmitGameMode"/> no tick e transmite wire (§52).
 /// Handler só enfileira; inventário não é reseedado.
 /// </summary>
-sealed class GameModeSystem : IGameSystem
+sealed class GameModeSystem(AuthorityGate gate) : IGameSystem
 {
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -18,7 +19,11 @@ sealed class GameModeSystem : IGameSystem
         foreach (var player in online)
         {
             if (!player.IsInGame) continue;
-            if (!player.Intents.TryConsumeGameMode(out var mode)) continue;
+            if (!player.Intents.TryConsumeGameMode(out var request)) continue;
+
+            // The owner asks again: a grant revoked, or an issuer that left, between the command and this tick stops the change.
+            if (!gate.Confirms(request.Issuer)) continue;
+            var mode = request.Mode;
 
             player.SetGameMode(mode);
 

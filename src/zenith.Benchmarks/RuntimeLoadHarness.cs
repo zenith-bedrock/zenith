@@ -575,7 +575,7 @@ internal static class RuntimeLoadHarness
             var playerSpatial = new PlayerSpatialIndex();
             Loop.Register(new PlayerSpatialIndexSystem(playerSpatial));
             Loop.Register(new ChatSystem());
-            Loop.Register(new GameModeSystem());
+            Loop.Register(new GameModeSystem(context.Gate));
             ZombieSystem? zombieSystem = null;
             if (includeZombieSystem || includeProjectileSystem)
             {

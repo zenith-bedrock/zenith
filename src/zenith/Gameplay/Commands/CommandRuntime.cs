@@ -1,4 +1,5 @@
 using Zenith.Player;
+using Zenith.Gameplay.Permissions;
 using Zenith.Diagnostics;
 using System.Globalization;
 using System.Diagnostics;
@@ -15,10 +16,12 @@ sealed class CommandRuntime
     private readonly DiagnosticsInvestigation? _diagnostics;
     private readonly GameRules? _rules;
     private readonly MobSpawner? _spawner;
+    private readonly PermissionAuthority _authority;
     private readonly CommandCatalog _catalog = new();
 
-    public CommandRuntime(PlayerManager players, DiagnosticsInvestigation? diagnostics = null, GameRules? rules = null, MobSpawner? spawner = null)
+    public CommandRuntime(PlayerManager players, PermissionAuthority authority, DiagnosticsInvestigation? diagnostics = null, GameRules? rules = null, MobSpawner? spawner = null)
     {
+        _authority = authority;
         _spawner = spawner;
         _players = players;
         _rules = rules;
@@ -28,17 +31,17 @@ sealed class CommandRuntime
             ["survival"] = GameMode.Survival, ["s"] = GameMode.Survival, ["0"] = GameMode.Survival,
             ["creative"] = GameMode.Creative, ["c"] = GameMode.Creative, ["1"] = GameMode.Creative
         };
-        _catalog.Register(new CommandDefinition("gamemode", "Change game mode", CommandPermission.Any,
+        _catalog.Register(new CommandDefinition("gamemode", "Change game mode", [PermissionNodes.GameModeSelf, PermissionNodes.GameModeOthers],
             [new CommandOverload(new EnumCommandArgument("mode", modes), new PlayerCommandArgument("target", name => _players.Get(name), Optional: true))], ["gm"]));
-        _catalog.Register(new CommandDefinition("help", "List available commands", CommandPermission.Any,
+        _catalog.Register(new CommandDefinition("help", "List available commands", PermissionNodes.Help,
             new CommandOverload(), new CommandOverload(new StringCommandArgument("command"))));
-        _catalog.Register(new CommandDefinition("sample", "Show a bounded runtime sample request", CommandPermission.Any,
+        _catalog.Register(new CommandDefinition("sample", "Show a bounded runtime sample request", PermissionNodes.Sample,
             new CommandOverload(), new CommandOverload(new IntegerCommandArgument("ticks", 1, 20))));
         var diagnosticsActions = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["snapshot"] = "snapshot", ["compare"] = "compare", ["tick"] = "tick", ["incident"] = "incident", ["window"] = "window"
         };
-        _catalog.Register(new CommandDefinition("diagnostics", "Capture and compare runtime diagnostics", CommandPermission.Any,
+        _catalog.Register(new CommandDefinition("diagnostics", "Capture and compare runtime diagnostics", PermissionNodes.Diagnostics,
             new CommandOverload(new EnumCommandArgument("action", diagnosticsActions))));
 
         var effectGive = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["give"] = "give" };
@@ -49,7 +52,7 @@ sealed class CommandRuntime
             ["regeneration"] = EffectType.Regeneration,
             ["regen"] = EffectType.Regeneration
         };
-        _catalog.Register(new CommandDefinition("effect", "Apply or clear a timed player effect", CommandPermission.Any,
+        _catalog.Register(new CommandDefinition("effect", "Apply or clear a timed player effect", [PermissionNodes.EffectSelf, PermissionNodes.EffectOthers],
             [
                 new CommandOverload(
                     new EnumCommandArgument("action", effectGive),
@@ -60,46 +63,53 @@ sealed class CommandRuntime
                 new CommandOverload(
                     new EnumCommandArgument("action", effectClear),
                     new PlayerCommandArgument("target", name => _players.Get(name), Optional: true))
-            ]));
+            ], []));
 
         if (rules is not null)
         {
             var names = rules.Snapshot.ToDictionary(rule => rule.Name, rule => (object)rule.Name, StringComparer.OrdinalIgnoreCase);
-            _catalog.Register(new CommandDefinition("gamerule", "Show or change a game rule", CommandPermission.Operator,
-                new CommandOverload(new EnumCommandArgument("rule", names), new StringCommandArgument("value", Optional: true))));
+            _catalog.Register(new CommandDefinition("gamerule", "Show or change a game rule", [PermissionNodes.GameRuleRead, PermissionNodes.GameRuleWrite],
+                [new CommandOverload(new EnumCommandArgument("rule", names), new StringCommandArgument("value", Optional: true))], []));
         }
 
         if (spawner is not null)
         {
             var species = spawner.Names.ToDictionary(name => name, name => (object)name, StringComparer.OrdinalIgnoreCase);
-            _catalog.Register(new CommandDefinition("summon", "Summon a mob at your position", CommandPermission.Operator,
+            _catalog.Register(new CommandDefinition("summon", "Summon a mob at your position", PermissionNodes.Summon,
                 new CommandOverload(new EnumCommandArgument("mob", species))));
         }
 
         _catalog.Freeze();
     }
 
-    public IReadOnlyList<string> Suggest(string prefix) => _catalog.Suggest(prefix);
+    /// <summary>The command names and aliases the player may use, so discovery shows exactly what execution would allow.</summary>
+    public IReadOnlyList<string> Suggest(Player.Player source, string prefix) => _catalog.Suggest(prefix, HoldsFor(source));
+
     internal CommandCatalog Catalog => _catalog;
+
+    private Func<string, bool> HoldsFor(Player.Player source)
+    {
+        var principal = source.Principal;
+        return node => _authority.Has(principal, node);
+    }
+
+    private const string NoPermission = "You do not have permission.";
 
     public CommandFeedback Execute(Player.Player source, string line)
     {
-        // Zenith has no permission model yet: StartGame/abilities make every player an operator (a development default),
-        // so a command's required permission is always met. Replace this with the player's real level when one exists.
-        var parsed = _catalog.Parse(line, CommandPermission.Operator);
+        // Both entrances (chat slash and CommandRequest) land here, so the same authority applies whatever the client sent.
+        var parsed = _catalog.Parse(line, HoldsFor(source));
         if (parsed.Status == CommandParseStatus.Unknown) return new("Command", "Unknown command.");
-        if (parsed.Status == CommandParseStatus.Denied) return new("Command", "You do not have permission.");
+        if (parsed.Status == CommandParseStatus.Denied) return new("Command", NoPermission);
         if (parsed.Status == CommandParseStatus.Invalid) return new("Command", $"Usage: /{parsed.Definition!.Name}");
 
         var arguments = parsed.Arguments!;
         switch (parsed.Definition!.Name)
         {
             case "gamemode":
-                var target = arguments.TryGetValue("target", out var targetValue) ? (Player.Player)targetValue : source;
-                target.Intents.SubmitGameMode((GameMode)arguments["mode"]);
-                return new("Game mode", $"Queued for {target.Username}.");
+                return ExecuteGameMode(source, arguments);
             case "help":
-                return new("Commands", string.Join(", ", _catalog.Suggest("")));
+                return new("Commands", string.Join(", ", _catalog.Suggest("", HoldsFor(source))));
             case "sample":
                 return new("Command", arguments.TryGetValue("ticks", out var ticks) ? $"Sample request: {ticks} ticks." : "Sample request: default.");
             case "diagnostics":
@@ -107,7 +117,7 @@ sealed class CommandRuntime
             case "effect":
                 return ExecuteEffect(source, arguments);
             case "gamerule":
-                return ExecuteGameRule(arguments);
+                return ExecuteGameRule(source, arguments);
             case "summon":
                 return ExecuteSummon(source, arguments);
             default:
@@ -115,20 +125,44 @@ sealed class CommandRuntime
         }
     }
 
+    /// <summary>The node a command needs to act on <paramref name="target"/>, and whether the sender holds it. Self and others are separate grants.</summary>
+    private bool TryAuthorizeTarget(Player.Player source, Player.Player target, string selfNode, string othersNode, out Authorization issued)
+    {
+        issued = new Authorization(source.Principal, ReferenceEquals(source, target) ? selfNode : othersNode);
+        return _authority.Has(issued.Principal, issued.Node);
+    }
+
+    private CommandFeedback ExecuteGameMode(Player.Player source, IReadOnlyDictionary<string, object> arguments)
+    {
+        var target = arguments.TryGetValue("target", out var targetValue) ? (Player.Player)targetValue : source;
+        if (!TryAuthorizeTarget(source, target, PermissionNodes.GameModeSelf, PermissionNodes.GameModeOthers, out var issued))
+            return new("Game mode", NoPermission);
+        target.Intents.SubmitGameMode((GameMode)arguments["mode"], issued);
+        return new("Game mode", $"Queued for {target.Username}.");
+    }
+
     private CommandFeedback ExecuteSummon(Player.Player source, IReadOnlyDictionary<string, object> arguments)
     {
         var mob = (string)arguments["mob"];
-        return _spawner!.Request(mob, source.PositionX, source.PositionY, source.PositionZ)
-            ? new("Summon", $"Summoned {mob}.")
+        var issued = new Authorization(source.Principal, PermissionNodes.Summon);
+        // Accepted, not applied: the spawn happens on the next tick, and only if the authority still holds then.
+        return _spawner!.Request(mob, source.PositionX, source.PositionY, source.PositionZ, issued)
+            ? new("Summon", $"Queued {mob}.")
             : new("Summon", $"Unknown mob '{mob}'.");
     }
 
-    private CommandFeedback ExecuteGameRule(IReadOnlyDictionary<string, object> arguments)
+    private CommandFeedback ExecuteGameRule(Player.Player source, IReadOnlyDictionary<string, object> arguments)
     {
         var name = (string)arguments["rule"];
         var current = _rules!.Get(name);
         if (!arguments.TryGetValue("value", out var value))
-            return new("Game rule", $"{current.Name} = {current.ValueText}");
+        {
+            return _authority.Has(source.Principal, PermissionNodes.GameRuleRead)
+                ? new("Game rule", $"{current.Name} = {current.ValueText}")
+                : new("Game rule", NoPermission);
+        }
+
+        if (!_authority.Has(source.Principal, PermissionNodes.GameRuleWrite)) return new("Game rule", NoPermission);
         if (!_rules.TrySet(current.Name, (string)value, out var error))
             return new("Game rule", error);
         return new("Game rule", $"{current.Name} = {_rules.Get(current.Name).ValueText}");
@@ -137,17 +171,19 @@ sealed class CommandRuntime
     private CommandFeedback ExecuteEffect(Player.Player source, IReadOnlyDictionary<string, object> arguments)
     {
         var target = arguments.TryGetValue("target", out var targetValue) ? (Player.Player)targetValue : source;
+        if (!TryAuthorizeTarget(source, target, PermissionNodes.EffectSelf, PermissionNodes.EffectOthers, out var issued))
+            return new("Effect", NoPermission);
         var action = (string)arguments["action"];
         if (action == "clear")
         {
-            target.Effects.SubmitEffect(EffectIntent.Clear);
+            target.Effects.SubmitEffect(EffectIntent.ClearBy(issued));
             return new("Effect", $"Clearing effects for {target.Username}.");
         }
 
         var type = (EffectType)arguments["type"];
         var duration = arguments.TryGetValue("duration", out var durationValue) ? (int)durationValue : 600;
         var amplifier = arguments.TryGetValue("amplifier", out var amplifierValue) ? (int)amplifierValue : 0;
-        target.Effects.SubmitEffect(EffectIntent.Give(type, amplifier, duration));
+        target.Effects.SubmitEffect(EffectIntent.Give(type, amplifier, duration, issued));
         return new("Effect", $"Queued {type} (amplifier {amplifier}, {duration} ticks) for {target.Username}.");
     }
 

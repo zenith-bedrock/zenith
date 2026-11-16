@@ -79,7 +79,7 @@ class ResourcePacksSessionHandler : ISessionHandler
                 session.Protocol.Inventory.SendCraftingData();
                 session.Protocol.Inventory.SendInitiallyUnlockedRecipes();
                 session.Protocol.Commands.SendAvailableCommands(
-                    BedrockCommandAdapter.CreateMetadata(session.Context.Commands.Catalog));
+                    BedrockCommandAdapter.CreateMetadata(session.Context.Commands.Catalog, node => session.Context.Permissions.Has(player.Principal, node)));
                 // Vanilla BiomeDefinitionList — required once by modern clients after CraftingData (ADR §70).
                 session.Protocol.World.SendBiomeDefinitionList();
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityIdentifiers);

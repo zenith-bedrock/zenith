@@ -35,6 +35,16 @@ auth:
     - xbox
     - self-signed
     - offline
+permissions:
+  # Nobody is an administrator by default. The server logs "Identity for '<name>': uuid=... trust=..." at every login;
+  # list the uuid of an Xbox-authenticated player here to make them an operator.
+  operators: []
+  # Per-identity exact nodes (zenith.command.gamemode.others, zenith.world.break, ...). deny > grant > default.
+  # grants:
+  #   "00000000-0000-0000-0000-000000000000": [zenith.command.gamemode.self]
+  # denies: {}
+  # Development only: allow self-signed/offline identities (anyone can claim them) to hold the privileges above.
+  trust-self-asserted: false
 chat:
   max-length: 512
   rate-capacity: 8

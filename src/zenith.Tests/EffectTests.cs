@@ -16,7 +16,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("subject");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 1, durationTicks: 100));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -31,7 +31,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("refresher");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 0, durationTicks: 20));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -55,7 +55,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("resistant");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 2, durationTicks: 200));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -81,7 +81,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("upgraded");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 100));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -99,7 +99,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("expiring");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 5));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -116,7 +116,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("clearer");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 0, durationTicks: 100));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -138,7 +138,7 @@ public class EffectTests
         var palette = fx.Context.ItemPalette;
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorChestplateSlot,
             StackId.FromItem(palette.Require("minecraft:diamond_chestplate")), 1));
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 0, durationTicks: 100));
         system.Tick(fx.Clock, fx.Players.Online); // tick 0 happens to be a poison interval tick — ticks once here.
@@ -161,7 +161,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("fast-poison");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 1, durationTicks: 100));
         system.Tick(fx.Clock, fx.Players.Online); // tick 0 is a poison interval tick at every amplifier.
@@ -179,7 +179,7 @@ public class EffectTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("nearly-dead");
         _ = player.ApplyDamage(DamageSource.Generic, 18.5f, 0); // Health = 1.5
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         // Amplifier 3 ticks every 25 >> 3 = 3 ticks (amplifier scales the interval, not the per-tick
         // amount — see EffectSystem's doc). 12 is the first tick that is both a poison interval and
@@ -205,7 +205,7 @@ public class EffectTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("healing");
         _ = player.ApplyDamage(DamageSource.Generic, 10f, 0); // Health = 10
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 200));
         system.Tick(fx.Clock, fx.Players.Online); // tick 0 happens to be a regen interval tick — heals once here.
@@ -221,7 +221,7 @@ public class EffectTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("dying");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
 
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Regeneration, amplifier: 0, durationTicks: 200));
         system.Tick(fx.Clock, fx.Players.Online);
@@ -253,7 +253,7 @@ public class EffectTests
         // for the same identity always starts with none, matching Hunger's current precedent.
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("logging-off");
-        var system = new EffectSystem(fx.Players);
+        var system = new EffectSystem(fx.Players, fx.Context.Gate);
         player.Effects.SubmitEffect(EffectIntent.Give(EffectType.Poison, amplifier: 0, durationTicks: 200));
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.NotEmpty(player.Effects.Active);

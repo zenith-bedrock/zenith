@@ -128,6 +128,33 @@
       },
       "required": ["accept"]
     },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Who may do what. Identities are canonical UUIDs (logged at login). Privilege applies only to identities the server can verify (an Xbox login), unless trust-self-asserted is set.",
+      "properties": {
+        "operators": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" },
+          "default": []
+        },
+        "grants": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "default": {}
+        },
+        "denies": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "default": {}
+        },
+        "trust-self-asserted": {
+          "type": "boolean",
+          "default": false,
+          "description": "Development only: let self-signed/offline identities hold operator status and grants."
+        }
+      }
+    },
     "chat": {
       "type": "object",
       "additionalProperties": false,

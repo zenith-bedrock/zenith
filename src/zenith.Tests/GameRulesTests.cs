@@ -207,7 +207,7 @@ public class GameRulesTests
     public void Gamerule_command_shows_and_changes_a_rule()
     {
         var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("op");
+        var player = fx.AddOperator("op");
         var commands = fx.Context.Commands;
 
         Assert.Equal("keepInventory = false", commands.Execute(player, "/gamerule keepInventory").Message);

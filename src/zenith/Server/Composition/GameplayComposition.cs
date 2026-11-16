@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Permissions;
 using Zenith.Diagnostics;
 using Zenith.Ecs;
 using Zenith.Gameplay.Entities;
@@ -26,6 +27,7 @@ sealed record ServerServices(
     EntityRuntime Entities,
     PlayerSpatialIndex PlayerSpatial,
     MobSpawner Spawner,
+    AuthorityGate Gate,
     int ChunkResidencySweepIntervalTicks)
 {
     /// <summary>Registers <paramref name="system"/> on the loop under its diagnostics timing name: the one place that pairs the two.</summary>

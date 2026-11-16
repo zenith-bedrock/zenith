@@ -1,3 +1,5 @@
+using Zenith.Gameplay.Permissions;
+
 namespace Zenith.Gameplay.Survival;
 
 /// <summary>
@@ -18,10 +20,13 @@ readonly record struct ActiveEffect(EffectType Type, int Amplifier, ulong Expire
 }
 
 /// <summary>Network-to-gameplay handoff for one effect command — apply/refresh or clear-all.</summary>
-readonly record struct EffectIntent(bool ClearAll, EffectType Type, int Amplifier, int DurationTicks)
+readonly record struct EffectIntent(bool ClearAll, EffectType Type, int Amplifier, int DurationTicks, Authorization? Issuer = null)
 {
-    public static EffectIntent Give(EffectType type, int amplifier, int durationTicks) =>
-        new(false, type, amplifier, durationTicks);
+    public static EffectIntent Give(EffectType type, int amplifier, int durationTicks, Authorization? issuer = null) =>
+        new(false, type, amplifier, durationTicks, issuer);
 
-    public static EffectIntent Clear => new(true, default, 0, 0);
+    /// <summary>Clear every effect. <paramref name="issuer"/> is who asked (null: the server itself).</summary>
+    public static EffectIntent ClearBy(Authorization? issuer) => new(true, default, 0, 0, issuer);
+
+    public static EffectIntent Clear => ClearBy(null);
 }

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Permissions;
 using Zenith.Gameplay.Ports;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
@@ -24,7 +25,13 @@ sealed class EffectSystem : IGameSystem
     private readonly PlayerManager _players;
     private readonly List<EffectType> _expiredScratch = new();
 
-    public EffectSystem(PlayerManager players) => _players = players;
+    private readonly AuthorityGate _gate;
+
+    public EffectSystem(PlayerManager players, AuthorityGate gate)
+    {
+        _players = players;
+        _gate = gate;
+    }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -39,9 +46,10 @@ sealed class EffectSystem : IGameSystem
         }
     }
 
-    private static void ApplyPendingIntent(Player.Player player, GameClock clock)
+    private void ApplyPendingIntent(Player.Player player, GameClock clock)
     {
         if (!player.Effects.TryConsumeEffectIntent(out var intent)) return;
+        if (!_gate.Confirms(intent.Issuer)) return; // revoked, or the issuer left, since the command was queued
 
         var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;

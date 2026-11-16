@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Zenith.Gameplay.Permissions;
 using Zenith.Gameplay.Runtime;
 
 namespace Zenith.Gameplay.Entities;
@@ -8,11 +9,11 @@ namespace Zenith.Gameplay.Entities;
 /// method under a name at composition; a request is queued (the command may run off the game thread) and carried out
 /// inside the tick, so spawning never races the species system that owns the mob's stores.
 /// </summary>
-sealed class MobSpawner : IGameSystem
+sealed class MobSpawner(AuthorityGate? gate = null) : IGameSystem
 {
     private readonly Dictionary<string, Action<float, float, float>> _species = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Func<int>> _liveCounts = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentQueue<(Action<float, float, float> Spawn, float X, float Y, float Z)> _pending = new();
+    private readonly ConcurrentQueue<(Action<float, float, float> Spawn, float X, float Y, float Z, Authorization? Issuer)> _pending = new();
     private bool _frozen;
 
     /// <summary>Names a species can be summoned by, in alphabetical order.</summary>
@@ -49,16 +50,20 @@ sealed class MobSpawner : IGameSystem
     public int LiveCount(string name) => _liveCounts.TryGetValue(name, out var count) ? count() : 0;
 
     /// <summary>Queues a spawn of <paramref name="name"/>; false when no such species is registered.</summary>
-    public bool Request(string name, float x, float y, float z)
+    public bool Request(string name, float x, float y, float z, Authorization? issuer = null)
     {
         if (!_species.TryGetValue(name, out var spawn)) return false;
-        _pending.Enqueue((spawn, x, y, z));
+        _pending.Enqueue((spawn, x, y, z, issuer));
         return true;
     }
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         while (_pending.TryDequeue(out var request))
+        {
+            // Owner-side recheck: an issuer who lost the permission, or left, since queuing does not get the spawn.
+            if (gate is not null && !gate.Confirms(request.Issuer)) continue;
             request.Spawn(request.X, request.Y, request.Z);
+        }
     }
 }
