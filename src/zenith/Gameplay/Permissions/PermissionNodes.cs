@@ -16,6 +16,7 @@ static class PermissionNodes
 
     public const string WorldPlace = "zenith.world.place";
     public const string WorldBreak = "zenith.world.break";
+    public const string WorldInteract = "zenith.world.interact";
     public const string ContainerOpen = "zenith.container.open";
     public const string ContainerTransfer = "zenith.container.transfer";
 
@@ -35,6 +36,7 @@ static class PermissionNodes
 
         registry.Register(WorldPlace, PermissionDefault.Everyone);
         registry.Register(WorldBreak, PermissionDefault.Everyone);
+        registry.Register(WorldInteract, PermissionDefault.Everyone);
         registry.Register(ContainerOpen, PermissionDefault.Everyone);
         registry.Register(ContainerTransfer, PermissionDefault.Everyone);
     }

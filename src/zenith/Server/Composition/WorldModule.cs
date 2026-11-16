@@ -24,7 +24,7 @@ sealed class WorldModule : IGameplayModule
         s.Register(new BlockDigSystem(s.World), "block-dig");
         s.Register(new BlockEditSystem(s.Players, s.World, s.Durability, s.BlockPolicies, s.Events), "block-edit");
         // Right after edits: a bucket is a block edit with its own item rules; the water it pours flows in block-update below.
-        s.Register(new BucketSystem(s.World, s.Players, new BucketItems(s.ItemPalette)), "bucket");
+        s.Register(new BucketSystem(s.World, s.Players, new BucketItems(s.ItemPalette), s.BlockPolicies, s.Events), "bucket");
         s.Register(Gravity, "gravity");
         // After edits and gravity: reacts to everything they wrote this tick (a plant whose soil was just dug, a door without ground).
         s.Register(new BlockUpdateSystem(s.World, s.Players), "block-update");

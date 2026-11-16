@@ -10,7 +10,14 @@ readonly record struct PolicyDecision(bool IsAllowed, string? Reason = null)
     public static PolicyDecision Deny(string reason) => new(false, reason);
 }
 
-enum BlockEditKind { Place, Break }
+enum BlockEditKind
+{
+    Place,
+    Break,
+
+    /// <summary>Using a block in place (opening or closing a door, trapdoor or gate): the cells change state, nothing is added or removed.</summary>
+    Interact
+}
 
 /// <summary>One cell of an edit: where, what was there, what the edit leaves there.</summary>
 readonly record struct BlockCellChange(int X, int Y, int Z, int Before, int After);
@@ -84,7 +91,14 @@ sealed class PermissionBlockEditPolicy(PermissionAuthority authority) : IBlockEd
 {
     public PolicyDecision Evaluate(in BlockEditProposal proposal)
     {
-        var node = proposal.Kind == BlockEditKind.Place ? PermissionNodes.WorldPlace : PermissionNodes.WorldBreak;
+        var node = proposal.Kind switch
+        {
+            BlockEditKind.Place => PermissionNodes.WorldPlace,
+            BlockEditKind.Break => PermissionNodes.WorldBreak,
+            BlockEditKind.Interact => PermissionNodes.WorldInteract,
+            _ => null
+        };
+        if (node is null) return PolicyDecision.Deny("Unknown kind of edit.");
         return authority.Has(proposal.Actor, node) ? PolicyDecision.Allow : PolicyDecision.Deny("You do not have permission to do that here.");
     }
 }

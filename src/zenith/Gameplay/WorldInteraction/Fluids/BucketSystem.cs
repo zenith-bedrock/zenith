@@ -1,3 +1,5 @@
+using Zenith.Event;
+using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -11,12 +13,18 @@ namespace Zenith.Gameplay.WorldInteraction.Fluids;
 /// <see cref="BlockUpdateSystem"/>. Creative players keep their stack; survival players swap it. The tick that applies it
 /// also re-checks reach and that the player still holds what the client said they did, so a stale packet changes nothing.
 /// </summary>
-sealed class BucketSystem(World.World world, PlayerManager players, BucketItems buckets) : IGameSystem
+sealed class BucketSystem(
+    World.World world, PlayerManager players, BucketItems buckets,
+    BlockEditPolicies? policies = null, EventBus? events = null) : IGameSystem
 {
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = [];
+    private readonly BlockEditPolicies _policies = policies ?? new BlockEditPolicies();
+    private ulong _tick;
+    private long _nextOperation;
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
+        _tick = clock.CurrentTick;
         _updates.Clear();
         foreach (var player in online)
         {
@@ -58,10 +66,14 @@ sealed class BucketSystem(World.World world, PlayerManager players, BucketItems 
             if (!TryFindScoop(player, cell, out filled)) return false;
         }
 
+        // Scooping removes the source: judged as a break of that cell before the bucket is swapped or the cell written.
+        var source = world.GetBlock(cell.X, cell.Y, cell.Z);
+        if (!Judge(player, BlockEditKind.Break, cell, source, World.World.AirRuntimeId)) return false;
         if (player.GameMode != GameMode.Creative && !SwapForFilled(player, use.HotbarSlot, held, filled)) return false;
         if (!world.TrySetBlock(cell.X, cell.Y, cell.Z, World.World.AirRuntimeId)) return false;
         _updates.Add((cell.X, cell.Y, cell.Z, World.World.AirRuntimeId));
         SyncInventory(player);
+        Publish(player, BlockEditKind.Break, cell, source, World.World.AirRuntimeId);
         return true;
     }
 
@@ -77,16 +89,34 @@ sealed class BucketSystem(World.World world, PlayerManager players, BucketItems 
             if (!CanPourInto(player, cell, filled)) return false;
         }
 
+        var before = world.GetBlock(cell.X, cell.Y, cell.Z);
+        // Pouring puts liquid in the cell: judged as a placement before the bucket is spent, a plant spilled or the cell written.
+        if (!Judge(player, BlockEditKind.Place, cell, before, filled.Block)) return false;
+
         if (player.GameMode != GameMode.Creative &&
             !player.Inventory.TrySet(use.HotbarSlot, buckets.Empty, 1)) return false;
 
-        if (world.TryGetBlock(cell.X, cell.Y, cell.Z, out var existing) && !Blocks.IsAir(existing) && !Blocks.IsFluid(existing))
-            BlockSpill.Drop(world, players, online, cell.X, cell.Y, cell.Z, existing);
+        if (!Blocks.IsAir(before) && !Blocks.IsFluid(before))
+            BlockSpill.Drop(world, players, online, cell.X, cell.Y, cell.Z, before);
         if (!world.TrySetBlock(cell.X, cell.Y, cell.Z, filled.Block)) return false;
         _updates.Add((cell.X, cell.Y, cell.Z, filled.Block));
         SyncInventory(player);
+        Publish(player, BlockEditKind.Place, cell, before, filled.Block);
         return true;
     }
+
+    private bool Judge(Player.Player player, BlockEditKind kind, (int X, int Y, int Z) cell, int before, int after)
+    {
+        ReadOnlySpan<BlockCellChange> cells = [new BlockCellChange(cell.X, cell.Y, cell.Z, before, after)];
+        var decision = _policies.Evaluate(new BlockEditProposal(player.Principal, kind, _tick, cells));
+        if (!decision.IsAllowed)
+            player.Level.Logger?.Debug($"Bucket {kind} denied for {player.Username} @ {cell.X},{cell.Y},{cell.Z}: {decision.Reason}");
+        return decision.IsAllowed;
+    }
+
+    private void Publish(Player.Player player, BlockEditKind kind, (int X, int Y, int Z) cell, int before, int after) =>
+        events?.Publish(new BlocksChanged(
+            ++_nextOperation, player.Uuid, player.RuntimeId, kind, _tick, [new BlockCellChange(cell.X, cell.Y, cell.Z, before, after)]));
 
     private bool TryFindScoop(Player.Player player, (int X, int Y, int Z) cell, out FilledBucket filled)
     {

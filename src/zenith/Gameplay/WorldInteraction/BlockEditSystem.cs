@@ -300,6 +300,16 @@ sealed class BlockEditSystem : IGameSystem
         return _policies.Evaluate(new BlockEditProposal(player.Principal, kind, _tick, CollectionsMarshal.AsSpan(cells)));
     }
 
+    /// <summary>Asks the policies about a use-in-place edit: every cell the interaction would change, none of them "clicked".</summary>
+    private PolicyDecision EvaluateInteraction(global::Zenith.Player.Player player)
+    {
+        var cells = _cells;
+        cells.Clear();
+        foreach (var write in _extra)
+            cells.Add(new BlockCellChange(write.X, write.Y, write.Z, _world.GetBlock(write.X, write.Y, write.Z), write.BlockRuntimeId));
+        return _policies.Evaluate(new BlockEditProposal(player.Principal, BlockEditKind.Interact, _tick, CollectionsMarshal.AsSpan(cells)));
+    }
+
     /// <summary>A vetoed placement: nothing was consumed or written; the placer's client gets every cell it predicted put back.</summary>
     private bool DenyPlace(global::Zenith.Player.Player player, in BlockEditIntent edit, PolicyDecision decision)
     {
@@ -457,9 +467,23 @@ sealed class BlockEditSystem : IGameSystem
     {
         if (!edit.IsInWorldBounds() || !IsWithinReach(player, edit.X, edit.Y, edit.Z)) return false;
         if (!BlockShapes.TryInteract(_world, edit.X, edit.Y, edit.Z, _extra)) return false;
+        // The interaction is planned (nothing written yet), so the policies judge every cell it would flip before any of them does.
+        var decision = EvaluateInteraction(player);
+        if (!decision.IsAllowed)
+        {
+            player.Level.Logger?.Debug($"Interact denied for {player.Username} @ {edit.X},{edit.Y},{edit.Z}: {decision.Reason}");
+            foreach (var cell in _cells) ResyncCellToBreaker(player, cell.X, cell.Y, cell.Z);
+            _extra.Clear();
+            return false;
+        }
+
         // Opening or closing changes nothing a neighbour depends on.
         CommitExtraWrites(SetBlockFlags.None);
-        return _extra.Count > 0;
+        if (_extra.Count == 0) return false;
+        // A write the world refused was dropped from _extra; the fact names only what really changed.
+        _cells.RemoveAll(cell => !_extra.Exists(write => write.X == cell.X && write.Y == cell.Y && write.Z == cell.Z));
+        PublishApplied(player, BlockEditKind.Interact);
+        return true;
     }
 
     /// <summary>Enqueue gravity evaluation after a successful world mutation (ADR §57).</summary>
