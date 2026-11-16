@@ -476,6 +476,7 @@ partial class InGameSessionHandler
                     packet.BlockFace,
                     packet.HotbarSlot,
                     packet.ClickedBlockRuntimeId,
+                    packet.ClickY,
                     packet.HeldItem);
                 break;
             case InventoryTransactionPacket.TypeItemUseOnActor:

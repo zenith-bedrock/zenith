@@ -104,8 +104,9 @@ public class BlockPaletteTests
         Assert.True(Blocks.IsPlaceable(Blocks.ChestForFacing(Blocks.CardinalNorth)));
         Assert.False(Blocks.IsPlaceable(Blocks.Air));
         Assert.False(Blocks.IsPlaceable(Blocks.Water));
-        Assert.True(palette.TryGet("minecraft:gold_block", out var goldRid));
-        Assert.False(Blocks.IsPlaceable(goldRid));
+        Assert.True(palette.TryGet("minecraft:wooden_door", out var unsupportedRid));
+        Assert.False(Blocks.IsPlaceable(unsupportedRid));
+        Assert.True(Blocks.IsPlaceable(palette.Require("minecraft:gold_block")), "full cubes are placeable through the catalog");
         Assert.False(Blocks.IsPlaceable(int.MaxValue));
     }
 

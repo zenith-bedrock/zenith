@@ -53,12 +53,77 @@ static class BlockLoot
     private static void RegisterOreDrop(Dictionary<int, StackId> drops, int blockRuntimeId, int itemNetworkId) =>
         drops[blockRuntimeId] = StackId.FromItem(itemNetworkId);
 
-    /// <summary>Drop for breaking <paramref name="blockRuntimeId"/> — the mapped item for the
-    /// no-smelt ores above, otherwise the block itself (existing default behavior).</summary>
-    public static StackId DropFor(int blockRuntimeId)
+    /// <summary>
+    /// What breaking <paramref name="blockRuntimeId"/> yields: the mapped item for the no-smelt ores, a redirected or
+    /// absent drop for the blocks vanilla treats specially (stone → cobblestone, glass drops nothing…), otherwise the
+    /// block itself in its default state. <see cref="BlockDrop.Count"/> 0 means "drops nothing".
+    /// </summary>
+    public static BlockDrop DropOf(int blockRuntimeId)
     {
-        return OreDrops.TryGetValue(blockRuntimeId, out var item)
-            ? item
-            : StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId));
+        if (OreDrops.TryGetValue(blockRuntimeId, out var item))
+            return new BlockDrop(item, 1);
+
+        if (Blocks.TryGetName(blockRuntimeId, out var name))
+        {
+            if (BlockDropRules.TryRedirect(name, out var redirect, out var count))
+            {
+                if (count == 0) return default;
+                if (Blocks.TryGetDefaultRuntimeId(redirect, out var redirectId))
+                    return new BlockDrop(StackId.FromBlock(redirectId), count);
+            }
+        }
+
+        return new BlockDrop(StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId)), 1);
+    }
+
+    /// <summary>Single-stack form of <see cref="DropOf"/> kept for callers that only need the item identity.</summary>
+    public static StackId DropFor(int blockRuntimeId) => DropOf(blockRuntimeId).Id;
+}
+
+/// <summary>A broken block's yield; <see cref="Count"/> 0 means nothing drops.</summary>
+readonly record struct BlockDrop(StackId Id, int Count);
+
+/// <summary>Name-driven exceptions to "a broken block drops itself", matched on flattened Bedrock names.</summary>
+static class BlockDropRules
+{
+    public static bool TryRedirect(string name, out string redirect, out int count)
+    {
+        redirect = "";
+        count = 1;
+        switch (name)
+        {
+            case "minecraft:stone": redirect = "minecraft:cobblestone"; return true;
+            case "minecraft:deepslate": redirect = "minecraft:cobbled_deepslate"; return true;
+            case "minecraft:grass_block":
+            case "minecraft:podzol":
+            case "minecraft:mycelium":
+            case "minecraft:farmland":
+            case "minecraft:grass_path":
+            case "minecraft:dirt_path":
+                redirect = "minecraft:dirt";
+                return true;
+            case "minecraft:short_grass":
+            case "minecraft:fern":
+            case "minecraft:dead_bush":
+                count = 0;
+                return true;
+        }
+
+        if (name.Contains("glass", StringComparison.Ordinal) && !name.Contains("glazed", StringComparison.Ordinal) ||
+            name.Contains("leaves", StringComparison.Ordinal) ||
+            name == "minecraft:ice")
+        {
+            count = 0;
+            return true;
+        }
+
+        if (name.EndsWith("_double_slab", StringComparison.Ordinal))
+        {
+            redirect = name[..^"_double_slab".Length] + "_slab";
+            count = 2;
+            return true;
+        }
+
+        return false;
     }
 }

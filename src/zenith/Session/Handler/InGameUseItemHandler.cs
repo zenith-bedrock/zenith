@@ -38,6 +38,7 @@ partial class InGameSessionHandler
             face,
             use.HotbarSlot,
             use.ClickedBlockRuntimeId,
+            use.ClickY,
             use.HeldItem);
     }
 
@@ -51,6 +52,7 @@ partial class InGameSessionHandler
         byte blockFace,
         int hotbarSlot,
         int clickedBlockRuntimeId,
+        float clickY,
         in DecodedTransactionItem heldItem)
     {
         session.Context.Logger.Debug(
@@ -165,6 +167,19 @@ partial class InGameSessionHandler
         }
 
         var (tx, ty, tz) = FaceOffset(blockX, blockY, blockZ, blockFace);
+        if (!Blocks.IsChest(runtimeId))
+        {
+            // State-bearing families (stairs, slabs, logs, torches) get the state the placement context implies;
+            // plants are refused without ground so nothing floats.
+            if (!BlockPlacement.TryResolve(runtimeId, blockFace, clickY, player.Yaw, out runtimeId) ||
+                !BlockPlacement.HasSupport(world, tx, ty, tz, runtimeId))
+            {
+                session.Context.Logger.Debug($"Rejected place: no valid state/support at {tx},{ty},{tz} for {player.Username}");
+                session.Protocol.World.SendUpdateBlock(tx, ty, tz, world.GetBlock(tx, ty, tz));
+                return;
+            }
+        }
+
         if (Blocks.IsChest(runtimeId))
             runtimeId = ChestPairing.AlignFacingWithNeighbor(world, tx, ty, tz, runtimeId);
 

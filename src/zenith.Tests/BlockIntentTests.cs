@@ -181,7 +181,7 @@ public class BlockIntentTests
         var player = fx.AddInGamePlayer("goldie");
         StandNear(player, 4, 64, 4);
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Assert.True(palette.TryGet("minecraft:gold_block", out var goldRid));
+        Assert.True(palette.TryGet("minecraft:wooden_door", out var goldRid));
         Assert.False(Blocks.IsPlaceable(goldRid));
         Assert.True(player.Inventory.TrySetBlock(0, goldRid, 3));
 
@@ -243,7 +243,7 @@ public class BlockIntentTests
         Assert.Equal(Blocks.Air, fx.World.GetBlock(0, 90, 0));
         Assert.True(player.Inventory.Get(9).IsEmpty);
         var drop = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(Blocks.Stone, drop.Id.Value); Assert.Equal(1, drop.Count);
+        Assert.Equal(Blocks.Cobblestone, drop.Id.Value); Assert.Equal(1, drop.Count); // stone drops cobblestone, as in vanilla
         Assert.Equal(FloorDropStore.DefaultPickupDelay, drop.PickupDelayTicks);
         var pickup = new FloorDropSystem(fx.World);
         for (var tick = 1; tick < FloorDropStore.DefaultPickupDelay; tick++)
@@ -251,7 +251,7 @@ public class BlockIntentTests
         Assert.True(player.Inventory.Get(9).IsEmpty);
         pickup.Tick(fx.Clock, fx.Players.Online);
         Assert.Empty(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(Blocks.Stone, player.Inventory.Get(9).Id.Value);
+        Assert.Equal(Blocks.Cobblestone, player.Inventory.Get(9).Id.Value);
         Assert.Equal(1, player.Inventory.Get(9).Count);
     }
 

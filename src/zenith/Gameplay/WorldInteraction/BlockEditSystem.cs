@@ -266,9 +266,11 @@ sealed class BlockEditSystem : IGameSystem
             }
             else if (shouldDrop)
             {
-                dropId = BlockLoot.DropFor(previous);
-                floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, 1)];
-                if (!FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, 1))
+                var drop = BlockLoot.DropOf(previous);
+                dropId = drop.Id;
+                if (drop.Count > 0)
+                    floorDropRequests = [new FloorDropFanout.DepositRequest(dropId, drop.Count)];
+                if (drop.Count > 0 && !FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, dropId, drop.Count))
                 {
                     player.Level.Logger?.Debug(
                         $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -347,7 +349,35 @@ sealed class BlockEditSystem : IGameSystem
         }
 
         NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
+        if (edit.BlockRuntimeId == World.World.AirRuntimeId)
+            ReleaseUnsupportedPlantAbove(edit.X, edit.Y, edit.Z, online);
         return true;
+    }
+
+    /// <summary>
+    /// Ground decoration (flowers, grass, saplings…) cannot outlive its soil: when the cell under it was just
+    /// cleared, the plant breaks and drops like any other block. One level only — plants are never stacked on plants.
+    /// </summary>
+    private void ReleaseUnsupportedPlantAbove(int x, int y, int z, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        var aboveY = y + 1;
+        var rid = _world.GetBlock(x, aboveY, z);
+        if (Blocks.Catalog.KindOf(rid) != BlockKind.Plant || BlockPlacement.HasSupport(_world, x, aboveY, z, rid))
+            return;
+        if (!_world.CanAcceptBlockWrite(x, aboveY, z, World.World.AirRuntimeId) ||
+            !_world.TrySetBlock(x, aboveY, z, World.World.AirRuntimeId))
+            return;
+
+        var drop = BlockLoot.DropOf(rid);
+        if (drop.Count > 0 && _world.Rules.DoTileDrops)
+            _ = FloorDropFanout.TryDepositBatch(_world, _players, online, x, aboveY, z,
+                [new FloorDropFanout.DepositRequest(drop.Id, drop.Count)]);
+
+        var updates = new List<(int X, int Y, int Z, int BlockRuntimeId)> { (x, aboveY, z, World.World.AirRuntimeId) };
+        foreach (var peer in online)
+        {
+            if (peer.IsInGame) peer.Client.World.PublishUpdateBlocks(updates);
+        }
     }
 
     /// <summary>Enqueue gravity evaluation after a successful world mutation (ADR §57).</summary>

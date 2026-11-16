@@ -73,6 +73,8 @@ class InventoryTransactionPacket : DataPacket
     /// world snapshot before a placement is accepted.
     /// </summary>
     public int ClickedBlockRuntimeId { get; set; }
+    /// <summary>Cursor height inside the clicked block (0..1).</summary>
+    public float ClickY { get; set; }
     public int HeldBlockRuntimeId { get; set; }
     public float FromX { get; set; }
     public float FromY { get; set; }
@@ -181,7 +183,7 @@ class InventoryTransactionPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
-        _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+        ClickY = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
 
         ClickedBlockRuntimeId = stream.ReadUnsignedVarInt(); // block runtime under cursor

@@ -25,6 +25,8 @@ readonly struct AuthItemInteraction
     public byte Hand { get; init; }
     /// <summary>Client's runtime-id precondition for the clicked block.</summary>
     public int ClickedBlockRuntimeId { get; init; }
+    /// <summary>Cursor height inside the clicked block (0..1); decides top/bottom for slabs and stairs.</summary>
+    public float ClickY { get; init; }
     /// <summary>Client-held ItemV4 descriptor; Session validates it against the authoritative hotbar slot.</summary>
     public DecodedTransactionItem HeldItem { get; init; }
 }
@@ -213,8 +215,8 @@ class PlayerAuthInputPacket : DataPacket
         _ = stream.ReadFloat(BinaryStream.Endianess.Little); // player_pos
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
-        _ = stream.ReadFloat(BinaryStream.Endianess.Little); // click_pos
-        _ = stream.ReadFloat(BinaryStream.Endianess.Little);
+        _ = stream.ReadFloat(BinaryStream.Endianess.Little); // click_pos (relative to the block)
+        var clickY = stream.ReadFloat(BinaryStream.Endianess.Little);
         _ = stream.ReadFloat(BinaryStream.Endianess.Little);
         var clickedBlockRuntimeId = stream.ReadUnsignedVarInt(); // block_runtime_id
         _ = stream.ReadByte(); // client_prediction
@@ -230,6 +232,7 @@ class PlayerAuthInputPacket : DataPacket
             HotbarSlot = hotbar,
             Hand = hand,
             ClickedBlockRuntimeId = clickedBlockRuntimeId,
+            ClickY = clickY,
             HeldItem = heldItem
         };
     }

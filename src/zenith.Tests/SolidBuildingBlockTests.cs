@@ -21,7 +21,7 @@ public class SolidBuildingBlockTests
             Assert.True(profile.DestroySpeed > 0, name);
         }
         Assert.False(Blocks.IsPlaceable(palette.Require("minecraft:furnace")));
-        Assert.False(Blocks.IsPlaceable(palette.Require("minecraft:oak_stairs")));
+        Assert.False(Blocks.IsPlaceable(palette.Require("minecraft:wooden_door")), "doors still need two-block placement and toggling");
     }
 
     [Theory]

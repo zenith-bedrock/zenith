@@ -115,8 +115,10 @@ public sealed class FishSystemTests
 
         Assert.Empty(system.Fish);
         Assert.False(system.Stores.Entities.IsAlive(id));
-        var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
-        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:cod"), loot.Id.Value);
+        var drops = fx.World.FloorDrops.Snapshot();
+        var cod = Assert.Single(drops, drop => drop.Id.IsItem && drop.Id.Value == fx.Context.ItemPalette.Require("minecraft:cod"));
+        Assert.Equal(1, cod.Count);
+        LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "fish");
         Assert.Equal(1, player.ExperiencePoints);
     }
 

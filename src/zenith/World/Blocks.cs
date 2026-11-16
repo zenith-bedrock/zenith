@@ -74,6 +74,7 @@ static class Blocks
         public HashSet<int> PassableIds { get; set; } = [];
         public Dictionary<int, string> NameByRuntime { get; set; } = [];
         public BlockPalette Palette { get; set; } = null!;
+        public BlockCatalog Catalog { get; set; } = null!;
     }
 
     private static volatile Loaded? _loaded;
@@ -145,6 +146,7 @@ static class Blocks
     {
         var b = new Loaded();
         b.Palette = palette;
+        b.Catalog = new BlockCatalog(palette, DefaultProperties.Value);
         b.Air = palette.Require("minecraft:air");
         b.Stone = palette.Require("minecraft:stone");
         b.GrassBlock = palette.Require("minecraft:grass_block");
@@ -286,7 +288,8 @@ static class Blocks
     /// </summary>
     public static bool IsPlaceable(int runtimeId)
     {
-        return Current.PlaceableIds.Contains(runtimeId) || SolidBuildingBlocks.TryGet(runtimeId, out _);
+        return Current.PlaceableIds.Contains(runtimeId) || SolidBuildingBlocks.TryGet(runtimeId, out _) ||
+               Current.Catalog.IsPlaceable(runtimeId);
     }
 
     /// <summary>Sand / gravel — cell-tick gravity set (ADR §57). Not on DigProfiles.</summary>
@@ -323,7 +326,7 @@ static class Blocks
     /// </summary>
     public static bool IsPassableDecoration(int runtimeId)
     {
-        return Current.PassableIds.Contains(runtimeId);
+        return Current.PassableIds.Contains(runtimeId) || Current.Catalog.IsPassable(runtimeId);
     }
 
     /// <summary>
@@ -423,6 +426,14 @@ static class Blocks
     }
 
     public static void EnsureLoaded() => _ = Current;
+
+    private static readonly Lazy<System.Collections.Frozen.FrozenDictionary<string, BlockProperty>> DefaultProperties =
+        new(() => BlockPropertiesLoader.FromEmbeddedResource());
+
+    /// <summary>State-driven classification, placement kinds and derived dig profiles for the loaded palette.</summary>
+    internal static BlockCatalog Catalog => Current.Catalog;
+
+    internal static BlockPalette Palette => Current.Palette;
 
     /// <summary>The loaded generation; the first access loads the embedded palette.</summary>
     private static Loaded Current
