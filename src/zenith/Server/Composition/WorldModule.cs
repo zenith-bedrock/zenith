@@ -40,5 +40,7 @@ sealed class WorldModule : IGameplayModule
         s.Register(new EquipmentSystem(), "equipment");
         s.Register(new ChunkStreamSystem(s.World, s.Diagnostics.Worldgen), "chunk-stream");
         s.Register(new ChunkResidencySystem(s.World, s.ChunkResidencySweepIntervalTicks), "chunk-residency");
+        // Last: a departure is announced only after everything this tick that finishes a departed player's work has run.
+        s.Register(new PresenceSystem(s.Players, s.Events), "presence");
     }
 }

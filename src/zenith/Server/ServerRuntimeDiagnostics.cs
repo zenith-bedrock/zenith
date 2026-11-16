@@ -126,7 +126,8 @@ sealed class ServerRuntimeDiagnostics : IDisposable
             ["effect"] = builder.Timing("tick.system.effect", "tick"),
             ["equipment"] = builder.Timing("tick.system.equipment", "tick"),
             ["chunk-stream"] = builder.Timing("tick.system.chunk-stream", "tick"),
-            ["chunk-residency"] = builder.Timing("tick.system.chunk-residency", "tick")
+            ["chunk-residency"] = builder.Timing("tick.system.chunk-residency", "tick"),
+            ["presence"] = builder.Timing("tick.system.presence", "tick")
         };
         _overBudgetTicks = builder.Counter("tick.over-budget");
         _tps = builder.Gauge("tick.tps");

@@ -23,7 +23,7 @@ public sealed class GameplayCompositionTests
         var services = new ServerServices(
             loop, diagnostics, fx.Players, fx.World, fx.Context.ItemPalette, fx.Context.Recipes, fx.Context.Durability,
             fx.Context.Creative, new EntityRuntime(), new PlayerSpatialIndex(),
-            new MobSpawner(), fx.Context.Gate, ChunkResidencySweepIntervalTicks: 200);
+            new MobSpawner(), fx.Context.Gate, fx.Context.EventBus, ChunkResidencySweepIntervalTicks: 200);
         return (loop, GameplayComposition.Register(services), services);
     }
 
@@ -46,7 +46,7 @@ public sealed class GameplayCompositionTests
             typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
             typeof(GameRuleSyncSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem),
-            typeof(InventorySystem), typeof(HungerSystem), typeof(AirSupplySystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem)
+            typeof(InventorySystem), typeof(HungerSystem), typeof(AirSupplySystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem), typeof(PresenceSystem)
         ];
         Assert.Equal(expected, loop.Systems.Select(system => system.GetType()).ToArray());
     }

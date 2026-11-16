@@ -40,6 +40,9 @@ sealed class ProbeConnection : IGameTransportConnection
     public void FlushOutgoing() { }
     public void Disconnect() => IsClosed = true;
 
+    /// <summary>The peer going away: the transport tells the host the connection closed.</summary>
+    public void Close(GameTransportCloseReason reason = GameTransportCloseReason.ClientDisconnect) => _host.Close(this, reason);
+
     /// <summary>Sends packets to the server in one batch, framed the way the session expects before and after NetworkSettings.</summary>
     public void Send(params DataPacket[] packets)
     {

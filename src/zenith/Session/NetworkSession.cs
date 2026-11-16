@@ -1,3 +1,4 @@
+using Zenith.Player;
 using Zenith.Gameplay.Replication;
 using System.Buffers;
 using System.IO.Compression;
@@ -315,12 +316,27 @@ class NetworkSession : Zenith.Gameplay.Ports.IClientChannel
             // session is removed. It grants no authority to mutate gameplay/world state.
             Player.IsInGame = false;
             Context.PlayerManager.Remove(Player);
+            // The departure is only a fact for a player who had entered the world; PresenceSystem publishes it on the game loop
+            // after the container/inventory work queued above has run.
+            if (wasInGame)
+            {
+                Context.PlayerManager.SubmitDeparture(new PlayerDeparture(
+                    Player.Uuid, Player.Username, Player.RuntimeId, ToLeaveReason(reason)));
+            }
+
             Context.EventBus.Publish(new PlayerQuitEvent(Player, wasInGame));
         }
 
         _transport.HasGameIdentity = false;
         _handler.OnDisable(this);
     }
+
+    private static PlayerLeaveReason ToLeaveReason(GameTransportCloseReason reason) => reason switch
+    {
+        GameTransportCloseReason.Timeout => PlayerLeaveReason.TimedOut,
+        GameTransportCloseReason.ServerDisconnect => PlayerLeaveReason.Removed,
+        _ => PlayerLeaveReason.Disconnected
+    };
 
     /// <summary>
     /// Chamado pelo <see cref="GameSessionHost"/> sempre que chega um

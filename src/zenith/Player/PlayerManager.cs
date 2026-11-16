@@ -23,6 +23,7 @@ class PlayerManager
     // array has no lock, so reading it to build a save blob must happen on the GameLoop thread that
     // owns its mutation — never directly from the network-close callback (ADR §104b Adendo).
     private readonly ConcurrentQueue<Player> _disconnectedInventoryPersist = new();
+    private readonly ConcurrentQueue<PlayerDeparture> _departures = new();
     private long _nextRuntimeId = 1;
 
     public int Count => _players.Count;
@@ -94,6 +95,12 @@ class PlayerManager
     /// <summary>GameLoop only — drains a disconnected player's pending inventory/player-data save.</summary>
     public bool TryConsumeDisconnectedInventoryPersist(out Player player) =>
         _disconnectedInventoryPersist.TryDequeue(out player!);
+
+    /// <summary>Network lifecycle handoff: a player who had entered the world is gone. Consumed by <c>PresenceSystem</c>.</summary>
+    public void SubmitDeparture(PlayerDeparture departure) => _departures.Enqueue(departure);
+
+    /// <summary>GameLoop only.</summary>
+    public bool TryConsumeDeparture(out PlayerDeparture departure) => _departures.TryDequeue(out departure);
 
     public Player? Get(string username) => _players.GetValueOrDefault(username);
 }

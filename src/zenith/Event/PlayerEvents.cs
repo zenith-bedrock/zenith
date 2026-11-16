@@ -1,18 +1,10 @@
 namespace Zenith.Event;
 
-/// <summary>Publicado depois que o login é aceito e o Player já está registrado no PlayerManager.</summary>
-class PlayerLoginEvent
-{
-    public Player.Player Player { get; }
-
-    public PlayerLoginEvent(Player.Player player) => Player = player;
-}
-
 /// <summary>
-/// Publicado quando a sessão com identidade aceita e já registrada no PlayerManager é encerrada
-/// (disconnect, kick ou timeout). Não é disparado se a conexão cair antes do login terminar —
-/// nesse caso nunca chegou a existir um Player pra remover. Isto não significa, por si só, que
-/// o spawn/entrada no gameplay terminou; veja WasInGame.
+/// Connection-lifecycle notice, published on the network thread when an accepted session closes (disconnect, kick or timeout).
+/// It carries the live <see cref="Player"/> and exists for the one internal subscriber that must release that player's chunk
+/// residency from the connection thread. It is NOT a gameplay fact: observers use <see cref="PlayerEnteredWorld"/> and
+/// <see cref="PlayerLeftWorld"/>, which are published by the game loop and carry values only.
 /// </summary>
 class PlayerQuitEvent
 {

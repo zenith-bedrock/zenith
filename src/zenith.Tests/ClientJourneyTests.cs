@@ -55,9 +55,11 @@ public sealed class ClientJourneyTests
     }
 
     /// <summary>Everything a client does from first contact until it stands in the world, in the order a real one does it.</summary>
-    private static async Task<(IntentTestFixture Fx, ProbeConnection Client, List<ReceivedPacket> Received)> JoinAsync(string name, string gameMode = "Survival")
+    private static async Task<(IntentTestFixture Fx, ProbeConnection Client, List<ReceivedPacket> Received)> JoinAsync(
+        string name, string gameMode = "Survival", Action<IntentTestFixture>? configure = null)
     {
         var fx = new IntentTestFixture();
+        configure?.Invoke(fx);
         fx.Context.Config.Server.Gamemode = gameMode;
         fx.Context.Config.Auth.NormalizeAndValidate(); // what the config loader does at boot
         var client = new ProbeConnection(new GameSessionHost(fx.Context), name);
@@ -129,9 +131,10 @@ public sealed class ClientJourneyTests
     private static NetworkItemStack Held(Player.Player player, int slot) =>
         player.Session.Protocol.Inventory.DescribeSlot(player.Inventory, slot);
 
-    private static async Task<(IntentTestFixture Fx, ProbeConnection Client, Player.Player Player)> InGameAsync(string name, string gameMode)
+    private static async Task<(IntentTestFixture Fx, ProbeConnection Client, Player.Player Player)> InGameAsync(
+        string name, string gameMode, Action<IntentTestFixture>? configure = null)
     {
-        var (fx, client, _) = await JoinAsync(name, gameMode);
+        var (fx, client, _) = await JoinAsync(name, gameMode, configure);
         var player = fx.Players.Get(name)!;
         client.Send(new SetLocalPlayerAsInitializedPacket { ActorRuntimeId = (ulong)player.RuntimeId });
         new Zenith.Session.ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online);
@@ -227,5 +230,80 @@ public sealed class ClientJourneyTests
         Assert.True(Blocks.IsAir(fx.World.GetBlock(3, Y + 1, 2)));
         Assert.Contains(afterBreak, p => p.Id == (int)ProtocolInfo.BLOCK_ACTOR_DATA_PACKET);
         Assert.DoesNotContain(afterBreak, p => CarriesPair(p, 2, 2)); // back to a single chest
+    }
+
+    private sealed class Presence
+    {
+        public List<Zenith.Event.PlayerEnteredWorld> Entered { get; } = [];
+        public List<Zenith.Event.PlayerLeftWorld> Left { get; } = [];
+
+        public void Watch(IntentTestFixture fx)
+        {
+            fx.Context.EventBus.Subscribe<Zenith.Event.PlayerEnteredWorld>(Entered.Add);
+            fx.Context.EventBus.Subscribe<Zenith.Event.PlayerLeftWorld>(Left.Add);
+        }
+    }
+
+    private static void TickPresence(IntentTestFixture fx) =>
+        new Zenith.Gameplay.Replication.PresenceSystem(fx.Players, fx.Context.EventBus).Tick(fx.Clock, fx.Players.Online);
+
+    [Fact]
+    public async Task A_player_entering_the_world_is_announced_once_with_values_only()
+    {
+        var presence = new Presence();
+        var (fx, _, player) = await InGameAsync("Entrant", "Survival", presence.Watch);
+
+        new Zenith.Session.ChunkStreamSystem(fx.World).Tick(fx.Clock, fx.Players.Online); // a later tick must not repeat it
+
+        var entered = Assert.Single(presence.Entered);
+        Assert.Equal(player.Uuid, entered.PlayerId);
+        Assert.Equal(player.RuntimeId, entered.SessionId);
+        Assert.Equal("Entrant", entered.Username);
+    }
+
+    [Fact]
+    public async Task A_login_that_drops_before_spawning_is_never_announced_in_either_direction()
+    {
+        var presence = new Presence();
+        var (fx, client, _) = await JoinAsync("Dropper", "Survival", presence.Watch); // joined and loading, never initialized
+
+        client.Close();
+        TickPresence(fx);
+
+        Assert.Empty(presence.Entered);
+        Assert.Empty(presence.Left);
+        Assert.Null(fx.Players.Get("Dropper"));
+    }
+
+    [Fact]
+    public async Task A_player_who_entered_and_left_produces_one_departure_fact_after_the_owner_ticks()
+    {
+        var presence = new Presence();
+        var (fx, client, player) = await InGameAsync("Leaver", "Survival", presence.Watch);
+
+        client.Close(Zenith.Network.GameTransportCloseReason.Timeout);
+        Assert.Empty(presence.Left); // closing the connection is not yet the owner finishing the departure
+        TickPresence(fx);
+        TickPresence(fx);
+
+        var left = Assert.Single(presence.Left);
+        Assert.Equal(player.Uuid, left.PlayerId);
+        Assert.Equal(player.RuntimeId, left.SessionId);
+        Assert.Equal(Zenith.Event.PlayerLeaveReason.TimedOut, left.Reason);
+        Assert.Null(fx.Players.Get("Leaver"));
+    }
+
+    [Fact]
+    public async Task A_failing_observer_does_not_change_the_outcome_or_starve_the_others()
+    {
+        var presence = new Presence();
+        var (fx, _, player) = await InGameAsync("Observed", "Survival", fx =>
+        {
+            fx.Context.EventBus.Subscribe<Zenith.Event.PlayerEnteredWorld>(_ => throw new InvalidOperationException("observer bug"));
+            presence.Watch(fx);
+        });
+
+        Assert.True(player.IsInGame);
+        Assert.Single(presence.Entered);
     }
 }

@@ -131,6 +131,7 @@ class ZenithServer
                 config.World.ChunkGenerationWorkers);
             startupCleanup.Push(() => world.StopGenerationAsync().AsTask().GetAwaiter().GetResult());
             world.LoadGameRules();
+            var eventBus = new EventBus(serverLogger);
             var permissions = PermissionsComposition.Create(config);
             var gate = new AuthorityGate(permissions, players);
             var spawner = new MobSpawner(gate);
@@ -138,19 +139,19 @@ class ZenithServer
                 gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
                 entities, new PlayerSpatialIndex(), spawner,
                 gate,
+                eventBus,
                 config.World.ChunkResidencySweepIntervalTicks);
             var compositionStarted = Stopwatch.GetTimestamp();
             var worldModule = GameplayComposition.Register(services);
             serverLogger.Info($"startup: gameplay registration validated in {Stopwatch.GetElapsedTime(compositionStarted).TotalMilliseconds:F1} ms");
 
-            var eventBus = new EventBus(serverLogger);
             Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner, permissions);
             GameLoop = gameLoop;
             _gravity = worldModule.Gravity;
 
             // First real EventBus domain consumers (ADR §78) — join/leave system chat.
-            eventBus.Subscribe<PlayerLoginEvent>(e => PlayerPresenceAnnouncer.OnLogin(Context, e));
-            eventBus.Subscribe<PlayerQuitEvent>(e => PlayerPresenceAnnouncer.OnQuit(Context, e));
+            eventBus.Subscribe<PlayerEnteredWorld>(e => PlayerPresenceAnnouncer.OnEntered(Context, e));
+            eventBus.Subscribe<PlayerLeftWorld>(e => PlayerPresenceAnnouncer.OnLeft(Context, e));
 
             // ADR §114 — a departing player never calls ForgetOutsideRadius/TryAbandon for whatever
             // chunks are still in their PlayerChunkTracker at disconnect time; without this, those

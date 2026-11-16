@@ -108,8 +108,6 @@ class LoginSessionHandler : ISessionHandler
         session.Player = player;
         session.HasGameIdentity = true;
 
-        session.Context.EventBus.Publish(new PlayerLoginEvent(player));
-
         session.Protocol.Login.SendLoginSuccess();
         session.Protocol.ResourcePacks.SendInfo(
             mustAccept: true,

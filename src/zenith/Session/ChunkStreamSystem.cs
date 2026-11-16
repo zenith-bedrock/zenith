@@ -1,3 +1,4 @@
+using Zenith.Event;
 using Zenith.Gameplay.Replication;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -57,7 +58,7 @@ sealed class ChunkStreamSystem : IGameSystem
                     ColumnSend.EmitFloorDropsInColumn(player.Session, _world, published.X, published.Z);
                     ColumnSend.EmitChestActorsInColumn(player.Session, _world, published.X, published.Z);
                 }
-            ApplySpawnReady(player, online);
+            ApplySpawnReady(player, online, clock.CurrentTick);
             player.Chunks.ApplyPendingRadius();
             DrainCompletedStreams(player);
             if (!player.IsInGame && !player.IsSpawning) continue;
@@ -122,7 +123,8 @@ sealed class ChunkStreamSystem : IGameSystem
 
     private static void ApplySpawnReady(
         global::Zenith.Player.Player player,
-        IReadOnlyList<global::Zenith.Player.Player> online)
+        IReadOnlyList<global::Zenith.Player.Player> online,
+        ulong tick)
     {
         if (!player.Intents.TryConsumeSpawnReady())
             return;
@@ -137,6 +139,9 @@ sealed class ChunkStreamSystem : IGameSystem
         player.Session.Protocol.Inventory.SendArmorContent(player.Inventory);
         player.Session.Protocol.Inventory.SendOffhandContent(player.Inventory);
         player.Session.SetHandler(new InGameSessionHandler());
+
+        // Only now is the player part of the world: observers hear about it once, from the owner, as values.
+        player.Session.Context.EventBus.Publish(new PlayerEnteredWorld(player.Uuid, player.Username, player.RuntimeId, tick));
     }
 
     private void StartPendingPreSpawn(global::Zenith.Player.Player player)
