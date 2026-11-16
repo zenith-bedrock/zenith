@@ -39,7 +39,7 @@ Previously **1.26.52** with protocol **2193**; the Mojang schema tag for 1.26.51
 |-------|------|
 | [`src/zenith/data/block_palette.nbt`](../src/zenith/data/block_palette.nbt) | Block runtime IDs (`Blocks.Load`) |
 | [`src/zenith/data/item_palette.json`](../src/zenith/data/item_palette.json) | Item registry wire + tools |
-| [`src/zenith/data/creative_items.json`](../src/zenith/data/creative_items.json) | Reference dump — **not** fully parsed at boot (short curated list in code) |
+| [`src/zenith/data/creative_items.json`](../src/zenith/data/creative_items.json) | Reference dump — not fully parsed at boot; a curated subset drives the creative inventory in code |
 | [`src/zenith/data/biome_definitions.bin`](../src/zenith/data/biome_definitions.bin) | Exact BDS 2193 BiomeDefinitionList packet body |
 | [`src/zenith/data/jigsaw_structures_data.nbt`](../src/zenith/data/jigsaw_structures_data.nbt) | Vanilla JigsawStructureData Network-NBT compound for protocol 2193, from pinned Axolotl BedrockData |
 | [`src/zenith/data/manifest.json`](../src/zenith/data/manifest.json) | Source versions, counts and SHA-256 hashes; embedded asset regression test |
@@ -86,7 +86,7 @@ Local clone layout (optional dev setup): [`dx.md`](dx.md) § "Bedrock references
 | ZLDB overlay world model (`c:`/`ov:`/`inv:`/`ct:`/`pd:`) | Endstone/PocketMine **single data directory** Docker pattern |
 | Native terrain gen (§63–§67) | **Not** BDS noise/biome tables, **not** PM plugins |
 
-**Explicit non-goals** (do not assume from comments elsewhere): plugin API, full Mojang `creative_items.json` / `block_state_b64`, in-process BDS world import, ECS, broad mob AI and plugin-facing command registration — listed in [`decisions.md`](decisions.md) § "Explicit non-goals".
+**Explicit non-goals** (do not assume from comments elsewhere): plugin API, full Mojang `creative_items.json` / `block_state_b64`, in-process BDS world import and plugin-facing command registration (ECS and mob AI have since shipped — see ecs.md) — listed in [`decisions.md`](decisions.md) § "Explicit non-goals".
 
 ## Reading `ADR §N` in source
 

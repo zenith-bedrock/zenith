@@ -24,7 +24,7 @@ If you hit something that isn't listed as a known gap below, it's likely a real 
 | Inventory (36 slots) | Rearrange (ISR), held-item sync to peers, Creative palette → cursor / SHIFT → bag. |
 | Chests | Single + double chest (sneak-place to pair), 54-slot UI, persist to `ct:`. |
 | Crafting (2×2 personal + 3×3 table) | Survival craft chain (log → planks → stick/tools/chest/fence/…). Recipes whose real vanilla shape needs more than 2×2 (chest, every tool, fence, wall) require an actual crafting table, matching vanilla — placing/interacting with a `crafting_table` block opens a real 9-slot grid (ADR §139). |
-| Creative / Survival gamemode | `/gamemode` minimal — fly in Creative, no fly in Survival. |
+| Creative / Survival gamemode | `/gamemode` minimal — fly in Creative, no fly in Survival; no Adventure/Spectator semantics. |
 | Void death / respawn | Fall below world → DeathInfo + Respawn handshake; Survival death drops loot to floor. |
 | Block gravity | Sand/gravel fall when unsupported (`GravitySystem`). |
 | World persistence | LevelDB overlay + inventory/chest/playerdata persist across restart; graceful shutdown flushes (Ctrl+C / SIGTERM). |
@@ -38,29 +38,29 @@ If any of these misbehave — desync, wrong slot contents, block not appearing f
 
 | Area | What's simplified |
 |------|--------------------|
-| Block/item registry | Palette-driven `runtimeId → name`, but only a curated allowlist is placeable/diggable. Not every vanilla block works yet. |
-| Creative catalogue | Short curated list, not the full Mojang `creative_items.json`. |
+| Mobs | Ten species (zombie, skeleton, spider, creeper, enderman, bat, villager, golem, fish, cow) plus minecart and projectile run on the ECS with melee, knockback, hurt/death feedback and data-driven loot tables (`data/loot_tables.json`). Spawning, breeding and per-species special behaviour are narrower than vanilla — see [`entity-fidelity.md`](entity-fidelity.md) and [`entity-behavior-matrix.md`](entity-behavior-matrix.md). |
+| Hunger / armor | Hunger and armor reduction exist; armor durability wear, effects and saturation edge cases are incomplete. |
+| Blocks | The palette has 1477 block types, but only a curated subset (~100) is placeable and ~110 breakable in survival. Stairs, slabs, doors, glass and plants are missing. Block gravity covers sand/gravel only. |
+| Creative catalogue | Curated subset, not the full Mojang `creative_items.json`. |
 | Tool speed | Curated tool table + speed-delta packet; **no enchantments**. |
-| Drop entities | Minimal `AddItemActor`/`TakeItemActor` wire — no physics, no despawn timer yet. |
+| Drop entities | Floor items use `AddItemActor`/`TakeItemActor` with a fan-out store; physics is minimal. |
 | World gen | Zenith-native noise/biome/cave/ore — not Mojang's noise tables. Visuals will differ from real Bedrock terrain. |
 
-Anomalies here should only be reported if they break the *documented* scope (e.g. a curated tool doesn't apply its speed bonus at all) — not "X isn't in the curated list yet."
+Anomalies here should only be reported if they break the *documented* scope — not "X isn't in the curated list yet."
 
 ---
 
 ## ❌ Not implemented — don't file these as bugs
 
-Full list of non-goals: [`decisions.md`](decisions.md) § "Explicit non-goals" and [`alpha-gate.md`](alpha-gate.md) § "Explicit non-goals on the tag". Highlights:
+The prioritized gap list lives in [`../plans/dragonfly-gap-analysis-2026-11-15.md`](../plans/dragonfly-gap-analysis-2026-11-15.md). Highlights:
 
-- Mobs / entity AI (planned for later — see project notes below)
-- Hunger / food / full damage pipeline
-- Redstone
-- Armor, ender chest, hoppers
-- Full vanilla command catalogue / plugin-facing command framework (Zenith currently has a small protocol-independent command core with Bedrock metadata for representative commands)
-- Plugin API
-- Nether / End dimensions, custom biome authoring
+- Dynamic world: random/scheduled ticks, liquids, fire, crop/tree growth, weather
+- Nether / End dimensions (dimension ids exist only as protocol constants)
+- Redstone, furnaces, hoppers, ender chest, beds, block entities beyond chests
+- Enchantments, potion effects, bows/ranged player weapons, XP orbs
+- Permissions, admin commands, plugin API, full command catalogue
+- Forms, title/bossbar/scoreboard
 - Mojang world import (BDS/PM world format)
-- Enchantments
 
 ---
 

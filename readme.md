@@ -16,7 +16,7 @@ Zenith is built around a strict split between **gameplay decisions**, **protocol
 
 ## :warning: Zenith is not vanilla-complete yet
 
-It does not have mobs/AI, redstone, hunger, full damage, enchantments, or a plugin API yet — see [docs/roadmap.md](docs/roadmap.md) for what's shipped vs planned. If you want vanilla parity today, use [official BDS](https://minecraft.net/download/server/bedrock). If you want a mature plugin ecosystem today, use [PocketMine-MP](https://github.com/pmmp/PocketMine-MP) or [Nukkit](https://github.com/CloudburstMC/Nukkit). Zenith is for people who want to **own** the server and are fine with early-stage gaps — see [docs/comparison.md](docs/comparison.md) for the full picture.
+It has ten mob species with ECS-driven AI, hunger, armor, melee/knockback and loot tables, but not yet redstone, enchantments, liquids/fire/growth, Nether/End, or a plugin API — see [docs/roadmap.md](docs/roadmap.md) for what's shipped vs planned. If you want vanilla parity today, use [official BDS](https://minecraft.net/download/server/bedrock). If you want a mature plugin ecosystem today, use [PocketMine-MP](https://github.com/pmmp/PocketMine-MP) or [Nukkit](https://github.com/CloudburstMC/Nukkit). Zenith is for people who want to **own** the server and are fine with early-stage gaps — see [docs/comparison.md](docs/comparison.md) for the full picture.
 
 ## Quick start
 

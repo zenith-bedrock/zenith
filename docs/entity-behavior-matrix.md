@@ -8,11 +8,9 @@ live source, not from naming or memory — every cell that names a mechanic has 
 behind it. Purpose per the phase brief: identify missing behavior and guide future ECS/component
 decisions, not to justify a generic AI framework.
 
-Runtime split: **Zombie, Skeleton, Spider, Cow** are ECS-based (own `ComponentStore<T>` under
-`src/zenith/Ecs/`, ticked by a matching `Gameplay/Entities/*System.cs`). **Creeper, Enderman, Golem,
-Bat, Villager** remain legacy hand-written classes in `src/zenith/Gameplay/Entities/` with their own
-store class — outside ECS, per ADR §99/§106/§107's evidence-gated migration (only six of the eleven
-species were ever migrated; the rest stay put until a concrete capability need, not "completeness").
+Runtime split: every species is ECS-based (own `ComponentStore<T>` under `src/zenith/Ecs/`, ticked by a
+matching `Gameplay/Entities/*System.cs`) since ADR §149 — the earlier legacy/ECS split no longer
+exists. Shared melee, knockback, death and loot live in `DamageableActorCombat` and `MobLoot`.
 Fish is passive/no-combat and omitted below.
 
 | Entity | Target | Movement | Attack | Knockback | Special |
@@ -23,7 +21,7 @@ Fish is passive/no-combat and omitted below.
 | Creeper | Nearest player in range | Approaches to fuse range, no retreat-after-ignite behavior | No melee/projectile — AoE explosion only: `FuseDurationTicks=30`, `ExplosionRadius=3f`, `ExplosionDamage=10f` (`CreeperSystem.cs:34-36`) | N/A (explosion applies its own separate impulse, not the shared melee knockback) | Fuse ignite/defuse hysteresis (ignite ≤3 blocks, defuse ≥7 — fixed in Phase XXIII to stop toggle-flicker at the boundary) |
 | Enderman | Last attacker only (damage-triggered aggro, `AggroDurationTicks` window) — no stare-triggered aggro | Instant teleport, not a walked chase: passive random short-hop (`PassiveTeleportRadius=8`, every 60-140 ticks) or aggro teleport-toward-target (`AggroTeleportRadius=2`, `AggroTeleportCooldownTicks=20`) | Melee only when in range post-teleport, `AttackDistance=2.25`, `AttackDamage=7` (`EndermanSystem.cs:18-20`) | Shared `GroundMobCombat` path | Teleport (`TryTeleport`, `EndermanSystem.cs:209-230`); **Yaw now set on every aggro tick as of Phase XXVI** (`EndermanSystem.cs` `TickAggro`) — previously never oriented at all, a confirmed entity-fidelity gap. Still missing vanilla's stare-triggered aggro and water/rain avoidance (`docs/entity-fidelity.md:240-241`) |
 | Golem | Player who last attacked a Villager (`Player.LastVillagerAttack` provocation, not direct aggro) | Ground chase toward provoker | Melee, `AttackDistance=2.5`, `AttackDamage=6`, `AttackCooldownTicks=20` (`GolemSystem.cs:27-30`) | Shared `GroundMobCombat` path | Provoke-by-proxy (attacking a Villager redirects Golem aggro) |
-| Cow | None | Passive wander only | N/A — takes damage via `DamageableActorCombat.ApplyPlayerMeleeAttacks`, never deals it | N/A | No breeding, no feeding (grepped project-wide for `Breed` — zero hits) |
+| Cow | None | Passive wander only | N/A — takes damage via `DamageableActorCombat.ApplyPlayerMeleeAttacks`, never deals it | N/A | Breeding exists (`CowSystem` `TryBreed`, 60s cooldown); no other passive species breed |
 | Villager | None | Passive wander only | N/A | N/A | No flee-on-hit (`docs/entity-fidelity.md:242-243` — vanilla villagers run from their attacker; Zenith's only records the hit for Golem-provoke purposes), no breeding/trading |
 | Bat | None | Passive flight/wander | N/A — takes player damage (`BatSystem.cs:63,120-123`), never attacks | N/A | Passive only |
 

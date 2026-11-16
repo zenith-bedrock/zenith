@@ -19,10 +19,12 @@ working multiplayer
 
 Phase XXI (ADR §106) took the last step for a deliberately small slice as an explicit scope
 decision rather than waiting for further measured pressure; Phase XXII (ADR §107) expanded that
-slice to six species and closed the ECS-as-active-focus story — see the Phase XXI/XXII sections
-below. The 6 remaining `IDamageableActor` species (Creeper, Enderman, Bat, Villager, Golem, Fish)
-still follow the original story unchanged: no further ECS migration is scheduled until per-species
-evidence or a deliberate scope decision like §106/§107 revisits it.
+slice to six species and closed the ECS-as-active-focus story; ADR §149 later migrated every remaining
+species. See the Phase XXI/XXII sections below.
+
+Current gaps against a mature server (permissions, placeable blocks, ticks/liquids/fire/growth,
+Nether/End, furnaces, effects, ...) are prioritized in
+[`plans/dragonfly-gap-analysis-2026-11-15.md`](../plans/dragonfly-gap-analysis-2026-11-15.md).
 
 ## Progress states
 
