@@ -5,6 +5,7 @@ Internal extensibility audit generated with improve on 2026-11-16. Existing date
 | Plan | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|
 | [001 — Internal extension spine](001-internal-extension-spine.md) | P1 | L across phases | none | TODO |
+| [002 — Environment change policy](002-environment-change-policy.md) | P2 | M across phases | 001 phases 0-3 | DESIGN |
 
 Phase dependency: inventory -> permissions -> 2b single-cell policy -> 2c batch planning -> commands -> narrow ports/Protect example -> public-surface ADR only. Phase 2a (presence and immutable payloads) follows inventory, may run alongside permissions, and precedes 2b. Keep 2a and 2c in separate PRs; L/HIGH is concentrated in 2c. The small command-catalog registration fix may land independently before permissions. Help/sample hygiene is a separate parallel PR and does not block permissions. Protect is the first proof; economy is deferred until a real ledger and transaction model exist.
 
