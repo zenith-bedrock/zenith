@@ -7,7 +7,7 @@
 - Effort: M across six independently reviewable phases
 - Risk: MED. The danger is not the seam, it is the writers: a veto that leaves a writer retrying forever, drops an item while the block stays, or builds half a structure is worse than no veto.
 - Depends on: plan 001 phases 0-3 (done)
-- Status: DESIGN, revision 2 (after review). Nothing here is implemented. Phase 0 is next once the decisions at the end are confirmed.
+- Status: DESIGN, revision 3. Phase 0 (the ratchet) is implemented and awaiting review; nothing else is. Decisions 1, 2 and 4 are approved. Decision 3 (gravity) was rejected as written and is replaced below; the gravity phase must not start until its prerequisites are approved.
 
 Revision 2 changes, from review plus a second reading of the code: the cause list now follows the meaning of the change, not the system that makes it; the proposal is per cell; what happens after a protection is lifted is stated; gravity has explicit invariants (and the code has a pre-existing conservation hole there); tree growth is a planned multi-cell unit, which the per-cell rule alone would break; the ratchet is an IL call-site scan, not text search; policy faults get rate-limited logging; the `EnvironmentChanged` fact and region flags are deferred.
 
@@ -85,16 +85,40 @@ Exception, stated as a rule: **a system whose unit of change is a planned multi-
 
 Lifting a protection does **not** replay changes that were refused while it held. A refused change is gone, not queued. In practice: water, fire and falling blocks resume on the next neighbour update or scheduled tick that reaches them; sapling growth, decay and spread resume by themselves because random ticks keep coming; an unsupported block (the torch) stays until something updates its neighbourhood. This is accepted for v1 because the alternative is a retry queue per cause, which is the "god scheduler" this project rejects. It is documented here and pinned by tests, so it is a stated behaviour and not a surprise. If it proves unacceptable, the follow-up is a targeted re-evaluation (re-enqueue the cells of a removed region into the existing update queues), not a new mechanism.
 
-### Gravity: invariants first
+### Gravity: conservation as a real invariant
 
-Gravity is split into its own phase because it has persistent state across ticks and a real conservation problem. The invariant, for every block that starts to fall: **at every tick boundary exactly one representation exists: the block at its origin, or one falling entry, or one dropped item stack, or (in the single documented failure case below) a logged loss. Never two, never silently none.**
+Rejected from revision 2: dropping a falling block after a bounded retry. A veto, a full drop store or a retry limit must never delete a block. The invariant is now:
 
-- **At the start of a fall**, judge the origin (`block -> air`) and the predicted landing cell. If either is vetoed the block does not start to fall and stays where it is (same rule as support loss). This removes almost every landing veto before it can happen.
-- **At landing**, if the cell is vetoed, or was claimed mid-fall, the entry converts to a drop through a dedicated conversion, not `BlockSpill.Drop`: it ignores `DoTileDrops` (a falling block is not terrain being broken; destroying it silently would be the loss) and it reports whether the deposit succeeded. The drop is created at the landing cell's position, the entry is removed in the same step, so the two representations never coexist.
-- **If the deposit fails** (floor-drop cap), the entry stays alive and the conversion is retried on the following ticks, bounded (default 20 ticks). After the bound the loss is logged at error level with coordinates and block, counted in diagnostics, and the entry is removed. This is the one documented loss case; it replaces today's silent loss in `Land`.
-- The same conversion also fixes the existing "cell claimed mid-fall" loss, which is a behaviour change to call out in that phase's commit.
+> For every block that starts to fall, at every tick boundary exactly one representation exists: the block in the world at its origin, or one live falling entry, or the block in the world at its resting place. It leaves that set only by landing as a block, or by the single named vanilla exit (the void, below). Failure, a veto, a full store, a retry limit or a restart never remove it.
 
-Tests: veto at origin, veto at predicted landing, veto only at landing after the prediction (cell changed mid-fall), `DoTileDrops` off, deposit refused then retried, deposit refused past the bound (logged, counted, entry gone), and a count of block + entry + drop equal to one at every tick in each scenario. Needs a check that falling entries do not need persistence across restart (look at `FallingBlockStore` and the world save before starting).
+**What the code does today** (investigated; none of this is changed yet):
+
+1. `FallingBlockStore` is memory only. Nothing saves it. A graceful shutdown force-lands every entry before the final flush (`ZenithServer`, `SettleAllPending`), so a clean stop conserves blocks. A crash, a kill, or an exception thrown by `SettleAllPending` (it is caught and logged as a warning) loses every in-flight block: `BeginFall` already cleared the origin, and the origin clear reaches disk within the write-behind drain (about 50 ms). **Pre-existing crash-durability gap.**
+2. `FloorDropStore` cannot carry the guarantee. It is memory only too (not in any save path), refuses new cells at `SoftCap` 2048, searches a radius of 3 for a free cell, and despawns a drop after 6000 ticks. `BlockSpill.Drop`, the helper a fallback would reach for, additionally does nothing when `DoTileDrops` is off or the block yields no drop, and discards the deposit result. So "convert to a drop" is not a conserving step: a deposit can fail, an accepted deposit is not durable, and the store has no way to reserve room. (The store does offer `CanDeposit`, used by player death to check room before removing a source; that is the right pattern for what it covers, but it does not fix persistence or despawn, and a dropped block is an ordinary item with ordinary item rules.)
+3. `Land` only fails to write when the cell is outside the world's height (`TrySetBlock`'s only refusal), so its "block is lost" comment describes a case that cannot happen for an in-range landing. But `Land` writes with `TrySetBlock` and never checks that the landing cell is replaceable: a block placed into the resting cell in the same tick would be overwritten, which destroys **that** block. Needs a test before the phase starts; if confirmed it is a pre-existing bug to fix with the phase.
+4. `TrySpawn` past `SoftCap` 512 makes `BeginFall` resolve the fall instantly at the current support. That conserves today, but it is the path that would have nowhere to put a block whose landing is vetoed, because by then the origin is already cleared.
+5. Falls into the void (no support down to the world floor, or the entry's Y below it) remove the entry without placing anything. This matches vanilla, where a falling block outside the world is discarded.
+6. A column can unload while an entry above it falls (residency counts viewers and floor drops, not falling entries). Landing then loads the column synchronously. Not a loss; noted for the cost review.
+
+**Proposal: the block is its own reservation.** Do not convert to an item at all. A vetoed landing moves the block, it does not destroy or transform it.
+
+- **Decide before clearing the origin.** `BeginFall` first checks, in this order and with nothing written: the origin is permitted to be cleared, the predicted landing cell (the first blocking support below, found without moving anything) is permitted to receive the block, and the store has room for an entry. If any check fails the block stays at its origin this tick, exactly like support loss under protection, and is re-enqueued with the existing deferral so it is judged again later. This removes the store-full case and almost every veto case before any state changes, and it replaces today's "clear, then spawn, then resolve instantly" order.
+- **Mid-fall changes** (a region created while falling, a cell filled below) are handled at the landing step: the block rests at the lowest cell of its fall column that is free **and** permitted, searching upward from the predicted landing toward its origin. A protected cell therefore behaves like ground for the falling block. Placing it is judged as `air -> block` under cause `Gravity`.
+- **No permitted resting cell** (the origin itself was permitted to clear but not to receive, and everything between is protected: a pathological policy): the entry stays alive at its last position, marked stuck. It is logged once at error level with block, coordinates and cause, counted in diagnostics, and re-evaluated every 20 ticks. The 20-tick figure only paces re-evaluation and the log; it never ends the entry. The block exists as an entry until a cell accepts it.
+- **Shutdown** uses the same resting rule, immediately and without animation. A stuck entry at shutdown is the case that cannot be made to rest; see persistence below.
+- **Replaceability.** Landing and resting require the target cell to be replaceable (air or what `FluidFlow.CanHold` accepts), never overwriting a block.
+- **The void** stays the one named exit, as in vanilla. It is not caused by policy, capacity or failure, and it is deterministic. **Needs your confirmation** (decision 3 below): the alternative is to forbid starting a fall that has no support above the world floor, which keeps the block but differs from vanilla and only matters in worlds without a bedrock floor.
+
+**Persistence and restart (the limit you asked about).** Graceful stop already conserves through the settle at shutdown, and the resting rule keeps that true under policies. The crash and settle-failure gap in item 1 is real and pre-existing, and the invariant is not true across it. The solution needed to make it true is a write-ahead record of the in-flight set:
+
+- One world record (a new `RecordKind` or the existing module-state record under a world-owned name) holding, per entry: block runtime id, landing column, origin Y, and current Y.
+- Order within the tick: the record containing a new entry is queued before the origin clear, so the write-behind drain can never persist the clear without the entry; a landed entry is removed from the record after the landing write.
+- Recovery at boot, deterministic: for each saved entry look at its origin cell. Origin is air: the block was cleared, so resolve the entry with the resting rule (conserved). Origin still holds that same block: the clear never reached disk, so discard the entry (no duplicate). Origin holds something else: the world changed meanwhile, resolve the entry with the resting rule.
+- Cost: one small put per tick in which the set changed; none otherwise.
+
+This is a prerequisite of the gravity phase, not part of it, because it changes world storage. It is proposed as **Phase 4a (falling-block durability)**, then **Phase 4b (gravity under policy)**. If you prefer to accept the crash gap as documented, 4a is dropped and the invariant is stated as "holds across graceful stops, not across crashes"; I would not recommend that given the constraint you set, but it is your call.
+
+**Tests (4b):** veto at origin keeps the block and does not leave a stuck entry; veto at predicted landing keeps the block at origin; store full keeps the block at origin; region created mid-fall makes the block rest above it; no permitted cell keeps a live stuck entry that is never removed and is logged once; landing cell filled meanwhile does not destroy the new block; `DoTileDrops` off changes nothing; shutdown settle under a region; and in every scenario a count of blocks plus entries equals the number that started, at every tick. **Tests (4a):** crash between origin clear and flush resolves to exactly one block; crash after landing duplicates nothing; recovery with origin air, origin same block, origin changed.
 
 ### Observable faults
 
@@ -108,12 +132,34 @@ Per-cell lookups run in fluid, fire and random ticks. Protect's lookup is a line
 
 Each phase is one reviewable commit with tests that assert the world and the items, not only a return value.
 
-- **Phase 0, the ratchet.** An IL call-site scan in the style of `ArchitectureBoundaryTests` (it already walks IL; no new dependency, comments and dead text cannot trigger it, method pointers are seen). It finds every call to the cell-mutating members of the world and compares the calling types with an allowlist whose entries name their cause or "player edit, policed". Inventory first: before the test is written, list every member that can change a cell (not only `SetBlock`/`TrySetBlock`: also the column and section setters and any chunk replace path) so the allowlist covers all mutation paths, and say in the test's comment what the scan cannot see (reflection). Adding a writer without deciding its cause then fails a test.
+- **Phase 0, the ratchet. DONE, see "Phase 0 result".**
 - **Phase 1, seam + Explosion + fault log.** The types, composition, Protect implementation, `CreeperSystem` per cell, the shared fault-log helper adopted by the three sets, the first measurement. Tests: a crater stops at the boundary; protected blocks untouched, others carved; a faulty policy denies safely and logs boundedly; frozen after composition.
 - **Phase 2, FluidFlow + Fire (incl. lava ignition).** Veto in the predicates. Tests: liquid and fire do not enter a region; no washed-away drop for a vetoed cell (item conservation); quiet afterwards (no re-queued tick for the vetoed cell); after the region is removed, resumption happens on the next neighbour update and not before (the documented semantics).
 - **Phase 3, SupportLoss.** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
-- **Phase 4, Gravity.** The invariants above, with their tests.
+- **Phase 4a, falling-block durability** (prerequisite, pending approval) and **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests.
 - **Phase 5, random ticks: Growth, Decay, Spread.** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
+
+## Phase 0 result
+
+**Inventory of members that change a world cell** (read from `World`, `WorldColumn`, `Section`): `World.TrySetBlock` (two overloads), `World.SetBlock`, `WorldColumn.Set`, `WorldColumn.SetSection`, `Section.Set`. `Section.Uniform` and `Section.FromIds` only build sections, which reach the world through `SetSection`. Block entities (`World.SetBlockEntity`, `RemoveBlockEntity`, `WorldColumn.SetEntity`, `RemoveEntity`) change container contents, not cell ids; they are outside this ratchet and covered by the container-access policy and the inventory conservation tests.
+
+**Every production caller found by the IL scan** (type.method, kind, cause):
+
+| Caller | Kind | Cause / note |
+|--------|------|--------------|
+| `BlockEditSystem.TryPlace`, `TryBreak`, `CommitExtraWrites` | player edit, policed | place, break, coupled cells and door use; `BlockEditPolicyTests`, `ProtectModuleTests`, `ProtectInteractionTests` |
+| `BucketSystem.TryScoop`, `TryPour` | player edit, policed | judged as break / place; `ProtectInteractionTests` |
+| `CreeperSystem.BreakBlocksInRadius` | environment | `Explosion` |
+| `FluidFlow.Write` | environment | `FluidFlow` |
+| `FireSpread.Write` | environment | `Fire` |
+| `GravitySystem.BeginFall`, `Land` | environment | `Gravity` (origin, landing) |
+| `BlockUpdateSystem.BreakUnsupported`, `Evaluate` | environment | `SupportLoss` (break and drop; neighbour-driven reshape) |
+| `RandomTickContext.TrySet` | environment | per behaviour, below |
+| `World.SetBlock`, `World.TrySetBlock`, `World.BuildColumn`, `ColumnCodec.Decode`, `WorldColumn.Set` | world internals | the write API, generation, loading, column storage |
+
+Random-tick behaviours that write through `RandomTickContext.TrySet`: `SaplingGrowthBehavior` (`Growth`, a whole tree is one planned unit), `LeavesDecayBehavior` (`Decay`), `GrassSpreadBehavior` (`Spread`), `LavaIgnitionBehavior` (`Fire`).
+
+No caller exists outside this table: nothing in `Server`, `Session`, `Protocol` or `Packets` changes a cell, and `SetBlock` has no production caller except through `TrySetBlock`. `WorldWriterInventoryTests` pins this at method granularity, fails for an unlisted writer, fails for a stale entry, pins that exactly six environment writers remain unpoliced, and requires every random-tick writer to name its cause. It was checked to fail when an entry is removed. What it cannot see is reflection or dynamic invocation, and it proves only that no unlisted code writes a cell; that a listed "policed" writer really consults the policies is shown by the behavioural tests named in the table.
 
 ## Deferred, with the trigger that reopens each
 
@@ -122,12 +168,12 @@ Each phase is one reviewable commit with tests that assert the world and the ite
 - **Chunk index for regions.** Only on measured cost.
 - **Re-evaluation when protection is lifted.** Only if the documented semantics prove unacceptable.
 
-## Decisions to confirm
+## Decisions
 
-1. Strict regions in v1 (consequence above accepted).
-2. Support loss inside a region is vetoed and the block stays, as intentional behaviour.
-3. Gravity's retry bound (20 ticks) and the single documented logged-loss case.
-4. Phase 0 first, alone, as the next commit.
+1. Strict regions in v1: **approved**. Saplings do not grow, leaves do not decay and grass does not spread inside a region.
+2. Support loss inside a region is vetoed and the block stays, even if that leaves a state vanilla would not allow: **approved**; tests for behaviour after protection is lifted stay.
+3. Gravity: **rejected as written**. Replaced by the conservation invariant, the block-as-reservation proposal and Phase 4a/4b above. Still to decide: (a) Phase 4a, persist the in-flight set (recommended) or accept the documented crash gap; (b) the void as the single named vanilla exit (recommended) or forbid starting a fall with no support above the floor.
+4. Phase 0 first, alone: **approved and done**. Phase 1 does not start until Phase 0 is reviewed.
 
 ## Non-goals
 
@@ -137,5 +183,5 @@ A public environment-event API, per-block-type rules, a rollback log, a schedule
 
 - A writer cannot be vetoed without leaving a half-applied effect (a side effect before the decision that cannot be reordered): stop and report that writer; do not veto after the fact.
 - The per-cell lookup shows up in tick diagnostics beyond noise: stop and add the chunk index before continuing.
-- Gravity needs state the falling-block store does not carry through a veto or a restart: record it, do not work around it.
+- Gravity cannot keep exactly one representation of a block in some scenario: stop and report it; never resolve it by removing the entry.
 - The Phase 0 inventory finds a mutation path that the allowlist approach cannot attribute to a cause: stop and decide it before the seam is built.
