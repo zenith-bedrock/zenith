@@ -13,8 +13,8 @@ static class ItemTags
 
     public static bool Contains(string tag, string name)
     {
-        if (!name.StartsWith("minecraft:", StringComparison.Ordinal)) return false;
-        var n = name.AsSpan("minecraft:".Length);
+        if (!name.StartsWith(ItemNames.Namespace, StringComparison.Ordinal)) return false;
+        var n = ItemNames.Bare(name);
         return tag switch
         {
             "minecraft:planks" => n.EndsWith("_planks"),

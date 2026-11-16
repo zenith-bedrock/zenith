@@ -44,6 +44,9 @@ static class ArmorItems
     };
 
     /// <summary>The armor slot an item belongs in, and its vanilla-parity protection points.</summary>
+    /// <summary>Every item name the table knows, for checking against the item palette.</summary>
+    public static IEnumerable<string> Names => Table.Keys;
+
     public static bool TryGet(ItemPalette palette, StackId id, out int slot, out float protectionPoints)
     {
         slot = -1;

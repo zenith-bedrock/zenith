@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Xunit;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.WorldInteraction;
@@ -152,7 +153,7 @@ public sealed class BucketTests
     public async Task A_lava_bucket_pours_lava_and_an_empty_one_takes_it_back()
     {
         var s = await Build();
-        Assert.True(s.Player.Inventory.TrySet(0, ItemOf(s, BucketItems.LavaName), 1));
+        Assert.True(s.Player.Inventory.TrySet(0, ItemOf(s, ItemNames.LavaBucket), 1));
 
         Use(s, 8, Floor, 8, face: 1);
         Assert.Equal(Blocks.Lava, s.Fx.World.GetBlock(8, Level, 8));
@@ -160,7 +161,7 @@ public sealed class BucketTests
 
         Use(s, 8, Level, 8, face: 1);
         Assert.True(Blocks.IsAir(s.Fx.World.GetBlock(8, Level, 8)));
-        Assert.Equal(ItemOf(s, BucketItems.LavaName), s.Player.Inventory.Get(0).Id);
+        Assert.Equal(ItemOf(s, ItemNames.LavaBucket), s.Player.Inventory.Get(0).Id);
     }
 
     [Fact]
@@ -168,7 +169,7 @@ public sealed class BucketTests
     {
         var s = await Build();
         Assert.True(Blocks.TryGetDefaultRuntimeId("minecraft:powder_snow", out var snow));
-        var full = ItemOf(s, BucketItems.PowderSnowName);
+        var full = ItemOf(s, ItemNames.PowderSnowBucket);
         Assert.True(s.Player.Inventory.TrySet(0, full, 1));
 
         Use(s, 8, Floor, 8, face: 1);
@@ -188,7 +189,7 @@ public sealed class BucketTests
     {
         var s = await Build();
         s.Fx.World.SetBlock(9, Level, 8, Blocks.Water);
-        Assert.True(s.Player.Inventory.TrySet(0, ItemOf(s, BucketItems.LavaName), 1));
+        Assert.True(s.Player.Inventory.TrySet(0, ItemOf(s, ItemNames.LavaBucket), 1));
         Use(s, 8, Floor, 8, face: 1);
 
         var updates = new BlockUpdateSystem(s.Fx.World, s.Fx.Players);

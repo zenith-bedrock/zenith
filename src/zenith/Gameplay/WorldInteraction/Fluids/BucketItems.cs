@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.World;
 
 namespace Zenith.Gameplay.WorldInteraction.Fluids;
@@ -8,27 +9,22 @@ readonly record struct FilledBucket(StackId Item, int Block, FluidType Fluid);
 /// <summary>The bucket items the server knows how to use, resolved once against the item palette and block catalog.</summary>
 sealed class BucketItems
 {
-    public const string EmptyName = "minecraft:bucket";
-    public const string WaterName = "minecraft:water_bucket";
-    public const string MilkName = "minecraft:milk_bucket";
-    public const string LavaName = "minecraft:lava_bucket";
-    public const string PowderSnowName = "minecraft:powder_snow_bucket";
     private const string PowderSnowBlock = "minecraft:powder_snow";
 
     private readonly FilledBucket[] _filled;
 
     public BucketItems(ItemPalette palette)
     {
-        Empty = StackId.FromItem(palette.Require(EmptyName));
+        Empty = StackId.FromItem(palette.Require(ItemNames.Bucket));
         if (!Blocks.TryGetDefaultRuntimeId(PowderSnowBlock, out var powderSnow))
             throw new InvalidOperationException($"{PowderSnowBlock} is not in the block palette.");
 
-        Water = new FilledBucket(StackId.FromItem(palette.Require(WaterName)), Blocks.Water, FluidType.Water);
+        Water = new FilledBucket(StackId.FromItem(palette.Require(ItemNames.WaterBucket)), Blocks.Water, FluidType.Water);
         _filled =
         [
             Water,
-            new FilledBucket(StackId.FromItem(palette.Require(LavaName)), Blocks.Lava, FluidType.Lava),
-            new FilledBucket(StackId.FromItem(palette.Require(PowderSnowName)), powderSnow, FluidType.None)
+            new FilledBucket(StackId.FromItem(palette.Require(ItemNames.LavaBucket)), Blocks.Lava, FluidType.Lava),
+            new FilledBucket(StackId.FromItem(palette.Require(ItemNames.PowderSnowBucket)), powderSnow, FluidType.None)
         ];
     }
 

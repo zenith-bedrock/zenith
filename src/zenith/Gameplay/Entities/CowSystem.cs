@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
@@ -47,9 +48,9 @@ sealed class CowSystem : MobSystem<CowState>
         : base(MobDefinitions.Cow, world, players, stores, itemPalette)
     {
         _body = new GroundMobBody(world, stores, players);
-        _feedItem = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
-        _emptyBucket = StackId.FromItem(itemPalette.Require(Zenith.Gameplay.WorldInteraction.Fluids.BucketItems.EmptyName));
-        _milkBucket = StackId.FromItem(itemPalette.Require(Zenith.Gameplay.WorldInteraction.Fluids.BucketItems.MilkName));
+        _feedItem = StackId.FromItem(itemPalette.Require(ItemNames.Wheat));
+        _emptyBucket = StackId.FromItem(itemPalette.Require(ItemNames.Bucket));
+        _milkBucket = StackId.FromItem(itemPalette.Require(ItemNames.MilkBucket));
         _random = random ?? new Random();
     }
 

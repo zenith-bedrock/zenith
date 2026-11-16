@@ -1,4 +1,4 @@
-using Zenith.Gameplay.WorldInteraction.Fluids;
+using Zenith.Gameplay.Inventory;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Survival;
@@ -54,9 +54,12 @@ static class FoodItems
         ["minecraft:beetroot_soup"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
         ["minecraft:rabbit_stew"] = new(10, 12, Remainder: "minecraft:bowl"),
         ["minecraft:suspicious_stew"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
-        [BucketItems.MilkName] = new(0, 0f, AlwaysEdible: true, Remainder: BucketItems.EmptyName, ClearsEffects: true),
+        [ItemNames.MilkBucket] = new(0, 0f, AlwaysEdible: true, Remainder: ItemNames.Bucket, ClearsEffects: true),
         ["minecraft:honey_bottle"] = new(6, 1.2f, UseTicks: 40, AlwaysEdible: true, Remainder: "minecraft:glass_bottle"),
     };
+
+    /// <summary>Every item name the table knows, for checking against the item palette.</summary>
+    public static IEnumerable<string> Names => Foods.Keys;
 
     public static bool TryGetNutrition(ItemPalette palette, StackId id, out int nutrition)
     {

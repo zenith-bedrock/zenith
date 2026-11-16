@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Survival;
@@ -9,20 +10,21 @@ static class PlayerMeleeDamage
     {
         var stack = attacker.Inventory.Get(attacker.SelectedHotbarSlot);
         if (stack.IsEmpty || !stack.Id.IsItem || !palette.TryGetName(stack.Id.Value, out var name)) return 1;
-        if (name == "minecraft:trident") return 9;
-        var separator = name.LastIndexOf('_');
+        if (name == ItemNames.Trident) return 9;
+        var bare = ItemNames.Bare(name);
+        var separator = bare.LastIndexOf('_');
         if (separator < 0) return 1;
-        var tier = name[..separator] switch
+        var tier = bare[..separator] switch
         {
-            "minecraft:wooden" or "minecraft:golden" => 5,
-            "minecraft:stone" or "minecraft:copper" => 6,
-            "minecraft:iron" => 7,
-            "minecraft:diamond" => 8,
-            "minecraft:netherite" => 9,
+            "wooden" or "golden" => 5,
+            "stone" or "copper" => 6,
+            "iron" => 7,
+            "diamond" => 8,
+            "netherite" => 9,
             _ => 0
         };
         if (tier == 0) return 1;
-        return name[(separator + 1)..] switch
+        return bare[(separator + 1)..] switch
         {
             "sword" => tier,
             "axe" => tier - 1,

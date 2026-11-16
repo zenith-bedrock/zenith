@@ -356,7 +356,7 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
                     TagBase64: slot.Id.Data.TagBase64);
             }
             WarnUnknownStackOnce(slot.Id.Value);
-            var airId = palette.Require("minecraft:air");
+            var airId = palette.Require(ItemNames.Air);
             return new NetworkItemStack(airId, 0, Blocks.Air);
         }
 
@@ -364,7 +364,7 @@ sealed class InventoryProtocol : Zenith.Gameplay.Ports.IInventoryChannel
             return new NetworkItemStack(blockNetId, (ushort)slot.Count, slot.Id.Value, StackNetworkId: stackNetworkId);
 
         WarnUnknownStackOnce(slot.Id.Value);
-        var air = palette.Require("minecraft:air");
+        var air = palette.Require(ItemNames.Air);
         return new NetworkItemStack(air, 0, Blocks.Air);
     }
 

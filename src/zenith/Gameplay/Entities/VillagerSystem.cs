@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Inventory;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Survival;
@@ -33,8 +34,8 @@ sealed class VillagerSystem : MobSystem<VillagerState>
     {
         _body = new GroundMobBody(world, stores, players);
         // The ware a trade gives back; independent of what a kill drops (the loot table).
-        _ware = StackId.FromItem(itemPalette.Require("minecraft:emerald"));
-        _requestedWare = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
+        _ware = StackId.FromItem(itemPalette.Require(ItemNames.Emerald));
+        _requestedWare = StackId.FromItem(itemPalette.Require(ItemNames.Wheat));
         _random = random ?? new Random();
     }
 
