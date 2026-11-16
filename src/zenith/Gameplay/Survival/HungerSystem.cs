@@ -124,6 +124,8 @@ sealed class HungerSystem : IGameSystem
         if (player.GameMode != GameMode.Creative && !ConsumeFood(player, use, definition, online)) return;
         player.Hunger = MathF.Min(20f, player.Hunger + definition.Nutrition);
         player.Saturation = MathF.Min(player.Hunger, player.Saturation + definition.Saturation);
+        if (definition.ClearsEffects)
+            player.Effects.SubmitEffect(EffectIntent.Clear);
     }
 
     private static void SetFoodUse(Player.Player player, FoodUseState? use, IReadOnlyList<Player.Player> online)
@@ -133,7 +135,7 @@ sealed class HungerSystem : IGameSystem
         if (!changed) return;
         foreach (var peer in online)
             if (peer.IsInGame)
-                peer.Client.Entity.SendActorFlags((ulong)player.RuntimeId, player.IsSneaking, player.IsSprinting, use.HasValue);
+                peer.Client.Entity.SendActorFlags((ulong)player.RuntimeId, player.IsSneaking, player.IsSprinting, use.HasValue, player.IsSwimming);
     }
 
     private bool ConsumeFood(Player.Player player, FoodUseState use, FoodDefinition food, IReadOnlyList<Player.Player> online)

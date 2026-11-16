@@ -15,7 +15,7 @@ static class ArmorMitigation
     /// <summary>Fall, void, starvation and magic (e.g. Poison) bypass ordinary armor.</summary>
     public static float Apply(Player.Player player, DamageSource source, float amount)
     {
-        if (source.Cause is DamageCause.Fall or DamageCause.Void or DamageCause.Starve or DamageCause.Magic) return amount;
+        if (source.Cause is DamageCause.Fall or DamageCause.Void or DamageCause.Starve or DamageCause.Magic or DamageCause.Drown) return amount;
 
         var points = TotalProtectionPoints(player);
         if (points <= 0f) return amount;

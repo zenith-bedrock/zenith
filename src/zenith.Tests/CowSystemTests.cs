@@ -267,6 +267,27 @@ public sealed class CowSystemTests
     }
 
     [Fact]
+    public void Milking_with_an_empty_bucket_gives_a_milk_bucket()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("milker");
+        var system = new CowSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
+        var id = system.SpawnCow(player.PositionX + 1, player.PositionY, player.PositionZ);
+        var palette = fx.Context.ItemPalette;
+        player.Inventory.TrySetItem(0, palette.Require("minecraft:bucket"), 2);
+        player.SelectedHotbarSlot = 0;
+
+        Assert.True(system.Stores.Identities.TryGet(id, out var identity));
+        player.Intents.SubmitInteractIntent(identity.ActorUniqueId);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(1, player.Inventory.Get(0).Count);
+        Assert.Equal(0, system.FeedCount);
+        var milk = palette.Require("minecraft:milk_bucket");
+        Assert.Contains(Enumerable.Range(0, 36), slot => player.Inventory.Get(slot) is { IsEmpty: false } s && s.Id.Value == milk);
+    }
+
+    [Fact]
     public void Interacting_without_wheat_does_not_feed()
     {
         var fx = new IntentTestFixture();

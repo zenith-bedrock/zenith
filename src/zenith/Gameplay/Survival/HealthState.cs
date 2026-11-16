@@ -12,7 +12,9 @@ enum DamageCause
     Melee,
     Projectile,
     Starve,
-    Magic
+    Magic,
+    Drown,
+    Lava
 }
 
 /// <summary>
@@ -27,6 +29,8 @@ readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = nu
     public static DamageSource Void => new(DamageCause.Void);
     public static DamageSource Starve => new(DamageCause.Starve);
     public static DamageSource Magic => new(DamageCause.Magic);
+    public static DamageSource Drown => new(DamageCause.Drown);
+    public static DamageSource Lava => new(DamageCause.Lava);
     public static DamageSource Melee => new(DamageCause.Melee);
     public static DamageSource MeleeFrom(long ownerRuntimeId) => new(DamageCause.Melee, ownerRuntimeId);
     /// <summary>Concrete first attribution case; the id is not an actor abstraction.</summary>

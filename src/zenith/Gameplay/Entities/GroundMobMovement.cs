@@ -27,6 +27,9 @@ static class GroundMobMovement
     /// <summary>Per-tick fall-speed retention factor (drag = 0.02) — same sources as <see cref="Gravity"/>.</summary>
     public const float Drag = 0.98f;
 
+    /// <summary>Blocks per tick a ground mob rises while submerged (about the pace of a swimmer treading water).</summary>
+    public const float FloatSpeed = 0.04f;
+
     /// <summary>Magnitude cap on downward fall speed, blocks/tick — same sources as <see cref="Gravity"/>.</summary>
     public const float TerminalFallSpeed = 3.92f;
 
@@ -74,6 +77,16 @@ static class GroundMobMovement
         var blockX = (int)MathF.Floor(x);
         var blockZ = (int)MathF.Floor(z);
         var feetY = (int)MathF.Floor(y);
+
+        // In a liquid a ground mob does not fall: it floats up until it breaks the surface, then stays there.
+        if (Blocks.IsFluid(world.GetBlock(blockX, feetY, blockZ)))
+        {
+            fallSpeed = 0f;
+            grounded = true;
+            if (!Blocks.IsFluid(world.GetBlock(blockX, feetY + 1, blockZ))) return false;
+            y += FloatSpeed;
+            return true;
+        }
 
         if (fallSpeed <= 0f && Blocks.CanSupportGroundActor(world.GetBlock(blockX, feetY - 1, blockZ)))
         {

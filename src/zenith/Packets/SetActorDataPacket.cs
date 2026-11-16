@@ -19,6 +19,12 @@ sealed class SetActorDataPacket : DataPacket
     public bool Sneaking { get; set; }
     public bool Sprinting { get; set; }
     public bool UsingItem { get; set; }
+    public bool Swimming { get; set; }
+
+    /// <summary>When set, the packet carries only the air supply (and its maximum), not pose or name.</summary>
+    public short? AirSupply { get; set; }
+
+    public short AirSupplyMax { get; set; }
 
     /// <summary>
     /// Non-player FLAGS-only override (e.g. Creeper Ignited/Powered) — when set, <see cref="FlagsOnly"/>
@@ -32,10 +38,12 @@ sealed class SetActorDataPacket : DataPacket
         writer.WriteUnsignedVarInt(Id);
         writer.WriteUnsignedVarLong((long)ActorRuntimeId);
 
-        if (FlagsOnly)
+        if (AirSupply is { } air)
+            EntityMetadataWriter.WriteAirSupply(ref writer, air, AirSupplyMax);
+        else if (FlagsOnly)
             EntityMetadataWriter.WriteFlagsOnly(
                 ref writer,
-                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting, UsingItem));
+                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting, UsingItem, Swimming));
         else
             EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Name, Sneaking, Sprinting);
 

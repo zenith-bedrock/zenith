@@ -29,7 +29,8 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly World.World _world;
     private readonly PlayerManager _players;
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = new();
-    private readonly WaterFlow _water;
+    private readonly FluidFlow _water;
+    private readonly FluidFlow _lava;
     private ulong _now;
     private IReadOnlyList<global::Zenith.Player.Player> _online = [];
 
@@ -37,7 +38,8 @@ sealed class BlockUpdateSystem : IGameSystem
     {
         _world = world;
         _players = players;
-        _water = new WaterFlow(world, _updates, DropWashedAway);
+        _water = new FluidFlow(world, FluidSpec.Water, _updates, DropWashedAway);
+        _lava = new FluidFlow(world, FluidSpec.Lava, _updates, DropWashedAway);
     }
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
@@ -59,8 +61,10 @@ sealed class BlockUpdateSystem : IGameSystem
         while (scheduled < MaxScheduledPerTick && _world.ScheduledTicks.TryPopDue(clock.CurrentTick, out var sx, out var sy, out var sz))
         {
             scheduled++;
-            if (_world.TryGetBlock(sx, sy, sz, out var due) && WaterFlow.IsWater(due)) _water.Tick(sx, sy, sz);
-            else Evaluate(sx, sy, sz, online, updates);
+            if (_world.TryGetBlock(sx, sy, sz, out var due) && Blocks.FluidOf(due) is var fluid and not FluidType.None)
+                FlowOf(fluid).Tick(sx, sy, sz);
+            else
+                Evaluate(sx, sy, sz, online, updates);
         }
 
         if (updates.Count == 0) return;
@@ -78,10 +82,12 @@ sealed class BlockUpdateSystem : IGameSystem
         // A cell in a chunk nobody has loaded is not ours to wake: it is re-evaluated when the chunk streams in and a neighbour changes.
         if (!_world.TryGetBlock(x, y, z, out var id) || id == World.World.AirRuntimeId) return;
 
-        // Water reacts to a neighbour's change after its own delay, not now.
-        if (WaterFlow.IsWater(id))
+        // A liquid reacts to a neighbour's change after its own delay, not now. Lava next to water sets at once.
+        if (Blocks.FluidOf(id) is var fluid and not FluidType.None)
         {
-            _ = _world.ScheduledTicks.Schedule(x, y, z, _now + WaterFlow.TickDelay);
+            var flow = FlowOf(fluid);
+            if (!flow.TryReact(x, y, z, id))
+                _ = _world.ScheduledTicks.Schedule(x, y, z, _now + (ulong)flow.Spec.TickDelay);
             return;
         }
 
@@ -97,6 +103,8 @@ sealed class BlockUpdateSystem : IGameSystem
         if (shaped != id && _world.TrySetBlock(x, y, z, shaped, SetBlockFlags.None))
             updates.Add((x, y, z, shaped));
     }
+
+    private FluidFlow FlowOf(FluidType fluid) => fluid == FluidType.Lava ? _lava : _water;
 
     private void BreakUnsupported(
         int x, int y, int z, int id,

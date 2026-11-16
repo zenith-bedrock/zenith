@@ -54,6 +54,7 @@ public class ArchitectureBoundaryTests
     public void Player_state_is_written_only_by_its_owners()
     {
         const string Movement = "Zenith.Gameplay.Survival.MovementSystem";
+        const string AirSupply = "Zenith.Gameplay.Survival.AirSupplySystem";
         const string Hunger = "Zenith.Gameplay.Survival.HungerSystem";
         const string Minecart = "Zenith.Gameplay.Entities.MinecartSystem";
         const string Login = "Zenith.Session.Handler.LoginSessionHandler";
@@ -72,6 +73,8 @@ public class ArchitectureBoundaryTests
             ["IsOnGround"] = [Movement],
             ["IsSneaking"] = [Movement, PlayerType],
             ["IsSprinting"] = [Movement, PlayerType],
+            ["IsSwimming"] = [Movement, PlayerType],
+            ["AirSupply"] = [AirSupply, PlayerType],
             ["FoodUse"] = [Hunger, PlayerType],
             ["FallPeakY"] = [Movement, PlayerType],
             // Vitals: HungerSystem owns the food model; mining and damage are exhaustion sources it prices.

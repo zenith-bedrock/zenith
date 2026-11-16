@@ -23,6 +23,10 @@ sealed class PlayerReplicatedState
 
     public bool Sneaking { get; set; }
     public bool Sprinting { get; set; }
+    public bool Swimming { get; set; }
+
+    /// <summary>Last air supply the owner's client was told about.</summary>
+    public int AirSupply { get; set; } = Gameplay.Survival.AirSupplySystem.MaxAirSupply;
     public bool OnGround { get; set; } = true;
 
     /// <summary>GameClock tick of the last relayed emote (rate limit §53).</summary>
@@ -33,5 +37,6 @@ sealed class PlayerReplicatedState
     {
         Sneaking = false;
         Sprinting = false;
+        Swimming = false;
     }
 }

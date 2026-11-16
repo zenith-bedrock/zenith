@@ -39,6 +39,8 @@ static class Blocks
         public int Gravel { get; set; }
         public int Bedrock { get; set; }
         public int Water { get; set; }
+        public int Lava { get; set; }
+        public int Obsidian { get; set; }
         public int Cobblestone { get; set; }
         public int Deepslate { get; set; }
         public int CoalOre { get; set; }
@@ -91,6 +93,8 @@ static class Blocks
     public static int Gravel => Current.Gravel;
     public static int Bedrock => Current.Bedrock;
     public static int Water => Current.Water;
+    public static int Lava => Current.Lava;
+    public static int Obsidian => Current.Obsidian;
     public static int Cobblestone => Current.Cobblestone;
     public static int Deepslate => Current.Deepslate;
     public static int CoalOre => Current.CoalOre;
@@ -160,6 +164,8 @@ static class Blocks
         b.Gravel = palette.Require("minecraft:gravel");
         b.Bedrock = palette.Require("minecraft:bedrock");
         b.Water = palette.Require("minecraft:water");
+        b.Lava = palette.Require("minecraft:lava");
+        b.Obsidian = palette.Require("minecraft:obsidian");
         b.Cobblestone = palette.Require("minecraft:cobblestone");
         b.Deepslate = palette.Require("minecraft:deepslate");
         b.CoalOre = palette.Require("minecraft:coal_ore");
@@ -313,8 +319,16 @@ static class Blocks
         return runtimeId == Current.Air;
     }
 
+    /// <summary>Which liquid the block is (any depth), or <see cref="FluidType.None"/>.</summary>
+    public static FluidType FluidOf(int runtimeId)
+    {
+        if (Current.Catalog.States.FamilyOf(runtimeId) is not { } family) return FluidType.None;
+        if ((family.Traits & BlockTraits.Water) != 0) return FluidType.Water;
+        return (family.Traits & BlockTraits.Lava) != 0 ? FluidType.Lava : FluidType.None;
+    }
+
     /// <summary>
-    /// Water (and any future fluid — see <see cref="LoadCore"/>). Has no collision box of its own:
+    /// Water or lava, at any depth. Has no collision box of its own:
     /// never blocks occupancy and never supports a ground actor, a falling block, or a projectile
     /// (Phase XXIX — replaces the old "any non-air block is solid" assumption that let ground mobs
     /// stand on water). Cross-referenced against PocketMine-MP's <c>Liquid::recalculateCollisionBoxes</c>
@@ -323,7 +337,7 @@ static class Blocks
     /// </summary>
     public static bool IsFluid(int runtimeId)
     {
-        return Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.Fluid) != 0;
+        return FluidOf(runtimeId) != FluidType.None;
     }
 
     /// <summary>

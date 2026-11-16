@@ -33,6 +33,8 @@ sealed class WorldModule : IGameplayModule
         s.Register(new InventorySystem(s.Players, s.World, s.Recipes, s.Creative), "inventory");
         // After Inventory: eating also mutates the held stack and must land before Equipment diffs it.
         s.Register(new HungerSystem(s.ItemPalette, s.Players), "hunger");
+        // After movement and hunger: judges where the player ended up this tick (breath, lava).
+        s.Register(new AirSupplySystem(s.Players), "air-supply");
         s.Register(new EffectSystem(s.Players), "effect");
         // Inventory/blocks may change the selected held stack; replicate the final same-tick state.
         s.Register(new EquipmentSystem(), "equipment");

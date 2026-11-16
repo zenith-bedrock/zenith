@@ -43,6 +43,8 @@ sealed class CowSystem : IGameSystem
     private readonly MobCore _mob;
     private readonly GroundMobBody _body;
     private readonly StackId _feedItem;
+    private readonly StackId _emptyBucket;
+    private readonly StackId _milkBucket;
     private readonly Random _random;
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
@@ -59,6 +61,8 @@ sealed class CowSystem : IGameSystem
         _body = new GroundMobBody(world, stores, players);
         _cows = new ComponentStore<CowState>(stores.Entities);
         _feedItem = StackId.FromItem(itemPalette.Require("minecraft:wheat"));
+        _emptyBucket = StackId.FromItem(itemPalette.Require(Zenith.Gameplay.WorldInteraction.Fluids.BucketItems.EmptyName));
+        _milkBucket = StackId.FromItem(itemPalette.Require("minecraft:milk_bucket"));
         _random = random ?? new Random();
     }
 
@@ -177,6 +181,7 @@ sealed class CowSystem : IGameSystem
             if (!_stores.Identities.TryGet(id, out var identity)) continue;
             if (!player.Intents.TryConsumeInteractIntent(checked((long)identity.ActorRuntimeId))) continue;
 
+            if (TryMilk(player)) return;
             if (player.Inventory.TryConsume(_feedItem, 1))
             {
                 player.Client.Inventory.SendInventoryContent(player.Inventory);
@@ -187,6 +192,31 @@ sealed class CowSystem : IGameSystem
             }
             return; // At most one interact resolved per tick — the intent itself is already one-shot.
         }
+    }
+
+    /// <summary>An empty bucket in hand becomes a milk bucket (ADR §171); a stack of buckets gives up one and needs room for the milk.</summary>
+    private bool TryMilk(Player.Player player)
+    {
+        var slot = player.SelectedHotbarSlot;
+        var held = player.Inventory.Get(slot);
+        if (held.IsEmpty || held.Id != _emptyBucket) return false;
+
+        var snapshot = player.Inventory.CaptureSnapshot();
+        if (held.Count == 1)
+            player.Inventory.TrySet(slot, _milkBucket, 1);
+        else
+        {
+            player.Inventory.TrySet(slot, held.Id, held.Count - 1);
+            if (!player.Inventory.TryAdd(_milkBucket))
+            {
+                player.Inventory.RestoreSnapshot(snapshot);
+                return false;
+            }
+        }
+
+        player.Client.Inventory.SendInventoryContent(player.Inventory);
+        player.Level.PersistInventory(player);
+        return true;
     }
 
     /// <summary>No loot, no XP, no HealthState involved — a pure lifecycle removal, not a death.</summary>

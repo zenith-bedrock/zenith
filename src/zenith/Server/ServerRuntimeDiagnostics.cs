@@ -121,6 +121,8 @@ sealed class ServerRuntimeDiagnostics : IDisposable
             ["floor-drop"] = builder.Timing("tick.system.floor-drop", "tick"),
             ["inventory"] = builder.Timing("tick.system.inventory", "tick"),
             ["hunger"] = builder.Timing("tick.system.hunger", "tick"),
+            ["mob-hazard"] = builder.Timing("tick.system.mob-hazard", "tick"),
+            ["air-supply"] = builder.Timing("tick.system.air-supply", "tick"),
             ["effect"] = builder.Timing("tick.system.effect", "tick"),
             ["equipment"] = builder.Timing("tick.system.equipment", "tick"),
             ["chunk-stream"] = builder.Timing("tick.system.chunk-stream", "tick"),

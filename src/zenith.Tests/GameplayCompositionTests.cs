@@ -42,11 +42,11 @@ public sealed class GameplayCompositionTests
             typeof(TimeSyncSystem), typeof(MovementSystem), typeof(PlayerSpatialIndexSystem), typeof(PlayerMeleeSystem), typeof(ChatSystem), typeof(GameModeSystem),
             // entities
             typeof(KnockbackSystem), typeof(ZombieSystem), typeof(MinecartSystem), typeof(ProjectileSystem), typeof(SkeletonSystem), typeof(CowSystem), typeof(CreeperSystem),
-            typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem),
+            typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem), typeof(MobHazardSystem),
             typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
             typeof(GameRuleSyncSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem),
-            typeof(InventorySystem), typeof(HungerSystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem)
+            typeof(InventorySystem), typeof(HungerSystem), typeof(AirSupplySystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem)
         ];
         Assert.Equal(expected, loop.Systems.Select(system => system.GetType()).ToArray());
     }

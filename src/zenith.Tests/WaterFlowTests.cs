@@ -85,8 +85,8 @@ public sealed class WaterFlowTests
 
         Run(fx, 120);
 
-        Assert.Equal(WaterFlow.Falling, DepthAt(fx, 8, Floor, 8));
-        Assert.Equal(WaterFlow.Falling, DepthAt(fx, 8, Floor - 1, 8));
+        Assert.Equal(FluidFlow.Falling, DepthAt(fx, 8, Floor, 8));
+        Assert.Equal(FluidFlow.Falling, DepthAt(fx, 8, Floor - 1, 8));
         Assert.Equal(1, DepthAt(fx, 9, Level, 8)); // the source keeps spreading across the top while it drains down
         Assert.Equal(-1, DepthAt(fx, 9, Floor - 1, 8)); // the shaft's walls are stone
     }
@@ -179,5 +179,161 @@ public sealed class WaterFlowTests
 
         Assert.Equal(0, DepthAt(fx, 8, Level, 8));
         Assert.Equal(0, DepthAt(fx, 10, Level, 8));
+    }
+
+    [Fact]
+    public async Task A_door_holds_water_back_instead_of_being_washed_away()
+    {
+        var fx = await FixtureWithFloor();
+        Assert.True(Blocks.TryGetDefaultRuntimeId("minecraft:wooden_door", out var door));
+        fx.World.SetBlock(9, Level, 8, door);
+        fx.World.SetBlock(8, Level, 8, WaterOf(0));
+
+        Run(fx, 30);
+
+        Assert.Equal(door, fx.World.GetBlock(9, Level, 8));
+    }
+}
+
+public sealed class LavaFlowTests
+{
+    private const int Floor = 199;
+    private const int Level = 200;
+
+    public LavaFlowTests() => Blocks.EnsureLoaded();
+
+    private static int LiquidAt(FluidType type, int depth)
+    {
+        var id = type == FluidType.Lava ? Blocks.Lava : Blocks.Water;
+        Assert.True(Blocks.Catalog.States.TrySet(ref id, StateKeys.LiquidDepth, depth));
+        return id;
+    }
+
+    private static int DepthAt(IntentTestFixture fx, FluidType type, int x, int y, int z)
+    {
+        var id = fx.World.GetBlock(x, y, z);
+        return Blocks.FluidOf(id) == type && Blocks.Catalog.States.TryGet(id, StateKeys.LiquidDepth, out var depth) ? depth : -1;
+    }
+
+    private static async Task<IntentTestFixture> FixtureWithFloor()
+    {
+        var fx = new IntentTestFixture();
+        await fx.World.GetOrCreateColumnAsync(0, 0);
+        for (var x = 0; x < 16; x++)
+            for (var z = 0; z < 16; z++)
+            {
+                for (var y = Floor - 3; y <= Floor; y++) fx.World.SetBlock(x, y, z, Blocks.Stone);
+                for (var y = Level; y < Level + 4; y++) fx.World.SetBlock(x, y, z, Blocks.Air);
+            }
+        return fx;
+    }
+
+    private static void Run(IntentTestFixture fx, int ticks)
+    {
+        var system = new BlockUpdateSystem(fx.World, fx.Players);
+        for (var i = 0; i < ticks; i++)
+        {
+            fx.Clock.AdvanceBy(1);
+            system.Tick(fx.Clock, fx.Players.Online);
+        }
+    }
+
+    [Fact]
+    public void Lava_and_water_are_told_apart_at_every_depth()
+    {
+        for (var depth = 0; depth < 16; depth++)
+        {
+            Assert.Equal(FluidType.Lava, Blocks.FluidOf(LiquidAt(FluidType.Lava, depth)));
+            Assert.Equal(FluidType.Water, Blocks.FluidOf(LiquidAt(FluidType.Water, depth)));
+        }
+
+        Assert.Equal(FluidType.None, Blocks.FluidOf(Blocks.Stone));
+    }
+
+    [Fact]
+    public async Task Lava_spreads_three_blocks_in_steps_of_two_and_slowly()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 0));
+
+        Run(fx, 20);
+        Assert.Equal(-1, DepthAt(fx, FluidType.Lava, 9, Level, 8)); // not yet: lava waits thirty ticks
+
+        Run(fx, 400);
+        Assert.Equal(2, DepthAt(fx, FluidType.Lava, 9, Level, 8));
+        Assert.Equal(4, DepthAt(fx, FluidType.Lava, 10, Level, 8));
+        Assert.Equal(6, DepthAt(fx, FluidType.Lava, 11, Level, 8));
+        Assert.Equal(-1, DepthAt(fx, FluidType.Lava, 12, Level, 8));
+    }
+
+    [Fact]
+    public async Task Lava_never_makes_a_new_source_between_two_sources()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(6, Level, 8, LiquidAt(FluidType.Lava, 0));
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 0));
+
+        Run(fx, 400);
+
+        Assert.NotEqual(0, DepthAt(fx, FluidType.Lava, 7, Level, 8));
+    }
+
+    [Fact]
+    public async Task Water_beside_a_lava_source_makes_obsidian()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 0));
+        fx.World.SetBlock(9, Level, 8, LiquidAt(FluidType.Water, 0));
+
+        Run(fx, 5);
+
+        Assert.Equal(Blocks.Obsidian, fx.World.GetBlock(8, Level, 8));
+    }
+
+    [Fact]
+    public async Task Water_beside_flowing_lava_makes_cobblestone()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 2));
+        fx.World.SetBlock(9, Level, 8, LiquidAt(FluidType.Water, 0));
+
+        Run(fx, 5);
+
+        Assert.Equal(Blocks.Cobblestone, fx.World.GetBlock(8, Level, 8));
+    }
+
+    [Fact]
+    public async Task Water_above_lava_makes_it_set_too()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 0));
+        fx.World.SetBlock(8, Level + 1, 8, LiquidAt(FluidType.Water, 0));
+
+        Run(fx, 5);
+
+        Assert.Equal(Blocks.Obsidian, fx.World.GetBlock(8, Level, 8));
+    }
+
+    [Fact]
+    public async Task Lava_falling_onto_water_turns_the_water_to_stone()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Water, 0));
+        fx.World.SetBlock(8, Level + 1, 8, LiquidAt(FluidType.Lava, 0));
+        // the lava touches the water below it, which only counts sideways and from above: the water is below, so it falls
+        Run(fx, 100);
+
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(8, Level, 8));
+    }
+
+    [Fact]
+    public async Task A_lone_lava_source_stays_a_source()
+    {
+        var fx = await FixtureWithFloor();
+        fx.World.SetBlock(8, Level, 8, LiquidAt(FluidType.Lava, 0));
+
+        Run(fx, 100);
+
+        Assert.Equal(0, DepthAt(fx, FluidType.Lava, 8, Level, 8));
     }
 }

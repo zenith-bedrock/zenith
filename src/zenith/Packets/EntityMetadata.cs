@@ -9,8 +9,10 @@ static class EntityMetaKey
     public const int Variant = 2;
     public const int ColorIndex = 3;
     public const int Name = 4;
+    public const int AirSupply = 7;
     public const int EffectColor = 8;
     public const int EffectAmbience = 9;
+    public const int AirSupplyMax = 42;
     public const int Scale = 38;
     public const int Width = 53;
     public const int Height = 54;
@@ -20,6 +22,7 @@ static class EntityMetaKey
 static class EntityMetaType
 {
     public const int Byte = 0;
+    public const int Short = 1;
     public const int Int = 2;
     public const int Float = 3;
     public const int String = 4;
@@ -31,6 +34,8 @@ static class EntityFlag
     public const int Sneaking = 1;
     public const int Sprinting = 3;
     public const int UsingItem = 4;
+    /// <summary>Swimming pose: sprinting with the head under water. Index from PocketMine's <c>DATA_FLAG_SWIMMING</c>; not yet seen on a real client.</summary>
+    public const int Swimming = 56;
     /// <summary>Creeper charged-by-lightning state — confirmed against bedrock-protocol's <c>EntityMetadataFlags::POWERED</c> and gophertunnel's <c>EntityDataFlagPowered</c>.</summary>
     public const int Powered = 9;
     /// <summary>Creeper fuse-lit state — drives the vanilla swell/flash animation. Same sources as <see cref="Powered"/>.</summary>
@@ -113,6 +118,12 @@ sealed class EntityMetadataBuilder
         return this;
     }
 
+    public EntityMetadataBuilder Short(int key, short value)
+    {
+        _entries.Add(new Entry { Key = key, Type = EntityMetaType.Short, LongValue = value });
+        return this;
+    }
+
     public EntityMetadataBuilder Byte(int key, byte value)
     {
         _entries.Add(new Entry { Key = key, Type = EntityMetaType.Byte, LongValue = value });
@@ -142,6 +153,9 @@ sealed class EntityMetadataBuilder
                     break;
                 case EntityMetaType.Byte:
                     writer.WriteByte((byte)entry.LongValue);
+                    break;
+                case EntityMetaType.Short:
+                    writer.WriteShort((short)entry.LongValue, BinaryStream.Endianess.Little);
                     break;
                 case EntityMetaType.Float:
                     writer.WriteFloat(entry.FloatValue, BinaryStream.Endianess.Little);
@@ -191,8 +205,13 @@ static class EntityMetadataWriter
     }
 
     /// <summary>FLAGS long for dirty pose updates (seed bits + sneak/sprint).</summary>
-    public static long BuildPoseFlags(bool sneaking, bool sprinting, bool usingItem = false) =>
-        BuildSpawnFlags(sneaking, sprinting) | (usingItem ? EntityFlag.Bit(EntityFlag.UsingItem) : 0);
+    public static long BuildPoseFlags(bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false) =>
+        BuildSpawnFlags(sneaking, sprinting) | (usingItem ? EntityFlag.Bit(EntityFlag.UsingItem) : 0) |
+        (swimming ? EntityFlag.Bit(EntityFlag.Swimming) : 0);
+
+    /// <summary>The owner's air supply (ticks) and its maximum — what the bubble row is drawn from.</summary>
+    public static void WriteAirSupply(ref BinaryStream writer, short air, short max) =>
+        new EntityMetadataBuilder().Short(EntityMetaKey.AirSupply, air).Short(EntityMetaKey.AirSupplyMax, max).WriteTo(ref writer);
 
     /// <summary>FLAGS(+Breathing) + visible-name entries used by peer AddPlayer and local SetActorData.</summary>
     public static void WriteVisibleNameMetadata(

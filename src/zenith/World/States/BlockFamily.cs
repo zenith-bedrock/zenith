@@ -24,8 +24,11 @@ enum BlockTraits : byte
     /// <summary>A trunk: leaves within reach of one do not decay (ADR §170).</summary>
     Log = 32,
 
-    /// <summary>A liquid (water): never solid, flows (ADR §171).</summary>
-    Fluid = 64
+    /// <summary>Water: a fluid that flows (ADR §171).</summary>
+    Water = 64,
+
+    /// <summary>Lava: a fluid that flows, burns and sets with water (ADR §171).</summary>
+    Lava = 128
 }
 
 /// <summary>One property of a block type: its legal values and the mixed-radix stride of the state ordinal.</summary>

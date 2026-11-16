@@ -103,6 +103,7 @@ sealed class MovementSystem : IGameSystem
             player.IsOnGround = input.OnGround;
 
             ApplyPoseModes(player, in input);
+            player.IsSwimming = SubmersionProbe.IsSwimming(player);
 
             if (input.MissedSwing)
                 _swing.Add(player);
@@ -153,7 +154,7 @@ sealed class MovementSystem : IGameSystem
                 peer.Client.Entity.SendActorFlags(
                     (ulong)mover.RuntimeId,
                     mover.IsSneaking,
-                    mover.IsSprinting, mover.FoodUse.HasValue);
+                    mover.IsSprinting, mover.FoodUse.HasValue, mover.IsSwimming);
             }
 
             foreach (var mover in _swing)
@@ -200,7 +201,8 @@ sealed class MovementSystem : IGameSystem
 
     private static bool IsFlagsDirty(global::Zenith.Player.Player player) =>
         player.IsSneaking != player.Replicated.Sneaking ||
-        player.IsSprinting != player.Replicated.Sprinting;
+        player.IsSprinting != player.Replicated.Sprinting ||
+        player.IsSwimming != player.Replicated.Swimming;
 
     private static void RememberReplicatedPose(global::Zenith.Player.Player player)
     {
@@ -217,6 +219,7 @@ sealed class MovementSystem : IGameSystem
     {
         player.Replicated.Sneaking = player.IsSneaking;
         player.Replicated.Sprinting = player.IsSprinting;
+        player.Replicated.Swimming = player.IsSwimming;
     }
 
     /// <summary>Void fall → death screen + Survival death loot (ADR §73). Creative keeps inventory.</summary>
@@ -252,6 +255,13 @@ sealed class MovementSystem : IGameSystem
         IReadOnlyList<global::Zenith.Player.Player> online,
         ulong currentTick)
     {
+        // Falling into a liquid ends the fall: the water takes the blow, and what drops into it starts counting again.
+        if (SubmersionProbe.AtFeet(player) != FluidType.None)
+        {
+            player.FallPeakY = player.PositionY;
+            return;
+        }
+
         if (!wasOnGround && player.IsOnGround)
         {
             var fallDistance = player.FallPeakY - player.PositionY;

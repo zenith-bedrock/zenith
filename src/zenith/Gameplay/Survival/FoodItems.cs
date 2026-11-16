@@ -1,3 +1,4 @@
+using Zenith.Gameplay.WorldInteraction.Fluids;
 using Zenith.World;
 
 namespace Zenith.Gameplay.Survival;
@@ -6,7 +7,7 @@ namespace Zenith.Gameplay.Survival;
 /// Concrete food facts used by the hunger tick; item-specific effects remain separate.
 /// </summary>
 readonly record struct FoodDefinition(int Nutrition, float Saturation, int UseTicks = 32,
-    bool AlwaysEdible = false, string? Remainder = null);
+    bool AlwaysEdible = false, string? Remainder = null, bool ClearsEffects = false);
 
 static class FoodItems
 {
@@ -53,6 +54,7 @@ static class FoodItems
         ["minecraft:beetroot_soup"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
         ["minecraft:rabbit_stew"] = new(10, 12, Remainder: "minecraft:bowl"),
         ["minecraft:suspicious_stew"] = new(6, 7.2f, Remainder: "minecraft:bowl"),
+        ["minecraft:milk_bucket"] = new(0, 0f, AlwaysEdible: true, Remainder: BucketItems.EmptyName, ClearsEffects: true),
         ["minecraft:honey_bottle"] = new(6, 1.2f, UseTicks: 40, AlwaysEdible: true, Remainder: "minecraft:glass_bottle"),
     };
 

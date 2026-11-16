@@ -608,13 +608,17 @@ sealed partial class EntityProtocol : IEntityChannel
     }
 
     /// <summary>Peer pose FLAGS-only update (sneak/sprint) — §53.</summary>
-    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false)
+    public void SendAirSupply(ulong actorRuntimeId, short air, short max) =>
+        _session.SendDataPacket(new SetActorDataPacket { ActorRuntimeId = actorRuntimeId, AirSupply = air, AirSupplyMax = max, Tick = 0 });
+
+    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false)
     {
         _session.SendDataPacket(new SetActorDataPacket
         {
             ActorRuntimeId = actorRuntimeId,
             FlagsOnly = true,
             UsingItem = usingItem,
+            Swimming = swimming,
             Sneaking = sneaking,
             Sprinting = sprinting,
             Tick = 0

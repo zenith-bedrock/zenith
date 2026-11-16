@@ -221,6 +221,12 @@ class Player
     public bool IsSneaking { get; set; }
     public bool IsSprinting { get; set; }
 
+    /// <summary>Sprinting with the head under water — the swimming pose peers see.</summary>
+    public bool IsSwimming { get; set; }
+
+    /// <summary>Ticks of breath left under water (<see cref="Zenith.Gameplay.Survival.AirSupplySystem.MaxAirSupply"/> when surfaced); negative while drowning.</summary>
+    public int AirSupply { get; set; } = Zenith.Gameplay.Survival.AirSupplySystem.MaxAirSupply;
+
     /// <summary>AuthInput VerticalCollision — peer Absolute ON_GROUND (default true until first input).</summary>
     public bool IsOnGround { get; set; } = true;
 
@@ -271,6 +277,7 @@ class Player
         while (Intents.TryConsumeFoodUse(out _)) { }
         IsSneaking = false;
         IsSprinting = false;
+        IsSwimming = false;
         Dig.AbortBreak();
         _ = Windows.TryClearOpenContainer(out _);
         _ = Intents.TryConsumeRespawn();
@@ -309,6 +316,8 @@ class Player
         Exhaustion = 0f;
         IsSneaking = false;
         IsSprinting = false;
+        IsSwimming = false;
+        AirSupply = Gameplay.Survival.AirSupplySystem.MaxAirSupply;
         Replicated.ForgetPoseFlags();
         FallPeakY = PositionY;
         _ = Intents.TryConsumeRespawn();

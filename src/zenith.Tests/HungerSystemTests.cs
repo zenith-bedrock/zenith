@@ -74,6 +74,26 @@ public class HungerSystemTests
     }
 
     [Fact]
+    public void Drinking_milk_at_full_hunger_returns_the_bucket_and_asks_for_the_effects_to_be_cleared()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("milk");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:milk_bucket"), 1);
+        player.SelectedHotbarSlot = 0;
+
+        player.Intents.SubmitEatIntent();
+        system.Tick(fx.Clock, fx.Players.Online);
+        fx.Clock.AdvanceBy(32);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(20f, player.Hunger);
+        Assert.Equal(fx.Context.ItemPalette.Require("minecraft:bucket"), player.Inventory.Get(0).Id.Value);
+        Assert.True(player.Effects.TryConsumeEffectIntent(out var intent));
+        Assert.True(intent.ClearAll);
+    }
+
+    [Fact]
     public void Eating_at_full_hunger_does_not_consume_the_item()
     {
         var fx = new IntentTestFixture();
