@@ -9,25 +9,6 @@ namespace Zenith.Protocol;
 /// </summary>
 sealed partial class EntityProtocol
 {
-    public void SendAddMob(MobKind kind, long entityUniqueId, ulong entityRuntimeId, float x, float y, float z, float yaw)
-    {
-        switch (kind)
-        {
-            case MobKind.Zombie: SendAddZombie(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Villager: SendAddVillager(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Spider: SendAddSpider(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Skeleton: SendAddSkeleton(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Minecart: SendAddMinecart(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Golem: SendAddGolem(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Fish: SendAddFish(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Enderman: SendAddEnderman(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Creeper: SendAddCreeper(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Cow: SendAddCow(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            case MobKind.Bat: SendAddBat(entityUniqueId, entityRuntimeId, x, y, z, yaw); break;
-            default: throw new ArgumentOutOfRangeException(nameof(kind), kind, "No wire actor type for this mob kind.");
-        }
-    }
-
     public void SendMobEquipment(ulong actorRuntimeId, PlayerInventory inventory, int hotbarSlot) =>
         SendMobEquipment(actorRuntimeId, _session.Protocol.Inventory.DescribeSlot(inventory, hotbarSlot), hotbarSlot);
 
