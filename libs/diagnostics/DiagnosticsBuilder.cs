@@ -7,6 +7,7 @@ namespace Zenith.Diagnostics;
 public sealed class DiagnosticsBuilder
 {
     private readonly List<MetricDefinition> _definitions = [];
+    private int _timingCount;
     private readonly Dictionary<string, int> _indexes = new(StringComparer.Ordinal);
 
     public CounterMetric Counter(string name, DiagnosticCategory category, string? parent = null) =>
@@ -24,23 +25,32 @@ public sealed class DiagnosticsBuilder
 
     public TimingMetric Timing(string name, string? parent = null) => Timing(name, InferCategory(name), parent);
 
-    public DiagnosticsRuntime Build() => new(_definitions.ToArray());
+    public DiagnosticsRuntime Build() => new(_definitions.ToArray(), _timingCount);
 
     private int Add(string name, DiagnosticMetricKind kind, DiagnosticCategory category, string? parent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        if (!_indexes.TryAdd(name, _definitions.Count))
+        if (_indexes.ContainsKey(name))
             throw new ArgumentException($"A diagnostic metric named '{name}' already exists.", nameof(name));
 
+        // Validate everything before registering the name: a rejected definition must leave the layout exactly as it was.
         var parentIndex = -1;
         if (parent is not null && !_indexes.TryGetValue(parent, out parentIndex))
             throw new ArgumentException($"Parent metric '{parent}' must be defined first.", nameof(parent));
 
-        _definitions.Add(new MetricDefinition(name, kind, category, parentIndex));
+        _indexes.Add(name, _definitions.Count);
+
+        _definitions.Add(new MetricDefinition(name, kind, category, parentIndex, kind == DiagnosticMetricKind.Timing ? _timingCount++ : -1));
         return _definitions.Count - 1;
     }
 
-    private static DiagnosticCategory InferCategory(string name) => name.Split('.', 2)[0] switch
+    private static string Prefix(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return name.Split('.', 2)[0];
+    }
+
+    private static DiagnosticCategory InferCategory(string name) => Prefix(name) switch
     {
         "tick" => DiagnosticCategory.Tick,
         "runtime" => DiagnosticCategory.Runtime,
@@ -50,4 +60,5 @@ public sealed class DiagnosticsBuilder
     };
 }
 
-internal readonly record struct MetricDefinition(string Name, DiagnosticMetricKind Kind, DiagnosticCategory Category, int ParentIndex);
+/// <param name="HistogramSlot">The timing's row in the runtime's histogram table; -1 for counters and gauges.</param>
+internal readonly record struct MetricDefinition(string Name, DiagnosticMetricKind Kind, DiagnosticCategory Category, int ParentIndex, int HistogramSlot);

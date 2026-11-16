@@ -25,18 +25,20 @@ public sealed record DiagnosticsComparison(
         return new DiagnosticsComparison(baseline.CapturedAt, current.CapturedAt, comparisons);
     }
 
-    public DiagnosticsDiagnosis Diagnose()
+    /// <summary>Best-effort guess at what drives a tick-cost regression; <paramref name="profile"/> names the metrics it reads (default: Zenith's).</summary>
+    public DiagnosticsDiagnosis Diagnose(DiagnosisProfile? profile = null)
     {
-        var tick = Metrics.FirstOrDefault(metric => metric.Name == "tick");
+        profile ??= DiagnosisProfile.Default;
+        var tick = Metrics.FirstOrDefault(metric => metric.Name == profile.TickMetric);
         var suspect = Metrics
-            .Where(metric => metric.Kind == DiagnosticMetricKind.Timing && metric.Category == DiagnosticCategory.Tick && metric.Parent == "tick")
+            .Where(metric => metric.Kind == DiagnosticMetricKind.Timing && metric.Category == DiagnosticCategory.Tick && metric.Parent == profile.TickMetric)
             .OrderByDescending(metric => metric.CurrentDisplayValue)
             .FirstOrDefault();
-        var gc = Metrics.Where(metric => metric.Category == DiagnosticCategory.Runtime && metric.Name.StartsWith("runtime.gc.", StringComparison.Ordinal))
+        var gc = Metrics.Where(metric => metric.Category == DiagnosticCategory.Runtime && metric.Name.StartsWith(profile.GcPrefix, StringComparison.Ordinal))
             .Any(metric => metric.DeltaValue > 0);
         var network = Metrics.Where(metric => metric.Category == DiagnosticCategory.Network)
             .OrderByDescending(metric => metric.RelativeIncrease).FirstOrDefault();
-        var actors = Metrics.FirstOrDefault(metric => metric.Name == "gameplay.actors");
+        var actors = Metrics.FirstOrDefault(metric => metric.Name == profile.ActorsMetric);
 
         if (gc && tick.RelativeIncrease > 0.20)
             return new(DiagnosticCategory.Runtime, "GC activity increased while tick cost rose.", tick, suspect);
@@ -85,6 +87,12 @@ public readonly record struct DiagnosticsMetricComparison(
         DiagnosticMetricKind.Timing when metric.Count != 0 && frequency != 0 => metric.TotalStopwatchTicks * 1000d / frequency / metric.Count,
         _ => metric.Value
     };
+}
+
+/// <summary>The metric names <see cref="DiagnosticsComparison.Diagnose"/> reads; the library knows no game, the host says which metrics play which part.</summary>
+public sealed record DiagnosisProfile(string TickMetric, string ActorsMetric, string GcPrefix)
+{
+    public static DiagnosisProfile Default { get; } = new("tick", "gameplay.actors", "runtime.gc.");
 }
 
 public readonly record struct DiagnosticsDiagnosis(

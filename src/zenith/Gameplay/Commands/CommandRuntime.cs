@@ -36,7 +36,7 @@ sealed class CommandRuntime
             new CommandOverload(), new CommandOverload(new IntegerCommandArgument("ticks", 1, 20))));
         var diagnosticsActions = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
-            ["snapshot"] = "snapshot", ["compare"] = "compare", ["tick"] = "tick", ["incident"] = "incident"
+            ["snapshot"] = "snapshot", ["compare"] = "compare", ["tick"] = "tick", ["incident"] = "incident", ["window"] = "window"
         };
         _catalog.Register(new CommandDefinition("diagnostics", "Capture and compare runtime diagnostics", CommandPermission.Any,
             new CommandOverload(new EnumCommandArgument("action", diagnosticsActions))));
@@ -161,6 +161,7 @@ sealed class CommandRuntime
                 ? new("Diagnostics", comparison.ToConsole())
                 : new("Diagnostics", "Capture a baseline first: /diagnostics snapshot"),
             "tick" => new("Diagnostics", DescribeTimings(_diagnostics.CaptureTopTimings())),
+            "window" => new("Diagnostics", _diagnostics.CaptureWindow().ToConsole()),
             "incident" => new("Diagnostics", DescribeLatestIncident(_diagnostics.CaptureRecentIncidents())),
             _ => new("Diagnostics", "Unknown diagnostics action.")
         };

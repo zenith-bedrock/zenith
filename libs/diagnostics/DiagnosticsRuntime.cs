@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -12,25 +13,35 @@ namespace Zenith.Diagnostics;
 public sealed class DiagnosticsRuntime
 {
     private readonly MetricDefinition[] _definitions;
-    private readonly long[] _values;
-    private readonly long[] _counts;
-    private readonly long[] _totals;
-    private readonly long[] _maximums;
+    private readonly Slot[] _slots;
+    private readonly long[] _histograms;
 
-    internal DiagnosticsRuntime(MetricDefinition[] definitions)
+    /// <summary>
+    /// One metric's mutable state, padded to 128 bytes so two metrics never share a cache line (nor the adjacent line the hardware
+    /// prefetches with it): the tick thread and the transport threads write different metrics at the same time, and without the
+    /// padding those writes invalidate each other's lines. It also keeps all four fields of one timing on a single line.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, Size = 128)]
+    private struct Slot
     {
+        public long Value;
+        public long Count;
+        public long Total;
+        public long Maximum;
+    }
+
+    internal DiagnosticsRuntime(MetricDefinition[] definitions, int timingCount)
+    {
+        _histograms = new long[timingCount * DurationHistogram.BucketCount];
         _definitions = definitions;
-        _values = new long[definitions.Length];
-        _counts = new long[definitions.Length];
-        _totals = new long[definitions.Length];
-        _maximums = new long[definitions.Length];
+        _slots = new Slot[definitions.Length];
     }
 
     public void Increment(CounterMetric metric, long value = 1) =>
-        Interlocked.Add(ref _values[Validate(metric.Index, DiagnosticMetricKind.Counter)], value);
+        Interlocked.Add(ref _slots[Validate(metric.Index, DiagnosticMetricKind.Counter)].Value, value);
 
     public void Set(GaugeMetric metric, long value) =>
-        Interlocked.Exchange(ref _values[Validate(metric.Index, DiagnosticMetricKind.Gauge)], value);
+        Interlocked.Exchange(ref _slots[Validate(metric.Index, DiagnosticMetricKind.Gauge)].Value, value);
 
     public TimingScope Begin(TimingMetric metric) =>
         new(this, Validate(metric.Index, DiagnosticMetricKind.Timing), Stopwatch.GetTimestamp());
@@ -53,38 +64,48 @@ public sealed class DiagnosticsRuntime
     internal void RecordValidated(int index, long elapsedStopwatchTicks)
     {
         if (elapsedStopwatchTicks < 0) return;
-        Interlocked.Exchange(ref _values[index], elapsedStopwatchTicks);
-        Interlocked.Increment(ref _counts[index]);
-        Interlocked.Add(ref _totals[index], elapsedStopwatchTicks);
+        ref var slot = ref _slots[index];
+        Interlocked.Exchange(ref slot.Value, elapsedStopwatchTicks);
+        Interlocked.Increment(ref slot.Count);
+        Interlocked.Add(ref slot.Total, elapsedStopwatchTicks);
+        Interlocked.Increment(ref _histograms[_definitions[index].HistogramSlot * DurationHistogram.BucketCount + DurationHistogram.BucketOf(elapsedStopwatchTicks)]);
 
         long observed;
-        while (elapsedStopwatchTicks > (observed = Interlocked.Read(ref _maximums[index])) &&
-               Interlocked.CompareExchange(ref _maximums[index], elapsedStopwatchTicks, observed) != observed)
+        while (elapsedStopwatchTicks > (observed = Interlocked.Read(ref slot.Maximum)) &&
+               Interlocked.CompareExchange(ref slot.Maximum, elapsedStopwatchTicks, observed) != observed)
         {
         }
     }
 
     internal int MetricCount => _definitions.Length;
 
+    /// <summary>Length of the flat histogram table: one <see cref="DurationHistogram.BucketCount"/>-bucket row per timing.</summary>
+    internal int HistogramLength => _histograms.Length;
+
+    internal void CopyHistograms(long[] destination)
+    {
+        for (var i = 0; i < _histograms.Length; i++) destination[i] = Interlocked.Read(ref _histograms[i]);
+    }
+
     internal MetricDefinition DefinitionAt(int index) => _definitions[index];
 
     /// <summary>Current value of a counter or gauge, or the latest duration of a timing (stopwatch ticks).</summary>
-    internal long ReadValue(int index) => Interlocked.Read(ref _values[index]);
+    internal long ReadValue(int index) => Interlocked.Read(ref _slots[index].Value);
 
     internal (long Count, long Total, long Maximum, long Last) ReadTiming(int index) => (
-        Interlocked.Read(ref _counts[index]),
-        Interlocked.Read(ref _totals[index]),
-        Interlocked.Read(ref _maximums[index]),
-        Interlocked.Read(ref _values[index]));
+        Interlocked.Read(ref _slots[index].Count),
+        Interlocked.Read(ref _slots[index].Total),
+        Interlocked.Read(ref _slots[index].Maximum),
+        Interlocked.Read(ref _slots[index].Value));
 
     internal void CopyRawValues(long[] values, long[] counts, long[] totals, long[] maximums)
     {
         for (var index = 0; index < _definitions.Length; index++)
         {
-            values[index] = Interlocked.Read(ref _values[index]);
-            counts[index] = Interlocked.Read(ref _counts[index]);
-            totals[index] = Interlocked.Read(ref _totals[index]);
-            maximums[index] = Interlocked.Read(ref _maximums[index]);
+            values[index] = Interlocked.Read(ref _slots[index].Value);
+            counts[index] = Interlocked.Read(ref _slots[index].Count);
+            totals[index] = Interlocked.Read(ref _slots[index].Total);
+            maximums[index] = Interlocked.Read(ref _slots[index].Maximum);
         }
     }
 

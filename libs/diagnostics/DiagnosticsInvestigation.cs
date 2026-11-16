@@ -7,12 +7,14 @@ public sealed class DiagnosticsInvestigation
 {
     private readonly DiagnosticsRuntime _runtime;
     private readonly DiagnosticsIncidentBuffer _incidents;
+    private readonly DiagnosticsWindow _window;
     private DiagnosticsSnapshot? _baseline;
 
     public DiagnosticsInvestigation(DiagnosticsRuntime runtime, DiagnosticsIncidentBuffer incidents)
     {
         _runtime = runtime;
         _incidents = incidents;
+        _window = new DiagnosticsWindow(runtime);
     }
 
     public DiagnosticsSnapshot CaptureBaseline()
@@ -39,6 +41,9 @@ public sealed class DiagnosticsInvestigation
         .OrderByDescending(metric => metric.Value)
         .Take(maximum)
         .ToArray();
+
+    /// <summary>Percentiles of every timing since the previous call (or since construction): the tail of recent ticks, not of the whole uptime.</summary>
+    public DiagnosticsWindowSnapshot CaptureWindow() => _window.Capture();
 
     public DiagnosticsSnapshot[] CaptureRecentIncidents() => _incidents.CaptureRecent();
 }
