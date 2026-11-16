@@ -10,6 +10,7 @@ static class PermissionsComposition
     {
         var registry = new PermissionRegistry();
         PermissionNodes.RegisterBuiltIns(registry);
+        Zenith.Modules.Protect.ProtectNodes.Register(registry);
         registry.Freeze();
         return new PermissionAuthority(registry, PermissionPolicy.Create(
             registry,

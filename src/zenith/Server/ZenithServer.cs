@@ -137,6 +137,8 @@ class ZenithServer
             var gate = new AuthorityGate(permissions, players);
             var blockPolicies = PermissionsComposition.CreateBlockPolicies(permissions, serverLogger);
             var containerPolicies = PermissionsComposition.CreateContainerPolicies(permissions, serverLogger);
+            // Modules add their vetoes now: the world composition below freezes the policy sets.
+            var protect = Zenith.Modules.Protect.ProtectModule.Compose(permissions, blockPolicies, containerPolicies);
             var spawner = new MobSpawner(gate);
             var services = new ServerServices(
                 gameLoop, diagnostics, players, world, itemPalette, recipes, durability, creative,
@@ -150,7 +152,7 @@ class ZenithServer
             var worldModule = GameplayComposition.Register(services);
             serverLogger.Info($"startup: gameplay registration validated in {Stopwatch.GetElapsedTime(compositionStarted).TotalMilliseconds:F1} ms");
 
-            Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner, permissions, blockPolicies, containerPolicies);
+            Context = new ServerContext(serverLogger, players, eventBus, clock, world, config, blockPalette, itemPalette, recipes, durability, creative, diagnostics, spawner, permissions, blockPolicies, containerPolicies, protect);
             GameLoop = gameLoop;
             _gravity = worldModule.Gravity;
 
