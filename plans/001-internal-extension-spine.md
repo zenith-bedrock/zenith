@@ -150,7 +150,7 @@ At completion of a selected phase, update this plan and its index. Leave later p
 |-------|--------|-----------------|
 | 0 Permissions | Done | `Principal`, `PermissionRegistry/Policy/Authority`, trust model (Authenticated/SelfAsserted/Ephemeral), config `permissions.*`, owner-side recheck via `AuthorityGate`. Gap: runtime grant persistence (`/op`), command metadata not refreshed on permission change. |
 | 1 Domain policy and events | Done for block edits and container access | `IBlockEditPolicy` (plan, judge, commit; whole coupled edit judged first), `BlocksChanged` fact, `IContainerAccessPolicy` (open + every transfer; a withdrawn right closes an open window), presence facts (`PlayerEnteredWorld`/`PlayerLeftWorld`). Gaps: door toggles, bucket, creeper, fluid, fire and gravity writers do not pass block policy yet. |
-| 2 Commands | Partial | Permission-gated catalog and runtime, per-node checks. TODO: definition-to-executor binding before freeze, Rejected/Accepted/Applied outcomes, identity targets, bounded summon queue. |
+| 2 Commands | Mostly done | Permission-gated catalog; `CommandBinding` (grammar + handler registered together before freeze, clashes fail composition); handlers get values-only `CommandInvocation` and `PlayerRef` targets; `CommandOutcome` Rejected/Accepted/Applied. TODO: bounded summon queue and correlated results, command-metadata refresh on permission change. |
 | 3 Internal Protect module | TODO | Needs the TODO above plus a dependency-boundary test. Policies for blocks and containers are ready to host it. |
 | 4 Re-audit / ADR | TODO | Only after Protect exists. |
 
