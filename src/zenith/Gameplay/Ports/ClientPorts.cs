@@ -70,7 +70,7 @@ interface IEntityChannel
     void SendMoveAbsolutes(IReadOnlyList<AbsoluteActorPose> poses);
     void SendMovePlayerTeleport(ulong entityRuntimeId, float x, float y, float z, float pitch, float yaw, float headYaw, ulong tick = 0);
 
-    void SendSetActorLink(long riderUniqueId, long riddenUniqueId, byte linkType, bool immediate = true, bool causedByRider = true);
+    void SendSetActorLink(long riderUniqueId, long riddenUniqueId, ActorLinkKind link, bool immediate = true, bool causedByRider = true);
     void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false);
 
     /// <summary>The owning client's air supply, in ticks, out of <paramref name="max"/> (drives the bubble row).</summary>
@@ -84,7 +84,7 @@ interface IEntityChannel
     void SendKnockback(ulong actorRuntimeId, float velocityX, float velocityY, float velocityZ);
     void SendAnimateSwingArm(ulong actorRuntimeId, string? swingSource = "attack");
     void SendTakeItemActor(ulong itemEntityRuntimeId, ulong takerEntityRuntimeId);
-    void SendMobEffect(ulong actorRuntimeId, byte eventId, int effectId, int amplifier, bool showParticles, int durationTicks);
+    void SendMobEffect(ulong actorRuntimeId, EffectChange change, int effectId, int amplifier, bool showParticles, int durationTicks);
 
     void SendFloorDropActor(long entityRuntimeId, StackId stackId, int count, float x, float y, float z, float velocityX = 0f, float velocityY = 0f, float velocityZ = 0f);
 
@@ -144,7 +144,8 @@ interface IWorldChannel
     void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates);
 
     void SendLevelSoundEvent(string sound, float x, float y, float z, int extraData = -1, bool isGlobal = false);
-    void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0);
+    void SendSoundCue(SoundCue cue, float x, float y, float z);
+    void SendExplosionParticles(float x, float y, float z);
     void SendChestLidOpen(int blockX, int blockY, int blockZ);
     void SendChestLidClose(int blockX, int blockY, int blockZ);
     void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks);

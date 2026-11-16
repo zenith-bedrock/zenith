@@ -37,6 +37,33 @@ public class ArchitectureBoundaryTests
             referencedType => IsInNamespace(referencedType, "Zenith.Packets"));
     }
 
+    /// <summary>
+    /// The IL scan above cannot see compile-time constants (the compiler inlines them), so a wire id such as
+    /// <c>MobEffectPacket.EventAdd</c> would pass it. Naming the namespace is what a constant needs, so the sources are checked too.
+    /// </summary>
+    [Fact]
+    public void Gameplay_sources_never_name_the_wire_or_session_namespaces()
+    {
+        var gameplay = FindGameplaySourceRoot();
+        var offenders = Directory.EnumerateFiles(gameplay, "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadLines(file).Any(line =>
+                line.StartsWith("using Zenith.Packets", StringComparison.Ordinal) ||
+                line.StartsWith("using Zenith.Protocol", StringComparison.Ordinal) ||
+                line.StartsWith("using Zenith.Session", StringComparison.Ordinal) ||
+                line.Contains("Zenith.Packets.", StringComparison.Ordinal)))
+            .Select(file => Path.GetRelativePath(gameplay, file))
+            .ToArray();
+        Assert.True(offenders.Length == 0, "Gameplay sources name the wire layer: " + string.Join(", ", offenders));
+    }
+
+    /// <summary>Resolved from this file's own compile-time path, so it holds wherever the build output lands.</summary>
+    private static string FindGameplaySourceRoot([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+    {
+        var root = Path.Combine(Path.GetDirectoryName(here)!, "..", "zenith", "Gameplay");
+        Assert.True(Directory.Exists(root), "Gameplay sources not found at " + root);
+        return Path.GetFullPath(root);
+    }
+
     [Fact]
     public void Gameplay_reaches_the_client_only_through_ports_not_session_or_protocol()
     {

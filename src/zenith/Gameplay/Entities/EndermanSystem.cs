@@ -2,7 +2,6 @@ using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
 using Zenith.Gameplay.Survival;
@@ -181,7 +180,7 @@ sealed class EndermanSystem : MobSystem<EndermanState>
             if (!peer.IsInGame) continue;
             if (!_replication.Viewers.Contains((identity.ActorUniqueId, peer.RuntimeId))) continue;
             peer.Client.Entity.SendMoveActorAbsoluteRaw(identity.ActorRuntimeId, pos.X, pos.Y, pos.Z, flags: 0, yaw: pos.Yaw, headYaw: pos.Yaw);
-            peer.Client.World.SendLevelSoundEvent("mob.endermen.portal", pos.X, pos.Y, pos.Z);
+            peer.Client.World.SendSoundCue(SoundCue.EndermanTeleport, pos.X, pos.Y, pos.Z);
         }
     }
 }

@@ -2,7 +2,6 @@ using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Ports;
 using Zenith.Player;
-using Zenith.Protocol;
 
 namespace Zenith.Gameplay.Entities;
 

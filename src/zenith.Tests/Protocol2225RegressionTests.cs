@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Binary;
 using Zenith.Packets;
 using Zenith.Session.Handler;
@@ -53,12 +54,12 @@ public sealed class Protocol2225RegressionTests
         var protocol = player.Session.Protocol.Entity;
         player.Intents.SubmitMovementInput(MovementInputState.FromClientAuthInput(0, 65.62f, 0, 0, 0, inputTick: 42));
         Assert.Equal(0UL, player.LastProcessedInputTick);
-        protocol.SendMobEffect((ulong)player.RuntimeId, 1, 1, 1, false, 20);
+        protocol.SendMobEffect((ulong)player.RuntimeId, EffectChange.Add, 1, 1, false, 20);
         movement.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(42UL, player.LastProcessedInputTick);
-        protocol.SendMobEffect((ulong)player.RuntimeId, 1, 1, 1, false, 20);
+        protocol.SendMobEffect((ulong)player.RuntimeId, EffectChange.Add, 1, 1, false, 20);
         protocol.SendKnockback((ulong)player.RuntimeId, 1, 2, 3);
-        protocol.SendMobEffect(99999, 1, 1, 1, false, 20); // ordinary actor: tick zero
+        protocol.SendMobEffect(99999, EffectChange.Add, 1, 1, false, 20); // ordinary actor: tick zero
         player.Intents.SubmitMovementInput(MovementInputState.FromClientAuthInput(0, 65.62f, 0, 0, 0, inputTick: 41));
         movement.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(42UL, player.LastProcessedInputTick); // older input cannot move the ack backwards

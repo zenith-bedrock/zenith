@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Gameplay.Entities;
 using Zenith.Gameplay.Survival;
 using Zenith.Packets;
@@ -76,7 +77,7 @@ public class CombatFidelityTests
         client.Calls.Clear(); player.Effects.SubmitEffect(EffectIntent.Clear); system.Tick(fx.Clock, fx.Players.Online);
         var removals = client.Calls.Where(c => c.Call == "SendMobEffect").ToArray();
         Assert.Equal(2, removals.Length);
-        Assert.All(removals, call => Assert.Equal(MobEffectPacket.EventRemove, Assert.IsType<byte>(call.Args[1])));
+        Assert.All(removals, call => Assert.Equal(EffectChange.Remove, Assert.IsType<EffectChange>(call.Args[1])));
         Assert.Equal(new[] { 10, 19 }, removals.Select(c => Assert.IsType<int>(c.Args[2])).Order().ToArray());
         Assert.Empty(player.Effects.Active);
         client.Calls.Clear(); player.Effects.SubmitEffect(EffectIntent.Clear); system.Tick(fx.Clock, fx.Players.Online);

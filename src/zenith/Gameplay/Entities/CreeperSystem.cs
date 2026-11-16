@@ -1,9 +1,7 @@
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
 using Zenith.Gameplay.Survival;
@@ -167,8 +165,8 @@ sealed class CreeperSystem : MobSystem<CreeperState>
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
-            peer.Client.World.SendLevelEvent(LevelEventPacket.EventParticleExplosion, explosionX, explosionY, explosionZ);
-            peer.Client.World.SendLevelSoundEvent("explode", explosionX, explosionY, explosionZ);
+            peer.Client.World.SendExplosionParticles(explosionX, explosionY, explosionZ);
+            peer.Client.World.SendSoundCue(SoundCue.Explosion, explosionX, explosionY, explosionZ);
             if (blockUpdates.Count > 0)
                 peer.Client.World.PublishUpdateBlocks(blockUpdates);
         }

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Packets;
 using Zenith.Reference;
 using Zenith.Rulebook;
@@ -234,6 +235,20 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
             Flags = flags,
             DataLayerId = dataLayerId
         };
+
+    public void SendExplosionParticles(float x, float y, float z) =>
+        SendLevelEvent(LevelEventPacket.EventParticleExplosion, x, y, z);
+
+    public void SendSoundCue(SoundCue cue, float x, float y, float z) =>
+        SendLevelSoundEvent(
+            cue switch
+            {
+                SoundCue.Explosion => "explode",
+                SoundCue.EndermanTeleport => "mob.endermen.portal",
+                SoundCue.IronGolemAttack => "mob.irongolem.attack",
+                _ => throw new ArgumentOutOfRangeException(nameof(cue), cue, "No wire sound for this cue."),
+            },
+            x, y, z);
 
     public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0)
     {

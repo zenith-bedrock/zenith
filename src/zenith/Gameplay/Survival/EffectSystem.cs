@@ -1,6 +1,6 @@
+using Zenith.Gameplay.Ports;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Player;
 
 namespace Zenith.Gameplay.Survival;
@@ -51,7 +51,7 @@ sealed class EffectSystem : IGameSystem
             var removed = player.Effects.Active.Keys.ToArray();
             if (!player.Effects.ClearEffects()) return;
             foreach (var type in removed)
-                entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
+                entity.SendMobEffect(rid, EffectChange.Remove, (int)type, 0, false, 0);
             return;
         }
 
@@ -64,7 +64,7 @@ sealed class EffectSystem : IGameSystem
 
         entity.SendMobEffect(
             rid,
-            wasActive ? MobEffectPacket.EventUpdate : MobEffectPacket.EventAdd,
+            wasActive ? EffectChange.Update : EffectChange.Add,
             (int)intent.Type,
             amplifier,
             showParticles: true,
@@ -101,7 +101,7 @@ sealed class EffectSystem : IGameSystem
         foreach (var type in expired)
         {
             player.Effects.RemoveEffect(type);
-            entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
+            entity.SendMobEffect(rid, EffectChange.Remove, (int)type, 0, false, 0);
         }
     }
 

@@ -2,7 +2,6 @@ using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
 using Zenith.Gameplay.Survival;
@@ -198,6 +197,6 @@ sealed class GolemSystem : MobSystem<GolemState>
         SlamCount++;
         foreach (var peer in online)
             if (peer.IsInGame)
-                peer.Client.World.SendLevelSoundEvent("mob.irongolem.attack", pos.X, pos.Y, pos.Z);
+                peer.Client.World.SendSoundCue(SoundCue.IronGolemAttack, pos.X, pos.Y, pos.Z);
     }
 }

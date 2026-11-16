@@ -11,12 +11,17 @@ sealed partial class EntityProtocol
 {
     /// <summary>Timed player effect add/update/remove (Phase XI.3) — <see cref="MobEffectPacket"/> events.</summary>
     public void SendMobEffect(
-        ulong actorRuntimeId, byte eventId, int effectId, int amplifier, bool showParticles, int durationTicks)
+        ulong actorRuntimeId, EffectChange change, int effectId, int amplifier, bool showParticles, int durationTicks)
     {
         _session.SendDataPacket(new MobEffectPacket
         {
             TargetRuntimeId = actorRuntimeId,
-            EventId = eventId,
+            EventId = change switch
+            {
+                EffectChange.Add => MobEffectPacket.EventAdd,
+                EffectChange.Update => MobEffectPacket.EventUpdate,
+                _ => MobEffectPacket.EventRemove,
+            },
             EffectId = effectId,
             EffectAmplifier = amplifier,
             ShowParticles = showParticles,

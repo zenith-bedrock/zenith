@@ -1,7 +1,5 @@
 using Zenith.Gameplay.Ports;
-using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 using Zenith.Gameplay.Replication;
 
@@ -111,7 +109,7 @@ static class PlayerDamage
             // Death clears every timed effect (vanilla parity); tell the owning client each is gone.
             var expiring = new List<EffectType>(player.Effects.Active.Keys);
             foreach (var type in expiring)
-                entity.SendMobEffect(rid, MobEffectPacket.EventRemove, (int)type, 0, false, 0);
+                entity.SendMobEffect(rid, EffectChange.Remove, (int)type, 0, false, 0);
             player.Effects.ClearEffects();
         }
         if (!player.TryFinalizeDeath()) throw new InvalidOperationException("A newly lethal HealthState did not finalize its death transition.");

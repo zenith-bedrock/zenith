@@ -44,7 +44,7 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendMoveActorAbsoluteRaws(IReadOnlyList<RawActorPose> poses) => owner.Calls.Add(("Entity", "SendMoveActorAbsoluteRaws", [poses]));
         public void SendMoveAbsolutes(IReadOnlyList<AbsoluteActorPose> poses) => owner.Calls.Add(("Entity", "SendMoveAbsolutes", [poses]));
         public void SendMovePlayerTeleport(ulong entityRuntimeId, float x, float y, float z, float pitch, float yaw, float headYaw, ulong tick = 0) => owner.Calls.Add(("Entity", "SendMovePlayerTeleport", [entityRuntimeId, x, y, z, pitch, yaw, headYaw, tick]));
-        public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, byte linkType, bool immediate = true, bool causedByRider = true) => owner.Calls.Add(("Entity", "SendSetActorLink", [riderUniqueId, riddenUniqueId, linkType, immediate, causedByRider]));
+        public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, ActorLinkKind link, bool immediate = true, bool causedByRider = true) => owner.Calls.Add(("Entity", "SendSetActorLink", [riderUniqueId, riddenUniqueId, link, immediate, causedByRider]));
         public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false) => owner.Calls.Add(("Entity", "SendActorFlags", [actorRuntimeId, sneaking, sprinting, usingItem, swimming]));
         public void SendAirSupply(ulong actorRuntimeId, short air, short max) => owner.Calls.Add(("Entity", "SendAirSupply", [actorRuntimeId, air, max]));
         public void SendActorIgnited(ulong actorRuntimeId, bool ignited) => owner.Calls.Add(("Entity", "SendActorIgnited", [actorRuntimeId, ignited]));
@@ -55,7 +55,7 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendKnockback(ulong actorRuntimeId, float velocityX, float velocityY, float velocityZ) => owner.Calls.Add(("Entity", "SendKnockback", [actorRuntimeId, velocityX, velocityY, velocityZ]));
         public void SendAnimateSwingArm(ulong actorRuntimeId, string? swingSource = "attack") => owner.Calls.Add(("Entity", "SendAnimateSwingArm", [actorRuntimeId, swingSource]));
         public void SendTakeItemActor(ulong itemEntityRuntimeId, ulong takerEntityRuntimeId) => owner.Calls.Add(("Entity", "SendTakeItemActor", [itemEntityRuntimeId, takerEntityRuntimeId]));
-        public void SendMobEffect(ulong actorRuntimeId, byte eventId, int effectId, int amplifier, bool showParticles, int durationTicks) => owner.Calls.Add(("Entity", "SendMobEffect", [actorRuntimeId, eventId, effectId, amplifier, showParticles, durationTicks]));
+        public void SendMobEffect(ulong actorRuntimeId, EffectChange change, int effectId, int amplifier, bool showParticles, int durationTicks) => owner.Calls.Add(("Entity", "SendMobEffect", [actorRuntimeId, change, effectId, amplifier, showParticles, durationTicks]));
         public void SendFloorDropActor(long entityRuntimeId, StackId stackId, int count, float x, float y, float z, float velocityX = 0f, float velocityY = 0f, float velocityZ = 0f) => owner.Calls.Add(("Entity", "SendFloorDropActor", [entityRuntimeId, stackId, count, x, y, z, velocityX, velocityY, velocityZ]));
         public void SendPlayerAttributes(Player.Player player) => owner.Calls.Add(("Entity", "SendPlayerAttributes", [player]));
         public void SendSelectedHotbarSlot(int slot) => owner.Calls.Add(("Entity", "SendSelectedHotbarSlot", [slot]));
@@ -102,7 +102,8 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId) => owner.Calls.Add(("World", "SendUpdateBlock", [x, y, z, blockRuntimeId]));
         public void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates) => owner.Calls.Add(("World", "PublishUpdateBlocks", [updates]));
         public void SendLevelSoundEvent(string sound, float x, float y, float z, int extraData = -1, bool isGlobal = false) => owner.Calls.Add(("World", "SendLevelSoundEvent", [sound, x, y, z, extraData, isGlobal]));
-        public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0) => owner.Calls.Add(("World", "SendLevelEvent", [eventType, x, y, z, eventData]));
+        public void SendSoundCue(SoundCue cue, float x, float y, float z) => owner.Calls.Add(("World", "SendSoundCue", [cue, x, y, z]));
+        public void SendExplosionParticles(float x, float y, float z) => owner.Calls.Add(("World", "SendExplosionParticles", [x, y, z]));
         public void SendChestLidOpen(int blockX, int blockY, int blockZ) => owner.Calls.Add(("World", "SendChestLidOpen", [blockX, blockY, blockZ]));
         public void SendChestLidClose(int blockX, int blockY, int blockZ) => owner.Calls.Add(("World", "SendChestLidClose", [blockX, blockY, blockZ]));
         public void SendBlockStartCrack(int blockX, int blockY, int blockZ, int breakTicks) => owner.Calls.Add(("World", "SendBlockStartCrack", [blockX, blockY, blockZ, breakTicks]));

@@ -1,9 +1,7 @@
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
 using Zenith.Gameplay.Survival;
@@ -125,7 +123,7 @@ sealed class MinecartSystem : IGameSystem
             {
                 // Late join / re-entering interest while occupied: this peer never saw the mount happen, so it must be told now.
                 if (_minecarts.TryGet(id, out var occupancy) && occupancy.OccupantPlayerRuntimeId is { } riderId)
-                    peer.Client.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, SetActorLinkPacket.TypeRider);
+                    peer.Client.Entity.SendSetActorLink(riderId, identity.ActorUniqueId, ActorLinkKind.Rider);
             });
 
     private void ApplyPlayerAttacks(EntityId id, IReadOnlyList<Player.Player> online, ulong currentTick)
@@ -152,7 +150,7 @@ sealed class MinecartSystem : IGameSystem
         var applied = _mob.TryApplyDamage(id, source, amount, online, currentTick, onPeerRemoved: peer =>
             {
                 if (occupant is not null)
-                    peer.Client.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, SetActorLinkPacket.TypeRemove);
+                    peer.Client.Entity.SendSetActorLink(occupant.RuntimeId, actorUniqueId, ActorLinkKind.Remove);
             });
 
         // Gated on actual death (entity no longer alive), not just `applied` — a non-lethal hit
@@ -204,7 +202,7 @@ sealed class MinecartSystem : IGameSystem
         occupancy.OccupantPlayerRuntimeId = player.RuntimeId;
         player.RidingEntityId = GetActorUniqueId(id);
         MountCount++;
-        BroadcastLink(id, online, player.RuntimeId, SetActorLinkPacket.TypeRider);
+        BroadcastLink(id, online, player.RuntimeId, ActorLinkKind.Rider);
     }
 
     /// <summary>
@@ -221,7 +219,7 @@ sealed class MinecartSystem : IGameSystem
         if (occupant is not null && occupant.RidingEntityId == actorUniqueId)
             occupant.RidingEntityId = null;
         DismountCount++;
-        BroadcastLink(id, online, riderId, SetActorLinkPacket.TypeRemove);
+        BroadcastLink(id, online, riderId, ActorLinkKind.Remove);
         SendDismountTeleport(occupant);
     }
 
@@ -254,7 +252,7 @@ sealed class MinecartSystem : IGameSystem
 
     private long GetActorUniqueId(EntityId id) => _stores.Identities.TryGet(id, out var identity) ? identity.ActorUniqueId : 0;
 
-    private void BroadcastLink(EntityId id, IReadOnlyList<Player.Player> online, long riderRuntimeId, byte linkType)
+    private void BroadcastLink(EntityId id, IReadOnlyList<Player.Player> online, long riderRuntimeId, ActorLinkKind linkType)
     {
         var actorUniqueId = GetActorUniqueId(id);
         foreach (var peer in online)

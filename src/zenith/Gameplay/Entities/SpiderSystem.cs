@@ -1,9 +1,7 @@
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
-using Zenith.Packets;
 using Zenith.Player;
-using Zenith.Protocol;
 using Zenith.World;
 
 using Zenith.Gameplay.Survival;
@@ -81,7 +79,7 @@ sealed class SpiderSystem : MobSystem<SpiderState>
         var expiresAtTick = clock.CurrentTick + PoisonDurationTicks;
         if (!target.Effects.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
         target.Client.Entity.SendMobEffect(
-            (ulong)target.RuntimeId, MobEffectPacket.EventAdd, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
+            (ulong)target.RuntimeId, EffectChange.Add, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
         PoisonInflictedCount++;
     }
 }

@@ -55,14 +55,18 @@ sealed partial class EntityProtocol
         });
     }
 
-    /// <summary>Mount/dismount actor link (Phase XX). <paramref name="linkType"/> is one of <see cref="SetActorLinkPacket"/>'s Type* constants.</summary>
-    public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, byte linkType, bool immediate = true, bool causedByRider = true)
+    /// <summary>Mount/dismount actor link (Phase XX). </summary>
+    public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, ActorLinkKind link, bool immediate = true, bool causedByRider = true)
     {
         _session.SendDataPacket(new SetActorLinkPacket
         {
             RiderUniqueId = riderUniqueId,
             RiddenUniqueId = riddenUniqueId,
-            LinkType = linkType,
+            LinkType = link switch
+            {
+                ActorLinkKind.Rider => SetActorLinkPacket.TypeRider,
+                _ => SetActorLinkPacket.TypeRemove,
+            },
             Immediate = immediate,
             CausedByRider = causedByRider
         });
