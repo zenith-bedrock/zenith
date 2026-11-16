@@ -143,4 +143,36 @@ public sealed class EnvironmentRandomTickTests
 
         Assert.Equal(Blocks.Dirt, fx.World.GetBlock(6, 64, 5));
     }
+
+    [Fact]
+    public async Task A_region_that_allows_growth_lets_a_tree_grow_but_still_resists_decay()
+    {
+        var fx = await WithSapling();
+        Protect(fx, 4, 60, 4, 12, 80, 12);
+        Assert.True(fx.Context.Protect.Regions.TrySetCause("vault", Zenith.Gameplay.Policy.EnvironmentCause.Growth, true));
+        Run(fx, 1500);
+        Assert.True(CountTree(fx).Logs >= 4, "growth was let through");
+
+        // Letting growth through does not let decay through: a lone leaf in the same region stays.
+        fx.World.SetBlock(5, 75, 5, Blocks.OakLeaves);
+        Run(fx, 300);
+        Assert.Equal(Blocks.OakLeaves, fx.World.GetBlock(5, 75, 5));
+    }
+
+    [Fact]
+    public async Task Allowing_spread_lets_grass_in_and_denying_it_again_closes_the_region()
+    {
+        var fx = await Viewed();
+        fx.World.SetBlock(5, 64, 5, Blocks.GrassBlock);
+        fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
+        Protect(fx, 6, 64, 5, 6, 64, 5);
+        Assert.True(fx.Context.Protect.Regions.TrySetCause("vault", Zenith.Gameplay.Policy.EnvironmentCause.Spread, true));
+        Run(fx, 300);
+        Assert.Equal(Blocks.GrassBlock, fx.World.GetBlock(6, 64, 5));
+
+        fx.World.SetBlock(6, 64, 5, Blocks.Dirt);
+        Assert.True(fx.Context.Protect.Regions.TrySetCause("vault", Zenith.Gameplay.Policy.EnvironmentCause.Spread, false));
+        Run(fx, 300);
+        Assert.Equal(Blocks.Dirt, fx.World.GetBlock(6, 64, 5));
+    }
 }

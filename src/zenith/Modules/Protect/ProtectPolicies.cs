@@ -24,7 +24,8 @@ sealed class ProtectBlockEditPolicy(ProtectRegions regions, PermissionAuthority 
 
 /// <summary>
 /// Keeps the environment out of a protected cell: no explosion, liquid, fire, falling block, support loss or growth changes it. There is
-/// no actor and so no bypass. Strict in v1: every cause is vetoed the same way.
+/// no actor and so no bypass. A region resists every cause unless it was told to let one through (<c>/protect allow</c>), one cause
+/// at a time: letting saplings grow never lets leaves decay.
 /// </summary>
 sealed class ProtectEnvironmentPolicy(ProtectRegions regions) : IEnvironmentChangePolicy
 {
@@ -32,7 +33,7 @@ sealed class ProtectEnvironmentPolicy(ProtectRegions regions) : IEnvironmentChan
     {
         if (regions.Snapshot.IsEmpty) return PolicyDecision.Allow;
         var cell = proposal.Cell;
-        return regions.TryFind(cell.X, cell.Y, cell.Z, out var region)
+        return regions.TryFindResisting(cell.X, cell.Y, cell.Z, proposal.Cause, out var region)
             ? PolicyDecision.Deny($"This area is protected ({region.Name}).")
             : PolicyDecision.Allow;
     }

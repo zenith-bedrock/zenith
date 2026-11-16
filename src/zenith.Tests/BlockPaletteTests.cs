@@ -35,7 +35,11 @@ public class BlockPaletteTests
     [Fact]
     public void Blocks_Load_from_embedded_matches_expected_hashes()
     {
-        Blocks.Load(BlockPaletteLoader.FromEmbeddedResource());
+        // The embedded palette is what the process runs on. Not reloaded here: swapping the process-wide tables under other tests
+        // that run at the same time was the cause of an intermittent random-tick failure (plan 002, phase 4a).
+        Blocks.EnsureLoaded();
+        var palette = BlockPaletteLoader.FromEmbeddedResource();
+        Assert.Equal(ExpectedAir, palette.Require("minecraft:air"));
         Assert.Equal(ExpectedAir, Blocks.Air);
         Assert.Equal(ExpectedStone, Blocks.Stone);
         Assert.Equal(ExpectedGrass, Blocks.GrassBlock);
@@ -45,7 +49,7 @@ public class BlockPaletteTests
     public void Chest_Require_name_is_south_and_cardinals_resolve()
     {
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Blocks.Load(palette);
+        Blocks.EnsureLoaded();
 
         const int south = 741882976;
         const int west = 1429214429;
@@ -72,7 +76,7 @@ public class BlockPaletteTests
     public void Reverse_map_covers_dump_entries_outside_curated_facade()
     {
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Blocks.Load(palette);
+        Blocks.EnsureLoaded();
 
         Assert.True(palette.ReverseCount > palette.Count,
             "reverse map must include state variants beyond preferred-per-name");
@@ -95,7 +99,7 @@ public class BlockPaletteTests
     public void IsPlaceable_allowlists_starter_set_not_arbitrary_palette_rids()
     {
         var palette = BlockPaletteLoader.FromEmbeddedResource();
-        Blocks.Load(palette);
+        Blocks.EnsureLoaded();
 
         Assert.True(Blocks.IsPlaceable(Blocks.Stone));
         Assert.True(Blocks.IsPlaceable(Blocks.Cobblestone));

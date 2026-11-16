@@ -97,15 +97,27 @@ sealed class ProtectModule
                 new EnumCommandArgument("action", Word("create")), new StringCommandArgument("name"),
                 Coordinate("x1"), Coordinate("y1"), Coordinate("z1"), Coordinate("x2"), Coordinate("y2"), Coordinate("z2")),
             new CommandOverload(new EnumCommandArgument("action", Word("remove")), new StringCommandArgument("name")),
+            new CommandOverload(
+                new EnumCommandArgument("action", new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["allow"] = "allow", ["deny"] = "deny" }),
+                new StringCommandArgument("name"), new EnumCommandArgument("cause", CauseWords())),
             new CommandOverload(new EnumCommandArgument("action", Word("list"))));
         return new CommandBinding(definition, Execute);
     }
+
+    private static Dictionary<string, object> CauseWords() =>
+        Enum.GetValues<EnvironmentCause>().ToDictionary(c => c.ToString().ToLowerInvariant(), c => (object)c, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Hands the current set to the state store after a change (callers hold the change lock, so what is saved is always the latest
     /// set). The change is already in force; the bytes reach disk with the world's other writes.
     /// </summary>
     private void Persist() => _state?.Save(StateName, ProtectRegionCodec.Encode(Regions.Snapshot));
+
+    private static string Describe(ProtectRegion region)
+    {
+        var allowed = Enum.GetValues<EnvironmentCause>().Where(region.Allows).Select(c => c.ToString().ToLowerInvariant()).ToArray();
+        return allowed.Length == 0 ? region.Name : $"{region.Name} (allows {string.Join(", ", allowed)})";
+    }
 
     private CommandFeedback Execute(in CommandInvocation invocation)
     {
@@ -133,9 +145,23 @@ sealed class ProtectModule
                     Persist();
                     return new("Protect", $"Removed {name}.", CommandOutcome.Applied);
                 }
+            case "allow":
+            case "deny":
+                var allow = (string)arguments["action"] == "allow";
+                var target = (string)arguments["name"];
+                var cause = (EnvironmentCause)arguments["cause"];
+                lock (_changes)
+                {
+                    if (!Regions.TrySetCause(target, cause, allow))
+                        return new("Protect", $"No region named '{target}'.", CommandOutcome.Rejected);
+                    Persist();
+                    return new("Protect", allow
+                        ? $"{target} now lets {cause.ToString().ToLowerInvariant()} through."
+                        : $"{target} resists {cause.ToString().ToLowerInvariant()} again.", CommandOutcome.Applied);
+                }
             default:
                 var all = Regions.Snapshot;
-                return new("Protect", all.IsEmpty ? "No protected regions." : string.Join(", ", all.Select(r => r.Name)), CommandOutcome.Applied);
+                return new("Protect", all.IsEmpty ? "No protected regions." : string.Join(", ", all.Select(Describe)), CommandOutcome.Applied);
         }
     }
 }

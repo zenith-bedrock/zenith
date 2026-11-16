@@ -1,10 +1,20 @@
 using System.Collections.Immutable;
+using Zenith.Gameplay.Policy;
 
 namespace Zenith.Modules.Protect;
 
-/// <summary>A named, axis-aligned box of protected cells; both corners are inclusive and stored ordered.</summary>
-readonly record struct ProtectRegion(string Name, int MinX, int MinY, int MinZ, int MaxX, int MaxY, int MaxZ)
+/// <summary>
+/// A named, axis-aligned box of protected cells; both corners are inclusive and stored ordered. <paramref name="AllowedCauses"/> is a
+/// bit set of the environment causes the region lets through (bit n is <see cref="EnvironmentCause"/> n); the default, none, is strict:
+/// the region resists every cause. Player edits are never affected by it.
+/// </summary>
+readonly record struct ProtectRegion(string Name, int MinX, int MinY, int MinZ, int MaxX, int MaxY, int MaxZ, int AllowedCauses = 0)
 {
+    public bool Allows(EnvironmentCause cause) => (AllowedCauses & (1 << (int)cause)) != 0;
+
+    public ProtectRegion WithCause(EnvironmentCause cause, bool allowed) =>
+        this with { AllowedCauses = allowed ? AllowedCauses | (1 << (int)cause) : AllowedCauses & ~(1 << (int)cause) };
+
     public static ProtectRegion Between(string name, int x1, int y1, int z1, int x2, int y2, int z2) => new(
         name, Math.Min(x1, x2), Math.Min(y1, y2), Math.Min(z1, z2), Math.Max(x1, x2), Math.Max(y1, y2), Math.Max(z1, z2));
 
@@ -66,6 +76,39 @@ sealed class ProtectRegions
             _regions = kept;
             return true;
         }
+    }
+
+    /// <summary>Lets <paramref name="cause"/> through the named region (or stops doing so); false when there is no such region.</summary>
+    public bool TrySetCause(string name, EnvironmentCause cause, bool allowed)
+    {
+        lock (_gate)
+        {
+            for (var i = 0; i < _regions.Length; i++)
+            {
+                if (!string.Equals(_regions[i].Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                _regions = _regions.SetItem(i, _regions[i].WithCause(cause, allowed));
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The first region covering the cell that does not let <paramref name="cause"/> through. Overlapping regions all count: a cell is
+    /// open to a cause only when every region over it allows it.
+    /// </summary>
+    public bool TryFindResisting(int x, int y, int z, EnvironmentCause cause, out ProtectRegion region)
+    {
+        foreach (var candidate in _regions)
+        {
+            if (!candidate.Contains(x, y, z) || candidate.Allows(cause)) continue;
+            region = candidate;
+            return true;
+        }
+
+        region = default;
+        return false;
     }
 
     /// <summary>The first region covering the cell, if any.</summary>
