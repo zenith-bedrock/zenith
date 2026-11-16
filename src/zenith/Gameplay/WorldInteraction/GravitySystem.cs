@@ -28,6 +28,7 @@ sealed class GravitySystem : IGameSystem
 
     /// <summary>Per-tick velocity retention factor (drag = 0.02).</summary>
     private const float DragFactor = 0.98f;
+    private const float LandingEpsilon = 0.001f;
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
@@ -239,7 +240,8 @@ sealed class GravitySystem : IGameSystem
                 continue;
             }
 
-            if (!CanPass(entry.LandX, belowY, entry.LandZ, entry.BlockRuntimeId))
+            var floorBlocked = !CanPass(entry.LandX, belowY, entry.LandZ, entry.BlockRuntimeId);
+            if (floorBlocked && entry.Y - cellY <= LandingEpsilon)
             {
                 entry.LandY = cellY;
                 _landedScratch.Add(entry);
@@ -249,6 +251,14 @@ sealed class GravitySystem : IGameSystem
             entry.VelocityY += Gravity;
             entry.VelocityY *= DragFactor;
             entry.Y -= entry.VelocityY;
+
+            // The floor is the end of the fall: glide down to it and stop exactly on it (the client interpolates between our moves),
+            // then land on the next tick. Landing from a fractional height would make the block jump to the floor in one frame.
+            if (floorBlocked && entry.Y < cellY)
+            {
+                entry.Y = cellY;
+                entry.VelocityY = 0f;
+            }
 
             foreach (var peer in online)
             {

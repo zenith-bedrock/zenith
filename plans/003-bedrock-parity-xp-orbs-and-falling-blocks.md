@@ -63,6 +63,12 @@ Reuse what exists: `ScheduledTicks` already holds "this cell is evaluated at tic
 - **Cost.** One block read above the written cell per normal write; a supported block that is noticed costs one entry that `BeginFall` rejects after re-checking support. Dedupe by cell and the existing cap apply.
 - **Tests (`GravityNoticeTests`).** A bare world write that removes the support: sand falls after the delay (control: supported sand stays, nothing pending). A quiet write notices nothing. A creeper blast under sand drops it into the crater. Leaves decaying under sand. Fire burning planks under gravel. Disabling the notice fails five tests. Tests that stage sand by hand and then drive gravity themselves now use `SetQuietly` (a test-only extension) so the staging does not notice anything.
 
+## Falling block feel result
+
+- **Landing snap.** `GravitySystem` landed a block as soon as the cell below was blocked, from wherever the entity was inside its cell: the client saw it hang up to nearly a block above the floor and then jump down in one frame. The entity now keeps falling (same gravity and drag) clamped to the floor height, the last move sent is exactly the resting height, and it lands on the next tick. PocketMine does the same: its entity lands only when its body is on the ground. The client interpolates between our per-tick moves, so ending on the floor makes the last step smooth.
+- **Start delay is now 1 tick** (`GravityPendingStore.StartDelayTicks`). Evidence: PocketMine and Dragonfly convert at once (no delay); Java vanilla uses 2; no Bedrock measurement exists here (the BDS install has no data that states it, and a measurement was not made). One tick is the closest to "next tick" that still lets a stack peel one block at a time. Revisit if a BDS capture shows otherwise.
+- **Test.** `A_falling_block_glides_down_to_the_floor_and_lands_from_exactly_there` (fails without the clamp).
+
 ## 3. Order and cost
 
 1. Phase B first (small: one scheduling change in `GravitySystem` and its tests, no new entity, no protocol), because it is a correction of something that already exists.

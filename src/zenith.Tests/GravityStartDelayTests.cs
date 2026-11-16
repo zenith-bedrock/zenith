@@ -64,6 +64,30 @@ public sealed class GravityStartDelayTests
     }
 
     [Fact]
+    public void A_falling_block_glides_down_to_the_floor_and_lands_from_exactly_there()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("watcher");
+        var client = new RecordingClientChannel();
+        player.AttachClient(client);
+        var gravity = new GravitySystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
+        fx.World.SetQuietly(0, Ground + 4, 0, Blocks.Sand); // three air cells above the grass
+        Assert.True(fx.World.GravityPending.TryEnqueue(0, Ground + 4, 0, 0));
+
+        for (var i = 0; i < 60 && fx.World.GetBlock(0, Ground + 1, 0) != Blocks.Sand; i++)
+        {
+            fx.Clock.AdvanceBy(1);
+            gravity.Tick(fx.Clock, fx.Players.Online);
+        }
+
+        Assert.Equal(Blocks.Sand, fx.World.GetBlock(0, Ground + 1, 0));
+        var heights = client.Of("SendMoveActorAbsoluteRaw").Select(a => (float)a[2]!).ToList();
+        Assert.NotEmpty(heights);
+        Assert.Equal(Ground + 1f, heights[^1]); // the last frame the client saw is the resting height, not a fraction above it
+        for (var i = 1; i < heights.Count; i++) Assert.True(heights[i] <= heights[i - 1]);
+    }
+
+    [Fact]
     public void Support_restored_inside_the_delay_cancels_the_fall()
     {
         var (world, gravity, clock) = Boot();

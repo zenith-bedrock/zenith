@@ -16,7 +16,7 @@ sealed class GravityPendingStore
     internal const int SoftCap = 2048;
 
     /// <summary>Ticks between a block losing its support and starting to fall (vanilla scheduled-tick delay of a falling block).</summary>
-    public const int StartDelayTicks = 2;
+    public const int StartDelayTicks = 1;
 
     /// <summary>
     /// Max <em>new</em> falls started per GameLoop tick — a safety bound for very large collapses, not what paces an ordinary stack
