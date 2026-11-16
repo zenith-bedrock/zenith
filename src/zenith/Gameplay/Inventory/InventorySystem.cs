@@ -44,8 +44,8 @@ sealed class InventorySystem : IGameSystem
         // now-departed player is simply never processed, not force-applied post-disconnect.
         while (_players.TryConsumeDisconnectedInventoryPersist(out var departed))
         {
-            _world.PersistInventory(departed);
-            _world.PersistPlayerData(departed);
+            _world.Persistence.PersistInventory(departed);
+            _world.Persistence.PersistPlayerData(departed);
         }
 
         if (online.Count == 0) return;
@@ -56,7 +56,7 @@ sealed class InventorySystem : IGameSystem
             {
                 player.Client.Inventory.SendInventoryContent(player.Inventory);
                 player.Client.Inventory.SendUiInventoryContent(player);
-                _world.PersistInventory(player);
+                _world.Persistence.PersistInventory(player);
             }
             while (player.Windows.TryConsumeInventoryRequest(out var window, out var stack))
             {

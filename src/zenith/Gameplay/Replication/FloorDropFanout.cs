@@ -222,9 +222,9 @@ static class FloorDropFanout
         player.Windows.CraftUi.Clear();
         player.Windows.TableCraftUi.Clear();
         player.Inventory.Clear();
-        world.PersistInventory(player);
-        world.PersistArmor(player);
-        world.PersistOffhand(player);
+        world.Persistence.PersistInventory(player);
+        world.Persistence.PersistArmor(player);
+        world.Persistence.PersistOffhand(player);
         ArmorFanout.Broadcast(player, online);
         ArmorFanout.BroadcastOffhand(player, online);
         return true;

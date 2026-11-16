@@ -71,11 +71,11 @@ public class OffhandTests
         var player = fx.AddInGamePlayer("lefty");
         Assert.True(player.Inventory.TrySetOffhand(StackId.FromBlock(Blocks.Dirt), 7));
 
-        fx.World.PersistOffhand(player);
+        fx.World.Persistence.PersistOffhand(player);
         await Task.Yield();
 
         var fresh = new PlayerInventory();
-        Assert.True(fx.World.TryLoadOffhand(player.Uuid, fresh));
+        Assert.True(fx.World.Persistence.TryLoadOffhand(player.Uuid, fresh));
         Assert.Equal(7, fresh.Offhand.Count);
     }
 

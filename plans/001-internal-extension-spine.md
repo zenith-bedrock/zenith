@@ -76,15 +76,29 @@ Exit tests: default player cannot invoke administrative commands even with forge
 
 ## Phase 2 — Core domain facts and policy decisions
 
-Work: move presence from admitted-login to owner-committed world entry; distinguish connection closed from owner-cleaned world departure. Add immutable IDs/value payloads and composition-only frozen subscriptions. Facts run after complete commit; follow-up mutations enqueue bounded work for a later tick. Keep existing network-thread residency cleanup explicitly internal. Observer exceptions log without changing committed outcomes.
+Deliver as three separately reviewed increments. Never combine presence correction with multiblock planning in one PR.
 
-Implement typed synchronous Allow/Deny policy evaluation as a separate owner-side mechanism, with no mutable domain objects, async work or recursive mutations in callbacks. Policy exceptions deny. Before adding protection, derive and validate the complete edit batch before consuming stacks, changing block entities or writing any cell. Amend ADR21's future EventBus recommendation to document these limits; do not open a public surface.
+### Phase 2a — Presence and immutable payloads
 
-Exit tests: failed spawn produces no world join/leave; successful entry and owner-cleaned exit each publish once; deny/policy exception preserve blocks, inventories, chests/openers, drops and durability; no committed event on refusal; one fact per successful batch. Dependencies: phase 1 for principal/policy context. Non-goals: converting all systems to events, raw packet listeners or generic cancellation bus.
+Work: move presence from admitted-login to owner-committed world entry; distinguish connection closed from owner-cleaned world departure. Use immutable IDs/value payloads and composition-only frozen subscriptions. Facts run after complete commit; follow-up mutations enqueue bounded work for a later tick. Keep network-thread residency cleanup explicitly internal. Observer exceptions log without changing committed outcomes. Amend ADR21's event limits without opening a public surface.
+
+Exit tests: failed spawn produces no world join/leave; successful entry and owner-cleaned exit each publish once per entered session; observers receive no mutable domain references; observer failure cannot change the committed result. Dependencies: phase 0; may run alongside phase 1. Non-goals: block policies, cancellation or multiblock planning. Effort S-M / risk LOW.
+
+### Phase 2b — Single-cell place/break policy
+
+Work: typed synchronous Allow/Deny evaluation on the owner before any effect. Callbacks receive no mutable domain objects, perform no async work and cannot mutate recursively. Policy exceptions deny. Enumerate operations proven to affect a single cell; exclude coupled cells, block entities and container contents. Unsupported operations in the protected path must reject before effects until phase 2c, never bypass policy silently.
+
+Exit tests: denied/policy-error edits preserve blocks, stack counts, metadata, drops and durability; no committed event on refusal; one fact after supported operation success; explicit rejection tests for operations outside this increment. Dependencies: phases 1 and 2a. Non-goals: full Protect proof, multiblock, environmental or container protection. Effort M / risk MED.
+
+### Phase 2c — Pure batch planning and policy
+
+Work: derive and validate the complete edit batch before consuming stacks, changing block entities, producing drops or writing any cell. Evaluate one immutable proposal and let the owner commit the complete result. Do not implement post-mutation cancellation.
+
+Exit tests: planning never mutates; denial of any coupled cell preserves all resources; failed application leaves no partial commit; success emits one complete batch fact, without duplicate single-cell facts; phase 2b tests stay green. Dependencies: phase 2b. Non-goals: environmental protection, converting all systems to events or raw packet listeners. Effort L / risk HIGH, concentrated in this increment rather than phase 2a.
 
 ## Phase 3 — Command contribution and operational commands
 
-Work: validate registration atomically including duplicate aliases within a definition; bind internal definition to executor in composition before freeze, eliminating the need to edit the central switch for the example module. Define internal sender/context and typed Rejected/Accepted/Applied results. Keep targets as IDs/constraints rather than mutable Player values across handoff. Filter help/suggestions/Bedrock metadata using the same policy and refresh on permission changes; retain wire details in adapter. Correct help argument, sample placeholder and summon feedback/queue capacity.
+Work: validate registration atomically including duplicate aliases within a definition; bind internal definition to executor in composition before freeze, eliminating the need to edit the central switch for the example module. Define internal sender/context and typed Rejected/Accepted/Applied results. General UI rule: enqueue acceptance never means application; announce completion only after the owner confirms, and correlate later failure with its operation. Apply this to every deferred operation, including summon. Keep targets as IDs/constraints rather than mutable Player values across handoff. Filter help/suggestions/Bedrock metadata using the same policy and refresh on permission changes; retain wire details in adapter. Correct summon feedback/queue capacity. Help argument/sample placeholder cleanup is a separate small hygiene PR parallel to phase 1; it must not block permissions, phase 2 or phase 3, or expose diagnostics before authorization.
 
 Priorities: secure existing commands first; add list/status for operations; add save/stop only through lifecycle coordination if still needed. Defer give/clear until inventory-domain transaction port and tp until owner teleport semantics exist. Do not add selectors/RCON/discovery.
 
@@ -94,7 +108,7 @@ Exit tests: adding a composed internal test command needs no runtime-switch edit
 
 Work: provide immutable player/world/block query models, explicit residency result, command invocation context and owner-side action decisions. Freeze only these internal semantics and error/freshness/ownership rules. Keep concrete Player, World, Windows, PlayerInventory, ClientPorts and ServerServices private to composition/owners. Example Protect contributes one permissioned configuration command and read-only policy for complete player edit batches and container access. Core performs validation, state change and replication.
 
-Document environmental edits as outside this prototype. Cover denied inventory transfers after protection changes or container permissions are revoked; preventing only a new open is insufficient. If economy is selected instead, start with an integer ledger and balance/transfer command on the owner; item purchases require a later atomic domain transaction and cannot be built by snapshotting bag alone.
+Protect is the chosen first proof; it needs no actor surface or ECS exposure. Document environmental edits as outside this prototype. Cover denied inventory transfers after protection changes or container permissions are revoked; preventing only a new open is insufficient. Economy is deferred to a later track with a persistent integer ledger and authoritative balance/transfer operations; an in-memory number is not a sufficient proof. Item purchases require a real cross-resource transaction and cannot be built by snapshotting bag alone. Economy does not replace the first Protect proof.
 
 Inventory future port: immutable stack snapshots plus exact grant/remove/transfer requests with bounded acceptance, explicit failure and committed result; no client request IDs/net IDs/window generation in module contracts. Actor surface is deferred unless an actual consumer appears.
 
@@ -107,6 +121,8 @@ Work: document lessons from the internal module: capability boundaries, trust/id
 Exit: reviewed ADR cites the passing module contract tests and unresolved external isolation risks; explicitly states loader remains unimplemented. Dependencies: phase 4. Non-goals: external assemblies, discovery, hot reload, sandbox claims, scheduler/DI framework.
 
 ## First three small commits
+
+Parallel hygiene PR: fix help's ignored argument and sample's placeholder semantics without widening diagnostics access. This is independent of permission-model work and must not become a prerequisite for it.
 
 1. `Validate command registration before mutating the catalog`: atomic alias/name validation, snapshot/copy definition collections as needed, freeze/duplicate regression tests. No command expansion. S / LOW.
 2. `Add internal permission principals and explicit node defaults`: pure evaluator + bootstrap trust configuration/storage policy and tests; keep it internal. M / MED.

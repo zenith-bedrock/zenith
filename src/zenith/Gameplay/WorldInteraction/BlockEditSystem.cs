@@ -358,7 +358,7 @@ sealed class BlockEditSystem : IGameSystem
         if (inventoryChanged)
         {
             player.Client.Inventory.SendInventoryContent(player.Inventory);
-            _world.PersistInventory(player);
+            _world.Persistence.PersistInventory(player);
         }
 
         NotifyGravityAfterEdit(edit.X, edit.Y, edit.Z, edit.BlockRuntimeId);
@@ -444,7 +444,7 @@ sealed class BlockEditSystem : IGameSystem
             return;
         // The client predicts its own wear, but only the server's stack is authoritative: resend it, and persist.
         player.Client.Inventory.SendInventoryContent(player.Inventory);
-        _world.PersistInventory(player);
+        _world.Persistence.PersistInventory(player);
     }
 
     /// <summary>

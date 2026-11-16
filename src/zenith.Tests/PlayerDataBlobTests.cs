@@ -98,7 +98,7 @@ public class PlayerDataBlobTests
         var blob = PlayerDataBlob.Pack(12f, -60f, 4f, 45f, 0f, GameMode.Creative, experienceLevel: 3, experiencePoints: 5);
         await storage.PutPlayerDataAsync(uuid, blob);
 
-        Assert.True(world.TryLoadPlayerData(uuid, out var x, out var y, out var z, out var yaw, out var pitch, out var mode, out var level, out var points, out _, out _, out _, out _));
+        Assert.True(world.Persistence.TryLoadPlayerData(uuid, out var x, out var y, out var z, out var yaw, out var pitch, out var mode, out var level, out var points, out _, out _, out _, out _));
         Assert.Equal(12f, x);
         Assert.Equal(-60f, y);
         Assert.Equal(4f, z);
@@ -113,7 +113,7 @@ public class PlayerDataBlobTests
     public void World_TryLoadPlayerData_miss()
     {
         var world = new World.World(new InMemoryChunkStorage());
-        Assert.False(world.TryLoadPlayerData(Guid.NewGuid(), out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _));
+        Assert.False(world.Persistence.TryLoadPlayerData(Guid.NewGuid(), out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _));
     }
 
     [Fact]
@@ -125,8 +125,8 @@ public class PlayerDataBlobTests
         var player = new Player.Player("ephemeral", null!, 1, uuid, GameMode.Survival, identityStable: false);
         Assert.True(player.Inventory.TrySetBlock(0, Blocks.Stone, 3));
 
-        world.PersistInventory(player);
-        Assert.False(world.TryLoadInventory(uuid, new PlayerInventory(seedStarterHotbar: false)));
+        world.Persistence.PersistInventory(player);
+        Assert.False(world.Persistence.TryLoadInventory(uuid, new PlayerInventory(seedStarterHotbar: false)));
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class PlayerDataBlobTests
             PositionZ = 9,
         };
 
-        world.PersistPlayerData(player);
-        Assert.False(world.TryLoadPlayerData(uuid, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _));
+        world.Persistence.PersistPlayerData(player);
+        Assert.False(world.Persistence.TryLoadPlayerData(uuid, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _));
     }
 }

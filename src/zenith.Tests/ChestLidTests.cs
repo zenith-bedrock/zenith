@@ -237,11 +237,11 @@ public class ChestLidTests
         fx.Players.SubmitDisconnectedInventoryPersist(player);
 
         var loaded = new PlayerInventory(seedStarterHotbar: false);
-        Assert.False(fx.World.TryLoadInventory(player.Uuid, loaded));
+        Assert.False(fx.World.Persistence.TryLoadInventory(player.Uuid, loaded));
 
         inventory.Tick(fx.Clock, Array.Empty<Player.Player>());
 
-        Assert.True(fx.World.TryLoadInventory(player.Uuid, loaded));
+        Assert.True(fx.World.Persistence.TryLoadInventory(player.Uuid, loaded));
         Assert.Equal(Blocks.Stone, loaded.Get(0).Id.Value);
         Assert.Equal(5, loaded.Get(0).Count);
     }

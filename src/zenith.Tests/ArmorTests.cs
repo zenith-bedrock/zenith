@@ -193,12 +193,12 @@ public class ArmorTests
         var player = fx.AddInGamePlayer("persisted");
         Assert.True(player.Inventory.TrySetArmor(PlayerInventory.ArmorHelmetSlot, StackId.FromItem(IronHelmet(fx)), 1));
 
-        fx.World.PersistArmor(player);
+        fx.World.Persistence.PersistArmor(player);
 
         // A fresh session for the same identity — mirrors LoginSessionHandler's post-TryAdd load,
         // without standing up the full login handshake.
         var reconnected = fx.AddPlayer("persisted-reconnect");
-        Assert.True(fx.World.TryLoadArmor(player.Uuid, reconnected.Inventory));
+        Assert.True(fx.World.Persistence.TryLoadArmor(player.Uuid, reconnected.Inventory));
 
         Assert.Equal(IronHelmet(fx), (short)reconnected.Inventory.GetArmor(PlayerInventory.ArmorHelmetSlot).Id.Value);
     }

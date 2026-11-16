@@ -188,15 +188,15 @@ class LoginSessionHandler : ISessionHandler
         // (inventory, armor, position, gamemode, vitals) on this still-private object first, so a
         // concurrent GameLoop tick can never observe a half-initialized player. TryAdd moves to
         // just before PlayerLoginEvent publishes, once the object is actually tick-ready.
-        var loaded = session.Context.World.TryLoadInventory(player);
+        var loaded = session.Context.World.Persistence.TryLoadInventory(player);
         session.Context.Logger.Info(
             loaded
                 ? $"Inventory load hit for '{player.Username}' uuid={player.Uuid:D}"
                 : $"Inventory load miss for '{player.Username}' uuid={player.Uuid:D} (starter/empty bag)");
-        session.Context.World.TryLoadArmor(player.Uuid, player.Inventory);
-        session.Context.World.TryLoadOffhand(player.Uuid, player.Inventory);
+        session.Context.World.Persistence.TryLoadArmor(player.Uuid, player.Inventory);
+        session.Context.World.Persistence.TryLoadOffhand(player.Uuid, player.Inventory);
 
-        if (session.Context.World.TryLoadPlayerData(
+        if (session.Context.World.Persistence.TryLoadPlayerData(
                 player.Uuid, out var px, out var py, out var pz, out var yaw, out var pitch, out var savedMode,
                 out var savedLevel, out var savedPoints,
                 out var savedHealth, out var savedHunger, out var savedSaturation, out var savedExhaustion))
@@ -220,7 +220,7 @@ class LoginSessionHandler : ISessionHandler
                 player.PositionY = healedY;
                 session.Context.Logger.Info(
                     $"Spawn heal for '{player.Username}': Y {py:F1} → {player.PositionY:F0} (clear feet at XZ)");
-                session.Context.World.PersistPlayerData(player);
+                session.Context.World.Persistence.PersistPlayerData(player);
             }
         }
         else

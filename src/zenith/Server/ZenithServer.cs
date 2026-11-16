@@ -459,8 +459,8 @@ class ZenithServer
             // and player-data save.
             while (Context.PlayerManager.TryConsumeDisconnectedInventoryPersist(out var departed))
             {
-                Context.World.PersistInventory(departed);
-                Context.World.PersistPlayerData(departed);
+                Context.World.Persistence.PersistInventory(departed);
+                Context.World.Persistence.PersistPlayerData(departed);
             }
 
             // Settle in-flight sand/gravel into overlays before LevelDB flush (ADR §57).

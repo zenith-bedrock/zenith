@@ -35,7 +35,7 @@ sealed class GameModeSystem : IGameSystem
 
             PlayerVisibility.RefreshPeerView(player, online);
 
-            player.Level.PersistPlayerData(player);
+            player.Level.Persistence.PersistPlayerData(player);
 
             player.Client.Ui.SendToast(
                 "Game mode",

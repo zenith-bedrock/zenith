@@ -140,7 +140,7 @@ sealed class CowSystem : MobSystem<CowState>
             if (player.Inventory.TryConsume(_feedItem, 1))
             {
                 player.Client.Inventory.SendInventoryContent(player.Inventory);
-                player.Level.PersistInventory(player);
+                player.Level.Persistence.PersistInventory(player);
                 ref var state = ref States.GetRef(id);
                 state.BreedCooldownUntilTick = clock.CurrentTick;
                 FeedCount++;
@@ -170,7 +170,7 @@ sealed class CowSystem : MobSystem<CowState>
         }
 
         player.Client.Inventory.SendInventoryContent(player.Inventory);
-        player.Level.PersistInventory(player);
+        player.Level.Persistence.PersistInventory(player);
         return true;
     }
 

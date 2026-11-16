@@ -96,7 +96,7 @@ sealed class StackRequestApplier
             protocol.SendUiInventoryContent(player);
         if (before.Chest is { } openAfter)
             protocol.SendChestContent(_world.Chests, openAfter);
-        _world.PersistInventory(player);
+        _world.Persistence.PersistInventory(player);
 
         var armorTouched = false;
         var offhandTouched = false;
@@ -109,14 +109,14 @@ sealed class StackRequestApplier
         if (armorTouched)
         {
             protocol.SendArmorContent(inventory);
-            _world.PersistArmor(player);
+            _world.Persistence.PersistArmor(player);
             ArmorFanout.Broadcast(player, online);
         }
 
         if (offhandTouched)
         {
             protocol.SendOffhandContent(inventory);
-            _world.PersistOffhand(player);
+            _world.Persistence.PersistOffhand(player);
             ArmorFanout.BroadcastOffhand(player, online);
         }
 

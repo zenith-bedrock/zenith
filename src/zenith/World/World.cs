@@ -20,6 +20,7 @@ sealed class World
     private readonly WorldGenerationBroker _generationBroker;
     private readonly int _generationWorkers;
     private readonly ILogger? _logger;
+    private readonly WriteBehind _writes;
     private int _syncLoads;
 
     /// <summary>The server logger this world was built with (null in headless tests), for gameplay that reports about the world.</summary>
@@ -28,6 +29,9 @@ sealed class World
 
     /// <summary>Game rules of this world (defaults from the stock BDS capture, restored from storage at boot).</summary>
     public GameRules Rules { get; } = GameRuleDefaults.Create();
+
+    /// <summary>What a player keeps between sessions: inventory, armor, offhand, pose and vitals.</summary>
+    public PlayerPersistence Persistence { get; }
 
     public FloorDropStore FloorDrops { get; }
     public ChestStore Chests { get; }
@@ -80,6 +84,8 @@ sealed class World
         _storage = storage;
         _overworld = Dimension.CreateOverworld(terrain ?? FlatTerrainProvider.Instance);
         _logger = logger;
+        _writes = new WriteBehind(logger);
+        Persistence = new PlayerPersistence(storage, _writes);
         _generationDiagnostics = generationDiagnostics;
         _generationWorkers = generationWorkers;
         _generationBroker = new WorldGenerationBroker(generationWorkers, GenerateColumnCoreAsync, generationDiagnostics);
@@ -113,129 +119,7 @@ sealed class World
             _logger?.Warning($"Stored game rules ignored (unknown name or changed type): {string.Join(", ", ignored)}.");
     }
 
-    /// <summary>
-    /// Write-behind: the storage call enqueues the write and returns; nobody waits for it. A ValueTask must still be consumed, so a
-    /// completed one is read and a pending or faulted one is observed here, where a failure is logged instead of vanishing as an
-    /// unobserved task exception.
-    /// </summary>
-    private void WriteBehind(ValueTask write, string what)
-    {
-        if (write.IsCompletedSuccessfully)
-        {
-            write.GetAwaiter().GetResult();
-            return;
-        }
-
-        _ = ObserveWriteAsync(write, what);
-    }
-
-    private async Task ObserveWriteAsync(ValueTask write, string what)
-    {
-        try
-        {
-            await write.ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            _logger?.Warning($"World write-behind '{what}' failed: {exception.Message}");
-        }
-    }
-
-    public void PersistGameRules() => WriteBehind(_storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot)), "PutGameRules");
-
-    public void PersistInventory(Player.Player player)
-    {
-        if (!player.IdentityStable) return;
-        WriteBehind(_storage.PutInventoryAsync(player.Uuid, PlayerInventorySave.Pack(player)), "PutInventory");
-    }
-
-    /// <summary>Raw Put for tests / loaders — prefer <see cref="PersistInventory(Player.Player)"/> on live sessions.</summary>
-    public void PersistInventory(Guid uuid, Player.PlayerInventory inventory) =>
-        WriteBehind(_storage.PutInventoryAsync(uuid, inventory.PackMainBlob()), "PutInventory");
-
-    public bool TryLoadInventory(Guid uuid, Player.PlayerInventory inventory)
-    {
-        var blob = _storage.GetInventoryAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && PlayerInventorySave.TryLoad(blob, inventory);
-    }
-
-    public bool TryLoadInventory(Player.Player player)
-    {
-        var blob = _storage.GetInventoryAsync(player.Uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && PlayerInventorySave.TryLoad(blob, player.Inventory, player.Windows);
-    }
-
-    public void PersistArmor(Player.Player player)
-    {
-        if (!player.IdentityStable) return;
-        WriteBehind(_storage.PutArmorAsync(player.Uuid, player.Inventory.PackArmorBlob()), "PutArmor");
-    }
-
-    public bool TryLoadArmor(Guid uuid, Player.PlayerInventory inventory)
-    {
-        var blob = _storage.GetArmorAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && inventory.TryLoadArmorFromBlob(blob);
-    }
-
-    public void PersistOffhand(Player.Player player)
-    {
-        if (!player.IdentityStable) return;
-        WriteBehind(_storage.PutOffhandAsync(player.Uuid, player.Inventory.PackOffhandBlob()), "PutOffhand");
-    }
-
-    public bool TryLoadOffhand(Guid uuid, Player.PlayerInventory inventory)
-    {
-        var blob = _storage.GetOffhandAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && inventory.TryLoadOffhandFromBlob(blob);
-    }
-
-    /// <summary>Quit / gamemode Persist — skips unstable identity (ADR §60).</summary>
-    public void PersistPlayerData(Player.Player player)
-    {
-        if (!player.IdentityStable) return;
-        // A persisted health of 0 would fail TryUnpack's own corruption guard on the next load
-        // (health must be positive — a hydrated player must never load already-dead). Disconnecting
-        // mid-death-screen (before CompleteRespawn ran) is the one real path that could otherwise
-        // hit this: persist as if already respawned rather than losing the whole blob (pose/XP too)
-        // to a validation rejection.
-        var health = player.IsDead ? player.MaxHealth : player.Health;
-        var blob = PlayerDataBlob.Pack(
-            player.PositionX,
-            player.PositionY,
-            player.PositionZ,
-            player.Yaw,
-            player.Pitch,
-            player.GameMode,
-            player.ExperienceLevel,
-            player.ExperiencePoints,
-            health,
-            player.Hunger,
-            player.Saturation,
-            player.Exhaustion);
-        WriteBehind(_storage.PutPlayerDataAsync(player.Uuid, blob), "PutPlayerData");
-    }
-
-    /// <summary>
-    /// Login hydrate. False = miss / corrupt / OOB → caller keeps terrain spawn + config GameMode.
-    /// </summary>
-    public bool TryLoadPlayerData(
-        Guid uuid, out float x, out float y, out float z, out float yaw, out float pitch, out Player.GameMode mode,
-        out int experienceLevel, out int experiencePoints,
-        out float health, out float hunger, out float saturation, out float exhaustion)
-    {
-        x = y = z = yaw = pitch = 0;
-        mode = Player.GameMode.Survival;
-        experienceLevel = 0;
-        experiencePoints = 0;
-        health = 20f;
-        hunger = 20f;
-        saturation = 5f;
-        exhaustion = 0f;
-        var blob = _storage.GetPlayerDataAsync(uuid).AsTask().GetAwaiter().GetResult();
-        return blob is not null && PlayerDataBlob.TryUnpack(
-            blob, out x, out y, out z, out yaw, out pitch, out mode, out experienceLevel, out experiencePoints,
-            out health, out hunger, out saturation, out exhaustion);
-    }
+    public void PersistGameRules() => _writes.Observe(_storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot)), "PutGameRules");
 
     /// <summary>
     /// True when feet + eye cell are air (standing room). Used to heal flat-era pd: into noise hills.
@@ -516,7 +400,7 @@ sealed class World
         // Cleared before encoding: an edit that lands while the blob is being built marks it dirty again.
         column.ClearDirty();
         var blob = ColumnCodec.Encode(column, Blocks.Palette);
-        WriteBehind(_storage.PutColumnAsync(column.Coord, blob), "PutColumn");
+        _writes.Observe(_storage.PutColumnAsync(column.Coord, blob), "PutColumn");
     }
 
     /// <summary>Snapshot of resident chunk coords — the eviction sweep's candidate set.</summary>

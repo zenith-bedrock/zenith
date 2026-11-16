@@ -104,16 +104,8 @@ sealed class PlayerInventory
 
     public void RestoreArmorSnapshot(InventorySlot[] snapshot) => Array.Copy(snapshot, _armor, ArmorSize);
 
-    public bool TryLoadArmorFromBlob(ReadOnlySpan<byte> data)
-    {
-        Span<InventorySlot> slots = new InventorySlot[ArmorSize];
-        if (!SlotBlob.TryUnpack(data, slots))
-            return false;
-        slots.CopyTo(_armor);
-        return true;
-    }
-
-    public byte[] PackArmorBlob() => SlotBlob.Pack(_armor);
+    /// <summary>Replaces the armor with a saved copy (exactly <see cref="ArmorSize"/> slots).</summary>
+    public void LoadArmor(ReadOnlySpan<InventorySlot> saved) => saved.CopyTo(_armor);
 
     /// <summary>The offhand stack (ISR container 34 slot 1; InventoryContent window 119).</summary>
     public InventorySlot Offhand => _offhand;
@@ -128,16 +120,8 @@ sealed class PlayerInventory
         return true;
     }
 
-    public bool TryLoadOffhandFromBlob(ReadOnlySpan<byte> data)
-    {
-        Span<InventorySlot> slots = new InventorySlot[1];
-        if (!SlotBlob.TryUnpack(data, slots))
-            return false;
-        _offhand = slots[0];
-        return true;
-    }
-
-    public byte[] PackOffhandBlob() => SlotBlob.Pack([_offhand]);
+    /// <summary>Replaces the offhand with a saved copy.</summary>
+    public void LoadOffhand(InventorySlot saved) => _offhand = saved;
 
     public static bool IsValidLocation(int slot) =>
         slot == CursorSlot || IsValidInventorySlot(slot);
@@ -372,17 +356,12 @@ sealed class PlayerInventory
         return all;
     }
 
-    public bool TryLoadMainFromBlob(ReadOnlySpan<byte> data)
+    /// <summary>Replaces the main inventory with a saved copy (exactly <see cref="FullInventorySize"/> slots); the cursor is emptied.</summary>
+    public void LoadMain(ReadOnlySpan<InventorySlot> saved)
     {
-        Span<InventorySlot> slots = new InventorySlot[FullInventorySize];
-        if (!SlotBlob.TryUnpack(data, slots))
-            return false;
-        slots.CopyTo(_slots);
+        saved.CopyTo(_slots);
         _cursor = InventorySlot.Empty;
-        return true;
     }
-
-    public byte[] PackMainBlob() => SlotBlob.Pack(_slots);
 
     private void SetLocation(int slot, InventorySlot value)
     {

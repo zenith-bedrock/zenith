@@ -160,7 +160,7 @@ sealed class HungerSystem : IGameSystem
             }
         }
         player.Client.Inventory.SendInventoryContent(player.Inventory);
-        player.Level.PersistInventory(player);
+        player.Level.Persistence.PersistInventory(player);
         return true;
     }
 

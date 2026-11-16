@@ -101,7 +101,7 @@ sealed class FloorDropSystem : IGameSystem
             NotifyPickup(player, eid, (int)MathF.Floor(drop.Pose.X), (int)MathF.Floor(drop.Pose.Z), remainingPublish, online);
 
             player.Client.Inventory.SendInventoryContent(player.Inventory);
-            _world.PersistInventory(player);
+            _world.Persistence.PersistInventory(player);
             return;
         }
     }

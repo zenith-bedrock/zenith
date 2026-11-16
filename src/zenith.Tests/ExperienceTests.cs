@@ -141,9 +141,9 @@ public class ExperienceTests
         var player = fx.AddInGamePlayer("progressed");
         player.AddExperience(50);
 
-        fx.World.PersistPlayerData(player);
+        fx.World.Persistence.PersistPlayerData(player);
 
-        Assert.True(fx.World.TryLoadPlayerData(
+        Assert.True(fx.World.Persistence.TryLoadPlayerData(
             player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points, out _, out _, out _, out _));
         Assert.Equal(player.ExperienceLevel, level);
         Assert.Equal(player.ExperiencePoints, points);
@@ -155,10 +155,10 @@ public class ExperienceTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("reconnector");
         player.AddExperience(50);
-        fx.World.PersistPlayerData(player);
+        fx.World.Persistence.PersistPlayerData(player);
 
         var reconnected = fx.AddPlayer("reconnector-again");
-        Assert.True(fx.World.TryLoadPlayerData(
+        Assert.True(fx.World.Persistence.TryLoadPlayerData(
             player.Uuid, out _, out _, out _, out _, out _, out _, out var level, out var points, out _, out _, out _, out _));
         reconnected.SetExperience(level, points);
 

@@ -119,6 +119,6 @@ sealed class BucketSystem(World.World world, PlayerManager players, BucketItems 
     {
         if (player.GameMode == GameMode.Creative) return;
         player.Client.Inventory.SendInventoryContent(player.Inventory);
-        world.PersistInventory(player);
+        world.Persistence.PersistInventory(player);
     }
 }

@@ -78,10 +78,10 @@ public class SlotBlobPersistTests
         var uuid = Guid.NewGuid();
         var packed = new PlayerInventory(seedStarterHotbar: false);
         Assert.True(packed.TrySetBlock(0, Blocks.Sand, 7));
-        world.PersistInventory(uuid, packed);
+        world.Persistence.PersistInventory(uuid, packed);
 
         var loaded = new PlayerInventory(seedStarterHotbar: true);
-        Assert.True(world.TryLoadInventory(uuid, loaded));
+        Assert.True(world.Persistence.TryLoadInventory(uuid, loaded));
         Assert.Equal(Blocks.Sand, loaded.Get(0).Id.Value);
         Assert.Equal(7, loaded.Get(0).Count);
         Assert.True(loaded.Get(1).IsEmpty);

@@ -95,7 +95,7 @@ sealed class VillagerSystem : MobSystem<VillagerState>
         }
 
         player.Client.Inventory.SendInventoryContent(player.Inventory);
-        player.Level.PersistInventory(player);
+        player.Level.Persistence.PersistInventory(player);
         TradeCount++;
         return true;
     }

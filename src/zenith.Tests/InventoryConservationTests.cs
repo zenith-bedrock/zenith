@@ -154,7 +154,7 @@ public class InventoryConservationTests
         fx.CreateInventorySystem().Tick(fx.Clock, []);
         await fx.World.FlushPersistenceAsync();
         var restored = NewPrivatePlayer(fx, player);
-        Assert.True(fx.World.TryLoadInventory(restored));
+        Assert.True(fx.World.Persistence.TryLoadInventory(restored));
         Assert.Equal(13, restored.Inventory.SnapshotMainInventory().Sum(slot => slot.Count));
         Assert.True(restored.Inventory.Cursor.IsEmpty);
         Assert.False(restored.Windows.CraftUi.HasPendingOutputs);
