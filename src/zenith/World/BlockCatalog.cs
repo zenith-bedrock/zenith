@@ -43,7 +43,10 @@ enum BlockKind : byte
     FenceGate,
 
     /// <summary>Connection types and post recomputed from neighbours on every placement or removal next to it.</summary>
-    Wall
+    Wall,
+
+    /// <summary>Leaves: placed by a player they are persistent (never decay); grown by world-gen they are not.</summary>
+    Leaves
 }
 
 /// <summary>

@@ -25,6 +25,7 @@ static class BlockShapes
         table[(int)BlockKind.Trapdoor] = new TrapdoorShape();
         table[(int)BlockKind.FenceGate] = new FenceGateShape();
         table[(int)BlockKind.Wall] = new WallShape();
+        table[(int)BlockKind.Leaves] = new LeavesShape();
         return table;
     }
 

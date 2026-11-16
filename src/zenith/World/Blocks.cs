@@ -34,6 +34,7 @@ static class Blocks
         public int OakPlanks { get; set; }
         public int OakLog { get; set; }
         public int OakLeaves { get; set; }
+        public int OakSapling { get; set; }
         public int Sand { get; set; }
         public int Gravel { get; set; }
         public int Bedrock { get; set; }
@@ -86,6 +87,7 @@ static class Blocks
     public static int OakPlanks => Current.OakPlanks;
     public static int OakLog => Current.OakLog;
     public static int OakLeaves => Current.OakLeaves;
+    public static int OakSapling => Current.OakSapling;
     public static int Sand => Current.Sand;
     public static int Gravel => Current.Gravel;
     public static int Bedrock => Current.Bedrock;
@@ -154,6 +156,7 @@ static class Blocks
         b.OakPlanks = palette.Require("minecraft:oak_planks");
         b.OakLog = palette.Require("minecraft:oak_log");
         b.OakLeaves = palette.Require("minecraft:oak_leaves");
+        b.OakSapling = palette.Require("minecraft:oak_sapling");
         b.Sand = palette.Require("minecraft:sand");
         b.Gravel = palette.Require("minecraft:gravel");
         b.Bedrock = palette.Require("minecraft:bedrock");
@@ -301,6 +304,12 @@ static class Blocks
     /// <summary>True for blocks that take random ticks (the <c>RandomTick</c> trait in block_definitions.json).</summary>
     public static bool IsRandomTicking(int runtimeId) =>
         Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.RandomTick) != 0;
+
+    /// <summary>True for trunks (the <c>Log</c> trait): what leaves hold on to.</summary>
+    public static bool IsLog(int runtimeId) =>
+        Current.Catalog.States.FamilyOf(runtimeId) is { } family && (family.Traits & BlockTraits.Log) != 0;
+
+    public static bool IsLeaves(int runtimeId) => Current.Catalog.KindOf(runtimeId) == BlockKind.Leaves;
 
     /// <summary>Literal empty air. Never occupies, never supports (Phase XXIX).</summary>
     public static bool IsAir(int runtimeId)

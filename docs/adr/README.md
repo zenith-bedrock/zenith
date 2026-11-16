@@ -184,5 +184,6 @@ One file per decision. Code, tests and docs cite a decision as **`ADR §N`**; th
 | 167 | [Mutable world columns with block entities](0167-mutable-world-columns-and-block-entities.md) |
 | 168 | [Typed records, write-behind and paged ZLDB](0168-typed-records-write-behind-and-paged-zldb.md) |
 | 169 | [Random ticks gated by section](0169-random-ticks-gated-by-section.md) |
+| 170 | [Leaves decay and sapling growth](0170-leaves-decay-and-sapling-growth.md) |
 
 Moved out of the log but still evidence for §99–§102: [first actor vertical slice findings](../history/first-actor-findings.md).

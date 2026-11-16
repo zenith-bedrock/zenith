@@ -84,3 +84,12 @@ sealed class TorchShape : BlockShape
         return (dx | dy | dz) == 0 || IsSolid(world.GetBlock(x + dx, y + dy, z + dz));
     }
 }
+
+/// <summary>A leaf block set down by a player is persistent: only world-grown leaves may decay (ADR §170).</summary>
+sealed class LeavesShape : BlockShape
+{
+    public override IReadOnlyList<StateKey> RequiredKeys => [StateKeys.Persistent];
+
+    public override bool TryResolve(ref int runtimeId, in PlaceContext context) =>
+        States.TrySet(ref runtimeId, StateKeys.Persistent, true);
+}

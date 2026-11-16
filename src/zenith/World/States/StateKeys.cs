@@ -38,6 +38,7 @@ static class StateKeys
     public static readonly BitKey UpsideDown = new("upside_down_bit");
     public static readonly BitKey InWall = new("in_wall_bit");
     public static readonly BitKey Age = new("age_bit");
+    public static readonly BitKey Persistent = new("persistent_bit");
 
     // Recognised for classification only.
     public static readonly PresenceKey StairCorner = new("minecraft:corner");

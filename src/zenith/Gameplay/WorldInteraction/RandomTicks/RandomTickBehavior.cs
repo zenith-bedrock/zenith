@@ -58,6 +58,10 @@ sealed class RandomTickBehaviors
     {
         var behaviors = new RandomTickBehaviors();
         behaviors.Register(Blocks.GrassBlock, new GrassSpreadBehavior());
+        behaviors.Register(Blocks.OakSapling, new SaplingGrowthBehavior());
+        var decay = new LeavesDecayBehavior();
+        foreach (var family in Blocks.Catalog.States.Families)
+            if (family.Kind == BlockKind.Leaves) behaviors.Register(family.DefaultId, decay);
         return behaviors;
     }
 

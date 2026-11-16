@@ -161,6 +161,89 @@ public sealed class RandomTickSystemTests
         Assert.Equal(before, fx.World.SyncLoadCount);
     }
 
+    private static RandomTickSystem SystemFor(IntentTestFixture fx) => new(fx.World, RandomTickBehaviors.Default(), new Random(1));
+
+    [Fact]
+    public async Task A_world_grown_leaf_with_no_trunk_decays()
+    {
+        var fx = await FixtureWithViewedColumn();
+        fx.World.SetBlock(5, 70, 5, Blocks.OakLeaves);
+
+        Run(fx, SystemFor(fx), 100);
+
+        Assert.True(Blocks.IsAir(fx.World.GetBlock(5, 70, 5)));
+    }
+
+    [Fact]
+    public async Task A_leaf_beside_a_trunk_stays()
+    {
+        var fx = await FixtureWithViewedColumn();
+        fx.World.SetBlock(5, 70, 5, Blocks.OakLeaves);
+        fx.World.SetBlock(6, 70, 5, Blocks.OakLog);
+
+        Run(fx, SystemFor(fx), 100);
+
+        Assert.Equal(Blocks.OakLeaves, fx.World.GetBlock(5, 70, 5));
+    }
+
+    [Fact]
+    public async Task Leaves_hold_on_through_a_chain_of_four_and_let_go_at_five()
+    {
+        var fx = await FixtureWithViewedColumn();
+        fx.World.SetBlock(1, 70, 5, Blocks.OakLog);
+        for (var x = 2; x <= 6; x++) fx.World.SetBlock(x, 70, 5, Blocks.OakLeaves);
+
+        Run(fx, SystemFor(fx), 200);
+
+        for (var x = 2; x <= 5; x++) Assert.Equal(Blocks.OakLeaves, fx.World.GetBlock(x, 70, 5));
+        Assert.True(Blocks.IsAir(fx.World.GetBlock(6, 70, 5)));
+    }
+
+    [Fact]
+    public async Task A_leaf_a_player_placed_never_decays()
+    {
+        var fx = await FixtureWithViewedColumn();
+        Assert.True(BlockShapes.TryResolve(Blocks.OakLeaves, 1, 0.5f, 0f, out var placed));
+        Assert.NotEqual(Blocks.OakLeaves, placed);
+        fx.World.SetBlock(5, 70, 5, placed);
+
+        Run(fx, SystemFor(fx), 100);
+
+        Assert.Equal(placed, fx.World.GetBlock(5, 70, 5));
+    }
+
+    private static async Task<IntentTestFixture> FixtureWithSapling(int saplingId)
+    {
+        var fx = await FixtureWithViewedColumn();
+        fx.World.SetBlock(8, 63, 8, Blocks.Dirt);
+        fx.World.SetBlock(8, 64, 8, saplingId);
+        return fx;
+    }
+
+    [Fact]
+    public async Task A_sapling_grows_into_a_tree_after_two_stages()
+    {
+        var fx = await FixtureWithSapling(Blocks.OakSapling);
+
+        Run(fx, SystemFor(fx), 600);
+
+        Assert.True(Blocks.IsLog(fx.World.GetBlock(8, 64, 8)));
+        Assert.True(Blocks.IsLog(fx.World.GetBlock(8, 67, 8)));
+        Assert.True(Blocks.IsLeaves(fx.World.GetBlock(10, 67, 8)));
+    }
+
+    [Fact]
+    public async Task A_sapling_without_room_does_not_grow()
+    {
+        var fx = await FixtureWithSapling(Blocks.OakSapling);
+        fx.World.SetBlock(8, 66, 8, Blocks.Stone);
+
+        Run(fx, SystemFor(fx), 600);
+
+        Assert.False(Blocks.IsLog(fx.World.GetBlock(8, 64, 8)));
+        Assert.Equal(Blocks.Stone, fx.World.GetBlock(8, 66, 8));
+    }
+
     [Fact]
     public async Task Speed_zero_turns_random_ticks_off()
     {

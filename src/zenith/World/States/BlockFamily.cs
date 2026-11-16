@@ -19,7 +19,10 @@ enum BlockTraits : byte
     WallConnectable = 8,
 
     /// <summary>Gets random ticks (ADR §169): grass spreading and decaying. Needs a behaviour registered for it.</summary>
-    RandomTick = 16
+    RandomTick = 16,
+
+    /// <summary>A trunk: leaves within reach of one do not decay (ADR §170).</summary>
+    Log = 32
 }
 
 /// <summary>One property of a block type: its legal values and the mixed-radix stride of the state ordinal.</summary>
