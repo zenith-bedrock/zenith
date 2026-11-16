@@ -93,7 +93,10 @@ class LoginSessionHandler : ISessionHandler
             packet.AuthInfo.Certificate,
             packet.ClientDataJwt);
 
-        var player = CreatePlayer(session, identity);
+        var player = CreatePlayer(session, identity, TrustOf(authType, identity));
+        session.Context.Logger.Info(
+            $"Identity for '{player.Username}': uuid={player.Uuid:D} trust={player.Trust} " +
+            "(list the uuid under permissions.operators to make an authenticated player an administrator).");
         HydratePlayer(session, player);
 
         if (!TryAdmit(session, player))
@@ -207,7 +210,14 @@ class LoginSessionHandler : ISessionHandler
             : identity;
     }
 
-    private static Zenith.Player.Player CreatePlayer(NetworkSession session, LoginIdentity.ParsedIdentity identity)
+    /// <summary>Only a FULL login the server verified is authenticated; a stable id a client picked itself is merely asserted.</summary>
+    private static Zenith.Gameplay.Permissions.IdentityTrust TrustOf(int authType, LoginIdentity.ParsedIdentity identity) =>
+        !identity.IdentityStable ? Zenith.Gameplay.Permissions.IdentityTrust.Ephemeral
+        : authType == LoginPacket.AuthenticationInfo.TypeFull ? Zenith.Gameplay.Permissions.IdentityTrust.Authenticated
+        : Zenith.Gameplay.Permissions.IdentityTrust.SelfAsserted;
+
+    private static Zenith.Player.Player CreatePlayer(
+        NetworkSession session, LoginIdentity.ParsedIdentity identity, Zenith.Gameplay.Permissions.IdentityTrust trust)
     {
         var gameMode = Zenith.Player.GameModeConfig.FromConfig(session.Context.Config.Server.Gamemode);
         return new Zenith.Player.Player(
@@ -218,7 +228,8 @@ class LoginSessionHandler : ISessionHandler
             gameMode,
             identity.IdentityStable,
             session.Context.World,
-            session.Context.ItemPalette)
+            session.Context.ItemPalette,
+            trust)
         {
             SkinRgba = identity.SkinRgba,
             SkinWidth = identity.SkinWidth,

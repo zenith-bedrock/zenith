@@ -50,6 +50,8 @@ public sealed class ClientJourneyTests
         Assert.Contains(afterLogin, p => p.Id == (int)ProtocolInfo.RESOURCE_PACKS_INFO_PACKET);
         Assert.False(client.IsClosed);
         Assert.NotNull(fx.Players.Get("Journey"));
+        // A self-signed login is a stable id the client picked itself: never authenticated, so no durable privilege.
+        Assert.Equal(Zenith.Gameplay.Permissions.IdentityTrust.SelfAsserted, fx.Players.Get("Journey")!.Trust);
     }
 
     /// <summary>Everything a client does from first contact until it stands in the world, in the order a real one does it.</summary>

@@ -4,6 +4,7 @@ using Zenith.Event;
 using Zenith.Diagnostics;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Commands;
+using Zenith.Gameplay.Permissions;
 using Zenith.Player;
 using Zenith.Logging;
 using Zenith.World;
@@ -30,6 +31,7 @@ class ServerContext
     public BucketItems Buckets { get; }
     public ItemDurability Durability { get; }
     public CreativeCatalog Creative { get; }
+    public PermissionAuthority Permissions { get; }
     public CommandRuntime Commands { get; }
     public ServerRuntimeDiagnostics Diagnostics { get; }
 
@@ -62,6 +64,14 @@ class ServerContext
         Durability = durability;
         Creative = creative;
         Diagnostics = diagnostics ?? new ServerRuntimeDiagnostics();
+        var permissionNodes = new PermissionRegistry();
+        PermissionNodes.RegisterBuiltIns(permissionNodes);
+        Permissions = new PermissionAuthority(permissionNodes, PermissionPolicy.Create(
+            permissionNodes,
+            config.Permissions.Operators,
+            config.Permissions.Grants,
+            config.Permissions.Denies,
+            config.Permissions.TrustSelfAsserted));
         Commands = new CommandRuntime(playerManager, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner);
     }
 }

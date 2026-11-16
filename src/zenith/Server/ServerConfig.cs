@@ -11,6 +11,7 @@ sealed class ServerConfig
     public ServerSection Server { get; set; } = new();
     public WorldSection World { get; set; } = new();
     public AuthSection Auth { get; set; } = new();
+    public PermissionsSection Permissions { get; set; } = new();
     public ChatSection Chat { get; set; } = new();
     public NetworkSection Network { get; set; } = new();
     public LogSection Log { get; set; } = new();
@@ -144,6 +145,19 @@ sealed class ServerConfig
 
             Accept = AllowedModes.Where(_modes.Contains).ToList();
         }
+    }
+
+    /// <summary>
+    /// Who may do what. Operators and grants are canonical identity UUIDs (the server logs a player's UUID and trust at login).
+    /// Privilege applies only to identities the server can vouch for: an Xbox login it verified, or, when
+    /// <see cref="TrustSelfAsserted"/> is set, a self-signed/offline one (development only).
+    /// </summary>
+    public sealed class PermissionsSection
+    {
+        public List<string> Operators { get; set; } = [];
+        public Dictionary<string, List<string>> Grants { get; set; } = [];
+        public Dictionary<string, List<string>> Denies { get; set; } = [];
+        public bool TrustSelfAsserted { get; set; }
     }
 
     public sealed class ChatSection

@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Permissions;
 using Zenith.Session;
 using Zenith.Gameplay.Survival;
 using Zenith.World;
@@ -71,6 +72,12 @@ class Player
     /// False when login minted an ephemeral Guid — skip <c>pd:</c> / prefer no reconnect honesty (ADR §60).
     /// </summary>
     public bool IdentityStable { get; }
+
+    /// <summary>How far the server vouches for this login's identity; decides whether durable privilege can apply (default: not at all).</summary>
+    public IdentityTrust Trust { get; }
+
+    /// <summary>Who authorization sees acting: identity, its trust and this login's session id. An immutable value, safe to hand off.</summary>
+    public Principal Principal => new(Uuid, Trust, RuntimeId);
 
     /// <summary>Requests the network hands to the GameLoop (movement input, attack, chat, block edits, ...).</summary>
     public PlayerIntents Intents { get; }
@@ -238,8 +245,10 @@ class Player
         GameMode gameMode = GameMode.Survival,
         bool identityStable = true,
         World.World? level = null,
-        ItemPalette? itemPalette = null)
+        ItemPalette? itemPalette = null,
+        IdentityTrust trust = IdentityTrust.Ephemeral)
     {
+        Trust = trust;
         Username = username;
         Session = session;
         _level = level;
