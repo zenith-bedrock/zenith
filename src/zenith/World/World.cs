@@ -237,7 +237,22 @@ sealed class World
     }
 
     /// <summary>Makes a built column resident. If another path got there first its column wins and this one is dropped.</summary>
-    private WorldColumn Publish(WorldColumn column) => _columns.GetOrAdd(column.Coord, column);
+    private WorldColumn Publish(WorldColumn column)
+    {
+        var resident = _columns.GetOrAdd(column.Coord, column);
+        // Only the column that became resident announces its saved falls; a built copy that lost the race is dropped with its records.
+        if (ReferenceEquals(resident, column) && column.PendingFalls.Count > 0)
+            _columnsWithSavedFalls.Enqueue(column);
+        return resident;
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<WorldColumn> _columnsWithSavedFalls = new();
+
+    /// <summary>
+    /// A column that was loaded from storage carrying falls that were in flight when it was saved. The gameplay adopts them (once,
+    /// on the owner thread); the column cannot be evicted while it still has any, so the entry and the column live and die together.
+    /// </summary>
+    public bool TryTakeColumnWithSavedFalls(out WorldColumn column) => _columnsWithSavedFalls.TryDequeue(out column!);
 
     /// <summary>The column holding block (x, z); loaded on the calling thread if nobody streamed it yet.</summary>
     private WorldColumn ColumnAt(int x, int z)
@@ -410,6 +425,16 @@ sealed class World
         _writes.Observe(_storage.PutColumnAsync(column.Coord, blob), "PutColumn");
     }
 
+    /// <summary>
+    /// Writes down that the block now at (x, y, z) is about to leave it and fall. Call before clearing the cell: the record and the
+    /// cell are in one column, so every image of that column either has both the block and no record, or the empty cell and the record.
+    /// </summary>
+    public PendingFall RecordFall(int x, int y, int z, int blockRuntimeId) =>
+        ColumnAt(x, z).AddPendingFall(ChunkMath.ToLocal(x), ChunkMath.ToLocal(z), y, blockRuntimeId);
+
+    /// <summary>Drops a fall's record once it has landed (in the same step that wrote the landing block) or left through the void.</summary>
+    public void ClearFall(int x, int z, PendingFall fall) => ColumnAt(x, z).RemovePendingFall(fall);
+
     /// <summary>Snapshot of resident chunk coords — the eviction sweep's candidate set.</summary>
     public List<(int X, int Z)> CopyLoadedColumns()
     {
@@ -432,6 +457,8 @@ sealed class World
             return true;
         if (HasOpenContainer(column))
             return false;
+        if (column.PendingFalls.Count > 0)
+            return false; // a block of this column is in the air; its landing must find this very column
 
         if (column.IsDirty) PersistColumn(column);
         _columns.TryRemove(column.Coord, out _);

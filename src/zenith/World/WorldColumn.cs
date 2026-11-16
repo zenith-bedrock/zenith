@@ -135,6 +135,32 @@ sealed class WorldColumn
         }
     }
 
+    // ---- falls in flight (owner thread only) ----
+
+    private readonly List<PendingFall> _pendingFalls = new();
+
+    /// <summary>Falling blocks whose cell was already cleared but which have not landed. Saved inside the column image.</summary>
+    public IReadOnlyList<PendingFall> PendingFalls => _pendingFalls;
+
+    /// <summary>Records a fall in this column and marks it for saving. Call in the same tick, before the origin cell is cleared.</summary>
+    public PendingFall AddPendingFall(int localX, int localZ, int originY, int blockRuntimeId)
+    {
+        var fall = new PendingFall(localX, localZ, originY, blockRuntimeId);
+        _pendingFalls.Add(fall);
+        _dirty = true;
+        return fall;
+    }
+
+    /// <summary>Install a fall while the column is being decoded — never on a published column.</summary>
+    public void RestorePendingFall(PendingFall fall) => _pendingFalls.Add(fall);
+
+    public bool RemovePendingFall(PendingFall fall)
+    {
+        if (!_pendingFalls.Remove(fall)) return false;
+        _dirty = true;
+        return true;
+    }
+
     // ---- wire ----
 
     /// <summary>The LevelChunk payload for the column as it is now; any thread.</summary>
@@ -177,6 +203,29 @@ sealed class WorldColumn
         writer.WriteByte(BiomeNetworkBorderBlocksEmpty);
         return new WirePayload(highest + 1, writer.GetBufferDisposing().ToArray(), version);
     }
+}
+
+/// <summary>
+/// A block that has left its origin cell and is falling in this column. Gravity is vertical, so the column that held the origin is
+/// the column of the landing: the record and the cell changes are one image and cannot be saved apart.
+/// </summary>
+sealed class PendingFall
+{
+    public PendingFall(int localX, int localZ, int originY, int blockRuntimeId)
+    {
+        LocalX = localX;
+        LocalZ = localZ;
+        OriginY = originY;
+        BlockRuntimeId = blockRuntimeId;
+    }
+
+    public int LocalX { get; }
+    public int LocalZ { get; }
+    public int OriginY { get; }
+    public int BlockRuntimeId { get; }
+
+    /// <summary>Whether a live falling entity represents this record (memory only; set by gravity, never saved).</summary>
+    public bool IsAdopted { get; set; }
 }
 
 /// <summary>A serialised LevelChunk body: how many subchunks it carries, the bytes, and the <see cref="WorldColumn.EditVersion"/> they reflect (or an older one if an edit raced the build).</summary>

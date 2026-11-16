@@ -12,13 +12,17 @@ namespace Zenith.World;
 ///                  cells packed LSB-first at that width (absent when the section is a single block)
 /// block entities   7-bit count, then per entity: local x byte, y (7-bit, offset by the world floor), local z byte,
 ///                  type id string, 7-bit length + the type's own bytes
+/// falls (v2)       7-bit count, then per fall: local x byte, local z byte, origin y (7-bit, offset by the world floor), block key string
 /// </code>
+/// Version 1 blobs (no falls section) still load. Falls in flight are part of the image on purpose: the cell cleared at the origin
+/// and the record of the block that left it are written together or not at all.
 /// Palette entries are <see cref="BlockPalette.CanonicalKeyOf"/> strings, not runtime ids, so a world outlives a block
 /// palette that renumbers.
 /// </summary>
 static class ColumnCodec
 {
-    private const byte Version = 1;
+    private const byte Version = 2;
+    private const byte FirstVersionWithFalls = 2;
 
     public static byte[] Encode(WorldColumn column, BlockPalette palette)
     {
@@ -63,6 +67,15 @@ static class ColumnCodec
                 w.Write7BitEncodedInt(bytes.Length);
                 w.Write(bytes);
             });
+
+            w.Write7BitEncodedInt(column.PendingFalls.Count);
+            foreach (var fall in column.PendingFalls)
+            {
+                w.Write((byte)fall.LocalX);
+                w.Write((byte)fall.LocalZ);
+                w.Write7BitEncodedInt(fall.OriginY - WorldColumn.MinY);
+                w.Write(KeyOf(palette, fall.BlockRuntimeId));
+            }
         }
 
         return stream.ToArray();
@@ -147,7 +160,7 @@ static class ColumnCodec
             using var r = new BinaryReader(stream, Encoding.UTF8);
             if (r.ReadByte() != (byte)'Z' || r.ReadByte() != (byte)'C') throw new InvalidDataException("Not a column blob.");
             var version = r.ReadByte();
-            if (version != Version) throw new InvalidDataException($"Column blob version {version} is not supported.");
+            if (version is < 1 or > Version) throw new InvalidDataException($"Column blob version {version} is not supported.");
 
             var column = new WorldColumn(coord, dimensionId, r.Read7BitEncodedInt());
             var sections = r.Read7BitEncodedInt();
@@ -208,6 +221,23 @@ static class ColumnCodec
                 if (!BlockEntityTypes.TryGet(typeId, out var type)) continue; // a type this build lacks: dropped, not fatal
                 var entity = type.Decode(bytes) ?? throw new InvalidDataException($"Block entity '{typeId}' data is not valid.");
                 column.SetEntity(coord.X * 16 + lx, y, coord.Z * 16 + lz, entity);
+            }
+
+            if (version >= FirstVersionWithFalls)
+            {
+                var fallCount = r.Read7BitEncodedInt();
+                for (var f = 0; f < fallCount; f++)
+                {
+                    var lx = r.ReadByte();
+                    var lz = r.ReadByte();
+                    var originY = r.Read7BitEncodedInt() + WorldColumn.MinY;
+                    var key = r.ReadString();
+                    if (lx >= 16 || lz >= 16 || !WorldColumn.InRange(originY))
+                        throw new InvalidDataException("Fall record is outside its column.");
+                    if (!palette.TryGetByCanonicalKey(key, out var blockRuntimeId))
+                        throw new InvalidDataException($"Unknown falling block '{key.Replace('\0', ' ')}'.");
+                    column.RestorePendingFall(new PendingFall(lx, lz, originY, blockRuntimeId));
+                }
             }
 
             column.ClearDirty();

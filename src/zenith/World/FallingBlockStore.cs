@@ -3,7 +3,10 @@ using Zenith.Logging;
 
 namespace Zenith.World;
 
-/// <summary>One in-flight falling-block entity (ADR §95). RAM-only — never persisted.</summary>
+/// <summary>
+/// One in-flight falling-block entity (ADR §95). The entity itself is RAM-only; what survives a restart is its
+/// <see cref="Record"/>, saved inside the column image (plan 002, phase 4a), which gravity re-adopts when the column loads.
+/// </summary>
 sealed class FallingBlockEntry
 {
     public required long EntityId { get; init; }
@@ -16,6 +19,14 @@ sealed class FallingBlockEntry
     /// <summary>Continuous vertical position — starts at the source block's Y, falls toward <see cref="LandY"/>.</summary>
     public float Y { get; set; }
     public float VelocityY { get; set; }
+
+    /// <summary>The saved record of this fall, in the column that holds both origin and landing. Removed only when the fall is resolved.</summary>
+    public PendingFall? Record { get; init; }
+
+    /// <summary>No cell below accepted the block yet; it is kept (never discarded) and retried periodically.</summary>
+    public bool IsStuck { get; set; }
+
+    public int RetryIn { get; set; }
 }
 
 /// <summary>

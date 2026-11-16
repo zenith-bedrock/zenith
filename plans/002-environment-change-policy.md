@@ -7,7 +7,7 @@
 - Effort: M across six independently reviewable phases
 - Risk: MED. The danger is not the seam, it is the writers: a veto that leaves a writer retrying forever, drops an item while the block stays, or builds half a structure is worse than no veto.
 - Depends on: plan 001 phases 0-3 (done)
-- Status: DESIGN, revision 3. Phase 0 (the ratchet) is implemented and awaiting review; nothing else is. Decisions 1, 2 and 4 are approved. Decision 3 (gravity) was rejected as written and is replaced below; the gravity phase must not start until its prerequisites are approved.
+- Status: DESIGN, revision 4. Phase 0 (the ratchet) is approved and done. Phase 4a (falling-block durability) is implemented and awaiting review; nothing else is. Phase 4b (gravity under policy) does not start until 4a is reviewed. Decision 3(b), the void as the single named exit, is still open.
 
 Revision 2 changes, from review plus a second reading of the code: the cause list now follows the meaning of the change, not the system that makes it; the proposal is per cell; what happens after a protection is lifted is stated; gravity has explicit invariants (and the code has a pre-existing conservation hole there); tree growth is a planned multi-cell unit, which the per-cell rule alone would break; the ratchet is an IL call-site scan, not text search; policy faults get rate-limited logging; the `EnvironmentChanged` fact and region flags are deferred.
 
@@ -106,19 +106,12 @@ Rejected from revision 2: dropping a falling block after a bounded retry. A veto
 - **Mid-fall changes** (a region created while falling, a cell filled below) are handled at the landing step: the block rests at the lowest cell of its fall column that is free **and** permitted, searching upward from the predicted landing toward its origin. A protected cell therefore behaves like ground for the falling block. Placing it is judged as `air -> block` under cause `Gravity`.
 - **No permitted resting cell** (the origin itself was permitted to clear but not to receive, and everything between is protected: a pathological policy): the entry stays alive at its last position, marked stuck. It is logged once at error level with block, coordinates and cause, counted in diagnostics, and re-evaluated every 20 ticks. The 20-tick figure only paces re-evaluation and the log; it never ends the entry. The block exists as an entry until a cell accepts it.
 - **Shutdown** uses the same resting rule, immediately and without animation. A stuck entry at shutdown is the case that cannot be made to rest; see persistence below.
-- **Replaceability.** Landing and resting require the target cell to be replaceable (air or what `FluidFlow.CanHold` accepts), never overwriting a block.
+- **Which cells accept a falling block** is settled by phase 4a, see "Phase 4a result": air, fire, any liquid, ground-cover plants and torches. Nothing else is ever overwritten; the block rests above it.
 - **The void** stays the one named exit, as in vanilla. It is not caused by policy, capacity or failure, and it is deterministic. **Needs your confirmation** (decision 3 below): the alternative is to forbid starting a fall that has no support above the world floor, which keeps the block but differs from vanilla and only matters in worlds without a bedrock floor.
 
-**Persistence and restart (the limit you asked about).** Graceful stop already conserves through the settle at shutdown, and the resting rule keeps that true under policies. The crash and settle-failure gap in item 1 is real and pre-existing, and the invariant is not true across it. The solution needed to make it true is a write-ahead record of the in-flight set:
+**Persistence and restart (the limit you asked about).** Implemented as phase 4a, see "Phase 4a result". The first sketch of this section (a separate world record written before the origin clear, with a three-way recovery rule on the origin cell) was replaced: a separate record can disagree with the column image in both directions, and the recovery rule "origin holds the same block, so discard the entry" destroys a block when a second sand block was placed in the vacated cell. The saved record now lives in the same image as the cells.
 
-- One world record (a new `RecordKind` or the existing module-state record under a world-owned name) holding, per entry: block runtime id, landing column, origin Y, and current Y.
-- Order within the tick: the record containing a new entry is queued before the origin clear, so the write-behind drain can never persist the clear without the entry; a landed entry is removed from the record after the landing write.
-- Recovery at boot, deterministic: for each saved entry look at its origin cell. Origin is air: the block was cleared, so resolve the entry with the resting rule (conserved). Origin still holds that same block: the clear never reached disk, so discard the entry (no duplicate). Origin holds something else: the world changed meanwhile, resolve the entry with the resting rule.
-- Cost: one small put per tick in which the set changed; none otherwise.
-
-This is a prerequisite of the gravity phase, not part of it, because it changes world storage. It is proposed as **Phase 4a (falling-block durability)**, then **Phase 4b (gravity under policy)**. If you prefer to accept the crash gap as documented, 4a is dropped and the invariant is stated as "holds across graceful stops, not across crashes"; I would not recommend that given the constraint you set, but it is your call.
-
-**Tests (4b):** veto at origin keeps the block and does not leave a stuck entry; veto at predicted landing keeps the block at origin; store full keeps the block at origin; region created mid-fall makes the block rest above it; no permitted cell keeps a live stuck entry that is never removed and is logged once; landing cell filled meanwhile does not destroy the new block; `DoTileDrops` off changes nothing; shutdown settle under a region; and in every scenario a count of blocks plus entries equals the number that started, at every tick. **Tests (4a):** crash between origin clear and flush resolves to exactly one block; crash after landing duplicates nothing; recovery with origin air, origin same block, origin changed.
+**Tests (4b):** veto at origin keeps the block and does not leave a stuck entry; veto at predicted landing keeps the block at origin; store full keeps the block at origin; region created mid-fall makes the block rest above it; no permitted cell keeps a live stuck entry that is never removed and is logged once; landing cell filled meanwhile does not destroy the new block; `DoTileDrops` off changes nothing; shutdown settle under a region; and in every scenario a count of blocks plus entries equals the number that started, at every tick. The 4a tests are listed in "Phase 4a result".
 
 ### Observable faults
 
@@ -136,7 +129,8 @@ Each phase is one reviewable commit with tests that assert the world and the ite
 - **Phase 1, seam + Explosion + fault log.** The types, composition, Protect implementation, `CreeperSystem` per cell, the shared fault-log helper adopted by the three sets, the first measurement. Tests: a crater stops at the boundary; protected blocks untouched, others carved; a faulty policy denies safely and logs boundedly; frozen after composition.
 - **Phase 2, FluidFlow + Fire (incl. lava ignition).** Veto in the predicates. Tests: liquid and fire do not enter a region; no washed-away drop for a vetoed cell (item conservation); quiet afterwards (no re-queued tick for the vetoed cell); after the region is removed, resumption happens on the next neighbour update and not before (the documented semantics).
 - **Phase 3, SupportLoss.** Tests: a torch inside a region survives its support being removed outside, with no drop; it remains on a later neighbour update while protected; once the region is removed it breaks on the next update and not before.
-- **Phase 4a, falling-block durability** (prerequisite, pending approval) and **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests.
+- **Phase 4a, falling-block durability. DONE, awaiting review; see "Phase 4a result".**
+- **Phase 4b, gravity under policy.** The invariant, the decide-before-clearing order, the resting rule and the stuck-entry rule above, with their tests. Not started.
 - **Phase 5, random ticks: Growth, Decay, Spread.** Per-behaviour cause; tree growth as a planned unit. Tests: no partial tree (a protected cell anywhere in the footprint means no trunk and no canopy); leaves inside a region do not decay; grass does not spread into a region; a region does not affect behaviours outside it.
 
 ## Phase 0 result
@@ -161,6 +155,57 @@ Random-tick behaviours that write through `RandomTickContext.TrySet`: `SaplingGr
 
 No caller exists outside this table: nothing in `Server`, `Session`, `Protocol` or `Packets` changes a cell, and `SetBlock` has no production caller except through `TrySetBlock`. `WorldWriterInventoryTests` pins this at method granularity, fails for an unlisted writer, fails for a stale entry, pins that exactly six environment writers remain unpoliced, and requires every random-tick writer to name its cause. It was checked to fail when an entry is removed. What it cannot see is reflection or dynamic invocation, and it proves only that no unlisted code writes a cell; that a listed "policed" writer really consults the policies is shown by the behavioural tests named in the table.
 
+## Phase 4a result
+
+Scope: conservation of falling blocks across crashes and mid-fall changes. No policy is consulted yet; that is 4b.
+
+### Vanilla landing semantics, and the rule adopted
+
+Researched on the Minecraft Wiki's Falling Block page (read for this phase, not recalled). Vanilla: a falling block becomes a block again only when the cell it reaches is replaceable (air, liquids, fire, and replaceable ground cover such as grass, ferns and snow layers) and the block below supports it; otherwise it breaks into an item (Bedrock since 0.8.0 build 8). A falling block that lands in a non-replaceable cell does not overwrite it. Bedrock adds snow layers to a layer of snow. What the page does not say, and I could not verify without a client: what happens to a fall that leaves the world (the void), to a cell filled during the fall, or with game rules that disable drops.
+
+Adopted rule (`GravitySystem.Accepts`): a falling block may occupy and land in **air, fire, any liquid, ground-cover plants and torches** (`Blocks.IsFluid` or `FluidFlow.CanHold`: the set a liquid washes away in Zenith). **Any other cell is never overwritten**, including every block that blocks movement and open doors, trapdoors and gates; the fall stops above it.
+
+Divergences from vanilla, deliberate and recorded:
+
+1. Vanilla turns the block into an item when the cell is not replaceable. Zenith rests it on top instead. Reason: an item is not a conserving step here (floor drops are memory only, capped, despawn, and `DoTileDrops` can suppress them), and the invariant is conservation. This is the one place Zenith keeps more than vanilla.
+2. Vanilla replaces some thin blocks Zenith does not model as replaceable (snow layers) and keeps some Zenith treats as replaceable (torches are destroyed by landing sand in Zenith; in vanilla Java they are broken too, in Bedrock I did not verify this). A torch or plant **placed during the fall in the landing cell is crushed**, because the falling block already passes through those cells; accepting that keeps the fall and the landing consistent. Everything that blocks movement placed during the fall is kept.
+3. Open doors, trapdoors and gates used to be fall-through cells (and were overwritten on landing). They now stop the fall. This changes behaviour that was an overwrite bug, not a feature.
+4. The void is unchanged: a block that falls below the world's floor is discarded and its record cleared. Decision 3(b) is still yours.
+
+I did not restrict falling to simplify: the only behaviours that became stricter are the ones that destroyed a block that blocks movement or an open door.
+
+### Design
+
+- **The record is part of the column image.** Gravity is vertical, so the cell a block leaves and the cell it lands in are in the same column. `WorldColumn` carries a list of `PendingFall` (local x, z, origin Y, block); `ColumnCodec` version 2 saves it after the block entities (version 1 images still load, with no falls). Because the cells and the record are encoded together by the single writer of column images (`World.PersistColumn`), no saved image can show the cleared origin without its record, or the landed block together with its record.
+- **A refinement of the wording of requirement 1 and 6, stated so you can reject it.** You asked for the record to be durably written before the origin is cleared, and removed only after the landing is durably confirmed. A separate record needs that ordering and a durability barrier between the two writes. Putting both in one image gives the same guarantee by construction (every image is either before the clear or after it, either before the landing or after it) and needs no barrier. The cost is that the record is only as durable as the column image: it reaches the disk when the column is next saved (the residency sweep, eviction or shutdown), not at the instant of the clear. A crash before that save leaves the previous image, which holds the block at its origin with no record: still exactly one block. "Durable" therefore means atomic with the cells and written on the store's normal schedule (the write-behind drain, atomic as a batch); it does not mean an fsync per fall.
+- **`BeginFall`**: record the fall (into the column), then clear the origin, in the same tick on the game loop. `Land`: write the block at the first cell from the landing cell upward that accepts it, then end the fall (entry leaves the store, record leaves the column) in the same step. `Resolve` is the only place that ends a fall; its callers are a landing and the void.
+- **Recovery**: a column loaded from storage that carries records announces itself once (only the copy that wins the publish race does). Gravity adopts each record once, creating a falling entry at its origin height; the normal fall then lands it, and the destination is judged at landing time, not at record time. The origin cell is not special: if something solid now sits there the block rests above it; if the same block sits there it is a different block (a player may have put sand back) and the record is kept. Blocks stacked above the origin are queued again, since the queue that held them was memory only.
+- **A column with a block in the air is not evicted** (`TryEvictChunk`), so the entry and the column that holds its record live and die together and a landing never reloads the column mid-fall. This also removes limit 6 above.
+- **A block no cell accepts** (the column is full to the world's top) stays an entry, marked stuck, is logged once at error level, is saved with its record, and is retried every 20 ticks. The 20 only paces the retry; it never ends the entry.
+- **Shutdown** (`SettleAllPending`) now adopts any loaded column's records first, so a stop right after boot also settles them.
+
+### Limits, stated honestly
+
+- A fall whose column nobody has loaded since the crash waits in storage with its record and falls when the column is next needed. The block is conserved but not visible in the world until then.
+- Durability is the column save schedule (see above), not an fsync per fall. The loss window is "the fall since the last save", which resolves to the earlier consistent state, never to a lost or duplicated block.
+- Nothing here was exercised against a real Bedrock client; the tests drive the systems directly.
+- A stuck entry holds its column resident for as long as it is stuck. It needs a column filled to the world's top, or (4b) a policy that refuses every cell.
+
+### Tests (`FallingBlockDurabilityTests`)
+
+The crash is a second world booted from `InMemoryChunkStorage.Snapshot()`: the bytes written so far, none that were only in memory.
+
+- A crash at every tick boundary of a whole fall, both before and after the tick was saved, resolves to exactly one block and no record; the live count (world plus entries) is one at every boundary; what is saved after recovering holds no record.
+- No saved image shows the cleared origin without its record, or a landed block with one, at every tick.
+- Two stacked blocks in flight both survive.
+- Recovery adopts once however often it is asked; booting twice from the same image gives the same world; a column nobody loaded keeps its record in storage until loaded.
+- A block placed in the landing cell or in the origin cell before recovery, and a block placed mid-fall in the landing cell, is never overwritten; the fall rests above it and the count is one.
+- Destination types: water, fire, short grass and torch give way; stone and an open door stay and the block rests above.
+- A column full to the top keeps a stuck, saved, once-logged entry through a restart, and it lands within a retry period once room appears.
+- The void clears the record with the entry. A column with a block in the air is not evicted until it lands. A graceful stop, including one right after boot, leaves no record.
+- Version 1 images still load; a record outside its column is rejected as corrupt.
+- Checked to fail: removing the record clear from `Resolve` fails nine of them.
+
 ## Deferred, with the trigger that reopens each
 
 - **`EnvironmentChanged` fact** (batched, per system per tick). Reopen when a concrete consumer exists (an audit log, rollback, an integration). Policies solve the current problem; facts serve needs not yet shown.
@@ -172,7 +217,7 @@ No caller exists outside this table: nothing in `Server`, `Session`, `Protocol` 
 
 1. Strict regions in v1: **approved**. Saplings do not grow, leaves do not decay and grass does not spread inside a region.
 2. Support loss inside a region is vetoed and the block stays, even if that leaves a state vanilla would not allow: **approved**; tests for behaviour after protection is lifted stay.
-3. Gravity: **rejected as written**. Replaced by the conservation invariant, the block-as-reservation proposal and Phase 4a/4b above. Still to decide: (a) Phase 4a, persist the in-flight set (recommended) or accept the documented crash gap; (b) the void as the single named vanilla exit (recommended) or forbid starting a fall with no support above the floor.
+3. Gravity: **rejected as written**. Replaced by the conservation invariant, the block-as-reservation proposal and Phase 4a/4b above. (a) Phase 4a, persist the in-flight set: **approved and done**, with the refinement in "Phase 4a result". (b) The void as the single named vanilla exit (recommended) or forbid starting a fall with no support above the floor: **still to decide**; 4b does not depend on it.
 4. Phase 0 first, alone: **approved and done**. Phase 1 does not start until Phase 0 is reviewed.
 
 ## Non-goals

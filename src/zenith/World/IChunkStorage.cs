@@ -128,6 +128,17 @@ sealed class InMemoryChunkStorage : IChunkStorage
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// An independent copy of what has been stored so far: what a restart after a crash would find on disk. Tests use it to boot a
+    /// second world from the bytes that had already been written, and none that had not.
+    /// </summary>
+    public InMemoryChunkStorage Snapshot()
+    {
+        var copy = new InMemoryChunkStorage();
+        foreach (var (key, blob) in _records) copy._records[key] = blob;
+        return copy;
+    }
+
     public ValueTask FlushAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
     public bool TryGetProperty(string property, out string value)

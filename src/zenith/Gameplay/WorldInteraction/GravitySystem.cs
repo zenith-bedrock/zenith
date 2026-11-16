@@ -1,4 +1,6 @@
 using Zenith.Gameplay.Runtime;
+using Zenith.Gameplay.WorldInteraction.Fluids;
+using Zenith.Logging;
 using Zenith.Player;
 using Zenith.World;
 
@@ -8,6 +10,10 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// Sand/gravel falls as a real, visible falling_block entity (ADR §95) — replaces §57's instant
 /// column-teleport (block vanished from the top of the column and reappeared at the bottom in the
 /// same tick, with no wire actor at all). Runs after <see cref="BlockEditSystem"/>.
+/// <para/>
+/// A block that starts to fall exists as exactly one thing at every tick boundary: the block at its origin, one falling entry (with
+/// a record saved in its column), or the block at its resting place. It leaves that set only by landing, or through the void
+/// (plan 002, phase 4a). Landing never overwrites a cell that does not accept the block; the block rests above it instead.
 /// </summary>
 sealed class GravitySystem : IGameSystem
 {
@@ -19,15 +25,28 @@ sealed class GravitySystem : IGameSystem
 
     private readonly World.World _world;
     private readonly PlayerManager _players;
+    private readonly ILogger? _logger;
+    private readonly List<WorldColumn> _columnsToRetryAdopting = new();
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updatesScratch = new();
     private readonly List<FallingBlockEntry> _landedScratch = new();
     private readonly List<FallingBlockEntry> _voidedScratch = new();
 
-    public GravitySystem(World.World world, PlayerManager players)
+    /// <summary>Ticks between attempts to place a block that no cell accepts yet. Paces the retry and the log only; it never ends the entry.</summary>
+    internal const int StuckRetryTicks = 20;
+
+    public GravitySystem(World.World world, PlayerManager players, ILogger? logger = null)
     {
         _world = world;
         _players = players;
+        _logger = logger ?? world.Logger;
     }
+
+    /// <summary>
+    /// What a falling block may occupy and land in: air, fire, a liquid, ground-cover plants and torches (what a liquid washes
+    /// away too). Everything else (every block that blocks movement, and open doors, trapdoors and gates) stops the fall and is
+    /// never overwritten.
+    /// </summary>
+    internal static bool Accepts(int blockRuntimeId) => Blocks.IsFluid(blockRuntimeId) || FluidFlow.CanHold(blockRuntimeId);
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
@@ -36,6 +55,7 @@ sealed class GravitySystem : IGameSystem
         var updates = _updatesScratch;
         updates.Clear();
 
+        AdoptSavedFalls(online);
         BeginNewFalls(online, updates);
         AdvanceActiveFalls(online, updates);
 
@@ -56,6 +76,7 @@ sealed class GravitySystem : IGameSystem
     {
         var updates = _updatesScratch;
         updates.Clear();
+        AdoptSavedFalls(Array.Empty<global::Zenith.Player.Player>());
         var pending = _world.GravityPending;
         var guard = GravityPendingStore.SoftCap * 2;
         while (guard-- > 0)
@@ -108,15 +129,23 @@ sealed class GravitySystem : IGameSystem
             return;
         if (!IsUnsupported(x, y, z))
             return;
-        if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
-            return;
 
+        // The record is written into the column before the cell is cleared: no image of the column can show the empty cell without it.
+        var record = _world.RecordFall(x, y, z, rid);
+        if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId))
+        {
+            _world.ClearFall(x, z, record);
+            return;
+        }
+
+        record.IsAdopted = true;
         updates.Add((x, y, z, World.World.AirRuntimeId));
         EnqueueAbove(x, y, z, deferCascade);
 
         var entityId = _players.AllocateRuntimeId();
         var entry = new FallingBlockEntry
         {
+            Record = record,
             EntityId = entityId,
             RuntimeId = (ulong)entityId,
             BlockRuntimeId = rid,
@@ -148,13 +177,23 @@ sealed class GravitySystem : IGameSystem
         _voidedScratch.Clear();
         foreach (var entry in active)
         {
+            if (entry.IsStuck)
+            {
+                if (--entry.RetryIn <= 0)
+                {
+                    entry.RetryIn = StuckRetryTicks;
+                    _landedScratch.Add(entry);
+                }
+
+                continue;
+            }
+
             var cellY = (int)MathF.Floor(entry.Y);
 
-            // Someone else already claimed our current cell while we were airborne — rest one
-            // cell above it instead of overwriting (matches vanilla: a falling block that finds
-            // its target occupied settles on top rather than replacing what landed first).
-            // Phase XXIX: water no longer counts — a block falling into a lake keeps sinking.
-            if (cellY >= Blocks.FlatMinY && Blocks.BlocksMovement(_world.GetBlock(entry.LandX, cellY, entry.LandZ)))
+            // Someone else already claimed our current cell while we were airborne: rest above it
+            // instead of overwriting it; Land searches upward for the first cell that accepts the block.
+            // Phase XXIX: water no longer counts, a block falling into a lake keeps sinking.
+            if (cellY >= Blocks.FlatMinY && !Accepts(_world.GetBlock(entry.LandX, cellY, entry.LandZ)))
             {
                 entry.LandY = cellY + 1;
                 _landedScratch.Add(entry);
@@ -169,7 +208,7 @@ sealed class GravitySystem : IGameSystem
                 continue;
             }
 
-            if (Blocks.BlocksMovement(_world.GetBlock(entry.LandX, belowY, entry.LandZ)))
+            if (!Accepts(_world.GetBlock(entry.LandX, belowY, entry.LandZ)))
             {
                 entry.LandY = cellY;
                 _landedScratch.Add(entry);
@@ -190,7 +229,7 @@ sealed class GravitySystem : IGameSystem
 
         foreach (var entry in _voidedScratch)
         {
-            _world.FallingBlocks.Remove(entry);
+            Resolve(entry);
             foreach (var peer in online)
             {
                 if (!peer.IsInGame) continue;
@@ -209,13 +248,13 @@ sealed class GravitySystem : IGameSystem
         bool deferCascade)
     {
         var landY = entry.LandY;
-        while (landY - 1 >= Blocks.FlatMinY && !Blocks.BlocksMovement(_world.GetBlock(entry.LandX, landY - 1, entry.LandZ)))
+        while (landY - 1 >= Blocks.FlatMinY && Accepts(_world.GetBlock(entry.LandX, landY - 1, entry.LandZ)))
             landY--;
 
         if (landY - 1 < Blocks.FlatMinY)
         {
-            // No support all the way down — void, destroy without placing (matches the per-tick path).
-            _world.FallingBlocks.Remove(entry);
+            // No support all the way down: void, destroy without placing (matches the per-tick path).
+            Resolve(entry);
             return;
         }
 
@@ -223,13 +262,26 @@ sealed class GravitySystem : IGameSystem
         Land(entry, updates, deferCascade, online: null);
     }
 
+    /// <summary>
+    /// Puts the block down at the first cell from its landing cell upward that accepts it, then ends the fall in the same step.
+    /// Block and record change in one column, so no saved image holds the landed block and its record together, or neither.
+    /// When no cell accepts it the entry stays alive and is retried; it is never discarded.
+    /// </summary>
     private void Land(
         FallingBlockEntry entry,
         List<(int X, int Y, int Z, int BlockRuntimeId)> updates,
         bool deferCascade,
         IReadOnlyList<global::Zenith.Player.Player>? online)
     {
-        _world.FallingBlocks.Remove(entry);
+        var restY = FindRestingCell(entry.LandX, entry.LandY, entry.LandZ);
+        if (restY is null || !_world.TrySetBlock(entry.LandX, restY.Value, entry.LandZ, entry.BlockRuntimeId))
+        {
+            MarkStuck(entry);
+            return;
+        }
+
+        entry.LandY = restY.Value;
+        Resolve(entry);
 
         if (online is not null)
         {
@@ -240,12 +292,90 @@ sealed class GravitySystem : IGameSystem
             }
         }
 
-        if (!_world.TrySetBlock(entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId))
-            return; // Best-effort: something else claimed the cell mid-fall — block is lost (rare, §95 non-goal).
-
         updates.Add((entry.LandX, entry.LandY, entry.LandZ, entry.BlockRuntimeId));
         if (IsUnsupported(entry.LandX, entry.LandY, entry.LandZ))
             EnqueueFallCell(entry.LandX, entry.LandY, entry.LandZ, deferCascade);
+    }
+
+    /// <summary>The lowest cell at or above <paramref name="fromY"/> that accepts a falling block, or null when none up to the world's top does.</summary>
+    private int? FindRestingCell(int x, int fromY, int z)
+    {
+        for (var y = Math.Max(fromY, Blocks.FlatMinY); y <= WorldColumn.MaxY; y++)
+            if (Accepts(_world.GetBlock(x, y, z)))
+                return y;
+        return null;
+    }
+
+    private void MarkStuck(FallingBlockEntry entry)
+    {
+        entry.RetryIn = StuckRetryTicks;
+        if (entry.IsStuck) return;
+        entry.IsStuck = true;
+        _logger?.Error(
+            $"Falling block {entry.BlockRuntimeId} at {entry.LandX},{entry.LandZ} has no cell that accepts it; " +
+            $"it stays in flight and is retried every {StuckRetryTicks} ticks.");
+    }
+
+    /// <summary>Ends a fall: the entry leaves the store and its record leaves the column, together. The only callers are a landing and the void.</summary>
+    private void Resolve(FallingBlockEntry entry)
+    {
+        _world.FallingBlocks.Remove(entry);
+        if (entry.Record is { } record)
+            _world.ClearFall(entry.LandX, entry.LandZ, record);
+    }
+
+    /// <summary>
+    /// Re-creates the falling entries of columns that were loaded carrying falls that were in flight when they were saved, then lets
+    /// them fall again from their origin. Each record is adopted at most once; the blocks above an origin are queued again, since the
+    /// queue that held them was memory only.
+    /// </summary>
+    private void AdoptSavedFalls(IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        while (_world.TryTakeColumnWithSavedFalls(out var column))
+            _columnsToRetryAdopting.Add(column);
+        if (_columnsToRetryAdopting.Count == 0) return;
+
+        var columns = _columnsToRetryAdopting.ToArray();
+        _columnsToRetryAdopting.Clear();
+        foreach (var column in columns)
+            AdoptColumn(column, online);
+    }
+
+    private void AdoptColumn(WorldColumn column, IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (!_world.TryGetLoadedColumn(column.Coord.X, column.Coord.Z, out var resident) || !ReferenceEquals(resident, column))
+            return;
+
+        foreach (var record in column.PendingFalls.ToArray())
+        {
+            if (record.IsAdopted) continue;
+
+            var x = column.Coord.X * 16 + record.LocalX;
+            var z = column.Coord.Z * 16 + record.LocalZ;
+            var entityId = _players.AllocateRuntimeId();
+            var entry = new FallingBlockEntry
+            {
+                Record = record,
+                EntityId = entityId,
+                RuntimeId = (ulong)entityId,
+                BlockRuntimeId = record.BlockRuntimeId,
+                LandX = x,
+                LandY = record.OriginY,
+                LandZ = z,
+                Y = record.OriginY,
+                VelocityY = 0f
+            };
+
+            if (!_world.FallingBlocks.TrySpawn(entry))
+            {
+                _columnsToRetryAdopting.Add(column);
+                return;
+            }
+
+            record.IsAdopted = true;
+            EnqueueAbove(x, record.OriginY, z, defer: true);
+            SpawnFanout(online, entry);
+        }
     }
 
     private static void SpawnFanout(IReadOnlyList<global::Zenith.Player.Player> online, FallingBlockEntry entry)
@@ -264,7 +394,7 @@ sealed class GravitySystem : IGameSystem
         var belowY = y - 1;
         if (belowY < Blocks.FlatMinY)
             return true;
-        return !Blocks.BlocksMovement(_world.GetBlock(x, belowY, z));
+        return Accepts(_world.GetBlock(x, belowY, z));
     }
 
     private void EnqueueAbove(int x, int y, int z, bool defer)
