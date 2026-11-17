@@ -15,6 +15,7 @@ static class PermissionNodes
     public const string DifficultyWrite = "zenith.command.difficulty.write";
     public const string Weather = "zenith.command.weather";
     public const string Summon = "zenith.command.summon";
+    public const string Kill = "zenith.command.kill";
     public const string Diagnostics = "zenith.command.diagnostics";
 
     public const string WorldPlace = "zenith.world.place";
@@ -38,6 +39,7 @@ static class PermissionNodes
         registry.Register(DifficultyWrite, PermissionDefault.Operator);
         registry.Register(Weather, PermissionDefault.Operator);
         registry.Register(Summon, PermissionDefault.Operator);
+        registry.Register(Kill, PermissionDefault.Operator);
         registry.Register(Diagnostics, PermissionDefault.Operator);
 
         registry.Register(WorldPlace, PermissionDefault.Everyone);

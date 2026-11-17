@@ -63,7 +63,24 @@ sealed class EntityModule : IGameplayModule
         s.Register(golem);
         s.Register(fish);
         s.Register(new MobHazardSystem(world, entities, damage, fish.Owns, id => zombie.Owns(id) || skeleton.Owns(id)));
-        s.Register(new MobEffectSystem(entities, damage));
+        var mobEffects = new MobEffectSystem(entities, damage);
+        s.Register(mobEffects);
+
+        // What a selector's type= means: the species by the name /summon uses. Commands that act on selected entities queue on the spawner's
+        // queue and run here, on the loop, where the entities live.
+        var species = new MobDirectory();
+        species.Register("zombie", zombie.Owns);
+        species.Register("minecart", minecart.Owns);
+        species.Register("cow", cow.Owns);
+        species.Register("spider", spider.Owns);
+        species.Register("fish", fish.Owns);
+        species.Register("creeper", creeper.Owns);
+        species.Register("enderman", enderman.Owns);
+        species.Register("iron_golem", golem.Owns);
+        species.Register("skeleton", skeleton.Owns);
+        species.Register("bat", bat.Owns);
+        species.Register("villager", villager.Owns);
+        s.Register(new EntityCommandSystem(entities, players, damage, mobEffects, species, s.Spawner.Targeted, s.Gate));
         s.Register(new DeathAnimationSystem(entities));
 
         var spawner = s.Spawner;

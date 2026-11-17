@@ -25,7 +25,9 @@ static class BedrockCommandAdapter
                 aliasIndex = (uint)packet.Enums.Count;
                 packet.Enums.Add(AddEnum(packet, $"{definition.Name}Aliases", definition.Aliases));
             }
-            var overloads = definition.Overloads.Select(overload => new AvailableCommandOverload(
+            // A name and a selector are the same thing to the client (a target), so overloads that differ only there are one overload.
+            var seen = new HashSet<string>();
+            var overloads = definition.Overloads.Where(overload => seen.Add(Signature(overload))).Select(overload => new AvailableCommandOverload(
                 overload.Arguments.Select(argument => ProjectArgument(packet, argument)).ToArray())).ToArray();
             packet.Commands.Add(new AvailableCommand(definition.Name, definition.Description,
                 "any", aliasIndex, overloads));
@@ -33,13 +35,22 @@ static class BedrockCommandAdapter
         return packet;
     }
 
+    private static string Signature(CommandOverload overload) => string.Join(' ', overload.Arguments.Select(argument =>
+        $"{argument.Name}:{argument switch
+        {
+            EnumCommandArgument e => "enum=" + string.Join('|', e.Values.Keys),
+            IntegerCommandArgument => "int",
+            PlayerCommandArgument or SelectorCommandArgument => "target",
+            _ => "string"
+        }}{(argument.Optional ? "?" : "")}"));
+
     private static AvailableCommandParameter ProjectArgument(AvailableCommandsPacket packet, CommandArgument argument)
     {
         var type = argument switch
         {
             EnumCommandArgument commandEnum => Valid | Enum | (uint)AddFixedEnum(packet, argument.Name, commandEnum.Values.Keys),
             IntegerCommandArgument => Valid | Int,
-            PlayerCommandArgument => Valid | Target,
+            PlayerCommandArgument or SelectorCommandArgument => Valid | Target,
             StringCommandArgument => Valid | String,
             _ => throw new InvalidOperationException($"Unsupported command argument {argument.GetType().Name}.")
         };

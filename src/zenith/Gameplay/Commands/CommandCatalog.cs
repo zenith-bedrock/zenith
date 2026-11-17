@@ -75,12 +75,44 @@ sealed class CommandCatalog
         .SelectMany(d => new[] { d.Name }.Concat(d.Aliases))
         .Where(name => name.StartsWith(prefix.TrimStart('/'), StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase).ToArray();
 
-    private static string[] Tokenize(string line)
+    /// <summary>
+    /// Splits a line on spaces, except inside the brackets of a target selector (<c>@e[type=zombie, r=5]</c> is one token, quotes
+    /// included): only a token that starts with <c>@</c> is bracket-aware, so no other argument can swallow the rest of the line.
+    /// </summary>
+    internal static string[] Tokenize(string line)
     {
         if (string.IsNullOrWhiteSpace(line)) return [];
         var trimmed = line.Trim();
         if (trimmed.StartsWith('/')) trimmed = trimmed[1..];
-        return trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var tokens = new List<string>();
+        var start = -1;
+        var depth = 0;
+        var inQuotes = false;
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            var c = trimmed[i];
+            if (start >= 0 && trimmed[start] == '@')
+            {
+                if (c == '"' && depth > 0) inQuotes = !inQuotes;
+                else if (!inQuotes && c == '[') depth++;
+                else if (!inQuotes && c == ']' && depth > 0) depth--;
+            }
+
+            if (c == ' ' && depth == 0)
+            {
+                if (start >= 0) tokens.Add(trimmed[start..i]);
+                start = -1;
+                inQuotes = false;
+            }
+            else if (start < 0)
+            {
+                start = i;
+            }
+        }
+
+        if (start >= 0) tokens.Add(trimmed[start..]);
+        return [.. tokens];
     }
 }
 
@@ -127,7 +159,18 @@ sealed record StringCommandArgument(string Name, bool Optional = false) : Comman
 sealed record PlayerCommandArgument(string Name, Func<string, object?> Resolve, bool Optional = false) : CommandArgument(Name, Optional)
 { public override bool TryParse(string token, out object value) { value = Resolve(token)!; return value is not null; } }
 
-enum CommandParseStatus { Success, Unknown, Denied, Invalid }
+/// <summary>A target: a plain player name or an <c>@s/@p/@a/@e/@r</c> selector with optional <c>[arguments]</c>; yields a <see cref="TargetSelector"/>.</summary>
+sealed record SelectorCommandArgument(string Name, bool Optional = false) : CommandArgument(Name, Optional)
+{
+    public override bool TryParse(string token, out object value)
+    {
+        var ok = TargetSelector.TryParse(token, out var selector, out _);
+        value = selector!;
+        return ok;
+    }
+}
+
+enum CommandParseStatus{ Success, Unknown, Denied, Invalid }
 readonly record struct CommandParseResult(CommandParseStatus Status, CommandDefinition? Definition, CommandOverload? Overload, IReadOnlyDictionary<string, object>? Arguments)
 {
     public static CommandParseResult Success(CommandDefinition definition, CommandOverload overload, IReadOnlyDictionary<string, object> arguments) => new(CommandParseStatus.Success, definition, overload, arguments);

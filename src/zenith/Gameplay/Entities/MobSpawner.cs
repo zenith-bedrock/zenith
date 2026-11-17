@@ -17,6 +17,9 @@ sealed class MobSpawner(AuthorityGate? gate = null) : IGameSystem
     private readonly ConcurrentQueue<(Action<float, float, float> Spawn, float X, float Y, float Z, Authorization? Issuer)> _pending = new();
     private bool _frozen;
 
+    /// <summary>Where commands that act on selected entities queue their work; the <c>entity-command</c> system runs it on the loop.</summary>
+    public Commands.EntityCommandQueue Targeted { get; } = new();
+
     /// <summary>Names a species can be summoned by, in alphabetical order.</summary>
     public IReadOnlyList<string> Names => _species.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
 

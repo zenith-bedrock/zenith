@@ -42,7 +42,7 @@ public sealed class GameplayCompositionTests
             typeof(TimeSyncSystem), typeof(MovementSystem), typeof(PlayerSpatialIndexSystem), typeof(PlayerMeleeSystem), typeof(ChatSystem), typeof(GameModeSystem),
             // entities
             typeof(KnockbackSystem), typeof(ZombieSystem), typeof(MinecartSystem), typeof(ProjectileSystem), typeof(SkeletonSystem), typeof(CowSystem), typeof(CreeperSystem),
-            typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem), typeof(MobHazardSystem), typeof(MobEffectSystem),
+            typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem), typeof(MobHazardSystem), typeof(MobEffectSystem), typeof(EntityCommandSystem),
             typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
             typeof(WorldStateSyncSystem), typeof(WeatherSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem), typeof(ExperienceOrbSystem),

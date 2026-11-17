@@ -44,7 +44,10 @@ sealed class CommandRuntime
             ["creative"] = GameMode.Creative, ["c"] = GameMode.Creative, ["1"] = GameMode.Creative
         };
         Bind(ExecuteGameMode, new CommandDefinition("gamemode", "Change game mode", [PermissionNodes.GameModeSelf, PermissionNodes.GameModeOthers],
-            [new CommandOverload(new EnumCommandArgument("mode", modes), new PlayerCommandArgument("target", ResolvePlayer, Optional: true))], ["gm"]));
+            [
+                new CommandOverload(new EnumCommandArgument("mode", modes), new PlayerCommandArgument("target", ResolvePlayer, Optional: true)),
+                new CommandOverload(new EnumCommandArgument("mode", modes), new SelectorCommandArgument("target", Optional: true))
+            ], ["gm"]));
         Bind(ExecuteHelp, new CommandDefinition("help", "List available commands", PermissionNodes.Help,
             new CommandOverload(), new CommandOverload(new StringCommandArgument("command"))));
         Bind(ExecuteSample, new CommandDefinition("sample", "Show a bounded runtime sample request", PermissionNodes.Sample,
@@ -70,7 +73,16 @@ sealed class CommandRuntime
                     new PlayerCommandArgument("target", ResolvePlayer, Optional: true)),
                 new CommandOverload(
                     new EnumCommandArgument("action", effectClear),
-                    new PlayerCommandArgument("target", ResolvePlayer, Optional: true))
+                    new PlayerCommandArgument("target", ResolvePlayer, Optional: true)),
+                // The Bedrock grammar: /effect <target> <effect> [seconds] [amplifier], /effect <target> clear. The target is a name or an @ selector.
+                new CommandOverload(
+                    new SelectorCommandArgument("target"),
+                    new EnumCommandArgument("effect", effectTypes),
+                    new IntegerCommandArgument("seconds", 1, 1_000_000, Optional: true),
+                    new IntegerCommandArgument("amplifier", 0, 3, Optional: true)),
+                new CommandOverload(
+                    new SelectorCommandArgument("target"),
+                    new EnumCommandArgument("clear", effectClear))
             ], []));
 
         if (rules is not null)
@@ -105,6 +117,8 @@ sealed class CommandRuntime
             var species = spawner.Names.ToDictionary(name => name, name => (object)name, StringComparer.OrdinalIgnoreCase);
             Bind(ExecuteSummon, new CommandDefinition("summon", "Summon a mob at your position", PermissionNodes.Summon,
                 new CommandOverload(new EnumCommandArgument("mob", species))));
+            Bind(ExecuteKill, new CommandDefinition("kill", "Kill the entities a target selects (yourself by default)", PermissionNodes.Kill,
+                new CommandOverload(), new CommandOverload(new SelectorCommandArgument("target"))));
         }
 
         foreach (var contribution in contributions ?? [])
@@ -149,7 +163,7 @@ sealed class CommandRuntime
         var parsed = _catalog.Parse(line, HoldsFor(source));
         if (parsed.Status == CommandParseStatus.Unknown) return Rejected("Command", "Unknown command.");
         if (parsed.Status == CommandParseStatus.Denied) return Rejected("Command", NoPermission);
-        if (parsed.Status == CommandParseStatus.Invalid) return Rejected("Command", $"Usage: /{parsed.Definition!.Name}");
+        if (parsed.Status == CommandParseStatus.Invalid) return Rejected("Command", $"Usage: /{parsed.Definition!.Name}{SelectorProblem(line)}");
 
         var invocation = new CommandInvocation(
             source.Principal, source.Username, source.PositionX, source.PositionY, source.PositionZ, parsed.Arguments!);
@@ -191,8 +205,47 @@ sealed class CommandRuntime
         return _authority.Has(issued.Principal, issued.Node);
     }
 
+    /// <summary>When a line has a selector that does not parse, why: the reason a command reads as malformed is not always the shape of the line.</summary>
+    private static string SelectorProblem(string line)
+    {
+        foreach (var token in CommandCatalog.Tokenize(line))
+            if (token.StartsWith('@') && !TargetSelector.TryParse(token, out _, out var error))
+                return $" ({error})";
+        return "";
+    }
+
+    /// <summary>
+    /// Queues an action on whatever a selector picks. The entities belong to the game loop, so the selector is resolved there, against
+    /// the world as it is then; the caller hears the result as a toast. A plain name that is not online is refused at once.
+    /// </summary>
+    private CommandFeedback QueueTargeted(in CommandInvocation invocation, TargetSelector selector, EntityAction action)
+    {
+        if (_spawner is null) return Rejected(action.Title, "Selectors are unavailable.");
+        if (selector.Kind == SelectorKind.Named && _players.Get(selector.PlayerName!) is null)
+            return Rejected(action.Title, "That player is not online.");
+        var origin = new SelectorOrigin(invocation.X, invocation.Y, invocation.Z, invocation.Caller.SessionId, invocation.Caller.Subject);
+        _spawner.Targeted.Enqueue(new EntityCommand(invocation.Caller, origin, selector, action));
+        return Accepted(action.Title, $"Queued for {selector}.");
+    }
+
+    private CommandFeedback ExecuteKill(in CommandInvocation invocation)
+    {
+        var selector = invocation.Arguments.TryGetValue("target", out var value) ? (TargetSelector)value : SelfSelector;
+        return QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.Kill));
+    }
+
+    private static readonly TargetSelector SelfSelector = ParseSelf();
+
+    private static TargetSelector ParseSelf()
+    {
+        TargetSelector.TryParse("@s", out var selector, out _);
+        return selector;
+    }
+
     private CommandFeedback ExecuteGameMode(in CommandInvocation invocation)
     {
+        if (invocation.Arguments.TryGetValue("target", out var chosen) && chosen is TargetSelector selector)
+            return QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.GameMode, Mode: (GameMode)invocation.Arguments["mode"]));
         if (ResolveTarget(invocation) is not { } target) return Rejected("Game mode", "That player is not online.");
         if (!TryAuthorizeTarget(invocation, target, PermissionNodes.GameModeSelf, PermissionNodes.GameModeOthers, out var issued))
             return Rejected("Game mode", NoPermission);
@@ -252,6 +305,18 @@ sealed class CommandRuntime
 
     private CommandFeedback ExecuteEffect(in CommandInvocation invocation)
     {
+        // The Bedrock form carries no "action" word: /effect <target> <effect> [seconds] [amplifier] and /effect <target> clear.
+        if (!invocation.Arguments.ContainsKey("action"))
+        {
+            var selector = (TargetSelector)invocation.Arguments["target"];
+            if (invocation.Arguments.ContainsKey("clear"))
+                return QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.ClearEffects));
+            var seconds = invocation.Arguments.TryGetValue("seconds", out var secondsValue) ? (int)secondsValue : 30;
+            var strength = invocation.Arguments.TryGetValue("amplifier", out var strengthValue) ? (int)strengthValue : 0;
+            return QueueTargeted(invocation, selector,
+                new EntityAction(EntityActionKind.GiveEffect, (EffectType)invocation.Arguments["effect"], strength, seconds * 20));
+        }
+
         if (ResolveTarget(invocation) is not { } target) return Rejected("Effect", "That player is not online.");
         if (!TryAuthorizeTarget(invocation, target, PermissionNodes.EffectSelf, PermissionNodes.EffectOthers, out var issued))
             return Rejected("Effect", NoPermission);

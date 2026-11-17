@@ -48,6 +48,16 @@ sealed class MobEffectSystem(EntityRuntime stores, DamageDispatch damage) : IGam
         return true;
     }
 
+    /// <summary>Takes every effect off a mob now. False when it has none (or no health).</summary>
+    public bool Clear(EntityId id, IReadOnlyList<Player.Player> online)
+    {
+        if (!stores.Bodies.TryGet(id, out var component) || component.Body.Effects.Active.Count == 0) return false;
+        var removed = component.Body.Effects.Active.Keys.ToArray();
+        if (!component.Body.Clear()) return false;
+        foreach (var type in removed) Tell(id, EffectChange.Remove, type, 0, 0, online);
+        return true;
+    }
+
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         _scratch.Clear();
