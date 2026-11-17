@@ -1,6 +1,6 @@
 # Plan 004 — Vanilla parity audit of what already exists
 
-- Status: AUDIT. Nothing here is implemented yet; each row is a finding with its evidence and a rough size.
+- Status: AUDIT, being worked through. Done: items 1, 5, 6, 19 (see "Done" at the end). The rest are findings with evidence and a rough size.
 - Date: 2026-11-16. Method: the code of each implemented system read against (a) the BDS 1.26 behavior pack in
   `bds-reference/bds/behavior_packs/vanilla` (entities and spawn rules; authoritative, extracted from the `.brarchive` files),
   (b) PocketMine (`essential-reference`) and Dragonfly (`dragonfly-reference`) sources, (c) known vanilla rules where neither
@@ -61,3 +61,11 @@ Fall-damage threshold 3, drowning (300 air, -20, 2 damage, +4 refill), water flo
 4. Mining modifiers (7) and block drop tables with random counts (13), then the item pop (14) and merging (15).
 5. Burning state (8) with its sources (lava, fire, flint and steel).
 6. Melee set (11) and spawn rules (17, 18) once the light model question is decided.
+
+## Done
+
+- **1 Fall damage** now `ceil(distance - 3)` (`MovementSystem`); test `A_started_block_beyond_the_safe_distance_counts_as_a_whole_one` fails with `floor`.
+- **5 Mob data** from the BDS pack: zombie 3, spider 3, golem 7 to 21 (new `damageMax`, rolled per hit by `MeleeProfile.Roll`), enderman health 40. The golem's area slam (8) is a separate constant and was left alone.
+- **6 Experience** from the pack: cow and fish 1 to 3 (new `killExperienceMax`, rolled per kill), iron golem, bat, minecart and villager 0. Zombie and skeleton equipment bonus is not modelled (Zenith mobs carry no equipment).
+- **19 Fish** health 6 (cod).
+- Tests that pinned the old numbers now pin the pack's (zombie/spider damage, golem and enderman kills, XP ranges, minecart/bat/villager 0).

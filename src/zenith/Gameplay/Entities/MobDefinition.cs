@@ -17,8 +17,13 @@ sealed record MobDefinition(
     string Name, MobKind Kind, float MaxHealth, string LootTable, int KillExperience,
     int DeathAnimationTicks = MobDefinitions.DefaultDeathAnimationTicks,
     MeleeProfile? Melee = null,
-    KnockbackProfile? Knockback = null)
+    KnockbackProfile? Knockback = null,
+    int KillExperienceMax = -1)
 {
+    /// <summary>Points a kill gives: <see cref="KillExperience"/> alone, or a roll in [KillExperience, KillExperienceMax] (the pack rolls 1 to 3 for animals).</summary>
+    public int RollKillExperience(Random random) =>
+        KillExperienceMax > KillExperience ? random.Next(KillExperience, KillExperienceMax + 1) : KillExperience;
+
     public (float Width, float Height) Dimensions => Kind switch
     {
         MobKind.Zombie or MobKind.Skeleton or MobKind.Villager => (0.6f, 1.9f),
@@ -35,7 +40,11 @@ sealed record MobDefinition(
 }
 
 /// <summary>A species' contact attack on a player: damage per hit, horizontal reach in blocks, and ticks between hits.</summary>
-sealed record MeleeProfile(float Damage, float Reach, int CooldownTicks);
+sealed record MeleeProfile(float Damage, float Reach, int CooldownTicks, float DamageMax = 0f)
+{
+    /// <summary>One hit's damage: fixed, or a roll in [Damage, DamageMax] (the iron golem hits for 7 to 21).</summary>
+    public float Roll(Random random) => DamageMax > Damage ? Damage + random.NextSingle() * (DamageMax - Damage) : Damage;
+}
 
 /// <summary>
 /// The horizontal push a landed hit gives a species: initial speed in blocks/tick (scaled down by <paramref name="Resistance"/>),
@@ -108,11 +117,13 @@ static class MobDefinitions
             if (string.IsNullOrWhiteSpace(loot)) throw new InvalidDataException($"{ResourceName}: '{name}' has no lootTable.");
             var xp = entry.GetProperty("killExperience").GetInt32();
             if (xp < 0) throw new InvalidDataException($"{ResourceName}: '{name}' has negative killExperience {xp}.");
+            var xpMax = entry.TryGetProperty("killExperienceMax", out var xpMaxElement) ? xpMaxElement.GetInt32() : -1;
+            if (xpMax != -1 && xpMax < xp) throw new InvalidDataException($"{ResourceName}: '{name}' killExperienceMax {xpMax} is below killExperience {xp}.");
             var deathTicks = entry.TryGetProperty("deathAnimationTicks", out var deathElement) ? deathElement.GetInt32() : DefaultDeathAnimationTicks;
             if (deathTicks < 0) throw new InvalidDataException($"{ResourceName}: '{name}' has negative deathAnimationTicks {deathTicks}.");
             var melee = entry.TryGetProperty("melee", out var meleeElement) ? ParseMelee(name, meleeElement) : null;
             var knockback = entry.TryGetProperty("knockback", out var knockbackElement) ? ParseKnockback(name, knockbackElement) : null;
-            if (!byName.TryAdd(name, new MobDefinition(name, kind, health, loot, xp, deathTicks, melee, knockback)))
+            if (!byName.TryAdd(name, new MobDefinition(name, kind, health, loot, xp, deathTicks, melee, knockback, xpMax)))
                 throw new InvalidDataException($"{ResourceName}: '{name}' is defined twice.");
         }
 
@@ -127,7 +138,9 @@ static class MobDefinitions
         if (!float.IsFinite(damage) || damage <= 0f) throw new InvalidDataException($"{ResourceName}: '{name}' melee damage {damage} must be positive.");
         if (!float.IsFinite(reach) || reach <= 0f) throw new InvalidDataException($"{ResourceName}: '{name}' melee reach {reach} must be positive.");
         if (cooldown <= 0) throw new InvalidDataException($"{ResourceName}: '{name}' melee cooldownTicks {cooldown} must be positive.");
-        return new MeleeProfile(damage, reach, cooldown);
+        var max = element.TryGetProperty("damageMax", out var maxElement) ? maxElement.GetSingle() : 0f;
+        if (max != 0f && (!float.IsFinite(max) || max < damage)) throw new InvalidDataException($"{ResourceName}: '{name}' melee damageMax {max} is below damage {damage}.");
+        return new MeleeProfile(damage, reach, cooldown, max);
     }
 
     private static KnockbackProfile ParseKnockback(string name, JsonElement element)

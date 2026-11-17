@@ -27,7 +27,9 @@ public class MobDefinitionTests
             new HashSet<string> { "Zombie", "Cow", "Creeper", "Spider", "Skeleton", "Golem", "Minecart" }, names);
         Assert.Equal(20f, MobDefinitions.Zombie.MaxHealth);
         Assert.Equal("zombie", MobDefinitions.Zombie.LootTable);
-        Assert.Equal(25, MobDefinitions.Golem.KillExperience);
+        Assert.Equal(0, MobDefinitions.Golem.KillExperience); // the pack gives an iron golem none
+        Assert.Equal(40f, MobDefinitions.Enderman.MaxHealth);
+        Assert.Equal((1, 3), (MobDefinitions.Cow.KillExperience, MobDefinitions.Cow.KillExperienceMax));
     }
 
     [Fact]

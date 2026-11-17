@@ -304,7 +304,7 @@ public sealed class MinecartSystemTests
         var loot = Assert.Single(fx.World.FloorDrops.Snapshot());
         Assert.Equal(fx.Context.ItemPalette.Require("minecraft:minecart"), loot.Id.Value);
         IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal(1, player.ExperiencePoints);
+        Assert.Equal(0, player.ExperiencePoints); // the pack gives no experience to this species
     }
 
     [Fact]

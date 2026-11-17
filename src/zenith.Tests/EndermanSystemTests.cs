@@ -137,7 +137,7 @@ public sealed class EndermanSystemTests
         var system = new EndermanSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnEnderman(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 5; i++) // 40 health (the pack), 8 per diamond-sword hit
         {
             player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);

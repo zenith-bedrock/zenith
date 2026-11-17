@@ -92,9 +92,9 @@ public sealed class MeleeAttackTests
     [Fact]
     public void Melee_profiles_come_from_the_data_file()
     {
-        Assert.Equal(new MeleeProfile(4f, 2.25f, 20), MobDefinitions.Zombie.Melee);
-        Assert.Equal(new MeleeProfile(2f, 2.25f, 20), MobDefinitions.Spider.Melee);
-        Assert.Equal(new MeleeProfile(6f, 2.5f, 20), MobDefinitions.Golem.Melee);
+        Assert.Equal(new MeleeProfile(3f, 2.25f, 20), MobDefinitions.Zombie.Melee);
+        Assert.Equal(new MeleeProfile(3f, 2.25f, 20), MobDefinitions.Spider.Melee);
+        Assert.Equal(new MeleeProfile(7f, 2.5f, 20, 21f), MobDefinitions.Golem.Melee);
         Assert.Equal(new MeleeProfile(7f, 2.25f, 20), MobDefinitions.Enderman.Melee);
         Assert.Null(MobDefinitions.Cow.Melee);
     }

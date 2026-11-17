@@ -43,6 +43,22 @@ public class FallDamageTests
     }
 
     [Fact]
+    public void A_started_block_beyond_the_safe_distance_counts_as_a_whole_one()
+    {
+        var fx = new IntentTestFixture();
+        var mover = fx.AddInGamePlayer("mover");
+        var system = new MovementSystem(fx.Players);
+
+        SubmitAirborne(mover, Blocks.FlatSpawnY + 10.5f);
+        system.Tick(fx.Clock, fx.Players.Online);
+        SubmitLanding(mover, Blocks.FlatSpawnY); // 7.5 past the safe distance: vanilla rounds up to 8
+
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(12f, mover.Health);
+    }
+
+    [Fact]
     public void Fall_past_safe_distance_deals_one_damage_per_extra_block()
     {
         var fx = new IntentTestFixture();

@@ -120,7 +120,7 @@ public sealed class FishSystemTests
         Assert.Equal(1, cod.Count);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "fish");
         IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal(1, player.ExperiencePoints);
+        Assert.InRange(player.ExperiencePoints, 1, 3); // the pack rolls 1 to 3 for a cod
     }
 
     [Fact]

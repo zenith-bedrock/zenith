@@ -79,7 +79,7 @@ public sealed class VillagerSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "villager");
         IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal(1, player.ExperiencePoints);
+        Assert.Equal(0, player.ExperiencePoints); // the pack gives no experience to this species
     }
 
     [Fact]

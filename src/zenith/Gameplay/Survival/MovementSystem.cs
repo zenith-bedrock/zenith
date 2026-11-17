@@ -242,8 +242,8 @@ sealed class MovementSystem : IGameSystem
         PlayerDamage.ApplyCore(player, _players, source, amount, currentTick).Conclude(online);
 
     /// <summary>
-    /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per block beyond
-    /// that (vanilla-parity, ADR §96). Creative is immune — matches vanilla's creative fall
+    /// Landing after a fall &gt; <see cref="SafeFallDistance"/> deals 1 damage per started block beyond
+    /// that (ceil, as vanilla and PocketMine) (vanilla-parity, ADR §96). Creative is immune — matches vanilla's creative fall
     /// immunity and Zenith's existing Creative-keeps-inventory convention on death.
     /// </summary>
     private const float SafeFallDistance = 3f;
@@ -270,7 +270,7 @@ sealed class MovementSystem : IGameSystem
                 !player.Level.Rules.FallDamage)
                 return;
 
-            var damage = MathF.Floor(fallDistance - SafeFallDistance);
+            var damage = MathF.Ceiling(fallDistance - SafeFallDistance);
             if (damage <= 0) return;
 
             ApplyDamage(player, online, DamageSource.Fall, damage, currentTick);

@@ -109,7 +109,7 @@ sealed class MobCore
         if (dx * dx + dz * dz > melee.Reach * melee.Reach) return false;
 
         var result = PlayerDamage.ApplyCore(
-            target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), melee.Damage, currentTick, dx, dz);
+            target, _players, DamageSource.MeleeFrom(identity.ActorUniqueId), melee.Roll(_random), currentTick, dx, dz);
         result.Conclude(online);
         if (!result.Applied) return false;
 
@@ -133,7 +133,7 @@ sealed class MobCore
         var hasIdentity = _stores.Identities.TryGet(id, out var identity);
         long? actorUniqueId = hasIdentity ? identity.ActorUniqueId : null;
         var applied = DamageableActorCombat.TryApplyDamage(
-            id, _stores, source, amount, online, _world, _players, Replication.Viewers, _loot, _random, Definition.KillExperience, ItemPalette,
+            id, _stores, source, amount, online, _world, _players, Replication.Viewers, _loot, _random, Definition.RollKillExperience(_random), ItemPalette,
             Definition.Name, currentTick,
             destroyActor: killed =>
             {

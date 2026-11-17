@@ -207,16 +207,16 @@ public sealed class ZombieSystemTests
 
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(16f, player.Health);
+        Assert.Equal(17f, player.Health);
         for (var i = 0; i < 19; i++)
         {
             fx.Clock.Advance();
             system.Tick(fx.Clock, fx.Players.Online);
         }
-        Assert.Equal(16f, player.Health);
+        Assert.Equal(17f, player.Health);
         fx.Clock.Advance();
         system.Tick(fx.Clock, fx.Players.Online);
-        Assert.Equal(12f, player.Health);
+        Assert.Equal(14f, player.Health);
     }
 
     [Fact]

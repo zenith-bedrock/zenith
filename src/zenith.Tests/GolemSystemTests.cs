@@ -103,7 +103,7 @@ public sealed class GolemSystemTests
     }
 
     [Fact]
-    public void Melee_kill_drops_iron_ingot_and_awards_boss_tier_experience()
+    public void Melee_kill_drops_iron_ingot_and_awards_no_experience()
     {
         var fx = new IntentTestFixture();
         // Creative: this test is about the many-hits-to-kill loot/XP path, not about surviving the
@@ -116,7 +116,7 @@ public sealed class GolemSystemTests
         var system = new GolemSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         var id = system.SpawnGolem(player.PositionX + 1, player.PositionY, player.PositionZ);
 
-        for (var i = 0; i < 17; i++) // 100 health / 6 damage-per-hit
+        for (var i = 0; i < 17; i++) // 100 health / 6 damage-per-hit (diamond sword 8: 13 hits suffice, 17 is slack)
         {
             player.Intents.SubmitAttackIntent();
             system.Tick(fx.Clock, fx.Players.Online);
@@ -126,10 +126,9 @@ public sealed class GolemSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         Assert.Empty(system.Golems);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "iron_golem");
-        // 25 raw XP from level 0 crosses two level-up thresholds (7, then 9) — same
-        // PlayerExperience.AddPoints math every other kill-XP path already goes through.
-        IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal((2, 9), (player.ExperienceLevel, player.ExperiencePoints));
+        // The pack gives an iron golem no experience: a kill drops no orbs at all.
+        Assert.Equal(0, fx.World.ExperienceOrbs.Count);
+        Assert.Equal((0, 0), (player.ExperienceLevel, player.ExperiencePoints));
     }
 
     [Fact]

@@ -81,7 +81,7 @@ public sealed class CowSystemTests
         Assert.False(system.Stores.Entities.IsAlive(id));
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "cow");
         IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal(1, player.ExperiencePoints);
+        Assert.InRange(player.ExperiencePoints, 1, 3); // the pack rolls 1 to 3
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public sealed class CowSystemTests
             id, DamageSource.Projectile(shooter.RuntimeId), Health(system, id).Maximum, fx.Players.Online, fx.Clock.CurrentTick));
 
         IntentTestHelpers.CollectOrbs(fx);
-        Assert.Equal(1, shooter.ExperiencePoints);
+        Assert.InRange(shooter.ExperiencePoints, 1, 3);
     }
 
     [Fact]
