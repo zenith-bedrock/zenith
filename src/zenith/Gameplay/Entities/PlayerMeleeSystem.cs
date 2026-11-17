@@ -69,7 +69,11 @@ sealed class PlayerMeleeSystem : IGameSystem
                 clock.CurrentTick,
                 dx, dz);
             result.Conclude(online);
-            if (result.Applied) HungerSystem.Exhaust(attacker, HungerSystem.AttackExhaustion);
+            if (result.Applied)
+            {
+                HungerSystem.Exhaust(attacker, HungerSystem.AttackExhaustion);
+                GearWear.WearHeldWeapon(attacker);
+            }
         }
     }
 }

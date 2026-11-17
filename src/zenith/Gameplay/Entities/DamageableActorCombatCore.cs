@@ -57,6 +57,7 @@ internal static class DamageableActorCombatCore
             if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), PlayerMeleeDamage.Resolve(player, itemPalette), online, currentTick))
             {
                 HungerSystem.Exhaust(player, HungerSystem.AttackExhaustion);
+                GearWear.WearHeldWeapon(player);
                 return true;
             }
 

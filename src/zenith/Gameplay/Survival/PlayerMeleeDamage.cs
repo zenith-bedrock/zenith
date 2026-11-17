@@ -6,7 +6,17 @@ namespace Zenith.Gameplay.Survival;
 /// <summary>Plain melee item damage; independent of the target species (ADR §159).</summary>
 static class PlayerMeleeDamage
 {
-    public static float Resolve(Player.Player attacker, ItemPalette palette)
+    /// <summary>A hit struck while falling (not on the ground, not in water, not riding) is critical and does half again as much.</summary>
+    public const float CriticalMultiplier = 1.5f;
+
+    public static bool IsCritical(Player.Player attacker) =>
+        !attacker.IsOnGround && attacker.FallPeakY > attacker.PositionY && attacker.RidingEntityId is null &&
+        SubmersionProbe.AtFeet(attacker) == FluidType.None;
+
+    public static float Resolve(Player.Player attacker, ItemPalette palette) =>
+        Base(attacker, palette) * (IsCritical(attacker) ? CriticalMultiplier : 1f);
+
+    private static float Base(Player.Player attacker, ItemPalette palette)
     {
         var stack = attacker.Inventory.Get(attacker.SelectedHotbarSlot);
         if (stack.IsEmpty || !stack.Id.IsItem || !palette.TryGetName(stack.Id.Value, out var name)) return 1;

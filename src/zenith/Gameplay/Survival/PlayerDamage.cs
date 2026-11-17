@@ -90,6 +90,7 @@ static class PlayerDamage
         var result = player.ApplyDamage(source, mitigated, currentTick);
         if (!result.WasApplied)
             return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+        if (GearWear.WearsArmorFor(source.Cause)) GearWear.WearArmor(player, amount);
 
         // Phase XXV — damage exhaustion source (survival only; a Creative death only happens via the
         // deliberate Void exception above, and shouldn't feed the hunger cycle either).

@@ -55,6 +55,11 @@ class Player
     public World.World Level => _level ?? throw new InvalidOperationException($"Player '{Username}' was created without a world.");
 
     /// <summary>The item registry this player's stacks resolve against.</summary>
+    private Zenith.Gameplay.Inventory.ItemDurability? _durability;
+
+    /// <summary>The wear table for this server's items, built on first use from the same palette.</summary>
+    public Zenith.Gameplay.Inventory.ItemDurability Durability => _durability ??= Zenith.Gameplay.Inventory.ItemDurability.CreateDefault(ItemPalette);
+
     public ItemPalette ItemPalette => _itemPalette ?? throw new InvalidOperationException($"Player '{Username}' was created without an item palette.");
 
     /// <summary>Runtime entity id enviado no StartGame / MoveActorAbsolute.</summary>
