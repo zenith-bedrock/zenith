@@ -12,7 +12,7 @@ sealed class BurnSystem(PlayerManager players, World.World world) : IGameSystem
         {
             if (!player.IsInGame || player.IsDead) continue;
             var before = player.BurnTicks;
-            if (player.GameMode == GameMode.Creative)
+            if (player.GameMode == GameMode.Creative || EffectRules.ImmuneToFire(player))
                 player.BurnTicks = 0;
             else
             {

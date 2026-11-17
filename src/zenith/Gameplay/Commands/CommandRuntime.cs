@@ -60,6 +60,26 @@ sealed class CommandRuntime
         var effectClear = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["clear"] = "clear" };
         var effectTypes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
+            ["speed"] = EffectType.Speed,
+            ["slowness"] = EffectType.Slowness,
+            ["haste"] = EffectType.Haste,
+            ["mining_fatigue"] = EffectType.MiningFatigue,
+            ["strength"] = EffectType.Strength,
+            ["instant_health"] = EffectType.InstantHealth,
+            ["instant_damage"] = EffectType.InstantDamage,
+            ["jump_boost"] = EffectType.JumpBoost,
+            ["nausea"] = EffectType.Nausea,
+            ["resistance"] = EffectType.Resistance,
+            ["fire_resistance"] = EffectType.FireResistance,
+            ["water_breathing"] = EffectType.WaterBreathing,
+            ["invisibility"] = EffectType.Invisibility,
+            ["blindness"] = EffectType.Blindness,
+            ["night_vision"] = EffectType.NightVision,
+            ["hunger"] = EffectType.Hunger,
+            ["weakness"] = EffectType.Weakness,
+            ["wither"] = EffectType.Wither,
+            ["saturation"] = EffectType.Saturation,
+            ["levitation"] = EffectType.Levitation,
             ["poison"] = EffectType.Poison,
             ["regeneration"] = EffectType.Regeneration,
             ["regen"] = EffectType.Regeneration

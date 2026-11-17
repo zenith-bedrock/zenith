@@ -34,11 +34,11 @@ sealed class AirSupplySystem(PlayerManager players) : IGameSystem
                 continue;
             }
 
-            if (SubmersionProbe.AtFeet(player) == FluidType.Lava)
+            if (SubmersionProbe.AtFeet(player) == FluidType.Lava && !EffectRules.ImmuneToFire(player))
                 PlayerDamage.ApplyCore(player, players, DamageSource.Lava, LavaDamage, clock.CurrentTick).Conclude(online);
             if (player.IsDead) continue;
 
-            player.AirSupply = Breathe(player.AirSupply, SubmersionProbe.AtHead(player) == FluidType.Water, out var drowning);
+            player.AirSupply = Breathe(player.AirSupply, SubmersionProbe.AtHead(player) == FluidType.Water && !EffectRules.BreathesUnderWater(player), out var drowning);
             if (drowning)
                 PlayerDamage.ApplyCore(player, players, DamageSource.Drown, DrownDamage, clock.CurrentTick).Conclude(online);
 

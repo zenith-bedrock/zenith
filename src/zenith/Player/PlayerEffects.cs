@@ -40,6 +40,9 @@ sealed class PlayerEffects(Func<bool> isDead)
         return true;
     }
 
+    /// <summary>The level of an active effect (amplifier + 1), 0 when it is not active: what a rule multiplies by.</summary>
+    public int LevelOf(EffectType type) => _active.TryGetValue(type, out var effect) ? effect.Amplifier + 1 : 0;
+
     public bool RemoveEffect(EffectType type) => _active.Remove(type);
 
     public bool ClearEffects()

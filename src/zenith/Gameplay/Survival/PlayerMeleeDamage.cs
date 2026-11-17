@@ -14,7 +14,7 @@ static class PlayerMeleeDamage
         SubmersionProbe.AtFeet(attacker) == FluidType.None;
 
     public static float Resolve(Player.Player attacker, ItemPalette palette) =>
-        Base(attacker, palette) * (IsCritical(attacker) ? CriticalMultiplier : 1f);
+        MathF.Max(0f, Base(attacker, palette) + EffectRules.MeleeBonus(attacker)) * (IsCritical(attacker) ? CriticalMultiplier : 1f);
 
     private static float Base(Player.Player attacker, ItemPalette palette)
     {

@@ -83,6 +83,7 @@ sealed class HungerSystem : IGameSystem
                 continue;
             }
 
+            ApplyFoodEffects(player);
             AccrueExhaustion(player);
 
             // Starvation stops at a health floor that depends on the difficulty: 10 on Easy, 1 on Normal, none on Hard (it kills).
@@ -218,6 +219,20 @@ sealed class HungerSystem : IGameSystem
         player.Client.Inventory.SendInventoryContent(player.Inventory);
         player.Level.Persistence.PersistInventory(player);
         return true;
+    }
+
+    /// <summary>Hunger tires the body 0.005 a tick for each level; Saturation feeds it a level of food and saturation every tick.</summary>
+    private static void ApplyFoodEffects(Player.Player player)
+    {
+        if (player.Effects.Active.Count == 0) return;
+        var hunger = player.Effects.LevelOf(EffectType.Hunger);
+        if (hunger > 0) Exhaust(player, 0.005f * hunger);
+        var saturation = player.Effects.LevelOf(EffectType.Saturation);
+        if (saturation > 0 && player.GameMode != GameMode.Creative)
+        {
+            player.Hunger = MathF.Min(20f, player.Hunger + saturation);
+            player.Saturation = MathF.Min(player.Hunger, player.Saturation + saturation);
+        }
     }
 
     private static void AccrueExhaustion(Player.Player player)

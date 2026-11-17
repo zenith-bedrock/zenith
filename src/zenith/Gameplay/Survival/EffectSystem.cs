@@ -21,6 +21,7 @@ sealed class EffectSystem : IGameSystem
     /// </summary>
     private const ulong PoisonIntervalTicks = 25;
     private const ulong RegenIntervalTicks = 50;
+    private const ulong WitherIntervalTicks = 40;
 
     private readonly PlayerManager _players;
     private readonly List<EffectType> _expiredScratch = new();
@@ -64,6 +65,12 @@ sealed class EffectSystem : IGameSystem
         }
 
         var amplifier = Math.Clamp(intent.Amplifier, 0, 3);
+        if (intent.Type is EffectType.InstantHealth or EffectType.InstantDamage)
+        {
+            ApplyInstant(player, intent.Type, amplifier, clock);
+            return;
+        }
+
         var durationTicks = Math.Max(1, intent.DurationTicks);
         var expiresAtTick = clock.CurrentTick + (ulong)durationTicks;
         var wasActive = player.Effects.Active.ContainsKey(intent.Type);
@@ -100,6 +107,9 @@ sealed class EffectSystem : IGameSystem
                 case EffectType.Regeneration:
                     TickRegeneration(player, effect, clock, online);
                     break;
+                case EffectType.Wither:
+                    TickWither(player, effect, clock, online);
+                    break;
             }
         }
 
@@ -125,6 +135,27 @@ sealed class EffectSystem : IGameSystem
 
         var amount = MathF.Min(1f, player.Health - 1f);
         PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, amount, clock.CurrentTick).Conclude(online);
+    }
+
+    /// <summary>Wither is poison that can kill: 1 magic damage every 40 ticks, halving the wait for each level.</summary>
+    private void TickWither(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
+    {
+        if (clock.CurrentTick % (WitherIntervalTicks >> effect.Amplifier) != 0) return;
+        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, 1f, clock.CurrentTick).Conclude(online);
+    }
+
+    /// <summary>Instant Health mends 4 a level (doubling each level); Instant Damage hurts 6 a level. Nothing stays active.</summary>
+    private void ApplyInstant(Player.Player player, EffectType type, int amplifier, GameClock clock)
+    {
+        if (type == EffectType.InstantHealth)
+        {
+            player.Heal(4f * (1 << amplifier));
+            player.Client.Entity.SendPlayerAttributes(player);
+            PlayerVisibility.RelayHealth(player, _players.Online);
+            return;
+        }
+
+        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, 6f * (1 << amplifier), clock.CurrentTick).Conclude(_players.Online);
     }
 
     /// <summary>Amount per tick is always 1 — a higher amplifier ticks more often, matching Poison.</summary>

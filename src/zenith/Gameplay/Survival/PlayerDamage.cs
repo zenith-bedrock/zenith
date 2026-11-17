@@ -95,7 +95,10 @@ static class PlayerDamage
             if (amount <= 0f) return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
         }
 
-        var mitigated = ArmorMitigation.Apply(player, source, amount);
+        if (source.Cause is DamageCause.Fire or DamageCause.Lava && EffectRules.ImmuneToFire(player))
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+
+        var mitigated = EffectRules.AfterResistance(player, source, ArmorMitigation.Apply(player, source, amount));
         var result = player.ApplyDamage(source, mitigated, currentTick);
         if (!result.WasApplied)
             return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);

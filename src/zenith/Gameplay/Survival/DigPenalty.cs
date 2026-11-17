@@ -12,7 +12,7 @@ static class DigPenalty
         var divisor = 1.0;
         if (SubmersionProbe.AtHead(player) == FluidType.Water) divisor *= Factor;
         if (!player.IsOnGround) divisor *= Factor;
-        return divisor;
+        return divisor / EffectRules.DigSpeed(player);
     }
 
     /// <summary>Dig ticks of <paramref name="block"/> for what <paramref name="player"/> holds and is doing right now (-1: cannot be dug).</summary>
