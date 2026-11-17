@@ -15,7 +15,7 @@ static class BreakDuration
     /// Dig ticks for block + held stack. Returns -1 when block has no <see cref="DigProfiles"/> entry.
     /// Instant break returns 0.
     /// </summary>
-    public static int BreakTicks(int blockRuntimeId, StackId held)
+    public static int BreakTicks(int blockRuntimeId, StackId held, double speedDivisor = 1.0)
     {
         Blocks.EnsureLoaded();
         DigProfiles.EnsureLoaded();
@@ -33,7 +33,7 @@ static class BreakDuration
         // was a no-op since harvestability and effectiveness both only ever checked Kind.
         var speed = IsEffective(profile, tool) ? tool.BaseMiningEfficiency : 1.0;
 
-        var damage = speed / profile.DestroySpeed / (canHarvest ? 30.0 : 100.0);
+        var damage = speed / speedDivisor / profile.DestroySpeed / (canHarvest ? 30.0 : 100.0);
         if (damage >= 1.0)
             return 0;
 

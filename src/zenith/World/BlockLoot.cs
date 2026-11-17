@@ -11,11 +11,11 @@ static class BlockLoot
     private static readonly Lock LoadGate = new();
 
     /// <summary>Immutable table published by one reference write (see <c>Tools</c>): a reload never exposes a half-filled map.</summary>
-    private static volatile FrozenDictionary<string, BlockDrop>? _drops;
+    private static volatile FrozenDictionary<string, ResolvedDrop>? _drops;
 
     public static void EnsureLoaded() => _ = Drops;
 
-    private static FrozenDictionary<string, BlockDrop> Drops
+    private static FrozenDictionary<string, ResolvedDrop> Drops
     {
         get
         {
@@ -33,16 +33,25 @@ static class BlockLoot
             _drops = table;
     }
 
-    private static FrozenDictionary<string, BlockDrop> Build(ItemPalette items)
+    private static FrozenDictionary<string, ResolvedDrop> Build(ItemPalette items)
     {
-        var drops = new Dictionary<string, BlockDrop>(StringComparer.Ordinal);
+        var drops = new Dictionary<string, ResolvedDrop>(StringComparer.Ordinal);
         foreach (var family in Blocks.Catalog.States.Families)
         {
             if (family.Definition?.Drop is not { } spec) continue;
-            drops[family.Name] = Resolve(family.Name, spec, items);
+            drops[family.Name] = ResolveAll(family.Name, spec, items);
         }
         return drops.ToFrozenDictionary(StringComparer.Ordinal);
     }
+
+    private static ResolvedDrop ResolveAll(string block, DropSpec spec, ItemPalette items) => new(
+        Resolve(block, spec, items),
+        Math.Max(spec.Count, spec.CountMax),
+        spec.Instead is { } instead ? [.. instead.Select(entry => Chanced(block, entry, items))] : [],
+        spec.Bonus is { } bonus ? [.. bonus.Select(entry => Chanced(block, entry, items))] : []);
+
+    private static ChancedDrop Chanced(string block, DropSpec entry, ItemPalette items) =>
+        new(Resolve(block, entry, items), Math.Max(entry.Count, entry.CountMax), entry.Chance);
 
     private static BlockDrop Resolve(string block, DropSpec spec, ItemPalette items)
     {
@@ -65,13 +74,54 @@ static class BlockLoot
     public static BlockDrop DropOf(int blockRuntimeId)
     {
         if (Blocks.Catalog.States.FamilyOf(blockRuntimeId) is { } family && Drops.TryGetValue(family.Name, out var drop))
-            return drop;
+            return drop.Main;
         return new BlockDrop(StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId)), 1);
+    }
+
+    /// <summary>
+    /// What one break of <paramref name="blockRuntimeId"/> actually yields, with the dice rolled: the main drop (its count drawn from
+    /// its range) unless an "instead" entry came up, plus every bonus entry that came up. Appends to <paramref name="into"/>.
+    /// </summary>
+    public static void Roll(int blockRuntimeId, Random random, List<BlockDrop> into)
+    {
+        if (Blocks.Catalog.States.FamilyOf(blockRuntimeId) is not { } family || !Drops.TryGetValue(family.Name, out var drop))
+        {
+            into.Add(new BlockDrop(StackId.FromBlock(Blocks.NormalizeMergeRuntimeId(blockRuntimeId)), 1));
+            return;
+        }
+
+        var replaced = false;
+        foreach (var entry in drop.Instead)
+            if (entry.Rolls(random))
+            {
+                into.Add(entry.Draw(random));
+                replaced = true;
+                break;
+            }
+
+        if (!replaced && drop.Main.Count > 0)
+            into.Add(new BlockDrop(drop.Main.Id, drop.MainMax > drop.Main.Count ? random.Next(drop.Main.Count, drop.MainMax + 1) : drop.Main.Count));
+
+        foreach (var entry in drop.Bonus)
+            if (entry.Rolls(random))
+                into.Add(entry.Draw(random));
     }
 
     /// <summary>Single-stack form of <see cref="DropOf"/> kept for callers that only need the item identity.</summary>
     public static StackId DropFor(int blockRuntimeId) => DropOf(blockRuntimeId).Id;
 }
+
+/// <summary>A drop that only sometimes happens, with a count range from <c>Drop.Count</c> to <paramref name="MaxCount"/>.</summary>
+readonly record struct ChancedDrop(BlockDrop Drop, int MaxCount, float Chance)
+{
+    public bool Rolls(Random random) => Drop.Count > 0 && (Chance >= 1f || random.NextSingle() < Chance);
+
+    public BlockDrop Draw(Random random) =>
+        new(Drop.Id, MaxCount > Drop.Count ? random.Next(Drop.Count, MaxCount + 1) : Drop.Count);
+}
+
+/// <summary>One block family's whole drop rule: the main drop and its highest count, what can replace it, what can come with it.</summary>
+readonly record struct ResolvedDrop(BlockDrop Main, int MainMax, ChancedDrop[] Instead, ChancedDrop[] Bonus);
 
 /// <summary>A broken block's yield; <see cref="Count"/> 0 means nothing drops.</summary>
 readonly record struct BlockDrop(StackId Id, int Count);

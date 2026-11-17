@@ -85,7 +85,7 @@ sealed class Explosion(
 
             _destroyed.Add((x, y, z, World.World.AirRuntimeId));
             if (random.NextSingle() < chance && !Blocks.IsFire(current))
-                BlockSpill.Drop(world, players, online, x, y, z, current);
+                BlockSpill.Drop(world, players, online, x, y, z, current, random);
         }
     }
 

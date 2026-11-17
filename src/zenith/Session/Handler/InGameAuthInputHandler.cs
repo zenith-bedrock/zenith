@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Survival;
 using Zenith.Gameplay.Replication;
 using System.Collections.Generic;
 using Zenith.Binary;
@@ -201,7 +202,7 @@ partial class InGameSessionHandler
         var block = session.Context.World.GetBlock(x, y, z);
         var held = player.Inventory.Get(player.SelectedHotbarSlot);
         var heldId = held.IsEmpty ? default : held.Id;
-        var need = Blocks.BreakTicks(block, heldId);
+        var need = DigPenalty.BreakTicksFor(player, block, heldId);
         // Unknown DigProfile → no Survival dig auth (ADR §55).
         if (need < 0)
         {

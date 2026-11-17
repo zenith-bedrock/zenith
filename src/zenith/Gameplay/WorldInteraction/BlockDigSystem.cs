@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Survival;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
@@ -99,7 +100,7 @@ sealed class BlockDigSystem : IGameSystem
 
         var block = _world.GetBlock(activeBreak.X, activeBreak.Y, activeBreak.Z);
         var oldNeed = activeBreak.RequiredTicks;
-        var newNeed = Blocks.BreakTicks(block, heldId);
+        var newNeed = DigPenalty.BreakTicksFor(player, block, heldId);
         if (newNeed < 0)
         {
             BlockCrackFanout.Stop(online, player.Client, activeBreak.X, activeBreak.Y, activeBreak.Z);

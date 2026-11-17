@@ -25,6 +25,8 @@ sealed class BlockEditSystem : IGameSystem
     private readonly ItemDurability _durability;
     private readonly List<BlockWrite> _extra = new();
     private readonly List<BlockCellChange> _cells = new();
+    private readonly List<BlockDrop> _rolled = new();
+    private readonly Random _random = new();
     private readonly BlockEditPolicies _policies;
     private readonly EventBus? _events;
     private int _appliedId;
@@ -278,7 +280,9 @@ sealed class BlockEditSystem : IGameSystem
 
         if (floorDropRequests is { Count: > 0 })
         {
-            if (!FloorDropFanout.TryDepositBatch(_world, _players, online, edit.X, edit.Y, edit.Z, floorDropRequests))
+            if (!FloorDropFanout.TryDepositBatch(
+                    _world, _players, online, edit.X, edit.Y, edit.Z, floorDropRequests,
+                    velocityX: BlockSpill.PopSideways(_random), velocityY: BlockSpill.PopUp, velocityZ: BlockSpill.PopSideways(_random)))
                 throw new InvalidOperationException("Prevalidated block-drop floor commit failed.");
 
             player.Level.Logger?.Debug($"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -342,9 +346,11 @@ sealed class BlockEditSystem : IGameSystem
     {
         var held = player.Inventory.Get(player.SelectedHotbarSlot);
         var heldId = held.IsEmpty ? default : held.Id;
+        var current = DigPenalty.BreakTicksFor(player, previous, heldId);
+        // The dig was timed when it began; if the breaker has since landed or surfaced the client digs faster, so the faster of the two counts.
         var need = edit.DigAuthorized
-            ? edit.DigRequiredTicks
-            : Blocks.BreakTicks(previous, heldId);
+            ? (edit.DigRequiredTicks > 0 && current >= 0 ? Math.Min(edit.DigRequiredTicks, current) : edit.DigRequiredTicks)
+            : current;
         if (need < 0 || (need > 0 && !edit.DigAuthorized))
         {
             player.Level.Logger?.Debug($"Break rejected (no dig auth) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
@@ -410,11 +416,12 @@ sealed class BlockEditSystem : IGameSystem
 
         if (!shouldDrop) return true;
 
-        var drop = BlockLoot.DropOf(previous);
-        if (drop.Count <= 0) return true;
+        _rolled.Clear();
+        BlockLoot.Roll(previous, _random, _rolled);
+        if (_rolled.Count == 0) return true;
 
-        requests = [new FloorDropFanout.DepositRequest(drop.Id, drop.Count)];
-        if (FloorDropFanout.CanDeposit(_world, edit.X, edit.Y, edit.Z, drop.Id, drop.Count)) return true;
+        requests = [.. _rolled.Select(drop => new FloorDropFanout.DepositRequest(drop.Id, drop.Count))];
+        if (FloorDropFanout.CanDepositBatch(_world, edit.X, edit.Y, edit.Z, requests)) return true;
 
         player.Level.Logger?.Debug(
             $"Break refused (no loot destination) for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");

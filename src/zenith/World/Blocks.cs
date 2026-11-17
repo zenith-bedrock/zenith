@@ -328,8 +328,8 @@ static class Blocks
     public static int BreakTicks(int runtimeId) => BreakDuration.BreakTicks(runtimeId);
 
     /// <summary>Dig duration with held <see cref="StackId"/> (ADR §55). Returns -1 if no DigProfile.</summary>
-    public static int BreakTicks(int blockRuntimeId, StackId held) =>
-        BreakDuration.BreakTicks(blockRuntimeId, held);
+    public static int BreakTicks(int blockRuntimeId, StackId held, double speedDivisor = 1.0) =>
+        BreakDuration.BreakTicks(blockRuntimeId, held, speedDivisor);
 
     /// <summary>
     /// LevelEvent BLOCK_START_BREAK / UPDATE data — progress added per game tick toward

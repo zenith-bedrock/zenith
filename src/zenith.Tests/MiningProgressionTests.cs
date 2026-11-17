@@ -85,15 +85,16 @@ public class MiningProgressionTests
     }
 
     [Fact]
-    public void Stone_pickaxe_harvests_iron_ore_which_still_drops_the_ore_block_pending_a_furnace()
+    public void Stone_pickaxe_harvests_iron_ore_which_drops_raw_iron()
     {
         var fx = new IntentTestFixture();
         var stone = Tools.Require("minecraft:stone_pickaxe");
         var player = MineAt(fx, 7, 64, 7, Blocks.IronOre, stone);
 
-        PickUpMinedLoot(fx, player, StackId.FromBlock(Blocks.IronOre));
+        var rawIron = StackId.FromItem(fx.Context.ItemPalette.Require("minecraft:raw_iron"));
+        PickUpMinedLoot(fx, player, rawIron);
         var slot = player.Inventory.Get(1);
-        Assert.Equal(StackId.FromBlock(Blocks.IronOre), slot.Id);
+        Assert.Equal(rawIron, slot.Id);
         Assert.Equal(1, slot.Count);
     }
 

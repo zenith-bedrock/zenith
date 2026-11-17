@@ -4,7 +4,13 @@ using System.Text.Json;
 namespace Zenith.World;
 
 /// <summary>What breaking a block yields when that is not "the block itself": a block, an item, or nothing (<see cref="Count"/> 0).</summary>
-readonly record struct DropSpec(string? Block, string? Item, int Count)
+/// <param name="Count">The count, or the lowest count when <paramref name="CountMax"/> is above it (redstone drops 4 to 5).</param>
+/// <param name="CountMax">The highest count; 0 or at most <paramref name="Count"/> means exactly <paramref name="Count"/>.</param>
+/// <param name="Chance">For an entry of <paramref name="Instead"/> or <paramref name="Bonus"/>: how likely it is to drop (0 to 1).</param>
+/// <param name="Instead">Entries tried in order; the first whose chance comes up drops in place of the main drop (gravel gives flint one time in ten).</param>
+/// <param name="Bonus">Entries that each roll on their own on top of the main drop (leaves may give a sapling, a stick, an apple).</param>
+readonly record struct DropSpec(
+    string? Block, string? Item, int Count, int CountMax = 0, float Chance = 1f, DropSpec[]? Instead = null, DropSpec[]? Bonus = null)
 {
     public bool DropsNothing => Count == 0;
 }
@@ -60,16 +66,7 @@ static class BlockDefinitionLoader
             foreach (var trait in list.EnumerateArray())
                 traits |= ParseEnum<BlockTraits>(name, "traits", trait.GetString());
 
-        DropSpec? drop = null;
-        if (row.TryGetProperty("drop", out var d))
-        {
-            var count = d.TryGetProperty("count", out var c) ? c.GetInt32() : 1;
-            var block = d.TryGetProperty("block", out var b) ? b.GetString() : null;
-            var item = d.TryGetProperty("item", out var i) ? i.GetString() : null;
-            if (block is not null && item is not null)
-                throw new InvalidOperationException($"{ResourceName}: '{name}' drop names both a block and an item.");
-            drop = new DropSpec(block, item, count);
-        }
+        DropSpec? drop = row.TryGetProperty("drop", out var d) ? ParseDrop(name, d) : null;
 
         return new BlockDefinition(
             kind,
@@ -80,6 +77,23 @@ static class BlockDefinitionLoader
             drop,
             row.TryGetProperty("mergesInto", out var merges) ? merges.GetString() : null);
     }
+
+    private static DropSpec ParseDrop(string name, JsonElement d)
+    {
+        var count = d.TryGetProperty("count", out var c) ? c.GetInt32() : 1;
+        var countMax = d.TryGetProperty("countMax", out var cm) ? cm.GetInt32() : 0;
+        var chance = d.TryGetProperty("chance", out var ch) ? ch.GetSingle() : 1f;
+        var block = d.TryGetProperty("block", out var b) ? b.GetString() : null;
+        var item = d.TryGetProperty("item", out var i) ? i.GetString() : null;
+        if (block is not null && item is not null)
+            throw new InvalidOperationException($"{ResourceName}: '{name}' drop names both a block and an item.");
+        if (count < 0 || countMax < 0 || chance is < 0f or > 1f)
+            throw new InvalidOperationException($"{ResourceName}: '{name}' drop has a negative count or a chance outside 0 to 1.");
+        return new DropSpec(block, item, count, countMax, chance, ParseDropList(name, d, "instead"), ParseDropList(name, d, "bonus"));
+    }
+
+    private static DropSpec[]? ParseDropList(string name, JsonElement d, string key) =>
+        d.TryGetProperty(key, out var list) ? [.. list.EnumerateArray().Select(entry => ParseDrop(name, entry))] : null;
 
     private static T Required<T>(string name, JsonElement row, string key) where T : struct, Enum =>
         row.TryGetProperty(key, out var value)
