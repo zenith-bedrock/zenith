@@ -1,0 +1,10 @@
+{
+  "note": "The tags and climate of the biomes Zenith generates, copied from the BDS 1.26 pack (behavior_packs/vanilla biomes: minecraft:tags and minecraft:climate). Zenith's 'Hills' is the pack's extreme_hills. temperature and downfall feed the climate rules (rain, snow, ice); snowAccumulation is [min, max] in the pack.",
+  "biomes": [
+    { "kind": "Ocean",  "id": "ocean",         "tags": ["monster", "ocean", "overworld"], "temperature": 0.5, "downfall": 0.5, "snowAccumulation": [0.0, 0.125] },
+    { "kind": "Plains", "id": "plains",        "tags": ["animal", "monster", "overworld", "plains", "bee_habitat"], "temperature": 0.8, "downfall": 0.4, "snowAccumulation": [0.0, 0.125] },
+    { "kind": "Desert", "id": "desert",        "tags": ["desert", "monster", "overworld", "spawns_gold_rabbits", "spawns_warm_variant_farm_animals", "spawns_warm_variant_frogs"], "temperature": 2.0, "downfall": 0.0, "snowAccumulation": [0.0, 0.125] },
+    { "kind": "Hills",  "id": "extreme_hills", "tags": ["animal", "extreme_hills", "monster", "overworld", "spawns_cold_variant_farm_animals"], "temperature": 0.2, "downfall": 0.3, "snowAccumulation": [0.0, 0.25] },
+    { "kind": "Forest", "id": "forest",        "tags": ["animal", "forest", "monster", "overworld", "bee_habitat"], "temperature": 0.7, "downfall": 0.8, "snowAccumulation": [0.0, 0.125] }
+  ]
+}

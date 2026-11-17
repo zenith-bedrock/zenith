@@ -66,9 +66,13 @@ static class LightModel
         return (int)((1f - daylight) * 11f);
     }
 
-    /// <summary>Brightness of a cell, 0 to 15: the larger of its block light and its sky light less what the time of day takes off.</summary>
-    public static int Brightness(World world, int x, int y, int z, int worldTime) =>
-        Math.Max(BlockLight(world, x, y, z), Math.Max(0, SkyLight(world, x, y, z) - SkyDarkness(worldTime, world.Weather.Level)));
+    /// <summary>
+    /// Brightness of a cell, 0 to 15: the larger of its block light and its sky light less what the time of day takes off.
+    /// <paramref name="adjustForWeather"/> also takes off what rain and thunder do (the pack's <c>adjust_for_weather</c>, true for
+    /// monsters and false for animals).
+    /// </summary>
+    public static int Brightness(World world, int x, int y, int z, int worldTime, bool adjustForWeather = true) =>
+        Math.Max(BlockLight(world, x, y, z), Math.Max(0, SkyLight(world, x, y, z) - SkyDarkness(worldTime, adjustForWeather ? world.Weather.Level : 0)));
 
     public static int BlockLight(World world, int x, int y, int z) => Search(world, x, y, z, sky: false);
 

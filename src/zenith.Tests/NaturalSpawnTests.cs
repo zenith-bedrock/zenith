@@ -9,7 +9,10 @@ public sealed class NaturalSpawnTests
     private const string Json = """
         {
           "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "time": "night", "biomes": ["Plains"] } ]
+          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "filters": [
+              { "test": "hourly_clock_time", "operator": ">=", "value": 13000 },
+              { "test": "hourly_clock_time", "operator": "<", "value": 23000 },
+              { "test": "has_biome_tag", "value": "monster" } ] } ]
         }
         """;
 
@@ -80,7 +83,7 @@ public sealed class NaturalSpawnTests
     }
 
     [Fact]
-    public void The_shipped_weights_and_groups_are_the_packs_and_a_cow_needs_grass_and_light()
+    public void The_shipped_weights_and_groups_are_the_packs()
     {
         SpawnEntry Entry(string mob) => SpawnTable.Default.Entries.Single(e => e.Mob == mob);
         Assert.Equal((100, 2, 4), (Entry("zombie").Weight, Entry("zombie").GroupMin, Entry("zombie").GroupMax));
@@ -88,23 +91,23 @@ public sealed class NaturalSpawnTests
         Assert.Equal((1, 1), (Entry("spider").GroupMin, Entry("spider").GroupMax));
         Assert.Equal((1, 2), (Entry("enderman").GroupMin, Entry("enderman").GroupMax));
         Assert.Equal((2, 3), (Entry("cow").GroupMin, Entry("cow").GroupMax));
-        Assert.Equal(SpawnLight.Bright, Entry("cow").Light);
-        Assert.Equal(SpawnLight.Dark, Entry("zombie").Light);
-        Assert.True(Entry("cow").StandsOn("minecraft:grass_block"));
-        Assert.False(Entry("cow").StandsOn("minecraft:sand"));
-        Assert.True(Entry("zombie").StandsOn("minecraft:sand")); // only the cow is picky about its ground
     }
 
+    private const string Head = """{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[1,1]""";
+
     [Theory]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"nope","weight":1,"group":[1,1],"time":"any","biomes":["Plains"]}]}""", "unknown category")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":0,"group":[1,1],"time":"any","biomes":["Plains"]}]}""", "weight")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[3,1],"time":"any","biomes":["Plains"]}]}""", "group")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[1,1],"time":"dusk","biomes":["Plains"]}]}""", "time")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[1,1],"time":"any","biomes":["Moon"]}]}""", "biome")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"nope","weight":1,"group":[1,1]}]}""", "unknown category")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":0,"group":[1,1]}]}""", "weight")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[3,1]}]}""", "group")]
     [InlineData("""{"categories":[{"name":"m","capPerPlayer":0,"intervalTicks":1}],"spawns":[]}""", "capPerPlayer")]
+    [InlineData(Head + ""","filters":[{"test":"moon_phase","value":1}]}]}""", "unknown test 'moon_phase'")]
+    [InlineData(Head + ""","filters":[{"test":"has_biome_tag","value":"moon"}]}]}""", "does not know the value 'moon'")]
+    [InlineData(Head + ""","filters":[{"test":"light_level","domain":"sky","operator":"<=","value":7}]}]}""", "no domain 'sky'")]
+    [InlineData(Head + ""","filters":[{"test":"light_level","operator":"~","value":7}]}]}""", "unknown operator")]
     public void A_bad_table_fails_loudly(string json, string expected)
     {
         var ex = Assert.Throws<InvalidDataException>(() => Table(json));
+        Assert.Contains("spawns.json", ex.Message);
         Assert.Contains(expected, ex.Message);
     }
 

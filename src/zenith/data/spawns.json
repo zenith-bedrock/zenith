@@ -1,14 +1,33 @@
 {
+  "note": "Natural spawning. 'filters' is the BDS filter grammar (test/operator/value/domain, all_of/any_of/none_of; a list is all_of). Monsters: brightness 7 or less with the weather taken into account (domain adjust_for_weather), not on Peaceful, in a biome tagged monster that is not the ocean. Animals: brightness 7 or more without weather, on grass, in a biome tagged animal.",
   "categories": [
     { "name": "monster",  "capPerPlayer": 20, "intervalTicks": 40 },
     { "name": "creature", "capPerPlayer": 10, "intervalTicks": 400 }
   ],
   "spawns": [
-    { "mob": "zombie",   "category": "monster",  "weight": 100, "group": [2, 4], "time": "any", "light": "dark", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
-    { "mob": "skeleton", "category": "monster",  "weight": 80,  "group": [1, 2], "time": "any", "light": "dark", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
-    { "mob": "spider",   "category": "monster",  "weight": 100, "group": [1, 1], "time": "any", "light": "dark", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
-    { "mob": "creeper",  "category": "monster",  "weight": 100, "group": [1, 1], "time": "any", "light": "dark", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
-    { "mob": "enderman", "category": "monster",  "weight": 10,  "group": [1, 2], "time": "any", "light": "dark", "biomes": ["Plains", "Forest", "Hills", "Desert"] },
-    { "mob": "cow",      "category": "creature", "weight": 8,   "group": [2, 3], "time": "any",   "light": "bright", "onBlock": "minecraft:grass_block", "biomes": ["Plains", "Forest", "Hills"] }
+    { "mob": "zombie",   "category": "monster",  "weight": 100, "group": [2, 4], "filters": [
+        { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
+        { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
+        { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
+    { "mob": "skeleton", "category": "monster",  "weight": 80,  "group": [1, 2], "filters": [
+        { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
+        { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
+        { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
+    { "mob": "spider",   "category": "monster",  "weight": 100, "group": [1, 1], "filters": [
+        { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
+        { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
+        { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
+    { "mob": "creeper",  "category": "monster",  "weight": 100, "group": [1, 1], "filters": [
+        { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
+        { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
+        { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
+    { "mob": "enderman", "category": "monster",  "weight": 10,  "group": [1, 2], "filters": [
+        { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
+        { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
+        { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
+    { "mob": "cow",      "category": "creature", "weight": 8,   "group": [2, 3], "filters": [
+        { "test": "light_level", "operator": ">=", "value": 7 },
+        { "test": "is_block", "domain": "down", "value": "minecraft:grass_block" },
+        { "test": "has_biome_tag", "value": "animal" } ] }
   ]
 }

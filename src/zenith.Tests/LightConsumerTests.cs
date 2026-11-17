@@ -17,7 +17,7 @@ public sealed class LightConsumerTests
     private const string DarkMonster = """
         {
           "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "time": "any", "light": "dark", "biomes": ["Plains"] } ]
+          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "filters": [ { "test": "light_level", "operator": "<=", "value": 7 } ] } ]
         }
         """;
 
@@ -53,7 +53,7 @@ public sealed class LightConsumerTests
         const string any = """
             {
               "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-              "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "time": "any", "biomes": ["Plains"] } ]
+              "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1] } ]
             }
             """;
         Assert.True(SpawnsAt(2000, any) > 0);
@@ -62,11 +62,17 @@ public sealed class LightConsumerTests
     [Fact]
     public void The_brightness_filters_are_the_packs_zero_to_seven_for_monsters_and_seven_up_for_animals()
     {
+        // The shipped entries on a lit and an unlit cell of a plains column (on grass, Normal difficulty).
         var table = SpawnTable.Default;
         var zombie = table.Entries.Single(e => e.Mob == "zombie");
         var cow = table.Entries.Single(e => e.Mob == "cow");
-        Assert.True(zombie.LightOk(0) && zombie.LightOk(7) && !zombie.LightOk(8));
-        Assert.True(cow.LightOk(7) && cow.LightOk(15) && !cow.LightOk(6));
+        var fx = new IntentTestFixture();
+        fx.World.SetBlock(5, 63, 5, Blocks.GrassBlock);
+        for (var y = 64; y < 80; y++) fx.World.SetBlock(5, y, 5, Blocks.Air);
+        Assert.True(zombie.Allows(new Zenith.Gameplay.Filters.FilterContext(fx.World, 5, 64, 5, 18000)));
+        Assert.False(zombie.Allows(new Zenith.Gameplay.Filters.FilterContext(fx.World, 5, 64, 5, 6000)));
+        Assert.False(cow.Allows(new Zenith.Gameplay.Filters.FilterContext(fx.World, 5, 64, 5, 18000)));
+        Assert.True(cow.Allows(new Zenith.Gameplay.Filters.FilterContext(fx.World, 5, 64, 5, 6000)));
     }
 
     // ---- grass and saplings --------------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 using Zenith.Ecs;
+using Zenith.Gameplay.Filters;
 using Zenith.Gameplay.Runtime;
 using Zenith.Gameplay.Survival;
 using Zenith.Player;
@@ -18,13 +19,13 @@ sealed class MobHazardSystem(
     EntityRuntime stores,
     DamageDispatch damage,
     Func<EntityId, bool> isAquatic,
-    Func<EntityId, bool>? isUndead = null) : IGameSystem
+    Func<EntityId, bool>? isUndead = null,
+    EntityRules? rules = null) : IGameSystem
 {
+    private readonly Filter _burnsInDaylight = (rules ?? EntityRules.Default).BurnsInDaylight;
+
     public const int LavaIntervalTicks = 10;
     public const float LavaDamage = 4f;
-
-    /// <summary>The sun burns undead while it takes at most this many levels off the sky (full day and the edges of it).</summary>
-    public const int SunBurnMaxDarkness = 3;
 
     /// <summary>How often a mob is checked for standing in the sun.</summary>
     private const int SunCheckEvery = 10;
@@ -95,10 +96,9 @@ sealed class MobHazardSystem(
             if (peer.IsInGame) peer.Client.Entity.SendActorBurning(identity.ActorRuntimeId, remaining > 0);
     }
 
-    /// <summary>Daylight and nothing but clear air overhead: the cell the mob stands in sees the sun.</summary>
+    /// <summary>The cell the mob stands in meets the <c>burns_in_daylight</c> rule of <c>entity_rules.json</c> (daylight, no rain, open sky).</summary>
     private bool InSun(Position pos, int worldTime) =>
-        !world.Weather.Raining && LightModel.SkyDarkness(worldTime) <= SunBurnMaxDarkness &&
-        LightModel.SeesSky(world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y + .5f), (int)MathF.Floor(pos.Z));
+        _burnsInDaylight.Matches(new FilterContext(world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y + .5f), (int)MathF.Floor(pos.Z), worldTime));
 
     /// <summary>Ticks of burning left on a mob (0 when it is not alight).</summary>
     public int BurnTicksOf(EntityId id) => _burn.GetValueOrDefault(id);

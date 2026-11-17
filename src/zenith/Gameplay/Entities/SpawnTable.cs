@@ -1,51 +1,26 @@
 using System.Reflection;
 using System.Text.Json;
-using Zenith.World;
+using Zenith.Gameplay.Filters;
 
 namespace Zenith.Gameplay.Entities;
-
-/// <summary>When in the day a spawn entry applies. Night is the stretch where the sky is dark enough for hostile mobs.</summary>
-enum SpawnTime { Any, Day, Night }
-
-/// <summary>How bright the spawn cell must be: monsters want the dark (0 to 7), grazing animals the light (7 and up).</summary>
-enum SpawnLight { Any, Dark, Bright }
 
 /// <summary>A mob category: how many of its mobs the world keeps per online player, and how often a spawn round runs.</summary>
 sealed record SpawnCategory(string Name, int CapPerPlayer, int IntervalTicks);
 
-/// <summary>One candidate of natural spawning: what, where (biomes), when, how many at once, and its relative weight.</summary>
-sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, SpawnTime Time, IReadOnlySet<OverworldBiomeKind> Biomes, string? OnBlock = null, SpawnLight Light = SpawnLight.Any)
+/// <summary>
+/// One candidate of natural spawning: what, how many at once, its relative weight, and the <see cref="Filter"/> that says where and when
+/// it may appear (light, biome tag, difficulty, the block it stands on, the weather, the time of day), in the grammar of the BDS spawn rules.
+/// </summary>
+sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, Filter Filter)
 {
-    /// <summary>The brightest a monster may spawn, and the dimmest an animal may (the pack's brightness filters).</summary>
-    public const int DarkMax = 7;
-    public const int BrightMin = 7;
-
-    public bool LightOk(int brightness) => Light switch
-    {
-        SpawnLight.Dark => brightness <= DarkMax,
-        SpawnLight.Bright => brightness >= BrightMin,
-        _ => true
-    };
-
-    /// <summary>A cow needs grass under its feet; an entry with no <see cref="OnBlock"/> stands on anything that holds a ground mob.</summary>
-    public bool StandsOn(string? groundBlock) => OnBlock is null || OnBlock == groundBlock;
-
-    public bool AppliesTo(OverworldBiomeKind biome, int worldTime) =>
-        Biomes.Contains(biome) && Time switch
-        {
-            SpawnTime.Night => IsNight(worldTime),
-            SpawnTime.Day => !IsNight(worldTime),
-            _ => true
-        };
-
-    /// <summary>The hostile window: dusk is over at 13000 and dawn starts at 23000 of the 24000-tick day.</summary>
-    public static bool IsNight(int worldTime) => worldTime is >= 13000 and < 23000;
+    /// <summary>Whether the cell <paramref name="context"/> describes (the feet cell of a candidate spot) may spawn this mob now.</summary>
+    public bool Allows(FilterContext context) => Filter.Matches(context);
 }
 
 /// <summary>
 /// The natural spawn table, loaded from the embedded <c>data/spawns.json</c> (hand-authored, not from a BDS capture). Every entry is
-/// validated at load: an unknown category, biome or time, a bad group range or a non-positive weight fails loudly instead of
-/// becoming a spawn that silently never happens.
+/// validated at load: an unknown category, a bad group range, a non-positive weight or a filter that names an unknown test, domain or
+/// value fails loudly instead of becoming a spawn that silently never happens.
 /// </summary>
 sealed class SpawnTable
 {
@@ -71,8 +46,9 @@ sealed class SpawnTable
 
     public IEnumerable<SpawnEntry> In(SpawnCategory category) => Entries.Where(entry => entry.Category == category);
 
-    public static SpawnTable Parse(Stream json)
+    public static SpawnTable Parse(Stream json, FilterRegistry? registry = null)
     {
+        var filters = new FilterParser(registry ?? FilterRegistry.Default);
         using var doc = JsonDocument.Parse(json);
         var categories = new List<SpawnCategory>();
         foreach (var c in doc.RootElement.GetProperty("categories").EnumerateArray())
@@ -102,21 +78,18 @@ sealed class SpawnTable
             var min = group[0].GetInt32();
             var max = group[1].GetInt32();
             if (min < 1 || max < min) throw Invalid($"'{mob}' has group [{min}, {max}]; need 1 <= min <= max");
-            var timeText = e.GetProperty("time").GetString();
-            if (!Enum.TryParse<SpawnTime>(timeText, ignoreCase: true, out var time)) throw Invalid($"'{mob}' has unknown time '{timeText}'");
-            var biomes = new HashSet<OverworldBiomeKind>();
-            foreach (var b in e.GetProperty("biomes").EnumerateArray())
+
+            Filter filter;
+            try
             {
-                var biomeText = b.GetString();
-                if (!Enum.TryParse<OverworldBiomeKind>(biomeText, ignoreCase: true, out var biome)) throw Invalid($"'{mob}' names unknown biome '{biomeText}'");
-                biomes.Add(biome);
+                filter = e.TryGetProperty("filters", out var node) ? filters.Parse(node, $"{mob}.filters") : Filter.Always;
+            }
+            catch (InvalidDataException ex)
+            {
+                throw Invalid(ex.Message.TrimEnd('.'));
             }
 
-            if (biomes.Count == 0) throw Invalid($"'{mob}' lists no biomes");
-            var onBlock = e.TryGetProperty("onBlock", out var ob) ? ob.GetString() : null;
-            var lightText = e.TryGetProperty("light", out var lt) ? lt.GetString() : "any";
-            if (!Enum.TryParse<SpawnLight>(lightText, ignoreCase: true, out var light)) throw Invalid($"'{mob}' has unknown light '{lightText}'");
-            entries.Add(new SpawnEntry(mob, category, weight, min, max, time, biomes, onBlock, light));
+            entries.Add(new SpawnEntry(mob, category, weight, min, max, filter));
         }
 
         return new SpawnTable(categories, entries);

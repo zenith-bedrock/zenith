@@ -1,4 +1,4 @@
-using Zenith.Rulebook;
+using Zenith.Gameplay.Filters;
 using Zenith.Gameplay.Runtime;
 using Zenith.World;
 
@@ -9,10 +9,11 @@ namespace Zenith.Gameplay.Entities;
 /// near each living in-game player, until the category's cap (per online player) is reached. Honours the
 /// <c>doMobSpawning</c> game rule. Spawns go through <see cref="MobSpawner"/>, the same path as <c>/summon</c>.
 ///
-/// Light decides what may spawn where (<see cref="LightModel"/>): monsters want a cell at brightness 7 or less, so they appear at
-/// night on the surface, in the dark all day under a roof and in caves; grazing animals want 7 or more and the grass they stand on.
+/// What may spawn where is each entry's filter (<see cref="SpawnEntry.Filter"/>, the BDS filter grammar): monsters want a cell at
+/// brightness 7 or less (rain counts), so they appear at night on the surface, in the dark all day under a roof and in caves, and never on
+/// Peaceful; grazing animals want 7 or more and the grass they stand on. This system only finds a spot and asks the filters.
 /// Simplifications against vanilla, on purpose and visible: no per-chunk mob-cap area (one global cap scaled by player count),
-/// no weather, and no structure or water spawns yet.
+/// and no structure or water spawns yet.
 /// </summary>
 [GameSystem("natural-spawn")]
 sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTable table, Random? random = null) : IGameSystem
@@ -45,7 +46,6 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
         foreach (var category in table.Categories)
         {
             if (clock.CurrentTick % (ulong)category.IntervalTicks != 0) continue;
-            if (category.Name == "monster" && world.Difficulty.Value == Difficulty.Peaceful) continue;
             var cap = category.CapPerPlayer * players.Length;
             var alive = table.In(category).Select(e => e.Mob).Distinct().Sum(spawner.LiveCount);
             foreach (var player in players)
@@ -59,22 +59,11 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
     private int SpawnGroupNear(Player.Player player, SpawnCategory category, Player.Player[] players, int worldTime, int room)
     {
         if (!TryFindSpot(player, players, category.Name == "monster", out var x, out var y, out var z, out var underground)) return 0;
-        var biome = world.SampleBiome((int)MathF.Floor(x), (int)MathF.Floor(z));
-        var ground = Blocks.Catalog.States.FamilyOf(world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y) - 1, (int)MathF.Floor(z)))?.Name;
-        var brightness = -1;
+        var context = new FilterContext(world, (int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z), worldTime);
 
         _eligible.Clear();
         foreach (var entry in table.In(category))
-        {
-            if (!entry.AppliesTo(biome, worldTime) || !entry.StandsOn(ground) || !spawner.IsRegistered(entry.Mob)) continue;
-            if (entry.Light != SpawnLight.Any)
-            {
-                if (brightness < 0) brightness = LightModel.Brightness(world, (int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z), worldTime);
-                if (!entry.LightOk(brightness)) continue;
-            }
-
-            _eligible.Add(entry);
-        }
+            if (spawner.IsRegistered(entry.Mob) && entry.Allows(context)) _eligible.Add(entry);
 
         if (_eligible.Count == 0) return 0;
 

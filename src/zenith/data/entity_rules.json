@@ -1,0 +1,8 @@
+{
+  "note": "Per-behaviour rules written as BDS filters. burns_in_daylight: when an undead mob is lit by the sun (full day and its edges, no rain, nothing over its head). The helmet that spares it belongs to the body model (plan 005 phase D).",
+  "burns_in_daylight": [
+    { "test": "is_daytime" },
+    { "test": "is_raining", "value": false },
+    { "test": "is_underground", "value": false }
+  ]
+}

@@ -66,6 +66,12 @@
     <EmbeddedResource Include="data\spawns.json">
       <LogicalName>spawns.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\biome_tags.json">
+      <LogicalName>biome_tags.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="data\entity_rules.json">
+      <LogicalName>entity_rules.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\recipes.json.gz">
       <LogicalName>recipes.json.gz</LogicalName>
     </EmbeddedResource>
