@@ -207,6 +207,12 @@ static class Blocks
     /// <summary>How much of an explosion the block absorbs (block_properties.json); water and lava 100, obsidian 1200, bedrock 3.6 million.</summary>
     public static float BlastResistanceOf(int runtimeId) => (float)(Current.Catalog.States.FamilyOf(runtimeId)?.BlastResistance ?? 0.0);
 
+    /// <summary>Light a block gives off (block_properties.json), 0 for most.</summary>
+    public static int EmissionOf(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId)?.Brightness ?? 0;
+
+    /// <summary>How much light a block takes from what passes it: 0 clear, 15 opaque (<see cref="LightModel.FilterOf"/>).</summary>
+    public static int LightFilterOf(int runtimeId) => LightModel.FilterOf(runtimeId);
+
     /// <summary>How readily the block burns away (block_properties.json), 0 when it does not.</summary>
     public static int FlammabilityOf(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId)?.Flammability ?? 0;
 

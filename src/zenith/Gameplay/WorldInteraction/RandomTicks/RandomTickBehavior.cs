@@ -23,6 +23,12 @@ sealed class RandomTickContext(
     /// <summary>The game tick being processed; carried into every proposal.</summary>
     public ulong Now { get; set; }
 
+    /// <summary>The time of day (a tick of the 24000 day), for behaviours that need the sun.</summary>
+    public int WorldTime { get; set; }
+
+    /// <summary>How bright the cell is right now (block light, or sky light less what the time of day takes off).</summary>
+    public int BrightnessAt(int x, int y, int z) => LightModel.Brightness(World, x, y, z, WorldTime);
+
     /// <summary>
     /// Whether the environment policies let this behaviour change the cell, under the cause it names. A behaviour asks before it
     /// acts (and before it rolls anything it would waste on a refusal); a change that is refused is simply not made.

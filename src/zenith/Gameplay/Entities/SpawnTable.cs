@@ -7,12 +7,26 @@ namespace Zenith.Gameplay.Entities;
 /// <summary>When in the day a spawn entry applies. Night is the stretch where the sky is dark enough for hostile mobs.</summary>
 enum SpawnTime { Any, Day, Night }
 
+/// <summary>How bright the spawn cell must be: monsters want the dark (0 to 7), grazing animals the light (7 and up).</summary>
+enum SpawnLight { Any, Dark, Bright }
+
 /// <summary>A mob category: how many of its mobs the world keeps per online player, and how often a spawn round runs.</summary>
 sealed record SpawnCategory(string Name, int CapPerPlayer, int IntervalTicks);
 
 /// <summary>One candidate of natural spawning: what, where (biomes), when, how many at once, and its relative weight.</summary>
-sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, SpawnTime Time, IReadOnlySet<OverworldBiomeKind> Biomes, string? OnBlock = null)
+sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, SpawnTime Time, IReadOnlySet<OverworldBiomeKind> Biomes, string? OnBlock = null, SpawnLight Light = SpawnLight.Any)
 {
+    /// <summary>The brightest a monster may spawn, and the dimmest an animal may (the pack's brightness filters).</summary>
+    public const int DarkMax = 7;
+    public const int BrightMin = 7;
+
+    public bool LightOk(int brightness) => Light switch
+    {
+        SpawnLight.Dark => brightness <= DarkMax,
+        SpawnLight.Bright => brightness >= BrightMin,
+        _ => true
+    };
+
     /// <summary>A cow needs grass under its feet; an entry with no <see cref="OnBlock"/> stands on anything that holds a ground mob.</summary>
     public bool StandsOn(string? groundBlock) => OnBlock is null || OnBlock == groundBlock;
 
@@ -100,7 +114,9 @@ sealed class SpawnTable
 
             if (biomes.Count == 0) throw Invalid($"'{mob}' lists no biomes");
             var onBlock = e.TryGetProperty("onBlock", out var ob) ? ob.GetString() : null;
-            entries.Add(new SpawnEntry(mob, category, weight, min, max, time, biomes, onBlock));
+            var lightText = e.TryGetProperty("light", out var lt) ? lt.GetString() : "any";
+            if (!Enum.TryParse<SpawnLight>(lightText, ignoreCase: true, out var light)) throw Invalid($"'{mob}' has unknown light '{lightText}'");
+            entries.Add(new SpawnEntry(mob, category, weight, min, max, time, biomes, onBlock, light));
         }
 
         return new SpawnTable(categories, entries);

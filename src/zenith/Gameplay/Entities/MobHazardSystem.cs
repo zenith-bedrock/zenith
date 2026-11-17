@@ -16,10 +16,17 @@ sealed class MobHazardSystem(
     World.World world,
     EntityRuntime stores,
     DamageDispatch damage,
-    Func<EntityId, bool> isAquatic) : IGameSystem
+    Func<EntityId, bool> isAquatic,
+    Func<EntityId, bool>? isUndead = null) : IGameSystem
 {
     public const int LavaIntervalTicks = 10;
     public const float LavaDamage = 4f;
+
+    /// <summary>The sun burns undead while it takes at most this many levels off the sky (full day and the edges of it).</summary>
+    public const int SunBurnMaxDarkness = 3;
+
+    /// <summary>How often a mob is checked for standing in the sun.</summary>
+    private const int SunCheckEvery = 10;
 
     /// <summary>Mobs differ in height; a point a little over a block up stands for the head, and a floating mob at the surface keeps it dry.</summary>
     private const float HeadHeight = 1.0f;
@@ -42,7 +49,8 @@ sealed class MobHazardSystem(
             if (stores.Corpses.Has(id) || isAquatic(id)) continue;
             if (!stores.Positions.TryGet(id, out var pos)) continue;
 
-            Burn(id, pos, clock.CurrentTick, online);
+            var sunlit = isUndead is not null && clock.CurrentTick % SunCheckEvery == 0 && isUndead(id) && InSun(pos, clock.WorldTime);
+            Burn(id, pos, clock.CurrentTick, online, sunlit);
 
             if (FluidAt(pos, FeetOffset) == FluidType.Lava && clock.CurrentTick % LavaIntervalTicks == 0)
             {
@@ -68,10 +76,11 @@ sealed class MobHazardSystem(
     }
 
     /// <summary>Fire and lava light a mob, water puts it out, and flames hurt it once a second (see <see cref="Burning"/>).</summary>
-    private void Burn(EntityId id, Position pos, ulong tick, IReadOnlyList<Player.Player> online)
+    private void Burn(EntityId id, Position pos, ulong tick, IReadOnlyList<Player.Player> online, bool sunlit = false)
     {
         var before = _burn.GetValueOrDefault(id);
         var contact = Burning.ContactAt(world, pos.X, pos.Y, pos.Z);
+        if (contact == 0 && sunlit) contact = Burning.FireIgniteTicks;
         if (before == 0 && contact <= 0) return;
 
         var remaining = Burning.Step(before, contact, tick, out var hurt);
@@ -84,6 +93,11 @@ sealed class MobHazardSystem(
         foreach (var peer in online)
             if (peer.IsInGame) peer.Client.Entity.SendActorBurning(identity.ActorRuntimeId, remaining > 0);
     }
+
+    /// <summary>Daylight and nothing but clear air overhead: the cell the mob stands in sees the sun.</summary>
+    private bool InSun(Position pos, int worldTime) =>
+        LightModel.SkyDarkness(worldTime) <= SunBurnMaxDarkness &&
+        LightModel.SeesSky(world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y + .5f), (int)MathF.Floor(pos.Z));
 
     /// <summary>Ticks of burning left on a mob (0 when it is not alight).</summary>
     public int BurnTicksOf(EntityId id) => _burn.GetValueOrDefault(id);

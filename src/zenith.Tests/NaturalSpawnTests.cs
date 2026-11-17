@@ -80,7 +80,7 @@ public sealed class NaturalSpawnTests
     }
 
     [Fact]
-    public void The_shipped_weights_and_groups_are_the_packs_and_a_cow_needs_grass_in_daylight()
+    public void The_shipped_weights_and_groups_are_the_packs_and_a_cow_needs_grass_and_light()
     {
         SpawnEntry Entry(string mob) => SpawnTable.Default.Entries.Single(e => e.Mob == mob);
         Assert.Equal((100, 2, 4), (Entry("zombie").Weight, Entry("zombie").GroupMin, Entry("zombie").GroupMax));
@@ -88,7 +88,8 @@ public sealed class NaturalSpawnTests
         Assert.Equal((1, 1), (Entry("spider").GroupMin, Entry("spider").GroupMax));
         Assert.Equal((1, 2), (Entry("enderman").GroupMin, Entry("enderman").GroupMax));
         Assert.Equal((2, 3), (Entry("cow").GroupMin, Entry("cow").GroupMax));
-        Assert.Equal(SpawnTime.Day, Entry("cow").Time);
+        Assert.Equal(SpawnLight.Bright, Entry("cow").Light);
+        Assert.Equal(SpawnLight.Dark, Entry("zombie").Light);
         Assert.True(Entry("cow").StandsOn("minecraft:grass_block"));
         Assert.False(Entry("cow").StandsOn("minecraft:sand"));
         Assert.True(Entry("zombie").StandsOn("minecraft:sand")); // only the cow is picky about its ground

@@ -35,6 +35,7 @@ sealed class RandomTickSystem : IGameSystem
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
     {
         _context.Now = clock.CurrentTick;
+        _context.WorldTime = clock.WorldTime;
         _speed = _world.Rules.RandomTickSpeed;
         if (_speed <= 0 || online.Count == 0) return;
 

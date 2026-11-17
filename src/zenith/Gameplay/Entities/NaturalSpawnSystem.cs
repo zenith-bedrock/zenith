@@ -8,9 +8,10 @@ namespace Zenith.Gameplay.Entities;
 /// near each living in-game player, until the category's cap (per online player) is reached. Honours the
 /// <c>doMobSpawning</c> game rule. Spawns go through <see cref="MobSpawner"/>, the same path as <c>/summon</c>.
 ///
-/// Simplifications against vanilla, on purpose and visible: there is no light level (hostile entries use time of day,
-/// and candidates are terrain-surface columns, so nothing spawns underground), no per-chunk mob-cap area (one global
-/// cap scaled by player count), and no structure or water spawns yet.
+/// Light decides what may spawn where (<see cref="LightModel"/>): monsters want a cell at brightness 7 or less, so they appear at
+/// night on the surface, in the dark all day under a roof and in caves; grazing animals want 7 or more and the grass they stand on.
+/// Simplifications against vanilla, on purpose and visible: no per-chunk mob-cap area (one global cap scaled by player count),
+/// no weather, and no structure or water spawns yet.
 /// </summary>
 sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTable table, Random? random = null) : IGameSystem
 {
@@ -20,6 +21,12 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
     internal const float MaxPlayerDistance = 48f;
     private const float GroupScatter = 3f;
     private const int PlacementAttempts = 10;
+
+    /// <summary>A monster candidate looks underground (around the player's height) this often instead of at the surface.</summary>
+    private const double CaveShare = 0.5;
+    private const int CaveReachDown = 24;
+    private const int CaveReachUp = 8;
+    private const int CaveScanDepth = 12;
 
     private readonly Random _random = random ?? new Random();
     private readonly List<SpawnEntry> _eligible = [];
@@ -48,14 +55,24 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
 
     private int SpawnGroupNear(Player.Player player, SpawnCategory category, Player.Player[] players, int worldTime, int room)
     {
-        if (!TryFindSurface(player, players, out var x, out var y, out var z)) return 0;
+        if (!TryFindSpot(player, players, category.Name == "monster", out var x, out var y, out var z, out var underground)) return 0;
         var biome = world.SampleBiome((int)MathF.Floor(x), (int)MathF.Floor(z));
-
         var ground = Blocks.Catalog.States.FamilyOf(world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y) - 1, (int)MathF.Floor(z)))?.Name;
+        var brightness = -1;
+
         _eligible.Clear();
         foreach (var entry in table.In(category))
-            if (entry.AppliesTo(biome, worldTime) && entry.StandsOn(ground) && spawner.IsRegistered(entry.Mob))
-                _eligible.Add(entry);
+        {
+            if (!entry.AppliesTo(biome, worldTime) || !entry.StandsOn(ground) || !spawner.IsRegistered(entry.Mob)) continue;
+            if (entry.Light != SpawnLight.Any)
+            {
+                if (brightness < 0) brightness = LightModel.Brightness(world, (int)MathF.Floor(x), (int)MathF.Floor(y), (int)MathF.Floor(z), worldTime);
+                if (!entry.LightOk(brightness)) continue;
+            }
+
+            _eligible.Add(entry);
+        }
+
         if (_eligible.Count == 0) return 0;
 
         var pick = PickWeighted(_eligible);
@@ -66,7 +83,7 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
             var gx = x + (i == 0 ? 0f : (float)(_random.NextDouble() * 2 - 1) * GroupScatter);
             var gz = z + (i == 0 ? 0f : (float)(_random.NextDouble() * 2 - 1) * GroupScatter);
             var gy = y;
-            if (i != 0 && !TryStandingY(gx, gz, out gy)) continue;
+            if (i != 0 && !(underground ? TryStandingNear(gx, gz, y, out gy) : TryStandingY(gx, gz, out gy))) continue;
             if (!spawner.Request(pick.Mob, gx, gy, gz)) continue;
             SpawnRequests++;
             spawned++;
@@ -75,20 +92,30 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
         return spawned;
     }
 
-    private bool TryFindSurface(Player.Player near, Player.Player[] all, out float x, out float y, out float z)
+    private bool TryFindSpot(Player.Player near, Player.Player[] all, bool mayGoUnderground, out float x, out float y, out float z, out bool underground)
     {
         x = y = z = 0f;
+        underground = false;
         for (var attempt = 0; attempt < PlacementAttempts; attempt++)
         {
             var angle = _random.NextDouble() * Math.PI * 2;
             var distance = MinPlayerDistance + _random.NextDouble() * (MaxPlayerDistance - MinPlayerDistance);
             var cx = near.PositionX + (float)(Math.Cos(angle) * distance);
             var cz = near.PositionZ + (float)(Math.Sin(angle) * distance);
-            if (!TryStandingY(cx, cz, out var cy)) continue;
+            var cave = mayGoUnderground && _random.NextDouble() < CaveShare;
+            float cy;
+            if (cave)
+            {
+                var from = (int)MathF.Floor(near.PositionY) + _random.Next(-CaveReachDown, CaveReachUp + 1);
+                if (!TryStandingNear(cx, cz, from, out cy, CaveScanDepth)) continue;
+            }
+            else if (!TryStandingY(cx, cz, out cy)) continue;
+
             if (all.Any(p => Dist2(p.PositionX, p.PositionZ, cx, cz) < MinPlayerDistance * MinPlayerDistance)) continue;
             x = cx;
             y = cy;
             z = cz;
+            underground = cave;
             return true;
         }
 
@@ -103,6 +130,30 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
         var feet = world.SampleSpawnFeetY(bx, bz);
         y = feet;
         return Blocks.CanSupportGroundActor(world.GetBlock(bx, feet - 1, bz)) && world.IsSpawnFeetClear(bx, feet, bz);
+    }
+
+    /// <summary>
+    /// Feet Y of a standing spot in the column at or just below <paramref name="from"/> (or, with no depth given, within three cells of it
+    /// either way): solid ground under two free cells, in a loaded column. Used for caves, where there is no surface to sample.
+    /// </summary>
+    private bool TryStandingNear(float x, float z, float from, out float y, int depth = 3)
+    {
+        var bx = (int)MathF.Floor(x);
+        var bz = (int)MathF.Floor(z);
+        var start = (int)MathF.Floor(from);
+        for (var step = 0; step <= depth; step++)
+            foreach (var feet in step == 0 ? [start] : depth == 3 ? new[] { start + step, start - step } : [start - step])
+            {
+                if (feet <= WorldColumn.MinY || feet >= WorldColumn.MaxY - 2) continue;
+                if (!world.TryGetBlock(bx, feet - 1, bz, out var below) || !Blocks.CanSupportGroundActor(below)) continue;
+                if (!world.TryGetBlock(bx, feet, bz, out var body) || !Blocks.CanOccupy(body) || Blocks.IsFluid(body)) continue;
+                if (!world.TryGetBlock(bx, feet + 1, bz, out var head) || !Blocks.CanOccupy(head) || Blocks.IsFluid(head)) continue;
+                y = feet;
+                return true;
+            }
+
+        y = 0f;
+        return false;
     }
 
     private SpawnEntry PickWeighted(List<SpawnEntry> entries)

@@ -14,6 +14,9 @@ namespace Zenith.Gameplay.WorldInteraction.RandomTicks;
 sealed class SaplingGrowthBehavior : IRandomTickBehavior
 {
     private const int OddsPerStage = 7;
+
+    /// <summary>Brightness the cell over a sapling needs for it to grow.</summary>
+    internal const int GrowthLight = 9;
     private const int MinTrunk = 4;
     private const int MaxTrunk = 6;
     private const int CanopyRadius = 2;
@@ -23,6 +26,7 @@ sealed class SaplingGrowthBehavior : IRandomTickBehavior
     public void OnRandomTick(RandomTickContext tick)
     {
         if (tick.Random.Next(OddsPerStage) != 0) return;
+        if (tick.BrightnessAt(tick.X, tick.Y + 1, tick.Z) < GrowthLight) return;
 
         var states = Blocks.Catalog.States;
         if (!states.Bit(tick.BlockRuntimeId, StateKeys.Age))

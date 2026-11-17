@@ -60,7 +60,7 @@ sealed class EntityModule : IGameplayModule
         s.Register(villager, "villager");
         s.Register(golem, "golem");
         s.Register(fish, "fish");
-        s.Register(new MobHazardSystem(world, entities, damage, fish.Owns), "mob-hazard");
+        s.Register(new MobHazardSystem(world, entities, damage, fish.Owns, id => zombie.Owns(id) || skeleton.Owns(id)), "mob-hazard");
         s.Register(new DeathAnimationSystem(entities), "death-animation");
 
         var spawner = s.Spawner;

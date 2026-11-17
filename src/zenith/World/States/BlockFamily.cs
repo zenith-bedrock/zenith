@@ -112,6 +112,9 @@ sealed class BlockFamily
     /// <summary>How much of an explosion's strength the block eats (block_properties.json, vanilla units); 0 for a block with no recorded row.</summary>
     public double BlastResistance { get; internal set; }
 
+    /// <summary>Light the block gives off, 0 to 15 (block_properties.json).</summary>
+    public int Brightness { get; internal set; }
+
     /// <summary>How strongly the block invites fire to spread to a cell beside it (block_properties.json).</summary>
     public int FlameEncouragement { get; internal set; }
 
