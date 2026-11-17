@@ -12,10 +12,12 @@ sealed class BucketItems
     private const string PowderSnowBlock = "minecraft:powder_snow";
 
     private readonly FilledBucket[] _filled;
+    private readonly StackId _flintAndSteel;
 
     public BucketItems(ItemPalette palette)
     {
         Empty = StackId.FromItem(palette.Require(ItemNames.Bucket));
+        _flintAndSteel = StackId.FromItem(palette.Require("minecraft:flint_and_steel"));
         if (!Blocks.TryGetDefaultRuntimeId(PowderSnowBlock, out var powderSnow))
             throw new InvalidOperationException($"{PowderSnowBlock} is not in the block palette.");
 
@@ -32,6 +34,9 @@ sealed class BucketItems
 
     /// <summary>The water bucket, which other systems (fish, scooping) treat specially.</summary>
     public FilledBucket Water { get; }
+
+    /// <summary>Flint and steel rides the same use-on-block path as the buckets; any wear on the stack is still the item.</summary>
+    public bool IsFlintAndSteel(StackId id) => id.IsItem && id.Value == _flintAndSteel.Value;
 
     public bool IsBucket(StackId id) => id == Empty || TryGetFilled(id, out _);
 

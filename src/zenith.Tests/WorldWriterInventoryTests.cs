@@ -43,6 +43,7 @@ public sealed class WorldWriterInventoryTests
         [("Zenith.Gameplay.WorldInteraction.BlockEditSystem", "CommitExtraWrites")] = new(Kind.PlayerEditPoliced, "coupled cells of a place, break or door use, planned and judged first"),
         [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryScoop")] = new(Kind.PlayerEditPoliced, "bucket scoop, judged as a break"),
         [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryPour")] = new(Kind.PlayerEditPoliced, "bucket pour, judged as a place"),
+        [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryIgnite")] = new(Kind.PlayerEditPoliced, "flint and steel, judged as a place"),
 
         // Environment writers that ask the environment policies. Proven by EnvironmentPolicyTests and EnvironmentFluidFireTests.
         [("Zenith.Gameplay.WorldInteraction.Explosion", "DestroyBlocks")] = new(Kind.EnvironmentPoliced, "Explosion"),

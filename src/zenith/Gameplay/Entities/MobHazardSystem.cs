@@ -29,6 +29,7 @@ sealed class MobHazardSystem(
     private const int SweepEveryTicks = 200;
 
     private readonly Dictionary<EntityId, int> _air = [];
+    private readonly Dictionary<EntityId, int> _burn = [];
     private readonly List<EntityId> _scratch = [];
 
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)
@@ -40,6 +41,8 @@ sealed class MobHazardSystem(
         {
             if (stores.Corpses.Has(id) || isAquatic(id)) continue;
             if (!stores.Positions.TryGet(id, out var pos)) continue;
+
+            Burn(id, pos, clock.CurrentTick, online);
 
             if (FluidAt(pos, FeetOffset) == FluidType.Lava && clock.CurrentTick % LavaIntervalTicks == 0)
             {
@@ -56,10 +59,34 @@ sealed class MobHazardSystem(
             else _air[id] = air;
         }
 
-        // Entities that are gone leave their breath behind; sweep rarely.
-        if (clock.CurrentTick % SweepEveryTicks == 0 && _air.Count > 0)
-            _air.Keys.Where(k => !stores.Health.Has(k)).ToList().ForEach(k => _air.Remove(k));
+        // Entities that are gone leave their breath and flames behind; sweep rarely.
+        if (clock.CurrentTick % SweepEveryTicks == 0)
+        {
+            if (_air.Count > 0) _air.Keys.Where(k => !stores.Health.Has(k)).ToList().ForEach(k => _air.Remove(k));
+            if (_burn.Count > 0) _burn.Keys.Where(k => !stores.Health.Has(k)).ToList().ForEach(k => _burn.Remove(k));
+        }
     }
+
+    /// <summary>Fire and lava light a mob, water puts it out, and flames hurt it once a second (see <see cref="Burning"/>).</summary>
+    private void Burn(EntityId id, Position pos, ulong tick, IReadOnlyList<Player.Player> online)
+    {
+        var before = _burn.GetValueOrDefault(id);
+        var contact = Burning.ContactAt(world, pos.X, pos.Y, pos.Z);
+        if (before == 0 && contact <= 0) return;
+
+        var remaining = Burning.Step(before, contact, tick, out var hurt);
+        if (remaining > 0) _burn[id] = remaining;
+        else _burn.Remove(id);
+        if (hurt) damage.TryApplyDamage(id, DamageSource.Fire, Burning.Damage, online, tick);
+
+        if ((before > 0) == (remaining > 0)) return;
+        if (!stores.Identities.TryGet(id, out var identity)) return;
+        foreach (var peer in online)
+            if (peer.IsInGame) peer.Client.Entity.SendActorBurning(identity.ActorRuntimeId, remaining > 0);
+    }
+
+    /// <summary>Ticks of burning left on a mob (0 when it is not alight).</summary>
+    public int BurnTicksOf(EntityId id) => _burn.GetValueOrDefault(id);
 
     private FluidType FluidAt(Position pos, float heightAboveFeet) =>
         world.TryGetBlock((int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y + heightAboveFeet), (int)MathF.Floor(pos.Z), out var block)

@@ -20,6 +20,7 @@ sealed class SetActorDataPacket : DataPacket
     public bool Sprinting { get; set; }
     public bool UsingItem { get; set; }
     public bool Swimming { get; set; }
+    public bool Burning { get; set; }
 
     /// <summary>When set, the packet carries only the air supply (and its maximum), not pose or name.</summary>
     public short? AirSupply { get; set; }
@@ -43,7 +44,7 @@ sealed class SetActorDataPacket : DataPacket
         else if (FlagsOnly)
             EntityMetadataWriter.WriteFlagsOnly(
                 ref writer,
-                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting, UsingItem, Swimming));
+                RawFlags ?? EntityMetadataWriter.BuildPoseFlags(Sneaking, Sprinting, UsingItem, Swimming, Burning));
         else
             EntityMetadataWriter.WriteVisibleNameMetadata(ref writer, Name, Sneaking, Sprinting);
 

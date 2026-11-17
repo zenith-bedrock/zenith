@@ -127,7 +127,7 @@ partial class InGameSessionHandler
         }
 
         // A bucket works on water as much as on blocks, so it never falls through to block placement.
-        if (session.Context.Buckets.IsBucket(stack.Id))
+        if (session.Context.Buckets.IsBucket(stack.Id) || session.Context.Buckets.IsFlintAndSteel(stack.Id))
         {
             if (!player.Intents.SubmitBucket(new BucketIntent(blockX, blockY, blockZ, blockFace, hotbarSlot, stack.Id)))
                 session.Context.Logger.Debug($"Dropped bucket use from {player.Username}: queue full.");

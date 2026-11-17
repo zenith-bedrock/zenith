@@ -1,6 +1,8 @@
 using Zenith.Event;
+using Zenith.Gameplay.Inventory;
 using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Replication;
+using Zenith.Gameplay.WorldInteraction.Fire;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
 using Zenith.World;
@@ -15,7 +17,7 @@ namespace Zenith.Gameplay.WorldInteraction.Fluids;
 /// </summary>
 sealed class BucketSystem(
     World.World world, PlayerManager players, BucketItems buckets,
-    BlockEditPolicies? policies = null, EventBus? events = null) : IGameSystem
+    BlockEditPolicies? policies = null, EventBus? events = null, ItemDurability? durability = null) : IGameSystem
 {
     private readonly List<(int X, int Y, int Z, int BlockRuntimeId)> _updates = [];
     private readonly BlockEditPolicies _policies = policies ?? new BlockEditPolicies();
@@ -42,7 +44,14 @@ sealed class BucketSystem(
     private void Apply(Player.Player player, in BucketIntent use, IReadOnlyList<Player.Player> online)
     {
         var held = PlayerInventory.IsValidHotbarSlot(use.HotbarSlot) ? player.Inventory.Get(use.HotbarSlot) : InventorySlot.Empty;
-        if (held.IsEmpty || held.Id != use.ExpectedStack || !buckets.IsBucket(held.Id)) return;
+        if (held.IsEmpty || held.Id != use.ExpectedStack) return;
+        if (buckets.IsFlintAndSteel(held.Id))
+        {
+            if (!TryIgnite(player, use, held)) ResyncAround(player, use);
+            return;
+        }
+
+        if (!buckets.IsBucket(held.Id)) return;
 
         var clicked = (use.X, use.Y, use.Z);
         var beyond = BlockFaces.Offset(use.X, use.Y, use.Z, use.Face);
@@ -51,9 +60,38 @@ sealed class BucketSystem(
             : TryScoop(player, use, held, clicked, beyond);
         if (done) return;
 
-        // Put the client's prediction right: it may have drawn the liquid or the empty cell.
-        foreach (var (x, y, z) in new[] { clicked, beyond })
+        ResyncAround(player, use);
+    }
+
+    /// <summary>Put the client's prediction right: it may have drawn the liquid, the fire or the empty cell.</summary>
+    private void ResyncAround(Player.Player player, in BucketIntent use)
+    {
+        foreach (var (x, y, z) in new[] { (use.X, use.Y, use.Z), BlockFaces.Offset(use.X, use.Y, use.Z, use.Face) })
             if (world.TryGetBlock(x, y, z, out var actual)) player.Client.World.SendUpdateBlock(x, y, z, actual);
+    }
+
+    /// <summary>Flint and steel lights a fire in the open cell its face looks at, and loses one point of wear (survival).</summary>
+    private bool TryIgnite(Player.Player player, in BucketIntent use, InventorySlot held)
+    {
+        var cell = BlockFaces.Offset(use.X, use.Y, use.Z, use.Face);
+        if (!BlockEditSystem.IsWithinReach(player, cell.X, cell.Y, cell.Z) || !world.TryGetBlock(cell.X, cell.Y, cell.Z, out var before) ||
+            !Blocks.IsAir(before))
+            return false;
+
+        var fire = FireBlocks.WithAge(0);
+        if (!Judge(player, BlockEditKind.Place, cell, before, fire)) return false;
+        if (!world.TrySetBlock(cell.X, cell.Y, cell.Z, fire)) return false;
+
+        _updates.Add((cell.X, cell.Y, cell.Z, fire));
+        if (player.GameMode != GameMode.Creative && durability is not null)
+        {
+            _ = ItemWear.Apply(durability, held, 1, out var worn);
+            _ = player.Inventory.TrySet(use.HotbarSlot, worn.IsEmpty ? StackId.FromBlock(Blocks.Air) : worn.Id, worn.IsEmpty ? 0 : worn.Count);
+            SyncInventory(player);
+        }
+
+        Publish(player, BlockEditKind.Place, cell, before, fire);
+        return true;
     }
 
     private bool TryScoop(Player.Player player, in BucketIntent use, InventorySlot held, (int X, int Y, int Z) clicked, (int X, int Y, int Z) beyond)

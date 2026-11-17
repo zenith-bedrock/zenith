@@ -32,6 +32,7 @@ static class EntityMetaType
 
 static class EntityFlag
 {
+    public const int OnFire = 0;
     public const int Sneaking = 1;
     public const int Sprinting = 3;
     public const int UsingItem = 4;
@@ -206,9 +207,9 @@ static class EntityMetadataWriter
     }
 
     /// <summary>FLAGS long for dirty pose updates (seed bits + sneak/sprint).</summary>
-    public static long BuildPoseFlags(bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false) =>
+    public static long BuildPoseFlags(bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false, bool burning = false) =>
         BuildSpawnFlags(sneaking, sprinting) | (usingItem ? EntityFlag.Bit(EntityFlag.UsingItem) : 0) |
-        (swimming ? EntityFlag.Bit(EntityFlag.Swimming) : 0);
+        (swimming ? EntityFlag.Bit(EntityFlag.Swimming) : 0) | (burning ? EntityFlag.Bit(EntityFlag.OnFire) : 0);
 
     /// <summary>The owner's air supply (ticks) and its maximum — what the bubble row is drawn from.</summary>
     public static void WriteAirSupply(ref BinaryStream writer, short air, short max) =>

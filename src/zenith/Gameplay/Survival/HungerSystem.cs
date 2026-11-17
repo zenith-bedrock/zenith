@@ -166,7 +166,7 @@ sealed class HungerSystem : IGameSystem
         if (!changed) return;
         foreach (var peer in online)
             if (peer.IsInGame)
-                peer.Client.Entity.SendActorFlags((ulong)player.RuntimeId, player.IsSneaking, player.IsSprinting, use.HasValue, player.IsSwimming);
+                peer.Client.Entity.SendActorFlags((ulong)player.RuntimeId, player.IsSneaking, player.IsSprinting, use.HasValue, player.IsSwimming, player.BurnTicks > 0);
     }
 
     private bool ConsumeFood(Player.Player player, FoodUseState use, FoodDefinition food, IReadOnlyList<Player.Player> online)

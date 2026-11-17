@@ -155,7 +155,7 @@ sealed class MovementSystem : IGameSystem
                 peer.Client.Entity.SendActorFlags(
                     (ulong)mover.RuntimeId,
                     mover.IsSneaking,
-                    mover.IsSprinting, mover.FoodUse.HasValue, mover.IsSwimming);
+                    mover.IsSprinting, mover.FoodUse.HasValue, mover.IsSwimming, mover.BurnTicks > 0);
             }
 
             foreach (var mover in _swing)

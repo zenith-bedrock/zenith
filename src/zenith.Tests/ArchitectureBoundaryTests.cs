@@ -102,6 +102,7 @@ public class ArchitectureBoundaryTests
             ["IsSprinting"] = [Movement, PlayerType],
             ["IsSwimming"] = [Movement, PlayerType],
             ["AirSupply"] = [AirSupply, PlayerType],
+            ["BurnTicks"] = ["Zenith.Gameplay.Survival.BurnSystem", PlayerType],
             ["FoodUse"] = [Hunger, PlayerType],
             ["FallPeakY"] = [Movement, PlayerType],
             // Vitals: HungerSystem owns the food model; mining and damage are exhaustion sources it prices.

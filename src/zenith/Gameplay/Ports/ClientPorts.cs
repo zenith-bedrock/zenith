@@ -73,10 +73,11 @@ interface IEntityChannel
     void SendMovePlayerTeleport(ulong entityRuntimeId, float x, float y, float z, float pitch, float yaw, float headYaw, ulong tick = 0);
 
     void SendSetActorLink(long riderUniqueId, long riddenUniqueId, ActorLinkKind link, bool immediate = true, bool causedByRider = true);
-    void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false);
+    void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false, bool burning = false);
 
     /// <summary>The owning client's air supply, in ticks, out of <paramref name="max"/> (drives the bubble row).</summary>
     void SendAirSupply(ulong actorRuntimeId, short air, short max);
+    void SendActorBurning(ulong actorRuntimeId, bool burning);
     void SendActorIgnited(ulong actorRuntimeId, bool ignited);
 
     void SendHealth(ulong actorRuntimeId, float health, float maximum);

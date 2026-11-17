@@ -231,6 +231,9 @@ class Player
     /// <summary>Sprinting with the head under water — the swimming pose peers see.</summary>
     public bool IsSwimming { get; set; }
 
+    /// <summary>Ticks of burning left (0 when not alight); see <see cref="Zenith.Gameplay.Survival.Burning"/>.</summary>
+    public int BurnTicks { get; set; }
+
     /// <summary>Ticks of breath left under water (<see cref="Zenith.Gameplay.Survival.AirSupplySystem.MaxAirSupply"/> when surfaced); negative while drowning.</summary>
     public int AirSupply { get; set; } = Zenith.Gameplay.Survival.AirSupplySystem.MaxAirSupply;
 
@@ -287,6 +290,7 @@ class Player
         IsSneaking = false;
         IsSprinting = false;
         IsSwimming = false;
+        BurnTicks = 0;
         Dig.AbortBreak();
         _ = Windows.TryClearOpenContainer(out _);
         _ = Intents.TryConsumeRespawn();
@@ -326,6 +330,7 @@ class Player
         IsSneaking = false;
         IsSprinting = false;
         IsSwimming = false;
+        BurnTicks = 0;
         AirSupply = Gameplay.Survival.AirSupplySystem.MaxAirSupply;
         Replicated.ForgetPoseFlags();
         FallPeakY = PositionY;

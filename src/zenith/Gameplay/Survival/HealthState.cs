@@ -15,7 +15,8 @@ enum DamageCause
     Magic,
     Drown,
     Lava,
-    Explosion
+    Explosion,
+    Fire
 }
 
 /// <summary>
@@ -32,6 +33,7 @@ readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = nu
     public static DamageSource Magic => new(DamageCause.Magic);
     public static DamageSource Drown => new(DamageCause.Drown);
     public static DamageSource Lava => new(DamageCause.Lava);
+    public static DamageSource Fire => new(DamageCause.Fire);
     public static DamageSource Explosion => new(DamageCause.Explosion);
     public static DamageSource Melee => new(DamageCause.Melee);
     public static DamageSource MeleeFrom(long ownerRuntimeId) => new(DamageCause.Melee, ownerRuntimeId);

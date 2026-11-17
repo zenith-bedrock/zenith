@@ -30,7 +30,7 @@ sealed partial class EntityProtocol
     public void SendAirSupply(ulong actorRuntimeId, short air, short max) =>
         _session.SendDataPacket(new SetActorDataPacket { ActorRuntimeId = actorRuntimeId, AirSupply = air, AirSupplyMax = max, Tick = 0 });
 
-    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false)
+    public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false, bool burning = false)
     {
         _session.SendDataPacket(new SetActorDataPacket
         {
@@ -38,10 +38,19 @@ sealed partial class EntityProtocol
             FlagsOnly = true,
             UsingItem = usingItem,
             Swimming = swimming,
+            Burning = burning,
             Sneaking = sneaking,
             Sprinting = sprinting,
             Tick = 0
         });
+    }
+
+    /// <summary>A non-player actor catches fire or is put out (the flame the client draws on it).</summary>
+    public void SendActorBurning(ulong actorRuntimeId, bool burning)
+    {
+        var flags = EntityMetadataWriter.BuildMobFlags();
+        if (burning) flags |= EntityFlag.Bit(EntityFlag.OnFire);
+        _session.SendDataPacket(new SetActorDataPacket { ActorRuntimeId = actorRuntimeId, FlagsOnly = true, RawFlags = flags, Tick = 0 });
     }
 
     /// <summary>

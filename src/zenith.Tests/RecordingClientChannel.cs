@@ -46,7 +46,8 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendMoveAbsolutes(IReadOnlyList<AbsoluteActorPose> poses) => owner.Calls.Add(("Entity", "SendMoveAbsolutes", [poses]));
         public void SendMovePlayerTeleport(ulong entityRuntimeId, float x, float y, float z, float pitch, float yaw, float headYaw, ulong tick = 0) => owner.Calls.Add(("Entity", "SendMovePlayerTeleport", [entityRuntimeId, x, y, z, pitch, yaw, headYaw, tick]));
         public void SendSetActorLink(long riderUniqueId, long riddenUniqueId, ActorLinkKind link, bool immediate = true, bool causedByRider = true) => owner.Calls.Add(("Entity", "SendSetActorLink", [riderUniqueId, riddenUniqueId, link, immediate, causedByRider]));
-        public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false) => owner.Calls.Add(("Entity", "SendActorFlags", [actorRuntimeId, sneaking, sprinting, usingItem, swimming]));
+        public void SendActorFlags(ulong actorRuntimeId, bool sneaking, bool sprinting, bool usingItem = false, bool swimming = false, bool burning = false) => owner.Calls.Add(("Entity", "SendActorFlags", [actorRuntimeId, sneaking, sprinting, usingItem, swimming]));
+        public void SendActorBurning(ulong actorRuntimeId, bool burning) => owner.Calls.Add(("Entity", "SendActorBurning", [actorRuntimeId, burning]));
         public void SendAirSupply(ulong actorRuntimeId, short air, short max) => owner.Calls.Add(("Entity", "SendAirSupply", [actorRuntimeId, air, max]));
         public void SendActorIgnited(ulong actorRuntimeId, bool ignited) => owner.Calls.Add(("Entity", "SendActorIgnited", [actorRuntimeId, ignited]));
         public void SendHealth(ulong actorRuntimeId, float health, float maximum) => owner.Calls.Add(("Entity", "SendHealth", [actorRuntimeId, health, maximum]));
