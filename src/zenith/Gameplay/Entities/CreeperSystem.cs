@@ -26,6 +26,7 @@ namespace Zenith.Gameplay.Entities;
 /// world-space coordinates and calls <see cref="PlayerDamage.ApplyCore"/> per player, independent
 /// of what backs the Creeper's own storage.
 /// </summary>
+[GameSystem("creeper")]
 sealed class CreeperSystem : MobSystem<CreeperState>
 {
     private const float SpawnDistance = 6f;

@@ -8,6 +8,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// the columns nobody has in view from <see cref="World.World"/> (<see cref="World.World.TryEvictChunk"/>), which also saves
 /// whatever was edited since.
 /// </summary>
+[GameSystem("chunk-residency")]
 sealed class ChunkResidencySystem : IGameSystem
 {
     /// <summary>Edited columns encoded per sweep; the rest wait for the next one (eviction and shutdown save any that are left).</summary>

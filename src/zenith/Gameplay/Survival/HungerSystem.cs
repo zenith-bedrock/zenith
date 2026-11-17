@@ -12,6 +12,7 @@ namespace Zenith.Gameplay.Survival;
 /// starvation damage and well-fed regeneration. No AttributeSystem, no item-component pipeline —
 /// food identity comes from the small <see cref="FoodItems"/> table.
 /// </summary>
+[GameSystem("hunger")]
 sealed class HungerSystem : IGameSystem
 {
     /// <summary>

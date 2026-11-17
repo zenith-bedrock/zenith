@@ -15,6 +15,7 @@ namespace Zenith.Gameplay.Entities;
 /// authoritative copy of this data now, not a concrete object mirroring what the components
 /// already hold. Combat/loot/XP bookkeeping moved to <see cref="DamageableActorCombat"/> (shared by every species). See docs/history/phases/phase-xxi-ecs-foundation-findings.md.
 /// </summary>
+[GameSystem("zombie")]
 sealed class ZombieSystem : MobSystem<ZombieState>
 {
     private const float DetectionDistance = 24f;

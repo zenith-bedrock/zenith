@@ -21,6 +21,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// the origin leaves the block where it is (nothing replays when a protection is lifted). No veto ever removes a block: when no
 /// cell may take it, the entry stays alive and is retried.
 /// </summary>
+[GameSystem("gravity")]
 sealed class GravitySystem : IGameSystem
 {
     /// <summary>Per-tick acceleration, matches vanilla-parity sand/gravel (PowerNukkitX <c>EntityFallingBlock</c>).</summary>

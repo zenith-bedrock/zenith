@@ -9,6 +9,7 @@ namespace Zenith.Gameplay.Entities;
 /// replicated by their move batch. It owns the motion only; who gets pushed, and by how much, is <see cref="MobCore.ApplyKnockback"/>
 /// from the species' <see cref="KnockbackProfile"/>.
 /// </summary>
+[GameSystem("knockback")]
 sealed class KnockbackSystem(World.World world, EntityRuntime stores) : IGameSystem
 {
     private const float Negligible = 0.001f;

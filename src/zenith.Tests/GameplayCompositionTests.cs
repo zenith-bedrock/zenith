@@ -45,10 +45,21 @@ public sealed class GameplayCompositionTests
             typeof(EndermanSystem), typeof(BatSystem), typeof(SpiderSystem), typeof(VillagerSystem), typeof(GolemSystem), typeof(FishSystem), typeof(MobHazardSystem),
             typeof(DeathAnimationSystem), typeof(MobSpawner), typeof(NaturalSpawnSystem),
             // world
-            typeof(GameRuleSyncSystem), typeof(WeatherSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem), typeof(ExperienceOrbSystem),
+            typeof(WorldStateSyncSystem), typeof(WeatherSystem), typeof(BlockDigSystem), typeof(BlockEditSystem), typeof(BucketSystem), typeof(GravitySystem), typeof(BlockUpdateSystem), typeof(RandomTickSystem), typeof(FloorDropSystem), typeof(ExperienceOrbSystem),
             typeof(InventorySystem), typeof(HungerSystem), typeof(AirSupplySystem), typeof(BurnSystem), typeof(EffectSystem), typeof(EquipmentSystem), typeof(ChunkStreamSystem), typeof(ChunkResidencySystem), typeof(PresenceSystem)
         ];
         Assert.Equal(expected, loop.Systems.Select(system => system.GetType()).ToArray());
+    }
+
+    [Fact]
+    public void Every_registered_system_is_named_by_its_class_and_the_diagnostics_layout_has_exactly_those_names()
+    {
+        var (loop, _, services) = Compose();
+
+        var registered = loop.Systems.Select(system => GameSystemAttribute.NameOf(system.GetType())).ToArray();
+        Assert.All(registered, name => Assert.NotNull(name));
+        Assert.Equal(registered.Length, registered.Distinct().Count());
+        Assert.Equal(registered.OrderBy(n => n, StringComparer.Ordinal), services.Diagnostics.Systems.Keys.OrderBy(n => n, StringComparer.Ordinal));
     }
 
     [Fact]

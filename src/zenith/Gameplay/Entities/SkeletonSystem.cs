@@ -18,6 +18,7 @@ namespace Zenith.Gameplay.Entities;
 /// make possible: no <c>SkeletonProjectileComponent</c>, no ability-framework — a direct call
 /// between two systems, exactly as narrow as it was before migration.
 /// </summary>
+[GameSystem("skeleton")]
 sealed class SkeletonSystem : IGameSystem
 {
     private const float SpawnDistance = 10f;

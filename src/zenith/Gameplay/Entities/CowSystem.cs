@@ -19,6 +19,7 @@ namespace Zenith.Gameplay.Entities;
 /// ground mob's gravity fall-speed, the same shared-data reuse <see cref="Velocity"/>'s own doc
 /// comment describes.
 /// </summary>
+[GameSystem("cow")]
 sealed class CowSystem : MobSystem<CowState>
 {
     private const float SpawnDistance = 4f;

@@ -12,6 +12,7 @@ namespace Zenith.Gameplay.Entities;
 /// flight rule are its own. Movement is bespoke 3D flight, not <see cref="GroundMobMovement"/>: a bat has no supporting-block
 /// requirement and wanders on a vertical axis no ground mob uses.
 /// </summary>
+[GameSystem("bat")]
 sealed class BatSystem : MobSystem<BatState>
 {
     private const float MovePerTick = 0.1f;

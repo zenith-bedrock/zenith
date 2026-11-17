@@ -11,6 +11,7 @@ namespace Zenith.Gameplay.Survival;
 /// Aplica <see cref="MovementInputState"/> no tick e replica pose / FLAGS / swing aos peers quando dirty (ADR §44 / §53).
 /// Void below threshold → death/Respawn handshake (ADR §40); soft-rescue retired.
 /// </summary>
+[GameSystem("movement")]
 sealed class MovementSystem : IGameSystem
 {
     /// <summary>Y below FlatMinY - margin triggers death (was soft-rescue before §40 adendo).</summary>

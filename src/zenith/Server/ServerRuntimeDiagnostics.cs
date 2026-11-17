@@ -1,3 +1,4 @@
+using Zenith.Gameplay.Runtime;
 using Zenith.Diagnostics;
 using Zenith.Network;
 using Zenith.World;
@@ -87,51 +88,7 @@ sealed class ServerRuntimeDiagnostics : IDisposable
         var builder = new DiagnosticsBuilder();
         Tick = builder.Timing("tick");
         Pacing = new Zenith.Gameplay.Runtime.TickPacingMetrics(builder.Timing("tick.wake-lateness"), builder.Counter("tick.skipped"));
-        Systems = new Dictionary<string, TimingMetric>(StringComparer.Ordinal)
-        {
-            ["game-rule-sync"] = builder.Timing("tick.system.game-rule-sync", "tick"),
-            ["weather"] = builder.Timing("tick.system.weather", "tick"),
-            ["summon"] = builder.Timing("tick.system.summon", "tick"),
-            ["natural-spawn"] = builder.Timing("tick.system.natural-spawn", "tick"),
-            ["time-sync"] = builder.Timing("tick.system.time-sync", "tick"),
-            ["movement"] = builder.Timing("tick.system.movement", "tick"),
-            ["player-spatial-index"] = builder.Timing("tick.system.player-spatial-index", "tick"),
-            ["player-melee"] = builder.Timing("tick.system.player-melee", "tick"),
-            ["chat"] = builder.Timing("tick.system.chat", "tick"),
-            ["game-mode"] = builder.Timing("tick.system.game-mode", "tick"),
-            ["zombie"] = builder.Timing("tick.system.zombie", "tick"),
-            ["projectile"] = builder.Timing("tick.system.projectile", "tick"),
-            ["skeleton"] = builder.Timing("tick.system.skeleton", "tick"),
-            ["cow"] = builder.Timing("tick.system.cow", "tick"),
-            ["creeper"] = builder.Timing("tick.system.creeper", "tick"),
-            ["enderman"] = builder.Timing("tick.system.enderman", "tick"),
-            ["bat"] = builder.Timing("tick.system.bat", "tick"),
-            ["spider"] = builder.Timing("tick.system.spider", "tick"),
-            ["villager"] = builder.Timing("tick.system.villager", "tick"),
-            ["golem"] = builder.Timing("tick.system.golem", "tick"),
-            ["minecart"] = builder.Timing("tick.system.minecart", "tick"),
-            ["fish"] = builder.Timing("tick.system.fish", "tick"),
-            ["death-animation"] = builder.Timing("tick.system.death-animation", "tick"),
-            ["knockback"] = builder.Timing("tick.system.knockback", "tick"),
-            ["block-dig"] = builder.Timing("tick.system.block-dig", "tick"),
-            ["block-edit"] = builder.Timing("tick.system.block-edit", "tick"),
-            ["bucket"] = builder.Timing("tick.system.bucket", "tick"),
-            ["gravity"] = builder.Timing("tick.system.gravity", "tick"),
-            ["block-update"] = builder.Timing("tick.system.block-update", "tick"),
-            ["random-tick"] = builder.Timing("tick.system.random-tick", "tick"),
-            ["floor-drop"] = builder.Timing("tick.system.floor-drop", "tick"),
-            ["experience-orb"] = builder.Timing("tick.system.experience-orb", "tick"),
-            ["inventory"] = builder.Timing("tick.system.inventory", "tick"),
-            ["hunger"] = builder.Timing("tick.system.hunger", "tick"),
-            ["mob-hazard"] = builder.Timing("tick.system.mob-hazard", "tick"),
-            ["air-supply"] = builder.Timing("tick.system.air-supply", "tick"),
-            ["burning"] = builder.Timing("tick.system.burning", "tick"),
-            ["effect"] = builder.Timing("tick.system.effect", "tick"),
-            ["equipment"] = builder.Timing("tick.system.equipment", "tick"),
-            ["chunk-stream"] = builder.Timing("tick.system.chunk-stream", "tick"),
-            ["chunk-residency"] = builder.Timing("tick.system.chunk-residency", "tick"),
-            ["presence"] = builder.Timing("tick.system.presence", "tick")
-        };
+        Systems = GameSystemAttribute.AllNames.ToDictionary(name => name, name => builder.Timing($"tick.system.{name}", "tick"), StringComparer.Ordinal);
         _overBudgetTicks = builder.Counter("tick.over-budget");
         _tps = builder.Gauge("tick.tps");
         _players = builder.Gauge("gameplay.players");

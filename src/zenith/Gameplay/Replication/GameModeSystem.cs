@@ -9,6 +9,7 @@ namespace Zenith.Gameplay.Replication;
 /// Aplica <see cref="Player.Player.Intents.SubmitGameMode"/> no tick e transmite wire (§52).
 /// Handler só enfileira; inventário não é reseedado.
 /// </summary>
+[GameSystem("game-mode")]
 sealed class GameModeSystem(AuthorityGate gate) : IGameSystem
 {
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)

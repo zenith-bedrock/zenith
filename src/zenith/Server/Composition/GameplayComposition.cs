@@ -36,8 +36,10 @@ sealed record ServerServices(
     EnvironmentChangePolicies EnvironmentPolicies,
     int ChunkResidencySweepIntervalTicks)
 {
-    /// <summary>Registers <paramref name="system"/> on the loop under its diagnostics timing name: the one place that pairs the two.</summary>
-    public void Register(IGameSystem system, string name) => Loop.Register(system, Diagnostics.System(name));
+    /// <summary>Registers <paramref name="system"/> on the loop under the timing name its class declares with <see cref="GameSystemAttribute"/>.</summary>
+    public void Register(IGameSystem system) =>
+        Loop.Register(system, Diagnostics.System(GameSystemAttribute.NameOf(system.GetType())
+            ?? throw new InvalidOperationException($"{system.GetType().Name} is registered as a game system but has no [GameSystem(\"name\")].")));
 }
 
 /// <summary>A feature's worth of game systems. A module constructs its systems and registers them; it does not own the loop.</summary>

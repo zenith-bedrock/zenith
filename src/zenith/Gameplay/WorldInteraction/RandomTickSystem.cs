@@ -12,6 +12,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// world of stone, water and air costs one integer test per column. Chunks nobody views are asleep, and ticks never
 /// load a chunk.
 /// </summary>
+[GameSystem("random-tick")]
 sealed class RandomTickSystem : IGameSystem
 {
     private readonly World.World _world;

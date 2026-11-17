@@ -16,6 +16,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// Applies authorized <see cref="BlockEditIntent"/> mutations and replicates UpdateBlock outcomes.
 /// Dig authorization is prepared beforehand by <see cref="BlockDigSystem"/>.
 /// </summary>
+[GameSystem("block-edit")]
 sealed class BlockEditSystem : IGameSystem
 {
     private readonly PlayerManager _players;

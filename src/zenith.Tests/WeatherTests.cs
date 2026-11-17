@@ -59,14 +59,15 @@ public sealed class WeatherTests
         player.AttachClient(client);
         fx.World.Weather.Restore(false, false, 2, 100000);
         var system = new WeatherSystem(fx.World, new Random(1));
+        var sync = new WorldStateSyncSystem(fx.World);
 
         Assert.True(fx.World.Rules.TrySet("doWeatherCycle", "false", out _));
-        for (var i = 0; i < 5; i++) system.Tick(fx.Clock, fx.Players.Online);
+        for (var i = 0; i < 5; i++) { system.Tick(fx.Clock, fx.Players.Online); sync.Tick(fx.Clock, fx.Players.Online); }
         Assert.False(fx.World.Weather.Raining);
         Assert.Empty(client.Of("SendWeather"));
 
         Assert.True(fx.World.Rules.TrySet("doWeatherCycle", "true", out _));
-        for (var i = 0; i < 5; i++) system.Tick(fx.Clock, fx.Players.Online);
+        for (var i = 0; i < 5; i++) { system.Tick(fx.Clock, fx.Players.Online); sync.Tick(fx.Clock, fx.Players.Online); }
         Assert.True(fx.World.Weather.Raining);
         Assert.Equal([true, false], client.Of("SendWeather").Single());
     }
@@ -95,10 +96,10 @@ public sealed class WeatherTests
         var storage = new InMemoryChunkStorage();
         var first = new World.World(storage);
         first.Weather.Set(2, 777);
-        first.PersistWeather();
+        WorldStates.Save(first, "weather");
 
         var second = new World.World(storage);
-        second.LoadWeather();
+        WorldStates.LoadAll(second);
 
         Assert.Equal(2, second.Weather.Level);
         Assert.Equal(777, second.Weather.RainTicks);

@@ -13,6 +13,7 @@ namespace Zenith.Gameplay.Survival;
 /// moved enough to matter. Creative players are untouched. Movement, buoyancy and the swimming stroke are the client's
 /// own; the server only judges the consequences.
 /// </summary>
+[GameSystem("air-supply")]
 sealed class AirSupplySystem(PlayerManager players) : IGameSystem
 {
     public const int MaxAirSupply = 300;

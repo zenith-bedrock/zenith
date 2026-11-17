@@ -12,15 +12,15 @@ sealed class PlayerInputModule : IGameplayModule
 
     public void Register(ServerServices s)
     {
-        s.Register(new TimeSyncSystem(), "time-sync");
+        s.Register(new TimeSyncSystem());
         // Movement before Block/Inventory: IsSneaking must be applied before sneak-place / chest open (§53/§56).
-        s.Register(new MovementSystem(s.Players), "movement");
+        s.Register(new MovementSystem(s.Players));
         // Rebuilds from this tick's just-applied pose, so every later system (this tick) queries current, not stale,
         // player positions. See PlayerSpatialIndexSystem.
-        s.Register(new PlayerSpatialIndexSystem(s.PlayerSpatial), "player-spatial-index");
+        s.Register(new PlayerSpatialIndexSystem(s.PlayerSpatial));
         // ItemUseOnActor player targets are resolved after movement established this tick's pose.
-        s.Register(new PlayerMeleeSystem(s.Players, s.ItemPalette), "player-melee");
-        s.Register(new ChatSystem(), "chat");
-        s.Register(new GameModeSystem(s.Gate), "game-mode");
+        s.Register(new PlayerMeleeSystem(s.Players, s.ItemPalette));
+        s.Register(new ChatSystem());
+        s.Register(new GameModeSystem(s.Gate));
     }
 }

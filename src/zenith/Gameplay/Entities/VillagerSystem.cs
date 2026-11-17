@@ -13,6 +13,7 @@ namespace Zenith.Gameplay.Entities;
 /// and only <see cref="VillagerState"/> (the offer, the trade cooldown, the wander heading) is its own. The trade is the first
 /// consumer of <c>InventoryTransactionPacket.ActorInteract</c>; see <see cref="TryHandleInteraction"/>.
 /// </summary>
+[GameSystem("villager")]
 sealed class VillagerSystem : MobSystem<VillagerState>
 {
     private const float MovePerTick = 0.04f;

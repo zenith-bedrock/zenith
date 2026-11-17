@@ -24,6 +24,7 @@ namespace Zenith.Gameplay.Entities;
 /// <see cref="Zenith.Gameplay.Survival.MovementSystem"/> — reach reads both actors' current-tick
 /// authoritative pose, not last-tick's (see registration order/comment in ZenithServer).
 /// </summary>
+[GameSystem("player-melee")]
 sealed class PlayerMeleeSystem : IGameSystem
 {
     private readonly PlayerManager _players;

@@ -35,6 +35,7 @@ sealed class PlayerSpatialIndex
 /// means a future consumer that needs it can depend on registration order alone, not on reading
 /// MovementSystem's implementation.
 /// </summary>
+[GameSystem("player-spatial-index")]
 sealed class PlayerSpatialIndexSystem : IGameSystem
 {
     private readonly PlayerSpatialIndex _index;

@@ -21,6 +21,7 @@ namespace Zenith.Gameplay.Entities;
 /// nothing to touch there. This is the concrete proof that a feature-specific post-hit consequence
 /// (poison) stays feature-owned and does not need to become part of the ECS damage seam.
 /// </summary>
+[GameSystem("spider")]
 sealed class SpiderSystem : MobSystem<SpiderState>
 {
     private const float SpawnDistance = 6f;

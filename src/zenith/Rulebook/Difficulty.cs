@@ -54,6 +54,15 @@ sealed class DifficultySetting
     private long _version;
 
     public Difficulty Value => (Difficulty)_value;
+
+    /// <summary>The stored form: one byte.</summary>
+    public byte[] Encode() => [(byte)Value];
+
+    /// <summary>Restores a stored value; anything but a known one byte is ignored (the world stays as it is).</summary>
+    public void Decode(byte[]? stored)
+    {
+        if (stored is { Length: 1 } && Enum.IsDefined((Difficulty)stored[0])) Set((Difficulty)stored[0]);
+    }
     public long Version => Volatile.Read(ref _version);
 
     public void Set(Difficulty difficulty)

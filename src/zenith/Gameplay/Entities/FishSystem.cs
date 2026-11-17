@@ -19,6 +19,7 @@ namespace Zenith.Gameplay.Entities;
 /// <see cref="FishState"/> (wander heading) is feature-specific and owned here — same shape as
 /// <see cref="SpiderState"/>. Being on <see cref="DamageDispatch"/> means arrows can hit a fish like any other actor.
 /// </summary>
+[GameSystem("fish")]
 sealed class FishSystem : MobSystem<FishState>
 {
     private const float SpawnOffsetX = 4f;

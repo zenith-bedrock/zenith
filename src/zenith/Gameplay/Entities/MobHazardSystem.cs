@@ -12,6 +12,7 @@ namespace Zenith.Gameplay.Entities;
 /// a player and drowns the mob when it is spent. Damage goes through <see cref="DamageDispatch"/>, so each species keeps its own
 /// death consequences. Aquatic species are exempt (<paramref name="isAquatic"/>); a corpse takes nothing.
 /// </summary>
+[GameSystem("mob-hazard")]
 sealed class MobHazardSystem(
     World.World world,
     EntityRuntime stores,

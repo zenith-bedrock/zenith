@@ -11,6 +11,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// Advances the authoritative lifecycle of floor-drop entities: pickup delay, despawn and pickup.
 /// This is separate from block edits because each drop must be evaluated every gameplay tick.
 /// </summary>
+[GameSystem("floor-drop")]
 sealed class FloorDropSystem : IGameSystem
 {
     private readonly World.World _world;

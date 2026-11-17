@@ -9,6 +9,7 @@ namespace Zenith.Gameplay.Entities;
 /// method under a name at composition; a request is queued (the command may run off the game thread) and carried out
 /// inside the tick, so spawning never races the species system that owns the mob's stores.
 /// </summary>
+[GameSystem("summon")]
 sealed class MobSpawner(AuthorityGate? gate = null) : IGameSystem
 {
     private readonly Dictionary<string, Action<float, float, float>> _species = new(StringComparer.OrdinalIgnoreCase);

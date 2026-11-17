@@ -21,6 +21,7 @@ namespace Zenith.Session;
 /// It lives in the Session layer, not in Gameplay: it is the transport-side pipeline that gets a client from "joining" to "in
 /// game" (wire order channels, the spawn-ready barrier, session handlers) and keeps streaming columns to it afterwards.
 /// </summary>
+[GameSystem("chunk-stream")]
 sealed class ChunkStreamSystem : IGameSystem
 {
     /// <summary>Máximo de novos loads iniciados por jogador por tick (anti-burst).</summary>

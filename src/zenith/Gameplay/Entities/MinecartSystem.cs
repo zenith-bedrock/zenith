@@ -15,6 +15,7 @@ namespace Zenith.Gameplay.Entities;
 /// Zombie's. The old <c>Minecart</c> object and <c>MinecartStore</c> are gone. See
 /// docs/history/phases/phase-xxi-ecs-foundation-findings.md.
 /// </summary>
+[GameSystem("minecart")]
 sealed class MinecartSystem : IGameSystem
 {
     private const float SpawnDistance = 5f;

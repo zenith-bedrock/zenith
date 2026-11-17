@@ -14,6 +14,7 @@ namespace Zenith.Gameplay.Inventory;
 /// Aplica <see cref="InventoryStackIntent"/> no tick e responde ItemStackResponse (same-session).
 /// Slot references are resolved against the authoritative open-container session and player UI.
 /// </summary>
+[GameSystem("inventory")]
 sealed class InventorySystem : IGameSystem
 {
     private readonly PlayerManager _players;

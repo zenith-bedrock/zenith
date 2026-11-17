@@ -87,11 +87,14 @@ static class PlayerDamage
         if (player.GameMode == GameMode.Creative && source.Cause != DamageCause.Void)
             return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
 
-        // A mob's hit scales with the difficulty (a player's does not).
+        // A mob's melee hit and explosion scale with the difficulty (a player's do not). A projectile does not: the
+        // arrow's difficulty is its own data (ProjectileSystem.RollDamage); Peaceful still spares the player from mobs.
         if (source.Cause is DamageCause.Melee or DamageCause.Projectile or DamageCause.Explosion &&
             (source.OwnerRuntimeId is not { } owner || players.GetByRuntimeId(owner) is null))
         {
-            amount = DifficultyRules.ScaleMobDamage(player.Level.Difficulty.Value, amount);
+            var difficulty = player.Level.Difficulty.Value;
+            if (source.Cause != DamageCause.Projectile) amount = DifficultyRules.ScaleMobDamage(difficulty, amount);
+            else if (difficulty == Difficulty.Peaceful) amount = 0f;
             if (amount <= 0f) return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
         }
 

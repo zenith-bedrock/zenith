@@ -14,6 +14,7 @@ namespace Zenith.Gameplay.Entities;
 /// Simplifications against vanilla, on purpose and visible: no per-chunk mob-cap area (one global cap scaled by player count),
 /// no weather, and no structure or water spawns yet.
 /// </summary>
+[GameSystem("natural-spawn")]
 sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTable table, Random? random = null) : IGameSystem
 {
     /// <summary>A candidate is rejected closer than this to any player (vanilla keeps spawns out of sight at 24).</summary>

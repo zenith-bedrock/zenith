@@ -9,6 +9,7 @@ namespace Zenith.Gameplay.Inventory;
 /// Replica item na mão aos peers quando hotbar selecionada ou stack held muda.
 /// Handler só escreve <see cref="Player.SelectedHotbarSlot"/>; fan-out neste tick.
 /// </summary>
+[GameSystem("equipment")]
 sealed class EquipmentSystem : IGameSystem
 {
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)

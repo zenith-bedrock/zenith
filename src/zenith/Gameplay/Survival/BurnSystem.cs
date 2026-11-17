@@ -4,6 +4,7 @@ using Zenith.Player;
 namespace Zenith.Gameplay.Survival;
 
 /// <summary>Players on fire (plan 004 item 8): contact with fire or lava lights them, water puts them out, and the flames hurt once a second. Creative players never burn.</summary>
+[GameSystem("burning")]
 sealed class BurnSystem(PlayerManager players, World.World world) : IGameSystem
 {
     public void Tick(GameClock clock, IReadOnlyList<Player.Player> online)

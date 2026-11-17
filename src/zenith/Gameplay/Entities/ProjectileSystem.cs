@@ -1,3 +1,4 @@
+using Zenith.Rulebook;
 using Zenith.Ecs;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -27,6 +28,7 @@ namespace Zenith.Gameplay.Entities;
 /// docs/history/phases/phase-xxii-ecs-roster-consolidation-findings.md and
 /// docs/history/phases/phase-xxviii-spatial-query-scaling-findings.md.
 /// </summary>
+[GameSystem("projectile")]
 sealed class ProjectileSystem : IGameSystem
 {
     private const float LaunchSpeed = 0.5f;
@@ -48,9 +50,14 @@ sealed class ProjectileSystem : IGameSystem
     /// </summary>
     internal const float GravityPerTick = 0.05f;
     private const float HitRadius = 0.55f;
-    /// <summary>The arrow in the BDS pack hurts for 1 to 4, rolled per hit (plan 004 item 18).</summary>
+    /// <summary>The arrow in the BDS pack hurts for 1 to 4, rolled per hit (plan 004 item 18); its <c>hard_arrow</c> group makes it 1 to 5 on Hard.</summary>
     internal const int MinDamage = 1;
     internal const int MaxDamage = 4;
+    internal const int HardMaxDamage = 5;
+
+    /// <summary>What an arrow does this hit: the difficulty is part of the arrow's own data in the pack, not a scale applied to the victim.</summary>
+    internal static int RollDamage(Difficulty difficulty, Random random) =>
+        random.Next(MinDamage, (difficulty == Difficulty.Hard ? HardMaxDamage : MaxDamage) + 1);
     private const int MaximumLifetimeTicks = 80;
 
     private readonly World.World _world;
@@ -165,7 +172,7 @@ sealed class ProjectileSystem : IGameSystem
         var hitActor = FindHitDamageableActor(nextX, nextY, nextZ, state.OwnerRuntimeId);
         if (hitActor is { } actorId)
         {
-            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), _random.Next(MinDamage, MaxDamage + 1), online, currentTick);
+            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), RollDamage(_world.Difficulty.Value, _random), online, currentTick);
             Remove(id, online);
             return;
         }
@@ -176,7 +183,7 @@ sealed class ProjectileSystem : IGameSystem
             // Knockback direction follows the arrow's own flight, not the shooter's position —
             // matches vanilla (an arrow that curved under gravity still knocks the target the way
             // it was actually travelling at impact).
-            PlayerDamage.ApplyCore(player, _players, DamageSource.Projectile(state.OwnerRuntimeId), _random.Next(MinDamage, MaxDamage + 1), currentTick, vel.X, vel.Z).Conclude(online);
+            PlayerDamage.ApplyCore(player, _players, DamageSource.Projectile(state.OwnerRuntimeId), RollDamage(_world.Difficulty.Value, _random), currentTick, vel.X, vel.Z).Conclude(online);
             Remove(id, online);
             return;
         }

@@ -9,6 +9,7 @@ namespace Zenith.Gameplay.Entities;
 /// destroys the corpse. Without this the removal followed the death event in the same tick and clients never played the animation.
 /// It owns the presentation lifetime only: loot, experience and the actor's destruction already happened at the kill.
 /// </summary>
+[GameSystem("death-animation")]
 sealed class DeathAnimationSystem(EntityRuntime stores) : IGameSystem
 {
     private readonly List<EntityId> _expired = [];

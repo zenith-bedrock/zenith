@@ -15,6 +15,7 @@ namespace Zenith.Gameplay.WorldInteraction.Fluids;
 /// <see cref="BlockUpdateSystem"/>. Creative players keep their stack; survival players swap it. The tick that applies it
 /// also re-checks reach and that the player still holds what the client said they did, so a stale packet changes nothing.
 /// </summary>
+[GameSystem("bucket")]
 sealed class BucketSystem(
     World.World world, PlayerManager players, BucketItems buckets,
     BlockEditPolicies? policies = null, EventBus? events = null, ItemDurability? durability = null) : IGameSystem

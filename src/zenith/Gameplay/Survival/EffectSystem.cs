@@ -12,6 +12,7 @@ namespace Zenith.Gameplay.Survival;
 /// EffectFramework, ModifierSystem or generic gameplay-component pipeline — each effect type is one
 /// concrete branch below.
 /// </summary>
+[GameSystem("effect")]
 sealed class EffectSystem : IGameSystem
 {
     /// <summary>

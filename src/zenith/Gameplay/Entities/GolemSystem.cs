@@ -30,6 +30,7 @@ namespace Zenith.Gameplay.Entities;
 /// and multi-target slam needed no new ECS primitive — both already operated on world-space
 /// coordinates and <see cref="PlayerDamage"/>, independent of what backs Golem's own storage.
 /// </summary>
+[GameSystem("golem")]
 sealed class GolemSystem : MobSystem<GolemState>
 {
     private const float SpawnDistance = 6f;

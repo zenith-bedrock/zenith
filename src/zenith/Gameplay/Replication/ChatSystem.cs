@@ -6,6 +6,7 @@ namespace Zenith.Gameplay.Replication;
 /// <summary>
 /// Fan-out de chat no tick. Handler só enfileira; nunca escreve no RakNetSession dos peers.
 /// </summary>
+[GameSystem("chat")]
 sealed class ChatSystem : IGameSystem
 {
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)

@@ -81,6 +81,25 @@ sealed class WeatherState
         }
     }
 
+    /// <summary>The stored form: flags (rain 1, thunder cycle 2), a spare byte, then the two timers.</summary>
+    public byte[] Encode()
+    {
+        var blob = new byte[10];
+        blob[0] = (byte)((_raining ? 1 : 0) | (_thundering ? 2 : 0));
+        BitConverter.TryWriteBytes(blob.AsSpan(2), RainTicks);
+        BitConverter.TryWriteBytes(blob.AsSpan(6), ThunderTicks);
+        return blob;
+    }
+
+    /// <summary>Restores what <see cref="Encode"/> wrote; a world with nothing stored (or unreadable bytes) gets timers drawn at random.</summary>
+    public void Decode(byte[]? stored)
+    {
+        if (stored is { Length: 10 })
+            Restore((stored[0] & 1) != 0, (stored[0] & 2) != 0, BitConverter.ToInt32(stored, 2), BitConverter.ToInt32(stored, 6));
+        else
+            Seed(Random.Shared);
+    }
+
     /// <summary>Restores a saved state without announcing a change (clients get the current state when they join).</summary>
     public void Restore(bool raining, bool thundering, int rainTicks, int thunderTicks)
     {

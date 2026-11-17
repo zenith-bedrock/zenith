@@ -47,21 +47,21 @@ sealed class EntityModule : IGameplayModule
         creeper.Explosion.Mobs = damage;
 
         // Pushes move actors before any species ticks, so a push is replicated by that species' move batch.
-        s.Register(new KnockbackSystem(world, entities), "knockback");
-        s.Register(zombie, "zombie");
-        s.Register(minecart, "minecart");
-        s.Register(projectile, "projectile");
-        s.Register(skeleton, "skeleton");
-        s.Register(cow, "cow");
-        s.Register(creeper, "creeper");
-        s.Register(enderman, "enderman");
-        s.Register(bat, "bat");
-        s.Register(spider, "spider");
-        s.Register(villager, "villager");
-        s.Register(golem, "golem");
-        s.Register(fish, "fish");
-        s.Register(new MobHazardSystem(world, entities, damage, fish.Owns, id => zombie.Owns(id) || skeleton.Owns(id)), "mob-hazard");
-        s.Register(new DeathAnimationSystem(entities), "death-animation");
+        s.Register(new KnockbackSystem(world, entities));
+        s.Register(zombie);
+        s.Register(minecart);
+        s.Register(projectile);
+        s.Register(skeleton);
+        s.Register(cow);
+        s.Register(creeper);
+        s.Register(enderman);
+        s.Register(bat);
+        s.Register(spider);
+        s.Register(villager);
+        s.Register(golem);
+        s.Register(fish);
+        s.Register(new MobHazardSystem(world, entities, damage, fish.Owns, id => zombie.Owns(id) || skeleton.Owns(id)));
+        s.Register(new DeathAnimationSystem(entities));
 
         var spawner = s.Spawner;
         spawner.Register("zombie", (x, y, z) => zombie.SpawnZombie(x, y, z), () => zombie.Zombies.Count);
@@ -75,9 +75,9 @@ sealed class EntityModule : IGameplayModule
         spawner.Register("minecart", (x, y, z) => minecart.SpawnMinecart(x, y, z));
         spawner.Register("bat", (x, y, z) => bat.SpawnBat(x, y, z), () => bat.Bats.Count);
         spawner.Register("villager", (x, y, z) => villager.SpawnVillager(x, y, z), () => villager.Villagers.Count);
-        s.Register(spawner, "summon");
+        s.Register(spawner);
         var spawnTable = SpawnTable.Default;
         spawner.Freeze(spawnTable);
-        s.Register(new NaturalSpawnSystem(world, spawner, spawnTable), "natural-spawn");
+        s.Register(new NaturalSpawnSystem(world, spawner, spawnTable));
     }
 }

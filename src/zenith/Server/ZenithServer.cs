@@ -131,9 +131,7 @@ class ZenithServer
                 diagnostics.Worldgen,
                 config.World.ChunkGenerationWorkers);
             startupCleanup.Push(() => world.StopGenerationAsync().AsTask().GetAwaiter().GetResult());
-            world.LoadGameRules();
-            world.LoadDifficulty();
-            world.LoadWeather();
+            WorldStates.LoadAll(world);
             var eventBus = new EventBus(serverLogger);
             var permissions = PermissionsComposition.Create(config);
             var gate = new AuthorityGate(permissions, players);

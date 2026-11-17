@@ -180,7 +180,7 @@ public class GameRulesTests
     {
         var fx = new IntentTestFixture();
         _ = fx.AddInGamePlayer("alice");
-        var system = new GameRuleSyncSystem(fx.World);
+        var system = new WorldStateSyncSystem(fx.World);
         Drain(fx);
 
         system.Tick(fx.Clock, fx.Players.Online);

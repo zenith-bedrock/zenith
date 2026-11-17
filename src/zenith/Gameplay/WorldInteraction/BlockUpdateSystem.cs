@@ -20,6 +20,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// deliberate: a protected cell changes only with bypass. Nothing replays it later; it is judged again the next time something
 /// updates its neighbourhood.
 /// </summary>
+[GameSystem("block-update")]
 sealed class BlockUpdateSystem : IGameSystem
 {
     /// <summary>Changed cells fanned out per tick — a cascade longer than this continues next tick.</summary>

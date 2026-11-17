@@ -11,6 +11,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// <see cref="TargetRange"/> blocks, are collected on touch and expire after <see cref="DespawnTicks"/>. An orb gives its points to
 /// exactly one player, once: the credit and the removal from the store are the same step.
 /// </summary>
+[GameSystem("experience-orb")]
 sealed class ExperienceOrbSystem : IGameSystem
 {
     /// <summary>Ticks an orb lives (5 minutes, vanilla). It expires without giving anything.</summary>

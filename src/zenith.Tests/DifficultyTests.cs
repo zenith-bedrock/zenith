@@ -105,6 +105,30 @@ public sealed class DifficultyTests
     }
 
     [Fact]
+    public void An_arrow_is_not_scaled_by_difficulty_its_own_damage_range_is_one_to_five_on_Hard_and_one_to_four_otherwise()
+    {
+        var random = new Random(5);
+        var normal = Enumerable.Range(0, 400).Select(_ => Zenith.Gameplay.Entities.ProjectileSystem.RollDamage(Difficulty.Normal, random)).ToArray();
+        var hard = Enumerable.Range(0, 400).Select(_ => Zenith.Gameplay.Entities.ProjectileSystem.RollDamage(Difficulty.Hard, random)).ToArray();
+        Assert.InRange(normal.Min(), 1, 1);
+        Assert.Equal(4, normal.Max());
+        Assert.Equal(5, hard.Max());
+
+        float Arrow(Difficulty difficulty)
+        {
+            var fx = new IntentTestFixture();
+            fx.World.Difficulty.Set(difficulty);
+            var victim = fx.AddInGamePlayer("victim");
+            PlayerDamage.ApplyCore(victim, fx.Players, DamageSource.Projectile(424242L), 3f, 100);
+            return 20f - victim.Health;
+        }
+
+        Assert.Equal(3f, Arrow(Difficulty.Easy));
+        Assert.Equal(3f, Arrow(Difficulty.Hard));
+        Assert.Equal(0f, Arrow(Difficulty.Peaceful));
+    }
+
+    [Fact]
     public void The_difficulty_command_reads_and_changes_it_and_the_sync_tells_the_clients()
     {
         var fx = new IntentTestFixture();
@@ -112,7 +136,7 @@ public sealed class DifficultyTests
         var client = new RecordingClientChannel();
         op.AttachClient(client);
         var commands = new CommandRuntime(fx.Players, fx.Context.Permissions, difficulty: fx.World.Difficulty);
-        var sync = new GameRuleSyncSystem(fx.World);
+        var sync = new WorldStateSyncSystem(fx.World);
 
         Assert.Contains("Normal", commands.Execute(op, "/difficulty").Message);
         Assert.Contains("Hard", commands.Execute(op, "/difficulty hard").Message);
@@ -180,10 +204,10 @@ public sealed class DifficultyTests
         var storage = new InMemoryChunkStorage();
         var first = new World.World(storage);
         first.Difficulty.Set(Difficulty.Hard);
-        first.PersistDifficulty();
+        WorldStates.Save(first, "difficulty");
 
         var second = new World.World(storage);
-        second.LoadDifficulty();
+        WorldStates.LoadAll(second);
 
         Assert.Equal(Difficulty.Hard, second.Difficulty.Value);
     }

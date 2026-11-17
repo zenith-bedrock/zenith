@@ -10,6 +10,7 @@ namespace Zenith.Gameplay.WorldInteraction;
 /// Owns the authoritative dig lifecycle on the gameplay tick: start, abort, held-tool retarget
 /// and idle expiry. It prepares dig authorization consumed later by <see cref="BlockEditSystem"/>.
 /// </summary>
+[GameSystem("block-dig")]
 sealed class BlockDigSystem : IGameSystem
 {
     private readonly World.World _world;

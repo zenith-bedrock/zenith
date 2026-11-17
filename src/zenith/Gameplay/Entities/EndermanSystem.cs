@@ -23,6 +23,7 @@ namespace Zenith.Gameplay.Entities;
 /// not use <c>Velocity.Y</c> for gravity either — every landing spot is validated directly via
 /// <see cref="GroundMobMovement.IsSupportedGroundCell"/>, unchanged by this migration.
 /// </summary>
+[GameSystem("enderman")]
 sealed class EndermanSystem : MobSystem<EndermanState>
 {
     private const float SpawnDistance = 5f;
