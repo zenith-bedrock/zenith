@@ -69,7 +69,7 @@ public sealed class GravityNoticeTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bystander");
         var system = new Zenith.Gameplay.Entities.CreeperSystem(
-            fx.World, fx.Players, new Zenith.Ecs.EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
+            fx.World, fx.Players, new Zenith.Ecs.EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies, new Random(7));
         var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.True(system.Stores.Positions.TryGet(id, out var at));
@@ -77,8 +77,8 @@ public sealed class GravityNoticeTests
         for (var x = cx - reach; x <= cx + reach; x++)
             for (var y = cy - reach; y <= cy + reach; y++)
                 for (var z = cz - reach; z <= cz + reach; z++)
-                    _ = fx.World.SetQuietly(x, y, z, Blocks.Stone);
-        fx.World.SetQuietly(cx, cy + 4, cz, Blocks.Sand); // just outside the crater, resting on stone that the blast removes
+                    _ = fx.World.SetQuietly(x, y, z, Blocks.Dirt);
+        fx.World.SetQuietly(cx, cy + 3, cz, Blocks.Sand); // just outside the crater, resting on dirt that the blast removes
         Assert.Equal(0, fx.World.GravityPending.Count);
 
         fx.Clock.AdvanceBy(29);
@@ -86,11 +86,11 @@ public sealed class GravityNoticeTests
         fx.Clock.AdvanceBy(1);
         system.Tick(fx.Clock, fx.Players.Online);
         Assert.Equal(1, system.ExplosionCount);
-        Assert.Equal(Blocks.Air, fx.World.GetBlock(cx, cy + 3, cz));
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(cx, cy + 2, cz)); // the support is gone
         Assert.True(fx.World.GravityPending.Count > 0, "the explosion made gravity notice the sand");
 
         Run(fx, Gravity(fx), 300);
-        Assert.Equal(Blocks.Air, fx.World.GetBlock(cx, cy + 4, cz));
+        Assert.Equal(Blocks.Air, fx.World.GetBlock(cx, cy + 3, cz));
         var sand = 0;
         for (var y = cy - reach; y <= cy + reach; y++) if (fx.World.GetBlock(cx, y, cz) == Blocks.Sand) sand++;
         Assert.Equal(1, sand);
@@ -120,7 +120,7 @@ public sealed class GravityNoticeTests
         fx.World.SetQuietly(0, Ground + 1, 0, Blocks.OakPlanks);
         fx.World.SetQuietly(0, Ground + 2, 0, Blocks.Gravel);
         fx.World.SetQuietly(1, Ground + 1, 0, FireBlocks.WithAge(0));
-        var blocks = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies);
+        var blocks = new BlockUpdateSystem(fx.World, fx.Players, fx.Context.EnvironmentPolicies, new Random(5)); // fire is random: a fixed seed keeps the test from sometimes dying out early
         var gravity = Gravity(fx);
         _ = fx.World.BlockUpdates.Enqueue(1, Ground + 1, 0);
 

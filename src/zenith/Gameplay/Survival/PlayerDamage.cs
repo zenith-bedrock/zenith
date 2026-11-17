@@ -94,7 +94,7 @@ static class PlayerDamage
         // Phase XXV — damage exhaustion source (survival only; a Creative death only happens via the
         // deliberate Void exception above, and shouldn't feed the hunger cycle either).
         // Only damage a body takes from an attack or from fire exhausts; a fall, hunger, a drowning or the void do not.
-        if (source.Cause is DamageCause.Melee or DamageCause.Projectile or DamageCause.Lava)
+        if (source.Cause is DamageCause.Melee or DamageCause.Projectile or DamageCause.Lava or DamageCause.Explosion)
             HungerSystem.Exhaust(player, HungerSystem.DamageExhaustion);
         var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;

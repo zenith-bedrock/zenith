@@ -45,7 +45,7 @@ public sealed class WorldWriterInventoryTests
         [("Zenith.Gameplay.WorldInteraction.Fluids.BucketSystem", "TryPour")] = new(Kind.PlayerEditPoliced, "bucket pour, judged as a place"),
 
         // Environment writers that ask the environment policies. Proven by EnvironmentPolicyTests and EnvironmentFluidFireTests.
-        [("Zenith.Gameplay.Entities.CreeperSystem", "BreakBlocksInRadius")] = new(Kind.EnvironmentPoliced, "Explosion"),
+        [("Zenith.Gameplay.WorldInteraction.Explosion", "DestroyBlocks")] = new(Kind.EnvironmentPoliced, "Explosion"),
 
         // Other environment writers. Each names its cause in plan 002; the Kind says whether it already asks the environment policies.
         [("Zenith.Gameplay.WorldInteraction.Fluids.FluidFlow", "Write")] = new(Kind.EnvironmentPoliced, "FluidFlow (predicates and the writes that bypass them)"),

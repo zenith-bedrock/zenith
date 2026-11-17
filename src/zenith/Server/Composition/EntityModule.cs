@@ -44,6 +44,7 @@ sealed class EntityModule : IGameplayModule
         damage.Register(skeleton.Owns, skeleton.TryApplyDamage);
         damage.Register(bat);
         damage.Register(villager);
+        creeper.Explosion.Mobs = damage;
 
         // Pushes move actors before any species ticks, so a push is replicated by that species' move batch.
         s.Register(new KnockbackSystem(world, entities), "knockback");

@@ -35,12 +35,13 @@ sealed class BlockUpdateSystem : IGameSystem
     private readonly FluidFlow _lava;
     private readonly FireSpread _fire;
     private readonly EnvironmentChangePolicies _environment;
-    private readonly Random _random = new();
+    private readonly Random _random;
     private ulong _now;
     private IReadOnlyList<global::Zenith.Player.Player> _online = [];
 
-    public BlockUpdateSystem(World.World world, PlayerManager players, EnvironmentChangePolicies environment)
+    public BlockUpdateSystem(World.World world, PlayerManager players, EnvironmentChangePolicies environment, Random? random = null)
     {
+        _random = random ?? new Random();
         _world = world;
         _players = players;
         _environment = environment;

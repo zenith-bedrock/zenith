@@ -1,3 +1,4 @@
+using Zenith.Gameplay.WorldInteraction;
 using Zenith.Gameplay.Policy;
 using Zenith.Gameplay.Ports;
 using Zenith.Ecs;
@@ -37,20 +38,21 @@ sealed class CreeperSystem : MobSystem<CreeperState>
     /// creeper standing at exactly ~3 blocks flicker its Ignited flag on/off every tick.
     /// </summary>
     private const float DefuseDistance = 7f;
-    /// <summary>Damage a player's weapon deals per hit — unrelated to <see cref="ExplosionDamage"/>.</summary>
+    /// <summary>Damage a player's weapon deals per hit — unrelated to the blast.</summary>
     private const float MovePerTick = 0.08f;
     private const int FuseDurationTicks = 30; // 1.5s @ 20 TPS, vanilla-parity.
-    private const float ExplosionRadius = 3f;
-    private const float ExplosionDamage = 10f;
+    /// <summary>The pack's <c>minecraft:explode</c> power for a creeper; the blast, its damage radius (twice this) and its drops all follow from it.</summary>
+    private const float ExplosionPower = 3f;
 
     private readonly GroundMobBody _body;
-    private readonly EnvironmentChangePolicies _environment;
+    /// <summary>The blast routine; its <see cref="Explosion.Mobs"/> is wired at composition so a creeper hurts other species too.</summary>
+    internal Explosion Explosion { get; }
 
-    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, EnvironmentChangePolicies environment)
+    public CreeperSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, EnvironmentChangePolicies environment, Random? random = null)
         : base(MobDefinitions.Creeper, world, players, stores, itemPalette)
     {
         _body = new GroundMobBody(world, stores, players);
-        _environment = environment;
+        Explosion = new Explosion(world, players, stores, environment, random ?? new Random());
     }
 
     internal IReadOnlyList<EntityId> Creepers => Entities;
@@ -150,21 +152,9 @@ sealed class CreeperSystem : MobSystem<CreeperState>
 
         ExplosionCount++;
 
-        foreach (var player in online)
-        {
-            if (!player.IsInGame || player.IsDead) continue;
-            var dx = player.PositionX - explosionX;
-            var dy = player.PositionY - explosionY;
-            var dz = player.PositionZ - explosionZ;
-            var distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-            if (distance > ExplosionRadius) continue;
-            var damage = ExplosionDamage * (1f - distance / ExplosionRadius);
-            if (damage <= 0f) continue;
-            PlayerDamage.ApplyCore(player, _players, DamageSource.Generic, damage, currentTick).Conclude(online);
-        }
+        Explosion.Detonate(explosionX, explosionY, explosionZ, ExplosionPower, online, currentTick, excluding: id);
 
-        var blockUpdates = BreakBlocksInRadius(explosionX, explosionY, explosionZ, currentTick);
-
+        var blockUpdates = Explosion.Destroyed;
         foreach (var peer in online)
         {
             if (!peer.IsInGame) continue;
@@ -173,44 +163,6 @@ sealed class CreeperSystem : MobSystem<CreeperState>
             if (blockUpdates.Count > 0)
                 peer.Client.World.PublishUpdateBlocks(blockUpdates);
         }
-    }
-
-    /// <summary>
-    /// Phase XXIII fix — Creeper explosions never touched the world at all (no crater), even though
-    /// they already applied player area damage. Simple spherical carve (distance falloff, not a full
-    /// blast-resistance/ray-casting simulation) — every solid, non-bedrock block within
-    /// <see cref="ExplosionRadius"/> becomes air. No item drops for destroyed terrain, matching
-    /// vanilla's default (mobGriefing-independent) "no block drops from mob-caused explosions".
-    /// <para/>
-    /// Each cell is asked of the environment policies first (cause <see cref="EnvironmentCause.Explosion"/>): a vetoed cell is
-    /// left exactly as it is and the rest of the crater is carved, so a protected region has a clean edge.
-    /// </summary>
-    private List<(int X, int Y, int Z, int BlockRuntimeId)> BreakBlocksInRadius(float centerX, float centerY, float centerZ, ulong tick)
-    {
-        var updates = new List<(int, int, int, int)>();
-        var radius = (int)MathF.Ceiling(ExplosionRadius);
-        var cx = (int)MathF.Floor(centerX);
-        var cy = (int)MathF.Floor(centerY);
-        var cz = (int)MathF.Floor(centerZ);
-
-        for (var dx = -radius; dx <= radius; dx++)
-            for (var dy = -radius; dy <= radius; dy++)
-                for (var dz = -radius; dz <= radius; dz++)
-                {
-                    var distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-                    if (distance > ExplosionRadius) continue;
-
-                    var x = cx + dx;
-                    var y = cy + dy;
-                    var z = cz + dz;
-                    var current = _world.GetBlock(x, y, z);
-                    if (current == World.World.AirRuntimeId || current == Blocks.Bedrock) continue;
-                    if (!_environment.Allows(EnvironmentCause.Explosion, tick, x, y, z, current, World.World.AirRuntimeId)) continue;
-                    if (!_world.TrySetBlock(x, y, z, World.World.AirRuntimeId)) continue;
-                    updates.Add((x, y, z, World.World.AirRuntimeId));
-                }
-
-        return updates;
     }
 
     private Player.Player? FindOrAcquireTarget(EntityId id, IReadOnlyList<Player.Player> online)

@@ -73,6 +73,7 @@ sealed class BlockCatalog
         {
             if (properties.TryGetValue(family.Name, out var property))
             {
+                family.BlastResistance = property.BlastResistance;
                 family.Flammability = property.Flammability;
                 family.FlameEncouragement = property.FlameEncouragement;
             }

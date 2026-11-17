@@ -109,6 +109,9 @@ sealed class BlockFamily
     /// <summary>Chance weight that the block burns away next to fire (block_properties.json); 0 for a block that does not burn.</summary>
     public int Flammability { get; internal set; }
 
+    /// <summary>How much of an explosion's strength the block eats (block_properties.json, vanilla units); 0 for a block with no recorded row.</summary>
+    public double BlastResistance { get; internal set; }
+
     /// <summary>How strongly the block invites fire to spread to a cell beside it (block_properties.json).</summary>
     public int FlameEncouragement { get; internal set; }
 

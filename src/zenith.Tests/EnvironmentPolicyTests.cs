@@ -12,7 +12,7 @@ public sealed class EnvironmentPolicyTests
 {
     public EnvironmentPolicyTests() => Blocks.EnsureLoaded();
 
-    private const float Radius = 3f; // CreeperSystem.ExplosionRadius
+    private const float Reach = 3.5f; // a power-3 ray has at most 3.9 strength and dirt takes 0.465 per step: nothing is carved farther than this
 
     private sealed class Throws : IEnvironmentChangePolicy
     {
@@ -117,7 +117,7 @@ public sealed class EnvironmentPolicyTests
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bystander");
-        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
+        var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies, new Random(7));
         var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
         system.Tick(fx.Clock, fx.Players.Online); // ignites
         Assert.True(system.Stores.Positions.TryGet(id, out var at));
@@ -127,7 +127,7 @@ public sealed class EnvironmentPolicyTests
         for (var x = cx - reach; x <= cx + reach; x++)
             for (var y = cy - reach; y <= cy + reach; y++)
                 for (var z = cz - reach; z <= cz + reach; z++)
-                    _ = fx.World.TrySetBlock(x, y, z, Blocks.Stone); // cells below the world floor do not exist
+                    _ = fx.World.TrySetBlock(x, y, z, Blocks.Dirt); // cells below the world floor do not exist; dirt is soft enough for a real crater
 
         beforeBlast?.Invoke(fx, cx, cy, cz);
 
@@ -140,12 +140,13 @@ public sealed class EnvironmentPolicyTests
         return new Blast(fx, cx, cy, cz, -reach, reach);
     }
 
-    private static bool InsideBlast(int dx, int dy, int dz) => MathF.Sqrt(dx * dx + dy * dy + dz * dz) <= Radius;
+    private static bool PastTheBlast(int dx, int dy, int dz) => MathF.Sqrt(dx * dx + dy * dy + dz * dz) > Reach;
 
     [Fact]
-    public void Without_a_region_the_crater_is_the_whole_sphere()
+    public void Without_a_region_the_blast_digs_a_crater_and_nothing_beyond_its_reach()
     {
         var blast = Prepare();
+        var carved = 0;
 
         for (var dx = blast.Min; dx <= blast.Max; dx++)
             for (var dy = blast.Min; dy <= blast.Max; dy++)
@@ -153,12 +154,16 @@ public sealed class EnvironmentPolicyTests
                 {
                     if (!WorldColumn.InRange(blast.Cy + dy)) continue;
                     var block = blast.Fx.World.GetBlock(blast.Cx + dx, blast.Cy + dy, blast.Cz + dz);
-                    Assert.True(InsideBlast(dx, dy, dz) ? block == Blocks.Air : block == Blocks.Stone, $"{dx},{dy},{dz}");
+                    if (PastTheBlast(dx, dy, dz)) Assert.Equal(Blocks.Dirt, block);
+                    else if (block == Blocks.Air) carved++;
                 }
+
+        Assert.True(carved > 10, "a blast in soft ground leaves a real crater");
+        Assert.Equal(Blocks.Air, blast.Fx.World.GetBlock(blast.Cx, blast.Cy, blast.Cz));
     }
 
     [Fact]
-    public void A_crater_stops_at_the_edge_of_a_region_and_carves_everything_else()
+    public void A_crater_stops_at_the_edge_of_a_region_and_carves_the_rest()
     {
         // The region is the half of the blast with x >= centre: the cells beside it are carved, the ones inside it stay.
         var blast = Prepare((fx, cx, cy, cz) =>
@@ -173,10 +178,9 @@ public sealed class EnvironmentPolicyTests
                     if (!WorldColumn.InRange(blast.Cy + dy)) continue;
                     var block = blast.Fx.World.GetBlock(blast.Cx + dx, blast.Cy + dy, blast.Cz + dz);
                     var protectedCell = dx >= 0;
-                    var expectedAir = InsideBlast(dx, dy, dz) && !protectedCell;
-                    Assert.True(expectedAir ? block == Blocks.Air : block == Blocks.Stone, $"{dx},{dy},{dz}");
-                    if (expectedAir) carved++;
-                    if (InsideBlast(dx, dy, dz) && protectedCell) kept++;
+                    if (protectedCell) Assert.NotEqual(Blocks.Air, block); // nothing inside the region is touched
+                    if (protectedCell && !PastTheBlast(dx, dy, dz)) kept++;
+                    if (!protectedCell && block == Blocks.Air) carved++;
                 }
 
         Assert.True(carved > 0 && kept > 0, "the blast must straddle the region for this test to mean anything");
@@ -191,6 +195,6 @@ public sealed class EnvironmentPolicyTests
             for (var dy = blast.Min; dy <= blast.Max; dy++)
                 for (var dz = blast.Min; dz <= blast.Max; dz++)
                     if (WorldColumn.InRange(blast.Cy + dy))
-                        Assert.Equal(Blocks.Stone, blast.Fx.World.GetBlock(blast.Cx + dx, blast.Cy + dy, blast.Cz + dz));
+                        Assert.Equal(Blocks.Dirt, blast.Fx.World.GetBlock(blast.Cx + dx, blast.Cy + dy, blast.Cz + dz));
     }
 }

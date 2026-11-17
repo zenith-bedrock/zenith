@@ -79,9 +79,10 @@ public sealed class CreeperSystemTests
     public void Fuse_completes_and_explodes_after_its_full_duration()
     {
         var fx = new IntentTestFixture();
+        Assert.True(fx.World.Rules.TrySet("doTileDrops", "false", out _)); // the crater's own drops are not what this test is about
         var player = fx.AddInGamePlayer("victim");
         var system = new CreeperSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, fx.Context.EnvironmentPolicies);
-        var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 1f);
+        var id = system.SpawnCreeper(player.PositionX, player.PositionY, player.PositionZ + 2.9f); // a blast that hurts without killing
 
         system.Tick(fx.Clock, fx.Players.Online); // tick 0: ignites
         Assert.True(IsFusing(system, id));
@@ -98,7 +99,7 @@ public sealed class CreeperSystemTests
         Assert.Empty(system.Creepers);
         Assert.Equal(1, system.ExplosionCount);
         LootAssert.OnlyWhatTheTableAwards(fx.World, fx.Context.ItemPalette, "creeper");
-        Assert.True(player.Health < 20f); // caught in the blast at 1 block away
+        Assert.InRange(player.Health, 1f, 5f); // 2.9 blocks from a power-3 blast: 17 damage, as in vanilla
         // Self-explosion has no attacker to attribute XP to — DamageSource.Generic carries no owner.
         Assert.Equal(0, player.ExperiencePoints);
     }

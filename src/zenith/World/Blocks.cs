@@ -204,6 +204,9 @@ static class Blocks
     /// <summary>The fire block, at any age (ADR §172).</summary>
     public static bool IsFire(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId) == Current.FireFamily;
 
+    /// <summary>How much of an explosion the block absorbs (block_properties.json); water and lava 100, obsidian 1200, bedrock 3.6 million.</summary>
+    public static float BlastResistanceOf(int runtimeId) => (float)(Current.Catalog.States.FamilyOf(runtimeId)?.BlastResistance ?? 0.0);
+
     /// <summary>How readily the block burns away (block_properties.json), 0 when it does not.</summary>
     public static int FlammabilityOf(int runtimeId) => Current.Catalog.States.FamilyOf(runtimeId)?.Flammability ?? 0;
 
