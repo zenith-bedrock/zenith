@@ -1,3 +1,4 @@
+using Zenith.Rulebook;
 using Zenith.Gameplay.Replication;
 using Zenith.Gameplay.Runtime;
 using Zenith.Player;
@@ -84,10 +85,14 @@ sealed class HungerSystem : IGameSystem
 
             AccrueExhaustion(player);
 
-            // Starvation has a health floor of 1 (vanilla's non-Hard-difficulty default — Zenith has
-            // no difficulty concept to gate this on, so it defaults to the common case: starving
-            // never kills on its own, it just leaves the player critically low).
-            if (player.Hunger <= 0f && player.Health > 1f && clock.CurrentTick % StarveDamageIntervalTicks == 0)
+            // Starvation stops at a health floor that depends on the difficulty: 10 on Easy, 1 on Normal, none on Hard (it kills).
+            // Peaceful keeps the body fed and healing instead (below).
+            var difficulty = player.Level.Difficulty.Value;
+            if (difficulty == Difficulty.Peaceful)
+            {
+                PeacefulRecovery(player, clock.CurrentTick, online);
+            }
+            else if (player.Hunger <= 0f && player.Health > DifficultyRules.StarvationFloor(difficulty) && clock.CurrentTick % StarveDamageIntervalTicks == 0)
             {
                 // PlayerDamage already sends attributes/relays health for both outcomes.
                 PlayerDamage.ApplyCore(player, _players, DamageSource.Starve, 1f, clock.CurrentTick).Conclude(online);
@@ -126,6 +131,26 @@ sealed class HungerSystem : IGameSystem
                 (player.Exhaustion != 0f && clock.CurrentTick % GameClock.TicksPerSecond == 0))
                 player.Client.Entity.SendPlayerAttributes(player);
         }
+    }
+
+    /// <summary>On Peaceful the body mends by itself (1 health a second) and the food bar refills.</summary>
+    private static void PeacefulRecovery(Player.Player player, ulong tick, IReadOnlyList<Player.Player> online)
+    {
+        var changed = false;
+        if (player.Hunger < 20f)
+        {
+            player.Hunger = 20f;
+            changed = true;
+        }
+
+        if (tick % GameClock.TicksPerSecond == 0 && player.Health < player.MaxHealth)
+        {
+            player.Heal(1f);
+            PlayerVisibility.RelayHealth(player, online);
+            changed = true;
+        }
+
+        if (changed) player.Client.Entity.SendPlayerAttributes(player);
     }
 
     private void TryEat(Player.Player player, ulong tick, IReadOnlyList<Player.Player> online)

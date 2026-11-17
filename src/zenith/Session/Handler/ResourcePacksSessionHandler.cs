@@ -67,11 +67,12 @@ class ResourcePacksSessionHandler : ISessionHandler
                     gameMode: (int)player.GameMode,
                     biomeType: StartGamePacket.SpawnBiomeTypeDefault,
                     biomeName: "",
-                    gameRules: session.Context.World.Rules.Snapshot);
+                    gameRules: session.Context.World.Rules.Snapshot,
+                    difficulty: (int)session.Context.World.Difficulty.Value);
                 session.Protocol.World.SendJoinStatic(JoinStaticNames.EntityProperties);
                 session.Protocol.Inventory.SendItemRegistry();
                 session.Protocol.World.SendWorldClockRegistry(session.Context.Clock.WorldTime);
-                session.Protocol.World.SendDifficulty(StartGamePacket.DefaultDifficulty);
+                session.Protocol.World.SendDifficulty((int)session.Context.World.Difficulty.Value);
                 session.Protocol.World.SendCommandsEnabled(StartGamePacket.DefaultCommandsEnabled);
                 // Catalog seed for all modes (PM/DF/Serenity). UI gated by gamemode — ADR §31/§52.
                 session.Protocol.Inventory.SendCreativeContent();

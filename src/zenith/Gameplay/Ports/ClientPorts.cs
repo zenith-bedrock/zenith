@@ -142,6 +142,7 @@ interface IWorldChannel
     void SendSpawnComplete();
     void SendTime(int worldTime);
     void SendGameRules(IReadOnlyList<GameRule> rules);
+    void SendDifficulty(int difficulty);
 
     void SendUpdateBlock(int x, int y, int z, int blockRuntimeId);
     void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates);

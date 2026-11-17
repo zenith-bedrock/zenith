@@ -12,9 +12,19 @@ namespace Zenith.Gameplay.Replication;
 sealed class GameRuleSyncSystem(World.World world) : IGameSystem
 {
     private long _published = world.Rules.Version;
+    private long _publishedDifficulty = world.Difficulty.Version;
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
+        var difficulty = world.Difficulty;
+        if (difficulty.Version != _publishedDifficulty)
+        {
+            _publishedDifficulty = difficulty.Version;
+            foreach (var player in online)
+                player.Client.World.SendDifficulty((int)difficulty.Value);
+            world.PersistDifficulty();
+        }
+
         var rules = world.Rules;
         var version = rules.Version;
         if (version == _published) return;

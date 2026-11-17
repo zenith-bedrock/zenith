@@ -31,7 +31,7 @@ class StartGamePacket : DataPacket
     public int Dimension = DimensionId.Overworld;
     public int Generator = GeneratorInfinite;
     public int GameType = AbilityBits.WireGameModeSurvival;
-    public const int DefaultDifficulty = 0;
+    public const int DefaultDifficulty = 2;
     public const bool DefaultCommandsEnabled = true;
     public int Difficulty = DefaultDifficulty;
     public IReadOnlyList<Zenith.Rulebook.GameRule> GameRules = [];

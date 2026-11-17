@@ -1,3 +1,4 @@
+using Zenith.Rulebook;
 using Zenith.Gameplay.Runtime;
 using Zenith.World;
 
@@ -43,6 +44,7 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
         foreach (var category in table.Categories)
         {
             if (clock.CurrentTick % (ulong)category.IntervalTicks != 0) continue;
+            if (category.Name == "monster" && world.Difficulty.Value == Difficulty.Peaceful) continue;
             var cap = category.CapPerPlayer * players.Length;
             var alive = table.In(category).Select(e => e.Mob).Distinct().Sum(spawner.LiveCount);
             foreach (var player in players)

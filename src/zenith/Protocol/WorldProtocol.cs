@@ -35,7 +35,8 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
         int gameMode = AbilityBits.WireGameModeSurvival,
         short biomeType = StartGamePacket.SpawnBiomeTypeDefault,
         string biomeName = "",
-        IReadOnlyList<GameRule>? gameRules = null)
+        IReadOnlyList<GameRule>? gameRules = null,
+        int difficulty = StartGamePacket.DefaultDifficulty)
     {
         _session.SendDataPacket(new StartGamePacket
         {
@@ -55,6 +56,7 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
             BiomeType = biomeType,
             BiomeName = biomeName,
             GameRules = gameRules ?? [],
+            Difficulty = difficulty,
             BaseGameVersion = ServerIdentity.VersionName,
             GameVersion = ServerIdentity.VersionName
         });

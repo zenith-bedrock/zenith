@@ -179,8 +179,7 @@ public class HungerSystemTests
 
     /// <summary>
     /// Regression: starvation used to have no health floor and could kill the player outright.
-    /// Reference servers gate starvation damage below Hard difficulty so it can never be lethal;
-    /// Zenith has no difficulty concept, so it defaults to that common, non-lethal case.
+    /// On Normal (the default difficulty) it stops at one; Easy and Hard are in <c>DifficultyTests</c>.
     /// </summary>
     [Fact]
     public void Starvation_never_reduces_health_below_one()

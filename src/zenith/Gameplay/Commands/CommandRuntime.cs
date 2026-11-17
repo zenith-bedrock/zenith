@@ -15,6 +15,7 @@ sealed class CommandRuntime
     private readonly PlayerManager _players;
     private readonly DiagnosticsInvestigation? _diagnostics;
     private readonly GameRules? _rules;
+    private readonly DifficultySetting? _difficulty;
     private readonly MobSpawner? _spawner;
     private readonly PermissionAuthority _authority;
     private readonly CommandCatalog _catalog = new();
@@ -26,8 +27,10 @@ sealed class CommandRuntime
     /// </param>
     public CommandRuntime(
         PlayerManager players, PermissionAuthority authority, DiagnosticsInvestigation? diagnostics = null,
-        GameRules? rules = null, MobSpawner? spawner = null, IEnumerable<CommandBinding>? contributions = null)
+        GameRules? rules = null, MobSpawner? spawner = null, IEnumerable<CommandBinding>? contributions = null,
+        DifficultySetting? difficulty = null)
     {
+        _difficulty = difficulty;
         _authority = authority;
         _spawner = spawner;
         _players = players;
@@ -77,6 +80,16 @@ sealed class CommandRuntime
             var names = rules.Snapshot.ToDictionary(rule => rule.Name, rule => (object)rule.Name, StringComparer.OrdinalIgnoreCase);
             Bind(ExecuteGameRule, new CommandDefinition("gamerule", "Show or change a game rule", [PermissionNodes.GameRuleRead, PermissionNodes.GameRuleWrite],
                 [new CommandOverload(new EnumCommandArgument("rule", names), new StringCommandArgument("value", Optional: true))], []));
+        }
+
+        if (difficulty is not null)
+        {
+            var levels = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["peaceful"] = Difficulty.Peaceful, ["easy"] = Difficulty.Easy, ["normal"] = Difficulty.Normal, ["hard"] = Difficulty.Hard
+            };
+            Bind(ExecuteDifficulty, new CommandDefinition("difficulty", "Show or change the world difficulty", [PermissionNodes.DifficultyRead, PermissionNodes.DifficultyWrite],
+                [new CommandOverload(new EnumCommandArgument("level", levels, Optional: true))], []));
         }
 
         if (spawner is not null)
@@ -187,6 +200,18 @@ sealed class CommandRuntime
         return _spawner!.Request(mob, invocation.X, invocation.Y, invocation.Z, issued)
             ? Accepted("Summon", $"Queued {mob}.")
             : Rejected("Summon", $"Unknown mob '{mob}'.");
+    }
+
+    private CommandFeedback ExecuteDifficulty(in CommandInvocation invocation)
+    {
+        if (!invocation.Arguments.TryGetValue("level", out var level))
+            return _authority.Has(invocation.Caller, PermissionNodes.DifficultyRead)
+                ? Applied("Difficulty", $"The difficulty is {_difficulty!.Value}.")
+                : Rejected("Difficulty", NoPermission);
+
+        if (!_authority.Has(invocation.Caller, PermissionNodes.DifficultyWrite)) return Rejected("Difficulty", NoPermission);
+        _difficulty!.Set((Difficulty)level);
+        return Applied("Difficulty", $"The difficulty is now {_difficulty.Value}.");
     }
 
     private CommandFeedback ExecuteGameRule(in CommandInvocation invocation)

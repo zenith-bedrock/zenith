@@ -85,6 +85,6 @@ class ServerContext
         Protect = protect ?? Zenith.Modules.Protect.ProtectModule.Compose(Permissions, BlockPolicies, ContainerPolicies, EnvironmentPolicies);
         Commands = new CommandRuntime(
             playerManager, Permissions, new DiagnosticsInvestigation(Diagnostics.Runtime, Diagnostics.Incidents), world.Rules, spawner,
-            contributions: [Protect.Command]);
+            contributions: [Protect.Command], difficulty: world.Difficulty);
     }
 }

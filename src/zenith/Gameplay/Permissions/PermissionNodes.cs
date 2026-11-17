@@ -11,6 +11,8 @@ static class PermissionNodes
     public const string EffectOthers = "zenith.command.effect.others";
     public const string GameRuleRead = "zenith.command.gamerule.read";
     public const string GameRuleWrite = "zenith.command.gamerule.write";
+    public const string DifficultyRead = "zenith.command.difficulty.read";
+    public const string DifficultyWrite = "zenith.command.difficulty.write";
     public const string Summon = "zenith.command.summon";
     public const string Diagnostics = "zenith.command.diagnostics";
 
@@ -31,6 +33,8 @@ static class PermissionNodes
         registry.Register(EffectOthers, PermissionDefault.Operator);
         registry.Register(GameRuleRead, PermissionDefault.Everyone);
         registry.Register(GameRuleWrite, PermissionDefault.Operator);
+        registry.Register(DifficultyRead, PermissionDefault.Everyone);
+        registry.Register(DifficultyWrite, PermissionDefault.Operator);
         registry.Register(Summon, PermissionDefault.Operator);
         registry.Register(Diagnostics, PermissionDefault.Operator);
 

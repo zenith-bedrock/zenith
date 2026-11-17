@@ -1,3 +1,4 @@
+using Zenith.Rulebook;
 using Zenith.Gameplay.Ports;
 using Zenith.Player;
 using Zenith.World;
@@ -85,6 +86,14 @@ static class PlayerDamage
         // Creative players die falling out of the world) so it bypasses this guard.
         if (player.GameMode == GameMode.Creative && source.Cause != DamageCause.Void)
             return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+
+        // A mob's hit scales with the difficulty (a player's does not).
+        if (source.Cause is DamageCause.Melee or DamageCause.Projectile or DamageCause.Explosion &&
+            (source.OwnerRuntimeId is not { } owner || players.GetByRuntimeId(owner) is null))
+        {
+            amount = DifficultyRules.ScaleMobDamage(player.Level.Difficulty.Value, amount);
+            if (amount <= 0f) return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+        }
 
         var mitigated = ArmorMitigation.Apply(player, source, amount);
         var result = player.ApplyDamage(source, mitigated, currentTick);

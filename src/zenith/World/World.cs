@@ -30,6 +30,11 @@ sealed class World
     /// <summary>Game rules of this world (defaults from the stock BDS capture, restored from storage at boot).</summary>
     public GameRules Rules { get; } = GameRuleDefaults.Create();
 
+    /// <summary>Difficulty of this world: Normal until set, restored from storage at boot.</summary>
+    public DifficultySetting Difficulty { get; } = new();
+
+    private const string DifficultyModule = "difficulty";
+
     /// <summary>What a player keeps between sessions: inventory, armor, offhand, pose and vitals.</summary>
     public PlayerPersistence Persistence { get; }
 
@@ -127,6 +132,15 @@ sealed class World
     /// <summary>Hands a module's bytes to the write-behind storage; they reach the disk with the world's other writes.</summary>
     public void PersistModuleState(string module, byte[] state) =>
         _writes.Observe(_storage.PutModuleStateAsync(module, state), $"PutModuleState:{module}");
+
+    /// <summary>Restores the stored difficulty (one byte). Boot only.</summary>
+    public void LoadDifficulty()
+    {
+        var blob = LoadModuleState(DifficultyModule);
+        if (blob is { Length: 1 } && Enum.IsDefined((Difficulty)blob[0])) Difficulty.Set((Difficulty)blob[0]);
+    }
+
+    public void PersistDifficulty() => PersistModuleState(DifficultyModule, [(byte)Difficulty.Value]);
 
     public void PersistGameRules() => _writes.Observe(_storage.PutGameRulesAsync(GameRuleCodec.ToBytes(Rules.Snapshot)), "PutGameRules");
 
