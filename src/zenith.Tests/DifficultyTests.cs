@@ -167,8 +167,8 @@ public sealed class DifficultyTests
             {
               "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 }, { "name": "creature", "capPerPlayer": 3, "intervalTicks": 40 } ],
               "spawns": [
-                { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "filters": [ { "test": "is_difficulty", "operator": "!=", "value": "peaceful" } ] },
-                { "mob": "cow", "category": "creature", "weight": 10, "group": [1, 1] }
+                { "mob": "zombie", "category": "monster", "weight": 10, "herd": { "min_size": 1, "max_size": 1 }, "filters": [ { "test": "is_difficulty", "operator": "!=", "value": "peaceful" } ] },
+                { "mob": "cow", "category": "creature", "weight": 10, "herd": { "min_size": 1, "max_size": 1 } }
               ]
             }
             """;

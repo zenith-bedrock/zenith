@@ -73,11 +73,10 @@ sealed class SpawnTable
                 ?? throw Invalid($"'{mob}' names unknown category '{categoryName}'");
             var weight = e.GetProperty("weight").GetInt32();
             if (weight <= 0) throw Invalid($"'{mob}' has weight {weight}; it must be positive");
-            var group = e.GetProperty("group");
-            if (group.GetArrayLength() != 2) throw Invalid($"'{mob}' group must be [min, max]");
-            var min = group[0].GetInt32();
-            var max = group[1].GetInt32();
-            if (min < 1 || max < min) throw Invalid($"'{mob}' has group [{min}, {max}]; need 1 <= min <= max");
+            var herd = e.GetProperty("herd"); // the pack's name for the size of one spawn: { "min_size", "max_size" }
+            var min = herd.GetProperty("min_size").GetInt32();
+            var max = herd.GetProperty("max_size").GetInt32();
+            if (min < 1 || max < min) throw Invalid($"'{mob}' has herd [{min}, {max}]; need 1 <= min_size <= max_size");
 
             Filter filter;
             try

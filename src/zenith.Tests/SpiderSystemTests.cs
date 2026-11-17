@@ -163,39 +163,23 @@ public sealed class SpiderSystemTests
     }
 
     [Fact]
-    public void A_landed_bite_can_poison_the_player_via_the_shared_effects_dictionary()
+    public void A_landed_bite_hurts_but_never_poisons_the_plain_spider_has_no_effect_in_the_pack()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("bitten");
-        var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(2));
+        var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette);
         system.SpawnSpider(player.PositionX + 1, player.PositionY, player.PositionZ);
-        // 40 landed hits at a 30% poison chance each: P(never triggers) = 0.7^40 ≈ 5e-7 —
-        // deterministic in practice, not a meaningful flake risk, without hard-coding a seed's
-        // exact draw sequence (which would break the moment System.Random's algorithm changes).
+        var bitten = false;
 
         for (var i = 0; i < 40; i++)
         {
             system.Tick(fx.Clock, fx.Players.Online);
-            player.Heal(player.MaxHealth); // stay alive for the full run — every hit is a fresh poison roll, not just the ones before death
+            bitten |= player.Health < player.MaxHealth;
+            player.Heal(player.MaxHealth);
             fx.Clock.AdvanceBy(20); // clears the attack cooldown between attempts
         }
 
-        Assert.True(system.PoisonInflictedCount > 0);
-        Assert.True(player.Effects.Active.ContainsKey(EffectType.Poison));
-    }
-
-    [Fact]
-    public void Melee_kill_before_any_bite_lands_never_poisons_the_player()
-    {
-        var fx = new IntentTestFixture();
-        var player = fx.AddInGamePlayer("safe-attacker");
-        Assert.True(player.Inventory.TrySetItem(0, fx.Context.ItemPalette.Require("minecraft:diamond_sword"), 1));
-        var system = new SpiderSystem(fx.World, fx.Players, new EntityRuntime(), fx.Context.ItemPalette, new Random(2));
-        system.SpawnSpider(player.PositionX + 10, player.PositionY, player.PositionZ);
-
-        system.Tick(fx.Clock, fx.Players.Online);
-
-        Assert.Equal(0, system.PoisonInflictedCount);
-        Assert.False(player.Effects.Active.ContainsKey(EffectType.Poison));
+        Assert.True(bitten);
+        Assert.Empty(player.Effects.Active);
     }
 }

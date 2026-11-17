@@ -9,7 +9,7 @@ public sealed class NaturalSpawnTests
     private const string Json = """
         {
           "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "filters": [
+          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "herd": { "min_size": 1, "max_size": 1 }, "filters": [
               { "test": "hourly_clock_time", "operator": ">=", "value": 13000 },
               { "test": "hourly_clock_time", "operator": "<", "value": 23000 },
               { "test": "has_biome_tag", "value": "monster" } ] } ]
@@ -93,12 +93,12 @@ public sealed class NaturalSpawnTests
         Assert.Equal((2, 3), (Entry("cow").GroupMin, Entry("cow").GroupMax));
     }
 
-    private const string Head = """{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[1,1]""";
+    private const string Head = """{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"herd": { "min_size": 1, "max_size": 1 }""";
 
     [Theory]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"nope","weight":1,"group":[1,1]}]}""", "unknown category")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":0,"group":[1,1]}]}""", "weight")]
-    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"group":[3,1]}]}""", "group")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"nope","weight":1,"herd": { "min_size": 1, "max_size": 1 }}]}""", "unknown category")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":0,"herd": { "min_size": 1, "max_size": 1 }}]}""", "weight")]
+    [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":1,"herd": { "min_size": 3, "max_size": 1 }}]}""", "herd")]
     [InlineData("""{"categories":[{"name":"m","capPerPlayer":0,"intervalTicks":1}],"spawns":[]}""", "capPerPlayer")]
     [InlineData(Head + ""","filters":[{"test":"moon_phase","value":1}]}]}""", "unknown test 'moon_phase'")]
     [InlineData(Head + ""","filters":[{"test":"has_biome_tag","value":"moon"}]}]}""", "does not know the value 'moon'")]

@@ -17,7 +17,7 @@ public sealed class LightConsumerTests
     private const string DarkMonster = """
         {
           "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1], "filters": [ { "test": "light_level", "operator": "<=", "value": 7 } ] } ]
+          "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "herd": { "min_size": 1, "max_size": 1 }, "filters": [ { "test": "light_level", "operator": "<=", "value": 7 } ] } ]
         }
         """;
 
@@ -53,7 +53,7 @@ public sealed class LightConsumerTests
         const string any = """
             {
               "categories": [ { "name": "monster", "capPerPlayer": 3, "intervalTicks": 40 } ],
-              "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "group": [1, 1] } ]
+              "spawns": [ { "mob": "zombie", "category": "monster", "weight": 10, "herd": { "min_size": 1, "max_size": 1 } } ]
             }
             """;
         Assert.True(SpawnsAt(2000, any) > 0);

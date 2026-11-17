@@ -16,10 +16,8 @@ namespace Zenith.Gameplay.Entities;
 /// <c>Velocity.X</c>/<c>Velocity.Z</c> — but Phase XXIX attaches the component anyway and reuses
 /// <c>Velocity.Y</c> as every ground mob's gravity fall-speed.
 ///
-/// <see cref="TryApplyPoison"/> is unchanged by this migration — it always operated on the target
-/// <em>Player</em>'s <c>Effects</c> dictionary, never on Spider's own state, so ECS migration had
-/// nothing to touch there. This is the concrete proof that a feature-specific post-hit consequence
-/// (poison) stays feature-owned and does not need to become part of the ECS damage seam.
+/// A spider's bite is plain melee: in the pack only the cave spider poisons (0, 7 or 15 seconds by difficulty), and the plain spider's
+/// data has no effect at all, so this system applies none.
 /// </summary>
 [GameSystem("spider")]
 sealed class SpiderSystem : MobSystem<SpiderState>
@@ -28,23 +26,17 @@ sealed class SpiderSystem : MobSystem<SpiderState>
     private const float DetectionDistance = 20f;
     private float AttackDistance => _mob.Definition.Melee!.Reach;
     private const float MovePerTick = 0.11f; // Faster than Zombie's 0.08 — a real behavioral difference, not just renaming.
-    private const float PoisonChance = 0.3f;
-    private const int PoisonDurationTicks = 100; // 5s @ 20 TPS — same cadence EffectSystem already ticks Poison at.
 
     private readonly GroundMobBody _body;
-    private readonly Random _random;
 
-    public SpiderSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette, Random? random = null)
+    public SpiderSystem(World.World world, PlayerManager players, EntityRuntime stores, ItemPalette itemPalette)
         : base(MobDefinitions.Spider, world, players, stores, itemPalette)
     {
         _body = new GroundMobBody(world, stores, players);
-        _random = random ?? new Random();
     }
 
     internal IReadOnlyList<EntityId> Spiders => Entities;
     internal ComponentStore<SpiderState> SpiderStates => States;
-
-    internal long PoisonInflictedCount { get; private set; }
 
     protected override void Think(EntityId id, GameClock clock, IReadOnlyList<Player.Player> online)
     {
@@ -62,25 +54,6 @@ sealed class SpiderSystem : MobSystem<SpiderState>
     {
         if (target is null || !_mob.IsMeleeReady(id, clock.CurrentTick)) return;
         if (!_stores.Positions.TryGet(id, out var pos) || !GroundMobBody.IsTargetValid(pos, target, DetectionDistance, out _)) return;
-        if (_mob.TryMeleeAttack(id, target, clock.CurrentTick, online))
-            TryApplyPoison(target, clock);
-    }
-
-    /// <summary>
-    /// The mob side of a status effect: writes the same <c>Player.Effects.Active</c> entry a potion or
-    /// intent would (see <see cref="EffectSystem"/>'s <c>ApplyPendingIntent</c>), then replicates
-    /// the same <see cref="MobEffectPacket"/>. Unchanged by ECS migration — see this class's doc
-    /// comment.
-    /// </summary>
-    private void TryApplyPoison(Player.Player target, GameClock clock)
-    {
-        if (target.IsDead) return;
-        if (_random.NextDouble() >= PoisonChance) return;
-
-        var expiresAtTick = clock.CurrentTick + PoisonDurationTicks;
-        if (!target.Effects.ApplyOrRefreshEffect(EffectType.Poison, 0, expiresAtTick, clock.CurrentTick)) return; // a longer poison is already active
-        target.Client.Entity.SendMobEffect(
-            (ulong)target.RuntimeId, EffectChange.Add, (int)EffectType.Poison, 0, showParticles: true, PoisonDurationTicks);
-        PoisonInflictedCount++;
+        _mob.TryMeleeAttack(id, target, clock.CurrentTick, online);
     }
 }

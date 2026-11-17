@@ -5,27 +5,27 @@
     { "name": "creature", "capPerPlayer": 10, "intervalTicks": 400 }
   ],
   "spawns": [
-    { "mob": "zombie",   "category": "monster",  "weight": 100, "group": [2, 4], "filters": [
+    { "mob": "zombie",   "category": "monster",  "weight": 100, "herd": { "min_size": 2, "max_size": 4 }, "filters": [
         { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
         { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
         { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
-    { "mob": "skeleton", "category": "monster",  "weight": 80,  "group": [1, 2], "filters": [
+    { "mob": "skeleton", "category": "monster",  "weight": 80,  "herd": { "min_size": 1, "max_size": 2 }, "filters": [
         { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
         { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
         { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
-    { "mob": "spider",   "category": "monster",  "weight": 100, "group": [1, 1], "filters": [
+    { "mob": "spider",   "category": "monster",  "weight": 100, "herd": { "min_size": 1, "max_size": 1 }, "filters": [
         { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
         { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
         { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
-    { "mob": "creeper",  "category": "monster",  "weight": 100, "group": [1, 1], "filters": [
+    { "mob": "creeper",  "category": "monster",  "weight": 100, "herd": { "min_size": 1, "max_size": 1 }, "filters": [
         { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
         { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
         { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
-    { "mob": "enderman", "category": "monster",  "weight": 10,  "group": [1, 2], "filters": [
+    { "mob": "enderman", "category": "monster",  "weight": 10,  "herd": { "min_size": 1, "max_size": 2 }, "filters": [
         { "test": "light_level", "domain": "adjust_for_weather", "operator": "<=", "value": 7 },
         { "test": "is_difficulty", "operator": "!=", "value": "peaceful" },
         { "test": "has_biome_tag", "value": "monster" }, { "test": "has_biome_tag", "operator": "!=", "value": "ocean" } ] },
-    { "mob": "cow",      "category": "creature", "weight": 8,   "group": [2, 3], "filters": [
+    { "mob": "cow",      "category": "creature", "weight": 8,   "herd": { "min_size": 2, "max_size": 3 }, "filters": [
         { "test": "light_level", "operator": ">=", "value": 7 },
         { "test": "is_block", "domain": "down", "value": "minecraft:grass_block" },
         { "test": "has_biome_tag", "value": "animal" } ] }
