@@ -7,23 +7,14 @@ using Zenith.Player;
 namespace Zenith.Gameplay.Survival;
 
 /// <summary>
-/// The first concrete effect slice (Phase XI.3): apply/refresh/clear via <see cref="EffectIntent"/>,
-/// periodic Poison damage and Regeneration healing, natural expiry. Owns <c>Player.Effects.Active</c>; no
-/// EffectFramework, ModifierSystem or generic gameplay-component pipeline — each effect type is one
-/// concrete branch below.
+/// Player effects: apply/refresh/clear via <see cref="EffectIntent"/>, the periodic and instant rules of <see cref="EffectTable"/>
+/// (poison, wither, regeneration, instant health and damage), natural expiry. Owns <c>Player.Effects.Active</c> (held by the player's
+/// <see cref="Body"/>, which turns effects into attribute modifiers: Health Boost, Absorption and the rest). What each effect does is data in
+/// <c>data/effects.json</c>; the mob counterpart is <c>MobEffectSystem</c>.
 /// </summary>
 [GameSystem("effect")]
 sealed class EffectSystem : IGameSystem
 {
-    /// <summary>
-    /// Vanilla-parity cadence at amplifier 0. Vanilla halves the tick interval per amplifier level
-    /// (<c>interval &gt;&gt; amplifier</c>) rather than scaling the per-tick amount — see
-    /// <see cref="TickPoison"/>/<see cref="TickRegeneration"/>.
-    /// </summary>
-    private const ulong PoisonIntervalTicks = 25;
-    private const ulong RegenIntervalTicks = 50;
-    private const ulong WitherIntervalTicks = 40;
-
     private readonly PlayerManager _players;
     private readonly List<EffectType> _expiredScratch = new();
 
@@ -62,13 +53,14 @@ sealed class EffectSystem : IGameSystem
             if (!player.Effects.ClearEffects()) return;
             foreach (var type in removed)
                 entity.SendMobEffect(rid, EffectChange.Remove, (int)type, 0, false, 0);
+            ShowBody(player);
             return;
         }
 
         var amplifier = Math.Clamp(intent.Amplifier, 0, 3);
-        if (intent.Type is EffectType.InstantHealth or EffectType.InstantDamage)
+        if (EffectTable.Default.Of(intent.Type).Instant is { } instant)
         {
-            ApplyInstant(player, intent.Type, amplifier, clock);
+            ApplyInstant(player, instant, amplifier, clock);
             return;
         }
 
@@ -76,7 +68,7 @@ sealed class EffectSystem : IGameSystem
         var expiresAtTick = clock.CurrentTick + (ulong)durationTicks;
         var wasActive = player.Effects.Active.ContainsKey(intent.Type);
         if (!player.Effects.ApplyOrRefreshEffect(intent.Type, amplifier, expiresAtTick, clock.CurrentTick))
-            return; // a stronger or longer instance is already active — vanilla ignores the weaker one.
+            return; // a stronger or longer instance is already active - vanilla ignores the weaker one.
 
         entity.SendMobEffect(
             rid,
@@ -85,6 +77,14 @@ sealed class EffectSystem : IGameSystem
             amplifier,
             showParticles: true,
             durationTicks);
+        ShowBody(player);
+    }
+
+    /// <summary>The maximum health and the absorption an effect changed are attributes: the client's hearts follow them.</summary>
+    private void ShowBody(Player.Player player)
+    {
+        player.Client.Entity.SendPlayerAttributes(player);
+        PlayerVisibility.RelayHealth(player, _players.Online);
     }
 
     private void TickActiveEffects(Player.Player player, GameClock clock, IReadOnlyList<Player.Player> online)
@@ -100,18 +100,8 @@ sealed class EffectSystem : IGameSystem
                 continue;
             }
 
-            switch (type)
-            {
-                case EffectType.Poison:
-                    TickPoison(player, effect, clock, online);
-                    break;
-                case EffectType.Regeneration:
-                    TickRegeneration(player, effect, clock, online);
-                    break;
-                case EffectType.Wither:
-                    TickWither(player, effect, clock, online);
-                    break;
-            }
+            if (EffectTable.Default.Of(type).Periodic is { } periodic && periodic.DueAt(clock.CurrentTick, effect.Amplifier))
+                RunPeriodic(player, periodic, clock, online);
         }
 
         if (expired.Count == 0) return;
@@ -122,51 +112,42 @@ sealed class EffectSystem : IGameSystem
             player.Effects.RemoveEffect(type);
             entity.SendMobEffect(rid, EffectChange.Remove, (int)type, 0, false, 0);
         }
+
+        ShowBody(player);
     }
 
     /// <summary>
-    /// Poison never reduces health below 1 and bypasses armor (vanilla parity, magic damage). Amount
-    /// per tick is always 1 — a higher amplifier ticks more often (<see cref="PoisonIntervalTicks"/>),
-    /// it does not deal more damage per tick.
+    /// One tick of a periodic rule. Healing stops at the maximum; damage is magic or wither (around armor), never takes poison below 1 and
+    /// always does its table amount per due tick: a higher amplifier ticks more often, it does not deal more damage per tick.
     /// </summary>
-    private void TickPoison(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
+    private void RunPeriodic(Player.Player player, EffectAction action, GameClock clock, IReadOnlyList<Player.Player> online)
     {
-        if (clock.CurrentTick % (PoisonIntervalTicks >> effect.Amplifier) != 0) return;
-        if (player.Health <= 1f) return;
+        if (action.Heals)
+        {
+            if (player.Health >= player.MaxHealth) return;
+            player.Heal(action.Amount);
+            player.Client.Entity.SendPlayerAttributes(player);
+            PlayerVisibility.RelayHealth(player, online);
+            return;
+        }
 
-        var amount = MathF.Min(1f, player.Health - 1f);
-        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, amount, clock.CurrentTick).Conclude(online);
-    }
-
-    /// <summary>Wither is poison that can kill: 1 magic damage every 40 ticks, halving the wait for each level.</summary>
-    private void TickWither(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (clock.CurrentTick % (WitherIntervalTicks >> effect.Amplifier) != 0) return;
-        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, 1f, clock.CurrentTick).Conclude(online);
+        var amount = action.DamageFor(player.Health);
+        if (amount <= 0f) return;
+        PlayerDamage.ApplyCore(player, _players, new DamageSource(action.Cause), amount, clock.CurrentTick).Conclude(online);
     }
 
     /// <summary>Instant Health mends 4 a level (doubling each level); Instant Damage hurts 6 a level. Nothing stays active.</summary>
-    private void ApplyInstant(Player.Player player, EffectType type, int amplifier, GameClock clock)
+    private void ApplyInstant(Player.Player player, EffectAction action, int amplifier, GameClock clock)
     {
-        if (type == EffectType.InstantHealth)
+        var amount = action.InstantAmount(amplifier);
+        if (action.Heals)
         {
-            player.Heal(4f * (1 << amplifier));
+            player.Heal(amount);
             player.Client.Entity.SendPlayerAttributes(player);
             PlayerVisibility.RelayHealth(player, _players.Online);
             return;
         }
 
-        PlayerDamage.ApplyCore(player, _players, DamageSource.Magic, 6f * (1 << amplifier), clock.CurrentTick).Conclude(_players.Online);
-    }
-
-    /// <summary>Amount per tick is always 1 — a higher amplifier ticks more often, matching Poison.</summary>
-    private static void TickRegeneration(Player.Player player, ActiveEffect effect, GameClock clock, IReadOnlyList<Player.Player> online)
-    {
-        if (clock.CurrentTick % (RegenIntervalTicks >> effect.Amplifier) != 0) return;
-        if (player.Health >= player.MaxHealth) return;
-
-        player.Heal(1f);
-        player.Client.Entity.SendPlayerAttributes(player);
-        PlayerVisibility.RelayHealth(player, online);
+        PlayerDamage.ApplyCore(player, _players, new DamageSource(action.Cause), amount, clock.CurrentTick).Conclude(_players.Online);
     }
 }

@@ -24,7 +24,7 @@ internal enum PlayerDamageOutcome { NotApplied, Hurt, Died }
 /// name must not imply "purely cosmetic, safe to skip."
 /// </summary>
 internal readonly record struct PlayerDamageResult(
-    PlayerDamageOutcome Outcome, Player.Player Player, PlayerManager Players)
+    PlayerDamageOutcome Outcome, Player.Player Player, PlayerManager Players, DamageBreakdown? Breakdown = null)
 {
     public bool Applied => Outcome != PlayerDamageOutcome.NotApplied;
 
@@ -50,6 +50,41 @@ internal readonly record struct PlayerDamageResult(
         if (Player.GameMode != GameMode.Creative && !world.Rules.KeepInventory)
             _ = FloorDropFanout.TryDropDeathLoot(world, Players, online, Player);
     }
+}
+
+/// <summary>One stage of the damage pipeline: the amount that came in and the amount that left.</summary>
+internal readonly record struct DamageStep(string Stage, float Before, float After);
+
+/// <summary>
+/// What each stage of the pipeline did to one hit (PocketMine's event modifiers, typed): in the order they ran. A test asserts a stage, and an
+/// observer can read why a hit was 3 and not 5.
+/// </summary>
+internal sealed class DamageBreakdown(float initial)
+{
+    private readonly List<DamageStep> _steps = [];
+
+    public float Initial { get; } = initial;
+    public IReadOnlyList<DamageStep> Steps => _steps;
+
+    /// <summary>What the absorption shield took of the hit.</summary>
+    public float Absorbed { get; set; }
+
+    public float Final => _steps.Count == 0 ? Initial : _steps[^1].After;
+
+    public void Add(string stage, float before, float after) => _steps.Add(new DamageStep(stage, before, after));
+
+    public DamageStep? Of(string stage) => _steps.Cast<DamageStep?>().FirstOrDefault(s => s!.Value.Stage == stage);
+}
+
+/// <summary>The stage names of <see cref="DamageBreakdown"/>, in pipeline order.</summary>
+internal static class DamageStage
+{
+    public const string Gate = "gate";
+    public const string Difficulty = "difficulty";
+    public const string FireImmunity = "fire-immunity";
+    public const string Armor = "armor";
+    public const string Resistance = "resistance";
+    public const string Absorption = "absorption";
 }
 
 /// <summary>One authoritative Player damage transition shared by concrete gameplay causes.</summary>
@@ -79,13 +114,18 @@ static class PlayerDamage
         Player.Player player, PlayerManager players, DamageSource source, float amount,
         ulong currentTick, float knockbackDirX = 0f, float knockbackDirZ = 0f)
     {
+        var breakdown = new DamageBreakdown(amount);
+
         // Vanilla-parity: Creative players take no damage from ordinary sources (mob melee,
-        // projectiles, explosions, player-vs-player). This was never checked at all — a real bug,
+        // projectiles, explosions, player-vs-player). This was never checked at all - a real bug,
         // not a simplification (found via real-client testing, Phase XXIII-B). Void is the one
-        // deliberate exception (established Zenith behavior, ADR §73/§40, matches vanilla — even
+        // deliberate exception (established Zenith behavior, ADR section 73/40, matches vanilla - even
         // Creative players die falling out of the world) so it bypasses this guard.
         if (player.GameMode == GameMode.Creative && source.Cause != DamageCause.Void)
-            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+        {
+            breakdown.Add(DamageStage.Gate, amount, 0f);
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players, breakdown);
+        }
 
         // A mob's melee hit and explosion scale with the difficulty (a player's do not). A projectile does not: the
         // arrow's difficulty is its own data (ProjectileSystem.RollDamage); Peaceful still spares the player from mobs.
@@ -93,18 +133,28 @@ static class PlayerDamage
             (source.OwnerRuntimeId is not { } owner || players.GetByRuntimeId(owner) is null))
         {
             var difficulty = player.Level.Difficulty.Value;
+            var before = amount;
             if (source.Cause != DamageCause.Projectile) amount = DifficultyRules.ScaleMobDamage(difficulty, amount);
             else if (difficulty == Difficulty.Peaceful) amount = 0f;
-            if (amount <= 0f) return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+            breakdown.Add(DamageStage.Difficulty, before, amount);
+            if (amount <= 0f) return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players, breakdown);
         }
 
-        if (source.Cause is DamageCause.Fire or DamageCause.Lava && EffectRules.ImmuneToFire(player))
-            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+        if (source.Cause.IsFire() && EffectRules.ImmuneToFire(player))
+        {
+            breakdown.Add(DamageStage.FireImmunity, amount, 0f);
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players, breakdown);
+        }
 
-        var mitigated = EffectRules.AfterResistance(player, source, ArmorMitigation.Apply(player, source, amount));
+        var armored = ArmorMitigation.Apply(player, source, amount);
+        breakdown.Add(DamageStage.Armor, amount, armored);
+        var mitigated = EffectRules.AfterResistance(player, source, armored);
+        breakdown.Add(DamageStage.Resistance, armored, mitigated);
         var result = player.ApplyDamage(source, mitigated, currentTick);
         if (!result.WasApplied)
-            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players);
+            return new PlayerDamageResult(PlayerDamageOutcome.NotApplied, player, players, breakdown);
+        breakdown.Absorbed = result.Absorbed;
+        breakdown.Add(DamageStage.Absorption, mitigated, mitigated - result.Absorbed);
         if (GearWear.WearsArmorFor(source.Cause)) GearWear.WearArmor(player, amount);
 
         // Phase XXV — damage exhaustion source (survival only; a Creative death only happens via the
@@ -118,7 +168,7 @@ static class PlayerDamage
         {
             entity.SendPlayerAttributes(player);
             ApplyKnockback(player, entity, knockbackDirX, knockbackDirZ);
-            return new PlayerDamageResult(PlayerDamageOutcome.Hurt, player, players);
+            return new PlayerDamageResult(PlayerDamageOutcome.Hurt, player, players, breakdown);
         }
 
         if (player.Effects.Active.Count > 0)
@@ -137,7 +187,7 @@ static class PlayerDamage
         entity.SendPlayerAttributes(player);
         entity.SendDeathInfo(player.DeathCause);
         entity.SendRespawnSearching(player.PositionX, player.PositionY + Blocks.PlayerEyeHeight, player.PositionZ, rid);
-        return new PlayerDamageResult(PlayerDamageOutcome.Died, player, players);
+        return new PlayerDamageResult(PlayerDamageOutcome.Died, player, players, breakdown);
     }
 
     /// <summary>

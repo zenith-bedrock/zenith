@@ -72,6 +72,9 @@
     <EmbeddedResource Include="data\entity_rules.json">
       <LogicalName>entity_rules.json</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="data\effects.json">
+      <LogicalName>effects.json</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="data\recipes.json.gz">
       <LogicalName>recipes.json.gz</LogicalName>
     </EmbeddedResource>

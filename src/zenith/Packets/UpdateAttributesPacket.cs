@@ -31,14 +31,15 @@ sealed class UpdateAttributesPacket : DataPacket
     /// <summary>Spawn/update attributes using Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
     public static UpdateAttributesPacket CreateDefaults(
         ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f,
-        float saturation = 5f, float exhaustion = 0f) =>
+        float saturation = 5f, float exhaustion = 0f, float maxHealth = 20f, float absorption = 0f) =>
         new()
         {
             ActorRuntimeId = actorRuntimeId,
             Tick = 0,
             Attributes =
             [
-                Entry("minecraft:health", 0f, 20f, health),
+                Entry("minecraft:health", 0f, maxHealth, health),
+                Entry("minecraft:absorption", 0f, float.MaxValue, absorption),
                 Entry("minecraft:movement", 0f, float.MaxValue, 0.1f),
                 Entry("minecraft:player.hunger", 0f, 20f, hunger),
                 Entry("minecraft:player.saturation", 0f, 20f, saturation),

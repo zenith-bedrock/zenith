@@ -103,3 +103,17 @@ struct Knockback
     /// <summary>Multiplier the push fades by each tick, from the species' <c>KnockbackProfile</c>.</summary>
     public float DecayPerTick;
 }
+
+/// <summary>
+/// A mob's <see cref="Gameplay.Survival.Body"/>: its attributes and status effects, wrapped around the same <see cref="Gameplay.HealthState"/> the
+/// <see cref="HealthComponent"/> holds. Attached when something first needs it (an effect given to the mob), so a mob that never has one pays nothing.
+/// </summary>
+struct BodyComponent
+{
+    public Zenith.Gameplay.Survival.Body Body;
+}
+
+/// <summary>Marks a mob that wears something on its head (a helmet or a pumpkin): the sun does not set it alight.</summary>
+struct Headgear
+{
+}

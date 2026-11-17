@@ -97,6 +97,9 @@ class Player
     /// <summary>Active status effects and the pending effect command.</summary>
     public PlayerEffects Effects { get; }
 
+    /// <summary>Health, attributes and effects of this player as the rules see them (the effects above live here).</summary>
+    public Body Body { get; }
+
     /// <summary>What peers were last told about this player (held item, pose, flags).</summary>
     public PlayerReplicatedState Replicated { get; } = new();
 
@@ -269,7 +272,8 @@ class Player
         Windows = new PlayerWindows(() => IsDead);
         Intents = new PlayerIntents(() => IsDead, () => GameMode, Windows);
         Dig = new PlayerDig(() => IsDead);
-        Effects = new PlayerEffects(() => IsDead);
+        Body = new Body(_health);
+        Effects = new PlayerEffects(() => IsDead, Body);
     }
 
     /// <summary>GameLoop only. Does not reseed inventory (§52).</summary>

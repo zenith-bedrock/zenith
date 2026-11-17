@@ -1,0 +1,29 @@
+{
+  "note": "The status effects: BDS name and wire id, category, the attribute modifiers each level grants (amount is per level, operations as the pack: add, multiply_base, multiply_total), the absorption each level shields, and the periodic or instant rule. Effects the client simulates by itself (jump boost, nausea, blindness, night vision, invisibility, levitation, water breathing) need only their row. Dig speed (haste, mining fatigue), hunger and saturation are read by their own rules.",
+  "effects": [
+    { "name": "speed",           "id": 1,  "category": "beneficial", "modifiers": [ { "attribute": "minecraft:movement", "operation": "multiply_base", "amount": 0.2 } ] },
+    { "name": "slowness",        "id": 2,  "category": "harmful",    "modifiers": [ { "attribute": "minecraft:movement", "operation": "multiply_base", "amount": -0.15 } ] },
+    { "name": "haste",           "id": 3,  "category": "beneficial" },
+    { "name": "mining_fatigue",  "id": 4,  "category": "harmful" },
+    { "name": "strength",        "id": 5,  "category": "beneficial", "modifiers": [ { "attribute": "minecraft:attack_damage", "operation": "add", "amount": 3 } ] },
+    { "name": "instant_health",  "id": 6,  "category": "beneficial", "instant": { "kind": "heal", "amount": 4 } },
+    { "name": "instant_damage",  "id": 7,  "category": "harmful",    "instant": { "kind": "damage", "cause": "magic", "amount": 6 } },
+    { "name": "jump_boost",      "id": 8,  "category": "beneficial" },
+    { "name": "nausea",          "id": 9,  "category": "harmful" },
+    { "name": "regeneration",    "id": 10, "category": "beneficial", "periodic": { "kind": "heal", "amount": 1, "intervalTicks": 50 } },
+    { "name": "resistance",      "id": 11, "category": "beneficial" },
+    { "name": "fire_resistance", "id": 12, "category": "beneficial" },
+    { "name": "water_breathing", "id": 13, "category": "beneficial" },
+    { "name": "invisibility",    "id": 14, "category": "beneficial" },
+    { "name": "blindness",       "id": 15, "category": "harmful" },
+    { "name": "night_vision",    "id": 16, "category": "beneficial" },
+    { "name": "hunger",          "id": 17, "category": "harmful" },
+    { "name": "weakness",        "id": 18, "category": "harmful",    "modifiers": [ { "attribute": "minecraft:attack_damage", "operation": "add", "amount": -4 } ] },
+    { "name": "poison",          "id": 19, "category": "harmful",    "periodic": { "kind": "damage", "cause": "magic", "amount": 1, "intervalTicks": 25, "floor": 1 } },
+    { "name": "wither",          "id": 20, "category": "harmful",    "periodic": { "kind": "damage", "cause": "wither", "amount": 1, "intervalTicks": 40, "floor": 0 } },
+    { "name": "health_boost",    "id": 21, "category": "beneficial", "modifiers": [ { "attribute": "minecraft:health", "operation": "add", "amount": 4 } ] },
+    { "name": "absorption",      "id": 22, "category": "beneficial", "absorption": 4 },
+    { "name": "saturation",      "id": 23, "category": "beneficial" },
+    { "name": "levitation",      "id": 24, "category": "harmful" }
+  ]
+}

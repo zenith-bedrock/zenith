@@ -28,6 +28,12 @@ sealed class DamageDispatch
         Func<EntityId, DamageSource, float, IReadOnlyList<Player.Player>, ulong, bool> tryApplyDamage) =>
         _handlers.Add((owns, tryApplyDamage));
 
+    /// <summary>
+    /// What the target's effects do to a hit before its species sees it (Resistance, Fire Resistance); returns the amount left, 0 to refuse it.
+    /// Set once at composition, from the mob bodies.
+    /// </summary>
+    public Func<EntityId, DamageSource, float, float>? Mitigate { get; set; }
+
     public void Register(IDamageableSpecies species) => Register(species.Owns, species.TryApplyDamage);
 
     /// <summary>Dispatches to whichever registered system owns <paramref name="id"/>; false if none does.</summary>
@@ -35,7 +41,15 @@ sealed class DamageDispatch
     {
         foreach (var (owns, tryApplyDamage) in _handlers)
             if (owns(id))
+            {
+                if (Mitigate is not null)
+                {
+                    amount = Mitigate(id, source, amount);
+                    if (amount <= 0f) return false;
+                }
+
                 return tryApplyDamage(id, source, amount, online, currentTick);
+            }
         return false;
     }
 }

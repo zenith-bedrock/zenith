@@ -28,6 +28,8 @@ sealed class EntityRuntime
     public ComponentStore<DeathAnimation> Corpses { get; }
     public ComponentStore<MeleeCooldown> MeleeCooldowns { get; }
     public ComponentStore<Knockback> Knockbacks { get; }
+    public ComponentStore<BodyComponent> Bodies { get; }
+    public ComponentStore<Headgear> Headgear { get; }
 
     public EntityRuntime()
     {
@@ -39,6 +41,30 @@ sealed class EntityRuntime
         Corpses = new ComponentStore<DeathAnimation>(Entities);
         MeleeCooldowns = new ComponentStore<MeleeCooldown>(Entities);
         Knockbacks = new ComponentStore<Knockback>(Entities);
+        Bodies = new ComponentStore<BodyComponent>(Entities);
+        Headgear = new ComponentStore<Headgear>(Entities);
+    }
+
+    /// <summary>
+    /// The body (attributes and effects) of a mob with health, made the first time it is asked for. False for something with no health state.
+    /// </summary>
+    public bool TryGetBody(EntityId id, out Gameplay.Survival.Body body)
+    {
+        if (Bodies.TryGet(id, out var existing))
+        {
+            body = existing.Body;
+            return true;
+        }
+
+        if (!Health.TryGet(id, out var health))
+        {
+            body = null!;
+            return false;
+        }
+
+        body = new Gameplay.Survival.Body(health.State);
+        Bodies.Set(id, new BodyComponent { Body = body });
+        return true;
     }
 
     /// <summary>
@@ -117,6 +143,8 @@ sealed class EntityRuntime
         if (Corpses.Has(id)) parts.Add(nameof(DeathAnimation));
         if (MeleeCooldowns.Has(id)) parts.Add(nameof(MeleeCooldown));
         if (Knockbacks.Has(id)) parts.Add(nameof(Knockback));
+        if (Bodies.Has(id)) parts.Add(nameof(BodyComponent));
+        if (Headgear.Has(id)) parts.Add(nameof(Headgear));
         return $"{id} alive, components=[{string.Join(", ", parts)}]";
     }
 }

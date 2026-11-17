@@ -16,7 +16,26 @@ enum DamageCause
     Drown,
     Lava,
     Explosion,
-    Fire
+    Fire,
+    Wither,
+    Lightning,
+    Freezing,
+    Contact
+}
+
+/// <summary>What each cause is, as properties (Dragonfly's source flags): which mitigations apply to it.</summary>
+static class DamageCauseTraits
+{
+    /// <summary>Armor reduces it. Falls, the void, hunger, magic, drowning, wither and freezing go around armor.</summary>
+    public static bool ReducedByArmour(this DamageCause cause) =>
+        cause is not (DamageCause.Fall or DamageCause.Void or DamageCause.Starve or DamageCause.Magic or DamageCause.Drown
+            or DamageCause.Wither or DamageCause.Freezing);
+
+    /// <summary>The Resistance effect reduces it. The void and hunger ignore it.</summary>
+    public static bool ReducedByResistance(this DamageCause cause) => cause is not (DamageCause.Void or DamageCause.Starve);
+
+    /// <summary>Fire Resistance spares it.</summary>
+    public static bool IsFire(this DamageCause cause) => cause is DamageCause.Fire or DamageCause.Lava;
 }
 
 /// <summary>
@@ -34,6 +53,10 @@ readonly record struct DamageSource(DamageCause Cause, long? OwnerRuntimeId = nu
     public static DamageSource Drown => new(DamageCause.Drown);
     public static DamageSource Lava => new(DamageCause.Lava);
     public static DamageSource Fire => new(DamageCause.Fire);
+    public static DamageSource Wither => new(DamageCause.Wither);
+    public static DamageSource Lightning => new(DamageCause.Lightning);
+    public static DamageSource Freezing => new(DamageCause.Freezing);
+    public static DamageSource Contact => new(DamageCause.Contact);
     public static DamageSource Explosion => new(DamageCause.Explosion);
     public static DamageSource Melee => new(DamageCause.Melee);
     public static DamageSource MeleeFrom(long ownerRuntimeId) => new(DamageCause.Melee, ownerRuntimeId);
@@ -57,7 +80,8 @@ readonly record struct DamageResult(
     DamageResultKind Kind,
     DamageSource Source,
     float PreviousHealth,
-    float CurrentHealth)
+    float CurrentHealth,
+    float Absorbed = 0f)
 {
     public bool WasApplied => Kind is DamageResultKind.Applied or DamageResultKind.Died;
     public bool CausedDeath => Kind == DamageResultKind.Died;
@@ -74,6 +98,7 @@ sealed class HealthState
         if (!float.IsFinite(maximum) || maximum <= 0f)
             throw new ArgumentOutOfRangeException(nameof(maximum));
 
+        BaseMaximum = maximum;
         Maximum = maximum;
         Current = maximum;
     }
@@ -89,8 +114,13 @@ sealed class HealthState
     /// </summary>
     private const int InvulnerabilityTicks = 10;
 
-    public float Maximum { get; }
+    /// <summary>The maximum with no modifier (what the body is born with); <see cref="Maximum"/> is what the health attribute makes of it now.</summary>
+    public float BaseMaximum { get; }
+    public float Maximum { get; private set; }
     public float Current { get; private set; }
+
+    /// <summary>The shield that damage drains before health (the <c>minecraft:absorption</c> attribute).</summary>
+    public float Absorption { get; private set; }
     public bool IsDead { get; private set; }
     public DamageSource? FatalSource { get; private set; }
 
@@ -128,14 +158,25 @@ sealed class HealthState
         _lastDamageTaken = amount;
         _invulnerableUntilTick = currentTick + InvulnerabilityTicks;
 
-        Current = MathF.Max(0f, Current - appliedAmount);
+        var absorbed = MathF.Min(Absorption, appliedAmount);
+        Absorption -= absorbed;
+        Current = MathF.Max(0f, Current - (appliedAmount - absorbed));
         if (Current > 0f)
-            return new DamageResult(DamageResultKind.Applied, source, previous, Current);
+            return new DamageResult(DamageResultKind.Applied, source, previous, Current, absorbed);
 
         IsDead = true;
         FatalSource = source;
-        return new DamageResult(DamageResultKind.Died, source, previous, Current);
+        return new DamageResult(DamageResultKind.Died, source, previous, Current, absorbed);
     }
+
+    /// <summary>A new maximum (Health Boost and friends): never below 1, and health above it comes down to it.</summary>
+    public void SetMaximum(float maximum)
+    {
+        Maximum = MathF.Max(1f, maximum);
+        if (Current > Maximum) Current = Maximum;
+    }
+
+    public void SetAbsorption(float absorption) => Absorption = MathF.Max(0f, absorption);
 
     /// <summary>Well-fed regeneration (Phase XI.1). No-op once dead; never exceeds Maximum.</summary>
     public void Heal(float amount)
@@ -160,6 +201,7 @@ sealed class HealthState
     /// <summary>Respawn resets the health lifecycle after its owner completed the transition.</summary>
     public void RestoreFull()
     {
+        Absorption = 0f;
         Current = Maximum;
         IsDead = false;
         FatalSource = null;

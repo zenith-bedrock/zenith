@@ -58,32 +58,8 @@ sealed class CommandRuntime
 
         var effectGive = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["give"] = "give" };
         var effectClear = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["clear"] = "clear" };
-        var effectTypes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["speed"] = EffectType.Speed,
-            ["slowness"] = EffectType.Slowness,
-            ["haste"] = EffectType.Haste,
-            ["mining_fatigue"] = EffectType.MiningFatigue,
-            ["strength"] = EffectType.Strength,
-            ["instant_health"] = EffectType.InstantHealth,
-            ["instant_damage"] = EffectType.InstantDamage,
-            ["jump_boost"] = EffectType.JumpBoost,
-            ["nausea"] = EffectType.Nausea,
-            ["resistance"] = EffectType.Resistance,
-            ["fire_resistance"] = EffectType.FireResistance,
-            ["water_breathing"] = EffectType.WaterBreathing,
-            ["invisibility"] = EffectType.Invisibility,
-            ["blindness"] = EffectType.Blindness,
-            ["night_vision"] = EffectType.NightVision,
-            ["hunger"] = EffectType.Hunger,
-            ["weakness"] = EffectType.Weakness,
-            ["wither"] = EffectType.Wither,
-            ["saturation"] = EffectType.Saturation,
-            ["levitation"] = EffectType.Levitation,
-            ["poison"] = EffectType.Poison,
-            ["regeneration"] = EffectType.Regeneration,
-            ["regen"] = EffectType.Regeneration
-        };
+        var effectTypes = EffectTable.Default.Definitions.ToDictionary(d => d.Name, d => (object)d.Type, StringComparer.OrdinalIgnoreCase);
+        effectTypes["regen"] = EffectType.Regeneration;
         Bind(ExecuteEffect, new CommandDefinition("effect", "Apply or clear a timed player effect", [PermissionNodes.EffectSelf, PermissionNodes.EffectOthers],
             [
                 new CommandOverload(

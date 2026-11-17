@@ -51,7 +51,7 @@ sealed class MobHazardSystem(
             if (stores.Corpses.Has(id) || isAquatic(id)) continue;
             if (!stores.Positions.TryGet(id, out var pos)) continue;
 
-            var sunlit = isUndead is not null && clock.CurrentTick % SunCheckEvery == 0 && isUndead(id) && InSun(pos, clock.WorldTime);
+            var sunlit = isUndead is not null && clock.CurrentTick % SunCheckEvery == 0 && isUndead(id) && !stores.Headgear.Has(id) && InSun(pos, clock.WorldTime);
             Burn(id, pos, clock.CurrentTick, online, sunlit);
 
             if (FluidAt(pos, FeetOffset) == FluidType.Lava && clock.CurrentTick % LavaIntervalTicks == 0)

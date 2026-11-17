@@ -46,6 +46,8 @@ sealed class EntityModule : IGameplayModule
         damage.Register(villager);
         creeper.Explosion.Mobs = damage;
 
+        damage.Mitigate = (id, source, amount) => MobMitigation.Apply(entities, id, source, amount);
+
         // Pushes move actors before any species ticks, so a push is replicated by that species' move batch.
         s.Register(new KnockbackSystem(world, entities));
         s.Register(zombie);
@@ -61,6 +63,7 @@ sealed class EntityModule : IGameplayModule
         s.Register(golem);
         s.Register(fish);
         s.Register(new MobHazardSystem(world, entities, damage, fish.Owns, id => zombie.Owns(id) || skeleton.Owns(id)));
+        s.Register(new MobEffectSystem(entities, damage));
         s.Register(new DeathAnimationSystem(entities));
 
         var spawner = s.Spawner;

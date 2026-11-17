@@ -74,10 +74,10 @@ sealed partial class EntityProtocol
     /// <summary>Attributes from Player vitals (ADR §40) plus level/experience (Phase XI.4).</summary>
     public void SendDefaultAttributes(
         ulong actorRuntimeId, float health, float hunger, int experienceLevel = 0, float experienceProgress = 0f,
-        float saturation = 5f, float exhaustion = 0f)
+        float saturation = 5f, float exhaustion = 0f, float maxHealth = 20f, float absorption = 0f)
     {
         _session.SendDataPacket(UpdateAttributesPacket.CreateDefaults(
-            actorRuntimeId, health, hunger, experienceLevel, experienceProgress, saturation, exhaustion));
+            actorRuntimeId, health, hunger, experienceLevel, experienceProgress, saturation, exhaustion, maxHealth, absorption));
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ sealed partial class EntityProtocol
         SendDefaultAttributes(
             (ulong)player.RuntimeId, player.Health, player.Hunger,
             player.ExperienceLevel, PlayerExperience.Progress(player.ExperienceLevel, player.ExperiencePoints),
-            player.Saturation, Math.Clamp(player.Exhaustion, 0f, 5f));
+            player.Saturation, Math.Clamp(player.Exhaustion, 0f, 5f), player.MaxHealth, player.Body.Health.Absorption);
 
     /// <summary>Replicates only the current health of an already-spawned actor.</summary>
     public void SendHealth(ulong actorRuntimeId, float health, float maximum)

@@ -29,6 +29,8 @@ enum EffectType
     Weakness = 18,
     Poison = 19,
     Wither = 20,
+    HealthBoost = 21,
+    Absorption = 22,
     Saturation = 23,
     Levitation = 24
 }
