@@ -18,11 +18,22 @@ static class FloorDropPhysics
         return launch;
     }
 
-    public static FloorDropMotion Step(World.World world, FloorDropMotion body)
+    /// <summary>
+    /// One tick of an item body. With <paramref name="buoyant"/> (items; experience orbs just sink), a body in water is slowed and pushed up
+    /// to a gentle rise, so a drop floats to the surface and bobs there instead of sinking like a stone.
+    /// </summary>
+    public static FloorDropMotion Step(World.World world, FloorDropMotion body, bool buoyant = true)
     {
         var vx = body.VelocityX * .98f;
         var vy = body.VelocityY * .98f - .04f;
         var vz = body.VelocityZ * .98f;
+        if (buoyant && InWater(world, body))
+        {
+            vx = body.VelocityX * .9f;
+            vz = body.VelocityZ * .9f;
+            vy = MathF.Min(WaterRise, body.VelocityY * .9f + WaterLift);
+        }
+
         var dy = Clip(world, Box(body), vy, 1);
         var ground = vy < 0 && MathF.Abs(dy - vy) > .000001f;
         body = body with { Y = body.Y + dy };
@@ -39,6 +50,14 @@ static class FloorDropPhysics
         if (MathF.Abs(vz) < .001f) vz = 0;
         return body with { VelocityX = vx, VelocityY = vy, VelocityZ = vz, OnGround = ground };
     }
+
+    private const float WaterRise = .06f;
+    private const float WaterLift = .025f;
+
+    /// <summary>Whether the body's middle is in a water cell.</summary>
+    public static bool InWater(World.World world, FloorDropMotion body) =>
+        world.TryGetBlock((int)MathF.Floor(body.X), (int)MathF.Floor(body.Y + EntityHitboxes.ItemEntitySize / 2f), (int)MathF.Floor(body.Z), out var id) &&
+        Blocks.FluidOf(id) == FluidType.Water;
 
     private static Aabb Box(FloorDropMotion body) =>
         Aabb.FromCenterSize(body.X, body.Y, body.Z, EntityHitboxes.ItemEntitySize, EntityHitboxes.ItemEntitySize);

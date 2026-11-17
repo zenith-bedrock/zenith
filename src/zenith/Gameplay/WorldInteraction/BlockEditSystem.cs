@@ -288,6 +288,9 @@ sealed class BlockEditSystem : IGameSystem
             player.Level.Logger?.Debug($"Break → floor drop for {player.Username} @ {edit.X},{edit.Y},{edit.Z}");
         }
 
+        if (shouldDrop && BlockExperience.TryRoll(previous, _random, out var points))
+            Zenith.Gameplay.Entities.MobKillReward.Grant(player, points, online, _world, _players, _random, edit.X + .5f, edit.Y + .5f, edit.Z + .5f);
+
         PublishApplied(player, BlockEditKind.Break);
         return true;
     }

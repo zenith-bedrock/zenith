@@ -12,7 +12,7 @@ sealed class ExperienceOrbEntry
     public required long EntityId { get; init; }
 
     /// <summary>The experience points this orb gives, exactly once, to whoever collects it.</summary>
-    public required int Value { get; init; }
+    public required int Value { get; set; }
 
     public required FloorDropMotion Pose { get; set; }
 

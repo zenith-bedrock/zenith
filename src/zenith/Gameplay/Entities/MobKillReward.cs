@@ -29,7 +29,16 @@ static class MobKillReward
         foreach (var candidate in online)
             if (candidate.RuntimeId == ownerRuntimeId) { killer = candidate; break; }
         if (killer is null) return;
+        Grant(killer, amount, online, world, players, random, x, y, z);
+    }
 
+    /// <summary>Gives <paramref name="amount"/> points to <paramref name="recipient"/> as orbs at the spot (any source: a kill, a mined ore).</summary>
+    public static void Grant(
+        Player.Player recipient, int amount, IReadOnlyList<Player.Player> online, World.World world, PlayerManager players,
+        Random random, float x, float y, float z)
+    {
+        if (amount <= 0) return;
+        var killer = recipient;
         var credited = 0;
         foreach (var points in ExperienceOrbSizes.Split(amount))
         {

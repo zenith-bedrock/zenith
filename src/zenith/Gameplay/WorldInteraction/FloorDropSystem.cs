@@ -24,7 +24,6 @@ sealed class FloorDropSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        _ = clock;
         _world.FloorDrops.TickPickupDelays();
         _world.FloorDrops.CopyViews(_dropScratch);
         foreach (var drop in _dropScratch)
@@ -40,6 +39,8 @@ sealed class FloorDropSystem : IGameSystem
         }
 
         _despawnScratch.Clear();
+        if (clock.CurrentTick % HazardEvery == 0) DestroyInHazards(online);
+        if (clock.CurrentTick % MergeEvery == 0) MergePiles(online);
         _world.FloorDrops.TickDespawn(_despawnScratch);
         NotifyDespawns(_despawnScratch, online);
 
@@ -50,6 +51,64 @@ sealed class FloorDropSystem : IGameSystem
         foreach (var drop in _dropScratch)
             TryPickup(drop, online);
     }
+
+    /// <summary>How often drops are checked for lava, fire and the void (every few ticks is soon enough to be invisible).</summary>
+    private const int HazardEvery = 4;
+
+    /// <summary>How often settled piles of the same item are folded together.</summary>
+    private const int MergeEvery = 10;
+
+    /// <summary>Items past this far below the world are gone (vanilla despawns them in the void).</summary>
+    private const int VoidDepth = 16;
+
+    /// <summary>A pile that lands in lava or fire burns up; one that falls out of the world is lost.</summary>
+    private void DestroyInHazards(IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        _world.FloorDrops.CopyViews(_dropScratch);
+        foreach (var drop in _dropScratch)
+        {
+            var pose = drop.Pose;
+            var burned = _world.TryGetBlock((int)MathF.Floor(pose.X), (int)MathF.Floor(pose.Y + .1f), (int)MathF.Floor(pose.Z), out var block) &&
+                         (Blocks.FluidOf(block) == FluidType.Lava || Blocks.IsFire(block));
+            if (!burned && pose.Y >= Blocks.FlatMinY - VoidDepth) continue;
+            if (_world.FloorDrops.TryTake(drop.Key.X, drop.Key.Y, drop.Key.Z, out var id, out var count, out var entity))
+                _despawnScratch.Add((drop.Key.X, drop.Key.Y, drop.Key.Z, id, count, entity));
+        }
+    }
+
+    /// <summary>Two settled piles of the same item within a block of each other become one when they fit a stack.</summary>
+    private void MergePiles(IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        if (_world.FloorDrops.Count < 2) return;
+        _world.FloorDrops.CopyViews(_dropScratch);
+        var touched = new HashSet<(int X, int Y, int Z)>();
+        for (var i = 0; i < _dropScratch.Count; i++)
+        {
+            var a = _dropScratch[i];
+            if (!Settled(a) || touched.Contains(a.Key)) continue;
+            for (var j = i + 1; j < _dropScratch.Count; j++)
+            {
+                var b = _dropScratch[j];
+                if (!Settled(b) || touched.Contains(b.Key) || a.Id != b.Id) continue;
+                if (MathF.Abs(a.Pose.X - b.Pose.X) > MergeReach || MathF.Abs(a.Pose.Z - b.Pose.Z) > MergeReach || MathF.Abs(a.Pose.Y - b.Pose.Y) >= 1f) continue;
+
+                var (keep, gone) = a.Count >= b.Count ? (a, b) : (b, a);
+                if (!_world.FloorDrops.TryMergePiles(keep.Key, gone.Key, out var absorbed, out var survivor)) continue;
+                _ = touched.Add(keep.Key);
+                _ = touched.Add(gone.Key);
+                foreach (var peer in online)
+                    if (peer.IsInGame)
+                        peer.Client.Entity.SendRemoveActor(absorbed);
+                if (survivor is { } merged) FloorDropFanout.Publish(online, merged);
+                break;
+            }
+        }
+    }
+
+    private const float MergeReach = 1f;
+
+    private static bool Settled(FloorDropStore.DropView drop) =>
+        !drop.HasMotion || drop.Pose is { VelocityX: 0, VelocityY: 0, VelocityZ: 0 };
 
     private static void NotifyDespawns(
         List<(int X, int Y, int Z, StackId Id, int Count, long EntityRuntimeId)> despawned,

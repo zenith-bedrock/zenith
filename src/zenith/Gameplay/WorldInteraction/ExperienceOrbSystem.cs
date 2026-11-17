@@ -32,9 +32,9 @@ sealed class ExperienceOrbSystem : IGameSystem
 
     public void Tick(GameClock clock, IReadOnlyList<global::Zenith.Player.Player> online)
     {
-        _ = clock;
         var orbs = _world.ExperienceOrbs;
         if (orbs.Count == 0) return;
+        if (clock.CurrentTick % MergeEvery == 0) MergeSettled(online);
 
         _scratch.Clear();
         _scratch.AddRange(orbs.Active);
@@ -53,7 +53,7 @@ sealed class ExperienceOrbSystem : IGameSystem
             if (_world.TryGetLoadedColumn(PlayerChunkTracker.BlockToChunk(pose.X), PlayerChunkTracker.BlockToChunk(pose.Z), out _))
             {
                 if (target is not null) pose = Pull(pose, target);
-                pose = FloorDropPhysics.Step(_world, pose);
+                pose = FloorDropPhysics.Step(_world, pose, buoyant: false);
             }
 
             if (pose != orb.Pose)
@@ -68,6 +68,42 @@ sealed class ExperienceOrbSystem : IGameSystem
                 Collect(orb, target, online);
         }
     }
+
+    /// <summary>How often settled orbs are folded together.</summary>
+    public const int MergeEvery = 10;
+
+    /// <summary>Orbs resting this close (blocks) become one orb carrying both values.</summary>
+    public const float MergeReach = 0.5f;
+
+    /// <summary>
+    /// Hundreds of kills must not mean hundreds of entities: two orbs that have come to rest near each other become one holding
+    /// both values. The older orb stays (its look is unchanged on the clients) and the other is removed.
+    /// </summary>
+    private void MergeSettled(IReadOnlyList<global::Zenith.Player.Player> online)
+    {
+        _scratch.Clear();
+        _scratch.AddRange(_world.ExperienceOrbs.Active);
+        for (var i = 0; i < _scratch.Count; i++)
+        {
+            var keep = _scratch[i];
+            if (!IsResting(keep)) continue;
+            for (var j = i + 1; j < _scratch.Count; j++)
+            {
+                var other = _scratch[j];
+                if (!IsResting(other) || other.Value == 0) continue;
+                if (MathF.Abs(keep.Pose.X - other.Pose.X) > MergeReach || MathF.Abs(keep.Pose.Y - other.Pose.Y) > MergeReach ||
+                    MathF.Abs(keep.Pose.Z - other.Pose.Z) > MergeReach)
+                    continue;
+
+                keep.Value += other.Value;
+                other.Value = 0; // spent: this sweep must not merge it again
+                Remove(other, online);
+            }
+        }
+    }
+
+    private static bool IsResting(ExperienceOrbEntry orb) =>
+        orb.Value > 0 && orb.Pose is { VelocityX: 0, VelocityY: 0, VelocityZ: 0 };
 
     /// <summary>The player this orb follows: the current one while still valid, else (looking once a second) the nearest valid one.</summary>
     private static global::Zenith.Player.Player? FindTarget(ExperienceOrbEntry orb, IReadOnlyList<global::Zenith.Player.Player> online)

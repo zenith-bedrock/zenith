@@ -162,6 +162,26 @@ sealed class FloorDropStore
         return true;
     }
 
+    /// <summary>
+    /// Folds the pile at <paramref name="from"/> into the pile at <paramref name="into"/> (same item, the sum fits one stack): the
+    /// absorbed cell is gone and the survivor keeps its own age, taking the longer pickup delay. Returns the absorbed entity id
+    /// (the caller removes it from the clients) and the survivor's new state (the caller republishes it).
+    /// </summary>
+    public bool TryMergePiles((int X, int Y, int Z) into, (int X, int Y, int Z) from, out long absorbedEntityRuntimeId, out DepositResult? survivor)
+    {
+        absorbedEntityRuntimeId = 0;
+        survivor = null;
+        if (into == from || !_drops.TryGetValue(into, out var keep) || !_drops.TryGetValue(from, out var gone)) return false;
+        if (keep.Id != gone.Id || keep.Count + gone.Count > ItemStackLimits.For(keep.Id)) return false;
+
+        _drops.Remove(from);
+        var merged = keep.Count + gone.Count;
+        _drops[into] = keep with { Count = merged, PickupDelayTicks = Math.Max(keep.PickupDelayTicks, gone.PickupDelayTicks) };
+        absorbedEntityRuntimeId = gone.EntityRuntimeId;
+        survivor = new DepositResult(into.X, into.Y, into.Z, keep.Id, merged, keep.EntityRuntimeId, Created: false, CountChanged: true, keep.Motion);
+        return true;
+    }
+
     /// <summary>Decrement pickup delays by <paramref name="tickDiff"/> (call once per GameLoop tick).</summary>
     public void TickPickupDelays(int tickDiff = 1)
     {
