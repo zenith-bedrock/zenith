@@ -11,8 +11,11 @@ enum SpawnTime { Any, Day, Night }
 sealed record SpawnCategory(string Name, int CapPerPlayer, int IntervalTicks);
 
 /// <summary>One candidate of natural spawning: what, where (biomes), when, how many at once, and its relative weight.</summary>
-sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, SpawnTime Time, IReadOnlySet<OverworldBiomeKind> Biomes)
+sealed record SpawnEntry(string Mob, SpawnCategory Category, int Weight, int GroupMin, int GroupMax, SpawnTime Time, IReadOnlySet<OverworldBiomeKind> Biomes, string? OnBlock = null)
 {
+    /// <summary>A cow needs grass under its feet; an entry with no <see cref="OnBlock"/> stands on anything that holds a ground mob.</summary>
+    public bool StandsOn(string? groundBlock) => OnBlock is null || OnBlock == groundBlock;
+
     public bool AppliesTo(OverworldBiomeKind biome, int worldTime) =>
         Biomes.Contains(biome) && Time switch
         {
@@ -96,7 +99,8 @@ sealed class SpawnTable
             }
 
             if (biomes.Count == 0) throw Invalid($"'{mob}' lists no biomes");
-            entries.Add(new SpawnEntry(mob, category, weight, min, max, time, biomes));
+            var onBlock = e.TryGetProperty("onBlock", out var ob) ? ob.GetString() : null;
+            entries.Add(new SpawnEntry(mob, category, weight, min, max, time, biomes, onBlock));
         }
 
         return new SpawnTable(categories, entries);

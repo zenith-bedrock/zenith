@@ -177,7 +177,9 @@ public sealed class FishSystemTests
         var damage = new DamageDispatch();
         damage.Register(fish.Owns, fish.TryApplyDamage);
         var projectiles = new ProjectileSystem(fx.World, fx.Players, stores, damage, new PlayerSpatialIndex());
-        var id = fish.SpawnFish(10f, 100f, 0f); // 3 HP; a projectile hit outright kills a fish, unlike the tougher cow/spider.
+        var id = fish.SpawnFish(10f, 100f, 0f);
+        fish.TryApplyDamage(id, DamageSource.Generic, 5f, fx.Players.Online, fx.Clock.CurrentTick); // one HP left: any arrow (1 to 4) kills
+        fx.Clock.AdvanceBy(11);
 
         projectiles.TrySpawnFromActor(owner.RuntimeId, 9.7f, 100f, 0f, 0.05f, 0f, 0f, fx.Players.Online);
         projectiles.Tick(fx.Clock, fx.Players.Online);

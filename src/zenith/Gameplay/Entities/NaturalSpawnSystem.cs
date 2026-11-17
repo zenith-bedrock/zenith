@@ -51,9 +51,10 @@ sealed class NaturalSpawnSystem(World.World world, MobSpawner spawner, SpawnTabl
         if (!TryFindSurface(player, players, out var x, out var y, out var z)) return 0;
         var biome = world.SampleBiome((int)MathF.Floor(x), (int)MathF.Floor(z));
 
+        var ground = Blocks.Catalog.States.FamilyOf(world.GetBlock((int)MathF.Floor(x), (int)MathF.Floor(y) - 1, (int)MathF.Floor(z)))?.Name;
         _eligible.Clear();
         foreach (var entry in table.In(category))
-            if (entry.AppliesTo(biome, worldTime) && spawner.IsRegistered(entry.Mob))
+            if (entry.AppliesTo(biome, worldTime) && entry.StandsOn(ground) && spawner.IsRegistered(entry.Mob))
                 _eligible.Add(entry);
         if (_eligible.Count == 0) return 0;
 

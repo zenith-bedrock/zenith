@@ -79,6 +79,21 @@ public sealed class NaturalSpawnTests
         Assert.All(table.Entries, e => Assert.Contains(e.Mob, known));
     }
 
+    [Fact]
+    public void The_shipped_weights_and_groups_are_the_packs_and_a_cow_needs_grass_in_daylight()
+    {
+        SpawnEntry Entry(string mob) => SpawnTable.Default.Entries.Single(e => e.Mob == mob);
+        Assert.Equal((100, 2, 4), (Entry("zombie").Weight, Entry("zombie").GroupMin, Entry("zombie").GroupMax));
+        Assert.Equal((80, 1, 2), (Entry("skeleton").Weight, Entry("skeleton").GroupMin, Entry("skeleton").GroupMax));
+        Assert.Equal((1, 1), (Entry("spider").GroupMin, Entry("spider").GroupMax));
+        Assert.Equal((1, 2), (Entry("enderman").GroupMin, Entry("enderman").GroupMax));
+        Assert.Equal((2, 3), (Entry("cow").GroupMin, Entry("cow").GroupMax));
+        Assert.Equal(SpawnTime.Day, Entry("cow").Time);
+        Assert.True(Entry("cow").StandsOn("minecraft:grass_block"));
+        Assert.False(Entry("cow").StandsOn("minecraft:sand"));
+        Assert.True(Entry("zombie").StandsOn("minecraft:sand")); // only the cow is picky about its ground
+    }
+
     [Theory]
     [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"nope","weight":1,"group":[1,1],"time":"any","biomes":["Plains"]}]}""", "unknown category")]
     [InlineData("""{"categories":[{"name":"m","capPerPlayer":1,"intervalTicks":1}],"spawns":[{"mob":"z","category":"m","weight":0,"group":[1,1],"time":"any","biomes":["Plains"]}]}""", "weight")]

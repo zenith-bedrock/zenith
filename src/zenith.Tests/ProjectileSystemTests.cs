@@ -42,7 +42,7 @@ public sealed class ProjectileSystemTests
         owner.Yaw = -90f;
         var system = CreateSystem(fx, out var zombies, out _, out var spatial);
         var zombieId = zombies.SpawnZombie(1f, owner.PositionY, owner.PositionZ);
-        zombies.TryApplyDamage(zombieId, DamageSource.Generic, 14f, fx.Players.Online, fx.Clock.CurrentTick);
+        zombies.TryApplyDamage(zombieId, DamageSource.Generic, 19f, fx.Players.Online, fx.Clock.CurrentTick);
         fx.Clock.AdvanceBy(11); // past the hit-invulnerability window — the arrow is a distinct, later hit.
 
         owner.Intents.SubmitProjectileIntent();
@@ -56,6 +56,25 @@ public sealed class ProjectileSystemTests
     }
 
     [Fact]
+    public void Arrow_damage_spans_the_packs_one_to_four_and_nothing_else()
+    {
+        var seen = new HashSet<float>();
+        for (var seed = 0; seed < 40; seed++)
+        {
+            var fx = new IntentTestFixture();
+            var target = fx.AddInGamePlayer("target");
+            var stores = new EntityRuntime();
+            var spatial = new PlayerSpatialIndex();
+            var system = new ProjectileSystem(fx.World, fx.Players, stores, new DamageDispatch(), spatial, new Random(seed));
+            system.TrySpawnFromActor(999, 0.4f, target.PositionY + 1f, target.PositionZ, -0.1f, 0f, 0f, fx.Players.Online);
+            Tick(system, spatial, fx);
+            seen.Add(20f - target.Health);
+        }
+
+        Assert.Equal([1f, 2f, 3f, 4f], seen.Order().ToArray());
+    }
+
+    [Fact]
     public void ActorProjectileImpactDamagesAnotherPlayerAndRemovesOnce()
     {
         var fx = new IntentTestFixture();
@@ -66,7 +85,7 @@ public sealed class ProjectileSystemTests
         Tick(system, spatial, fx);
 
         Assert.Empty(system.Projectiles);
-        Assert.Equal(14f, target.Health);
+        Assert.InRange(target.Health, 16f, 19f); // the arrow hurts for 1 to 4
     }
 
     /// <summary>Phase XXVIII characterization — the chunk-based candidate index must still find a hit whose actor sits in the neighboring chunk, not only the chunk containing the projectile's own position.</summary>
@@ -378,8 +397,10 @@ public sealed class ProjectileSystemTests
         var fx = new IntentTestFixture();
         var owner = fx.AddInGamePlayer("hunter");
         var system = CreateSystemWithFullRoster(fx, out _, out var minecarts, out _, out _);
-        var minecartId = minecarts.SpawnMinecart(10f, 100f, 0f); // 6 HP; a projectile hit outright kills it, unlike the tougher cow/spider.
+        var minecartId = minecarts.SpawnMinecart(10f, 100f, 0f);
         Assert.True(minecarts.Stores.Entities.IsAlive(minecartId));
+        minecarts.TryApplyDamage(minecartId, DamageSource.Generic, 5f, fx.Players.Online, fx.Clock.CurrentTick); // one HP left: any arrow (1 to 4) kills
+        fx.Clock.AdvanceBy(11);
 
         SpawnRaw(system, fx, owner.RuntimeId, 9.7f, 100f, 0f, 0.05f, 0f, 0f);
         system.Tick(fx.Clock, fx.Players.Online);

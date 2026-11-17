@@ -48,7 +48,9 @@ sealed class ProjectileSystem : IGameSystem
     /// </summary>
     internal const float GravityPerTick = 0.05f;
     private const float HitRadius = 0.55f;
-    private const float Damage = 6f;
+    /// <summary>The arrow in the BDS pack hurts for 1 to 4, rolled per hit (plan 004 item 18).</summary>
+    internal const int MinDamage = 1;
+    internal const int MaxDamage = 4;
     private const int MaximumLifetimeTicks = 80;
 
     private readonly World.World _world;
@@ -56,6 +58,7 @@ sealed class ProjectileSystem : IGameSystem
     private readonly EntityRuntime _stores;
     private readonly ComponentStore<ProjectileState> _projectiles;
     private readonly DamageDispatch _damage;
+    private readonly Random _random;
     private readonly PlayerSpatialIndex _playerSpatial;
     // Phase XXVIII — ECS damageable-actor candidates only (Health+Position), owned and rebuilt
     // once per Tick from the same Query.With(Health, Positions) this system already drove. Not
@@ -66,8 +69,9 @@ sealed class ProjectileSystem : IGameSystem
     private readonly ActorReplication _replication;
     private readonly List<EntityId> _tickScratch = []; // Reused per tick — see ZombieSystem's identical field for why.
 
-    public ProjectileSystem(World.World world, PlayerManager players, EntityRuntime stores, DamageDispatch damage, PlayerSpatialIndex playerSpatial)
+    public ProjectileSystem(World.World world, PlayerManager players, EntityRuntime stores, DamageDispatch damage, PlayerSpatialIndex playerSpatial, Random? random = null)
     {
+        _random = random ?? new Random();
         _world = world;
         _players = players;
         _stores = stores;
@@ -161,7 +165,7 @@ sealed class ProjectileSystem : IGameSystem
         var hitActor = FindHitDamageableActor(nextX, nextY, nextZ, state.OwnerRuntimeId);
         if (hitActor is { } actorId)
         {
-            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), Damage, online, currentTick);
+            TryDamageActor(actorId, DamageSource.Projectile(state.OwnerRuntimeId), _random.Next(MinDamage, MaxDamage + 1), online, currentTick);
             Remove(id, online);
             return;
         }
@@ -172,7 +176,7 @@ sealed class ProjectileSystem : IGameSystem
             // Knockback direction follows the arrow's own flight, not the shooter's position —
             // matches vanilla (an arrow that curved under gravity still knocks the target the way
             // it was actually travelling at impact).
-            PlayerDamage.ApplyCore(player, _players, DamageSource.Projectile(state.OwnerRuntimeId), Damage, currentTick, vel.X, vel.Z).Conclude(online);
+            PlayerDamage.ApplyCore(player, _players, DamageSource.Projectile(state.OwnerRuntimeId), _random.Next(MinDamage, MaxDamage + 1), currentTick, vel.X, vel.Z).Conclude(online);
             Remove(id, online);
             return;
         }
