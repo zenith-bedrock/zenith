@@ -47,6 +47,14 @@ sealed class EffectSystem : IGameSystem
         var entity = player.Client.Entity;
         var rid = (ulong)player.RuntimeId;
 
+        if (intent.RemoveOne)
+        {
+            if (!player.Effects.RemoveEffect(intent.Type)) return;
+            entity.SendMobEffect(rid, EffectChange.Remove, (int)intent.Type, 0, false, 0);
+            ShowBody(player);
+            return;
+        }
+
         if (intent.ClearAll)
         {
             var removed = player.Effects.Active.Keys.ToArray();

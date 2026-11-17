@@ -40,6 +40,10 @@ sealed class TargetSelector
     public IReadOnlyList<(GameMode Mode, bool Negated)> Modes { get; private init; } = [];
     public float? MaxDistance { get; private init; }
     public float? MinDistance { get; private init; }
+    /// <summary>Whether x, y, z are offsets from where the command was run (<c>x=~5</c>) and not absolute.</summary>
+    public bool RelativeX { get; private init; }
+    public bool RelativeY { get; private init; }
+    public bool RelativeZ { get; private init; }
     public float? X { get; private init; }
     public float? Y { get; private init; }
     public float? Z { get; private init; }
@@ -95,6 +99,7 @@ sealed class TargetSelector
         var modes = new List<(GameMode, bool)>();
         float? r = null, rm = null, x = null, y = null, z = null, dx = null, dy = null, dz = null;
         int? count = null, l = null, lm = null;
+        bool relX = false, relY = false, relZ = false;
         foreach (var (key, raw) in arguments)
         {
             var negated = raw.StartsWith('!');
@@ -116,9 +121,9 @@ sealed class TargetSelector
                     break;
                 case "r": if (!TryNumber(value, out var rv) || rv < 0) { error = "r must be a number of 0 or more."; return false; } r = rv; break;
                 case "rm": if (!TryNumber(value, out var rmv) || rmv < 0) { error = "rm must be a number of 0 or more."; return false; } rm = rmv; break;
-                case "x": if (!TryNumber(value, out var xv)) { error = "x must be a number."; return false; } x = xv; break;
-                case "y": if (!TryNumber(value, out var yv)) { error = "y must be a number."; return false; } y = yv; break;
-                case "z": if (!TryNumber(value, out var zv)) { error = "z must be a number."; return false; } z = zv; break;
+                case "x": if (!TryCoordinate(value, out var xv, out relX)) { error = "x must be a number or ~offset."; return false; } x = xv; break;
+                case "y": if (!TryCoordinate(value, out var yv, out relY)) { error = "y must be a number or ~offset."; return false; } y = yv; break;
+                case "z": if (!TryCoordinate(value, out var zv, out relZ)) { error = "z must be a number or ~offset."; return false; } z = zv; break;
                 case "dx": if (!TryNumber(value, out var dxv)) { error = "dx must be a number."; return false; } dx = dxv; break;
                 case "dy": if (!TryNumber(value, out var dyv)) { error = "dy must be a number."; return false; } dy = dyv; break;
                 case "dz": if (!TryNumber(value, out var dzv)) { error = "dz must be a number."; return false; } dz = dzv; break;
@@ -142,7 +147,7 @@ sealed class TargetSelector
         {
             Kind = kind.Value, Text = token, Types = types, Names = names, Modes = modes,
             MaxDistance = r, MinDistance = rm, X = x, Y = y, Z = z, Dx = dx, Dy = dy, Dz = dz,
-            Count = count, MaxLevel = l, MinLevel = lm
+            Count = count, MaxLevel = l, MinLevel = lm, RelativeX = relX, RelativeY = relY, RelativeZ = relZ
         };
         return true;
     }
@@ -167,6 +172,15 @@ sealed class TargetSelector
 
     private static string Unquote(string value) =>
         value.Length >= 2 && value[0] == '"' && value[^1] == '"' ? value[1..^1] : value;
+
+    /// <summary>A number, <c>~</c> (here) or <c>~offset</c>.</summary>
+    private static bool TryCoordinate(string text, out float value, out bool relative)
+    {
+        relative = text.StartsWith('~');
+        if (!relative) return TryNumber(text, out value);
+        value = 0f;
+        return text.Length == 1 || TryNumber(text[1..], out value);
+    }
 
     private static bool TryNumber(string text, out float value) =>
         float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);

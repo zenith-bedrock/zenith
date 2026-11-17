@@ -127,6 +127,13 @@ sealed class EntityCommandSystem(
                     player.Effects.SubmitEffect(EffectIntent.Give(action.Effect, action.Amplifier, action.DurationTicks, issued));
                     return true;
                 case EntityActionKind.ClearEffects:
+                    if (action.OnlyThisEffect)
+                    {
+                        if (!player.Effects.Active.ContainsKey(action.Effect)) return false;
+                        player.Effects.SubmitEffect(EffectIntent.RemoveBy(action.Effect, issued));
+                        return true;
+                    }
+
                     if (player.Effects.Active.Count == 0) return false;
                     player.Effects.SubmitEffect(EffectIntent.ClearBy(issued));
                     return true;
@@ -143,7 +150,7 @@ sealed class EntityCommandSystem(
         return action.Kind switch
         {
             EntityActionKind.GiveEffect => mobEffects.Give(id, action.Effect, action.Amplifier, action.DurationTicks, clock, online),
-            EntityActionKind.ClearEffects => mobEffects.Clear(id, online),
+            EntityActionKind.ClearEffects => action.OnlyThisEffect ? mobEffects.Remove(id, action.Effect, online) : mobEffects.Clear(id, online),
             EntityActionKind.Kill => damage.TryApplyDamage(id, DamageSource.Void, KillDamage, online, clock.CurrentTick),
             _ => false // a mob has no game mode
         };
@@ -152,7 +159,7 @@ sealed class EntityCommandSystem(
     private static string Describe(EntityAction action) => action.Kind switch
     {
         EntityActionKind.GiveEffect => $"{action.Effect} given",
-        EntityActionKind.ClearEffects => "Effects cleared",
+        EntityActionKind.ClearEffects => action.OnlyThisEffect ? $"{action.Effect} cleared" : "Effects cleared",
         EntityActionKind.Kill => "Killed",
         _ => $"Game mode {action.Mode}"
     };

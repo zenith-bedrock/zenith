@@ -122,6 +122,18 @@ public sealed class SelectorTests
     }
 
     [Fact]
+    public void A_tilde_offsets_the_origin_from_where_the_command_ran()
+    {
+        // Zombies at x=3 and x=12; from the origin 10, "~2" is 12 and "~" is 10.
+        var at = Origin with { X = 10 };
+        Assert.Equal(["zombie"], Names("@e[type=zombie,x=~2,r=1]", at));
+        Assert.Empty(Names("@e[type=zombie,x=~,r=1]", at));
+        Assert.Equal(["zombie"], Names("@e[type=zombie,x=~-7,r=1]", at)); // 10 - 7 = 3
+        Assert.Equal(["zombie"], Names("@e[type=zombie,x=2,r=1]", at));   // absolute: unaffected by the origin
+        Assert.False(TargetSelector.TryParse("@e[x=~abc]", out _, out _));
+    }
+
+    [Fact]
     public void Game_mode_and_level_apply_to_players_only()
     {
         Assert.Equal(["alex"], Names("@e[m=creative]"));
@@ -232,6 +244,23 @@ public sealed class SelectorTests
         rig.Run("/effect @e[type=zombie] clear");
 
         Assert.Empty(body.Effects.Active);
+    }
+
+    [Fact]
+    public async Task Clearing_one_named_effect_leaves_the_others()
+    {
+        var rig = await Build();
+        rig.Run("/effect @e[type=zombie] poison 30");
+        rig.Run("/effect @e[type=zombie] weakness 30");
+        rig.Stores.TryGetBody(rig.Zombie, out var body);
+        Assert.Equal(2, body.Effects.Active.Count);
+
+        rig.Run("/effect @e[type=zombie] clear poison");
+
+        Assert.Equal(EffectType.Weakness, Assert.Single(body.Effects.Active).Key);
+
+        rig.Run("/effect @s clear poison"); // the caller has no poison: nothing is queued
+        Assert.False(rig.Op.Effects.TryConsumeEffectIntent(out _));
     }
 
     [Fact]

@@ -42,8 +42,11 @@ readonly record struct ActiveEffect(EffectType Type, int Amplifier, ulong Expire
 }
 
 /// <summary>Network-to-gameplay handoff for one effect command — apply/refresh or clear-all.</summary>
-readonly record struct EffectIntent(bool ClearAll, EffectType Type, int Amplifier, int DurationTicks, Authorization? Issuer = null)
+readonly record struct EffectIntent(bool ClearAll, EffectType Type, int Amplifier, int DurationTicks, Authorization? Issuer = null, bool RemoveOne = false)
 {
+    /// <summary>Take just <paramref name="type"/> off the player (the other effects stay).</summary>
+    public static EffectIntent RemoveBy(EffectType type, Authorization? issuer) => new(false, type, 0, 0, issuer, true);
+
     public static EffectIntent Give(EffectType type, int amplifier, int durationTicks, Authorization? issuer = null) =>
         new(false, type, amplifier, durationTicks, issuer);
 

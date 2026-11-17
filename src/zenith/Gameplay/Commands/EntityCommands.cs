@@ -9,7 +9,7 @@ enum EntityActionKind { GiveEffect, ClearEffects, Kill, GameMode }
 
 /// <summary>What a command does to every entity its selector picks. Values only, so it can cross from the session thread to the loop.</summary>
 readonly record struct EntityAction(
-    EntityActionKind Kind, EffectType Effect = default, int Amplifier = 0, int DurationTicks = 0, GameMode Mode = default)
+    EntityActionKind Kind, EffectType Effect = default, int Amplifier = 0, int DurationTicks = 0, GameMode Mode = default, bool OnlyThisEffect = false)
 {
     public string Title => Kind switch
     {

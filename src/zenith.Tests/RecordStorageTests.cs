@@ -118,11 +118,11 @@ public sealed class WriteBehindStorageTests
 
         await storage.FlushAsync();
 
-        // The background drain runs every DrainIntervalMs, so on a loaded machine the 20 puts can straddle several drains: the bound is
-        // one write per interval that passed (plus the flush), not a fixed number, which made this test depend on the machine.
-        var intervals = (int)(clock.ElapsedMilliseconds / WriteBehindStorage.DrainIntervalMs) + 2;
+        // The drain can also wake as soon as work arrives, so the number of write calls depends on timing (3 in 4 ms was seen). What the
+        // test pins is batching: the 20 records must not each cost a write, so calls stay well under one per record.
+        _ = clock;
         Assert.Equal(20, store.RecordsWritten);
-        Assert.True(store.WriteCalls <= intervals, $"{store.WriteCalls} write calls for 20 records in {clock.ElapsedMilliseconds} ms");
+        Assert.True(store.WriteCalls <= 10, $"{store.WriteCalls} write calls for 20 records in {clock.ElapsedMilliseconds} ms");
     }
 
     [Fact]

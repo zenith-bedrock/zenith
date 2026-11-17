@@ -82,7 +82,8 @@ sealed class CommandRuntime
                     new IntegerCommandArgument("amplifier", 0, 3, Optional: true)),
                 new CommandOverload(
                     new SelectorCommandArgument("target"),
-                    new EnumCommandArgument("clear", effectClear))
+                    new EnumCommandArgument("clear", effectClear),
+                    new EnumCommandArgument("which", effectTypes, Optional: true))
             ], []));
 
         if (rules is not null)
@@ -310,7 +311,9 @@ sealed class CommandRuntime
         {
             var selector = (TargetSelector)invocation.Arguments["target"];
             if (invocation.Arguments.ContainsKey("clear"))
-                return QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.ClearEffects));
+                return invocation.Arguments.TryGetValue("which", out var which)
+                    ? QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.ClearEffects, (EffectType)which, OnlyThisEffect: true))
+                    : QueueTargeted(invocation, selector, new EntityAction(EntityActionKind.ClearEffects));
             var seconds = invocation.Arguments.TryGetValue("seconds", out var secondsValue) ? (int)secondsValue : 30;
             var strength = invocation.Arguments.TryGetValue("amplifier", out var strengthValue) ? (int)strengthValue : 0;
             return QueueTargeted(invocation, selector,

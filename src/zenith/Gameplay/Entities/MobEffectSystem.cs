@@ -48,6 +48,14 @@ sealed class MobEffectSystem(EntityRuntime stores, DamageDispatch damage) : IGam
         return true;
     }
 
+    /// <summary>Takes one effect off a mob now. False when it does not have it.</summary>
+    public bool Remove(EntityId id, EffectType type, IReadOnlyList<Player.Player> online)
+    {
+        if (!stores.Bodies.TryGet(id, out var component) || !component.Body.Remove(type)) return false;
+        Tell(id, EffectChange.Remove, type, 0, 0, online);
+        return true;
+    }
+
     /// <summary>Takes every effect off a mob now. False when it has none (or no health).</summary>
     public bool Clear(EntityId id, IReadOnlyList<Player.Player> online)
     {

@@ -34,9 +34,9 @@ static class SelectorResolver
             _ => candidates
         };
 
-        var ox = selector.X ?? origin.X;
-        var oy = selector.Y ?? origin.Y;
-        var oz = selector.Z ?? origin.Z;
+        var ox = selector.X is { } x ? (selector.RelativeX ? origin.X + x : x) : origin.X;
+        var oy = selector.Y is { } y ? (selector.RelativeY ? origin.Y + y : y) : origin.Y;
+        var oz = selector.Z is { } z ? (selector.RelativeZ ? origin.Z + z : z) : origin.Z;
         var matched = pool.Where(c => Matches(selector, c, ox, oy, oz)).ToList();
 
         // Nearest first for @p and @e (and anything with a count); @r shuffles; the rest keep their order.
