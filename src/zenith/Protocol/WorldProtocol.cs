@@ -279,6 +279,15 @@ sealed class WorldProtocol : Zenith.Gameplay.Ports.IWorldChannel
             x, y, z);
     }
 
+    /// <summary>The weather as Bedrock takes it: rain and thunder are each started or stopped by their own LevelEvent.</summary>
+    public void SendWeather(bool raining, bool thundering)
+    {
+        if (raining) SendLevelEvent(LevelEventPacket.EventStartRain, 0, 0, 0, LevelEventPacket.WeatherIntensity);
+        else SendLevelEvent(LevelEventPacket.EventStopRain, 0, 0, 0);
+        if (thundering) SendLevelEvent(LevelEventPacket.EventStartThunder, 0, 0, 0, LevelEventPacket.WeatherIntensity);
+        else SendLevelEvent(LevelEventPacket.EventStopThunder, 0, 0, 0);
+    }
+
     public void SendLevelEvent(int eventType, float x, float y, float z, int eventData = 0)
     {
         _session.SendDataPacket(new LevelEventPacket

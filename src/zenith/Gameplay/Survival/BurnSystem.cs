@@ -16,7 +16,7 @@ sealed class BurnSystem(PlayerManager players, World.World world) : IGameSystem
                 player.BurnTicks = 0;
             else
             {
-                var contact = Burning.ContactAt(world, player.PositionX, player.PositionY, player.PositionZ);
+                var contact = Burning.ContactAt(world, player.PositionX, player.PositionY, player.PositionZ, alight: before > 0);
                 player.BurnTicks = Burning.Step(before, contact, clock.CurrentTick, out var hurt);
                 if (hurt) PlayerDamage.ApplyCore(player, players, DamageSource.Fire, Burning.Damage, clock.CurrentTick).Conclude(online);
             }

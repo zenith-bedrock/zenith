@@ -79,7 +79,7 @@ sealed class MobHazardSystem(
     private void Burn(EntityId id, Position pos, ulong tick, IReadOnlyList<Player.Player> online, bool sunlit = false)
     {
         var before = _burn.GetValueOrDefault(id);
-        var contact = Burning.ContactAt(world, pos.X, pos.Y, pos.Z);
+        var contact = Burning.ContactAt(world, pos.X, pos.Y, pos.Z, alight: before > 0);
         if (contact == 0 && sunlit) contact = Burning.FireIgniteTicks;
         if (before == 0 && contact <= 0) return;
 
@@ -96,7 +96,7 @@ sealed class MobHazardSystem(
 
     /// <summary>Daylight and nothing but clear air overhead: the cell the mob stands in sees the sun.</summary>
     private bool InSun(Position pos, int worldTime) =>
-        LightModel.SkyDarkness(worldTime) <= SunBurnMaxDarkness &&
+        !world.Weather.Raining && LightModel.SkyDarkness(worldTime) <= SunBurnMaxDarkness &&
         LightModel.SeesSky(world, (int)MathF.Floor(pos.X), (int)MathF.Floor(pos.Y + .5f), (int)MathF.Floor(pos.Z));
 
     /// <summary>Ticks of burning left on a mob (0 when it is not alight).</summary>

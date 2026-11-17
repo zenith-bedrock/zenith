@@ -133,6 +133,7 @@ class ZenithServer
             startupCleanup.Push(() => world.StopGenerationAsync().AsTask().GetAwaiter().GetResult());
             world.LoadGameRules();
             world.LoadDifficulty();
+            world.LoadWeather();
             var eventBus = new EventBus(serverLogger);
             var permissions = PermissionsComposition.Create(config);
             var gate = new AuthorityGate(permissions, players);

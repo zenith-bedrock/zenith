@@ -16,6 +16,7 @@ sealed class CommandRuntime
     private readonly DiagnosticsInvestigation? _diagnostics;
     private readonly GameRules? _rules;
     private readonly DifficultySetting? _difficulty;
+    private readonly World.WeatherState? _weather;
     private readonly MobSpawner? _spawner;
     private readonly PermissionAuthority _authority;
     private readonly CommandCatalog _catalog = new();
@@ -28,8 +29,9 @@ sealed class CommandRuntime
     public CommandRuntime(
         PlayerManager players, PermissionAuthority authority, DiagnosticsInvestigation? diagnostics = null,
         GameRules? rules = null, MobSpawner? spawner = null, IEnumerable<CommandBinding>? contributions = null,
-        DifficultySetting? difficulty = null)
+        DifficultySetting? difficulty = null, World.WeatherState? weather = null)
     {
+        _weather = weather;
         _difficulty = difficulty;
         _authority = authority;
         _spawner = spawner;
@@ -90,6 +92,16 @@ sealed class CommandRuntime
             };
             Bind(ExecuteDifficulty, new CommandDefinition("difficulty", "Show or change the world difficulty", [PermissionNodes.DifficultyRead, PermissionNodes.DifficultyWrite],
                 [new CommandOverload(new EnumCommandArgument("level", levels, Optional: true))], []));
+        }
+
+        if (weather is not null)
+        {
+            var kinds = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["query"] = -1, ["clear"] = 0, ["rain"] = 1, ["thunder"] = 2
+            };
+            Bind(ExecuteWeather, new CommandDefinition("weather", "Show or change the weather", PermissionNodes.Weather,
+                new CommandOverload(new EnumCommandArgument("kind", kinds), new IntegerCommandArgument("duration", 1, 1000000, Optional: true))));
         }
 
         if (spawner is not null)
@@ -200,6 +212,17 @@ sealed class CommandRuntime
         return _spawner!.Request(mob, invocation.X, invocation.Y, invocation.Z, issued)
             ? Accepted("Summon", $"Queued {mob}.")
             : Rejected("Summon", $"Unknown mob '{mob}'.");
+    }
+
+    private CommandFeedback ExecuteWeather(in CommandInvocation invocation)
+    {
+        var kind = (int)invocation.Arguments["kind"];
+        if (kind < 0)
+            return Applied("Weather", _weather!.Level switch { 0 => "The sky is clear.", 1 => "It is raining.", _ => "There is a thunderstorm." });
+
+        var duration = invocation.Arguments.TryGetValue("duration", out var value) ? (int)value : World.WeatherState.DefaultCommandTicks;
+        _weather!.Set(kind, duration);
+        return Applied("Weather", kind switch { 0 => "The sky clears.", 1 => "It starts to rain.", _ => "A thunderstorm starts." });
     }
 
     private CommandFeedback ExecuteDifficulty(in CommandInvocation invocation)

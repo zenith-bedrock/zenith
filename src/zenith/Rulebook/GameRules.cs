@@ -18,6 +18,7 @@ sealed class GameRules
     public const string DoTileDropsName = "doTileDrops";
     public const string DoMobSpawningName = "doMobSpawning";
     public const string RandomTickSpeedName = "randomTickSpeed";
+    public const string DoWeatherCycleName = "doWeatherCycle";
 
     private sealed record State(long Version, GameRule[] Rules);
 
@@ -35,7 +36,7 @@ sealed class GameRules
         _state = new State(0, rules);
 
         // Fail at composition, not at the first tick: every rule a typed accessor reads must exist with its type.
-        _ = (KeepInventory, FallDamage, NaturalRegeneration, DoTileDrops, DoMobSpawning, RandomTickSpeed);
+        _ = (KeepInventory, FallDamage, NaturalRegeneration, DoTileDrops, DoMobSpawning, RandomTickSpeed, DoWeatherCycle);
     }
 
     /// <summary>Every rule in wire order (the order BDS sends them).</summary>
@@ -52,6 +53,8 @@ sealed class GameRules
     public bool DoTileDrops => Get(DoTileDropsName).AsBool;
 
     public bool DoMobSpawning => Get(DoMobSpawningName).AsBool;
+
+    public bool DoWeatherCycle => Get(DoWeatherCycleName).AsBool;
 
     /// <summary>Random ticks per section per game tick (Bedrock default 1).</summary>
     public int RandomTickSpeed => Get(RandomTickSpeedName).AsInt;

@@ -324,6 +324,7 @@ sealed class ChunkStreamSystem : IGameSystem
                     player.PositionX, player.PositionY, player.PositionZ,
                     player.Pitch, player.Yaw, player.HeadYaw);
                 session.Protocol.World.SendSpawnComplete();
+                session.Protocol.World.SendWeather(session.Context.World.Weather.Raining, session.Context.World.Weather.Thunder);
                 publication.SpawnReleased = true;
                 session.Context.Logger.Info(
                     $"PreSpawn readiness reached for {player.Username}: " +

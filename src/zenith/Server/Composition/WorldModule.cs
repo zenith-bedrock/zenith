@@ -21,6 +21,7 @@ sealed class WorldModule : IGameplayModule
         Gravity = new GravitySystem(s.World, s.Players, s.EnvironmentPolicies);
 
         s.Register(new GameRuleSyncSystem(s.World), "game-rule-sync");
+        s.Register(new WeatherSystem(s.World), "weather");
         s.Register(new BlockDigSystem(s.World), "block-dig");
         s.Register(new BlockEditSystem(s.Players, s.World, s.Durability, s.BlockPolicies, s.Events), "block-edit");
         // Right after edits: a bucket is a block edit with its own item rules; the water it pours flows in block-update below.

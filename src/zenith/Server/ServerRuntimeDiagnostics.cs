@@ -90,6 +90,7 @@ sealed class ServerRuntimeDiagnostics : IDisposable
         Systems = new Dictionary<string, TimingMetric>(StringComparer.Ordinal)
         {
             ["game-rule-sync"] = builder.Timing("tick.system.game-rule-sync", "tick"),
+            ["weather"] = builder.Timing("tick.system.weather", "tick"),
             ["summon"] = builder.Timing("tick.system.summon", "tick"),
             ["natural-spawn"] = builder.Timing("tick.system.natural-spawn", "tick"),
             ["time-sync"] = builder.Timing("tick.system.time-sync", "tick"),

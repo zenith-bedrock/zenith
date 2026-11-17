@@ -64,6 +64,9 @@ sealed class FireSpread(
     private const int FireTurnRollBase = 10;
     private const int FireTurnThreshold = 5;
 
+    private const double RainOutBase = 0.2;
+    private const double RainOutPerAge = 0.03;
+
     private const int SideBurnWeight = 300;
     private const int VerticalBurnWeight = 250;
 
@@ -83,6 +86,9 @@ sealed class FireSpread(
                 return Remove(x, y, z);
 
         var age = FireBlocks.AgeOf(id);
+        // Rain puts out a fire that stands under the open sky, more surely the older it is.
+        if (world.Weather.Raining && random.NextDouble() < RainOutBase + age * RainOutPerAge && LightModel.SeesSky(world, x, y, z))
+            return Remove(x, y, z);
         var floorKnown = world.TryGetBlock(x, y - 1, z, out var floor);
         var onFuel = floorKnown && Blocks.FlammabilityOf(floor) > 0;
         var fuelBeside = HasFlammableNeighbour(x, y, z);

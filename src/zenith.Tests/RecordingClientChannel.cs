@@ -100,6 +100,7 @@ internal sealed class RecordingClientChannel : IClientChannel
         public void SendWorldSpawnPosition(int x, int y, int z) => owner.Calls.Add(("World", "SendWorldSpawnPosition", [x, y, z]));
         public void SendSpawnComplete() => owner.Calls.Add(("World", "SendSpawnComplete", []));
         public void SendTime(int worldTime) => owner.Calls.Add(("World", "SendTime", [worldTime]));
+        public void SendWeather(bool raining, bool thundering) => owner.Calls.Add(("World", "SendWeather", [raining, thundering]));
         public void SendDifficulty(int difficulty) => owner.Calls.Add(("World", "SendDifficulty", [difficulty]));
         public void SendGameRules(IReadOnlyList<GameRule> rules) => owner.Calls.Add(("World", "SendGameRules", [rules]));
         public void SendUpdateBlock(int x, int y, int z, int blockRuntimeId) => owner.Calls.Add(("World", "SendUpdateBlock", [x, y, z, blockRuntimeId]));

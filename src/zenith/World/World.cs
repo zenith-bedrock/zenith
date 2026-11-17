@@ -34,6 +34,10 @@ sealed class World
     public DifficultySetting Difficulty { get; } = new();
 
     private const string DifficultyModule = "difficulty";
+    private const string WeatherModule = "weather";
+
+    /// <summary>Rain and thunder of this world; restored from storage at boot.</summary>
+    public WeatherState Weather { get; } = new();
 
     /// <summary>What a player keeps between sessions: inventory, armor, offhand, pose and vitals.</summary>
     public PlayerPersistence Persistence { get; }
@@ -138,6 +142,28 @@ sealed class World
     {
         var blob = LoadModuleState(DifficultyModule);
         if (blob is { Length: 1 } && Enum.IsDefined((Difficulty)blob[0])) Difficulty.Set((Difficulty)blob[0]);
+    }
+
+    /// <summary>Restores the stored weather (flags and the two timers). Boot only; a world with none gets timers drawn at random.</summary>
+    public void LoadWeather()
+    {
+        var blob = LoadModuleState(WeatherModule);
+        if (blob is { Length: 10 })
+        {
+            Weather.Restore((blob[0] & 1) != 0, (blob[0] & 2) != 0, BitConverter.ToInt32(blob, 2), BitConverter.ToInt32(blob, 6));
+            return;
+        }
+
+        Weather.Seed(Random.Shared);
+    }
+
+    public void PersistWeather()
+    {
+        var blob = new byte[10];
+        blob[0] = (byte)((Weather.Raining ? 1 : 0) | (Weather.ThunderCycleOn ? 2 : 0));
+        BitConverter.TryWriteBytes(blob.AsSpan(2), Weather.RainTicks);
+        BitConverter.TryWriteBytes(blob.AsSpan(6), Weather.ThunderTicks);
+        PersistModuleState(WeatherModule, blob);
     }
 
     public void PersistDifficulty() => PersistModuleState(DifficultyModule, [(byte)Difficulty.Value]);

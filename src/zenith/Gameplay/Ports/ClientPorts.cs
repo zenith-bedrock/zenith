@@ -143,6 +143,7 @@ interface IWorldChannel
     void SendTime(int worldTime);
     void SendGameRules(IReadOnlyList<GameRule> rules);
     void SendDifficulty(int difficulty);
+    void SendWeather(bool raining, bool thundering);
 
     void SendUpdateBlock(int x, int y, int z, int blockRuntimeId);
     void PublishUpdateBlocks(IReadOnlyList<(int X, int Y, int Z, int BlockRuntimeId)> updates);

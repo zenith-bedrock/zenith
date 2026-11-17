@@ -17,7 +17,7 @@ static class Burning
     /// <summary>What the cells around a body's feet do to it: <see cref="Extinguish"/>, 0 for nothing, or the ticks it is set alight for.</summary>
     public const int Extinguish = -1;
 
-    public static int ContactAt(World.World world, float x, float y, float z)
+    public static int ContactAt(World.World world, float x, float y, float z, bool alight = false)
     {
         var (bx, bz) = ((int)MathF.Floor(x), (int)MathF.Floor(z));
         var feet = (int)MathF.Floor(y + 0.1f);
@@ -29,7 +29,10 @@ static class Burning
             if (Blocks.IsFire(below)) return FireIgniteTicks;
         }
 
-        return world.TryGetBlock(bx, feet + 1, bz, out var above) && Blocks.IsFire(above) ? FireIgniteTicks : 0;
+        if (world.TryGetBlock(bx, feet + 1, bz, out var above) && Blocks.IsFire(above)) return FireIgniteTicks;
+
+        // Rain falling on a body that is alight puts it out (only asked of a burning body: it scans the sky above).
+        return alight && world.Weather.Raining && LightModel.SeesSky(world, bx, feet + 1, bz) ? Extinguish : 0;
     }
 
     /// <summary>One tick for a body that has <paramref name="remaining"/> ticks of burning: the new time and whether it takes its damage now.</summary>

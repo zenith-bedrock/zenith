@@ -10,7 +10,7 @@ namespace Zenith.World;
 /// water and leaves). <b>Sky light</b> is 15 in a cell that is open to the sky and spreads sideways the same way; the sun takes
 /// <see cref="SkyDarkness"/> levels off it according to the time of day. Brightness is the larger of the two. Both are found by a
 /// bounded search outward from the asked cell, so a query costs a few dozen cells in the open and a few thousand at worst in a cave.
-/// Not modelled: weather, and dimensions other than the overworld.
+/// Rain and thunder dim the sky (<see cref="World.Weather"/>). Not modelled: dimensions other than the overworld.
 /// </summary>
 static class LightModel
 {
@@ -51,7 +51,7 @@ static class LightModel
     /// Levels the sun takes off sky light at <paramref name="worldTime"/> (a tick of the 24000 day): 0 by day, 11 in the middle of the night,
     /// ramping through dusk and dawn. Vanilla's celestial-angle curve, clear weather.
     /// </summary>
-    public static int SkyDarkness(int worldTime)
+    public static int SkyDarkness(int worldTime, int weather = 0)
     {
         var angle = (worldTime % 24000 + 24000) % 24000 / 24000f - 0.25f;
         if (angle < 0f) angle += 1f;
@@ -59,12 +59,16 @@ static class LightModel
         angle += (smoothed - angle) / 3f;
         var light = 1f - (MathF.Cos(angle * MathF.PI * 2f) * 2f + 0.5f);
         light = Math.Clamp(light, 0f, 1f);
-        return (int)(light * 11f);
+        // Rain and a thunderstorm each leave 11/16 of the daylight (vanilla's rain and thunder gradients).
+        var daylight = 1f - light;
+        if (weather >= 1) daylight *= 0.6875f;
+        if (weather >= 2) daylight *= 0.6875f;
+        return (int)((1f - daylight) * 11f);
     }
 
     /// <summary>Brightness of a cell, 0 to 15: the larger of its block light and its sky light less what the time of day takes off.</summary>
     public static int Brightness(World world, int x, int y, int z, int worldTime) =>
-        Math.Max(BlockLight(world, x, y, z), Math.Max(0, SkyLight(world, x, y, z) - SkyDarkness(worldTime)));
+        Math.Max(BlockLight(world, x, y, z), Math.Max(0, SkyLight(world, x, y, z) - SkyDarkness(worldTime, world.Weather.Level)));
 
     public static int BlockLight(World world, int x, int y, int z) => Search(world, x, y, z, sky: false);
 
