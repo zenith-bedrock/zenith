@@ -61,13 +61,15 @@ sealed class PlayerMeleeSystem : IGameSystem
                 .DistanceSquaredTo(attacker.PositionX, attacker.PositionY + Blocks.PlayerEyeHeight, attacker.PositionZ) > reachSquared)
                 continue;
 
-            PlayerDamage.ApplyCore(
+            var result = PlayerDamage.ApplyCore(
                 target,
                 _players,
                 DamageSource.MeleeFrom(attacker.RuntimeId),
                 PlayerMeleeDamage.Resolve(attacker, _itemPalette),
                 clock.CurrentTick,
-                dx, dz).Conclude(online);
+                dx, dz);
+            result.Conclude(online);
+            if (result.Applied) HungerSystem.Exhaust(attacker, HungerSystem.AttackExhaustion);
         }
     }
 }

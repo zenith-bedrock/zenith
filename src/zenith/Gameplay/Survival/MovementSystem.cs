@@ -93,6 +93,7 @@ sealed class MovementSystem : IGameSystem
             player.RecordProcessedInputTick(input.InputTick);
 
             var wasOnGround = player.IsOnGround;
+            var (fromX, fromY, fromZ) = (player.PositionX, player.PositionY, player.PositionZ);
             player.PositionX = input.X;
             player.PositionY = input.Y;
             player.PositionZ = input.Z;
@@ -103,6 +104,7 @@ sealed class MovementSystem : IGameSystem
 
             ApplyPoseModes(player, in input);
             player.IsSwimming = SubmersionProbe.IsSwimming(player);
+            AccrueMovementExhaustion(player, fromX, fromY, fromZ, wasOnGround);
 
             if (input.MissedSwing)
                 _swing.Add(player);
@@ -167,6 +169,28 @@ sealed class MovementSystem : IGameSystem
             RememberReplicatedPose(mover);
         foreach (var mover in _dirtyFlags)
             RememberReplicatedFlags(mover);
+    }
+
+    /// <summary>A step longer than this is a teleport or a correction, not walking: it costs nothing.</summary>
+    private const float MaxWalkedStep = 5f;
+
+    /// <summary>
+    /// Hunger paid for the step just taken (survival only): sprinting by the metre, swimming by the metre, and a jump when the
+    /// feet leave the ground rising (the input carries no jump bit, so a rise from the ground is the jump).
+    /// </summary>
+    private static void AccrueMovementExhaustion(global::Zenith.Player.Player player, float fromX, float fromY, float fromZ, bool wasOnGround)
+    {
+        var dx = player.PositionX - fromX;
+        var dz = player.PositionZ - fromZ;
+        var metres = MathF.Sqrt(dx * dx + dz * dz);
+        if (metres < MaxWalkedStep)
+        {
+            if (player.IsSwimming) HungerSystem.Exhaust(player, metres * HungerSystem.SwimExhaustionPerMetre);
+            else if (player.IsSprinting) HungerSystem.Exhaust(player, metres * HungerSystem.SprintExhaustionPerMetre);
+        }
+
+        if (wasOnGround && !player.IsOnGround && player.PositionY - fromY > 0.1f && player.PositionY - fromY < 1f)
+            HungerSystem.Exhaust(player, player.IsSprinting ? HungerSystem.SprintJumpExhaustion : HungerSystem.JumpExhaustion);
     }
 
     /// <summary>Continuous sneak + sprint edges; mutual exclusion (§53 / Dragonfly).</summary>

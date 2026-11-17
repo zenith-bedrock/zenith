@@ -1,6 +1,6 @@
 # Plan 004 — Vanilla parity audit of what already exists
 
-- Status: AUDIT, being worked through. Done: items 1, 5, 6, 19 (see "Done" at the end). The rest are findings with evidence and a rough size.
+- Status: AUDIT, being worked through. Done: items 1, 2, 5, 6, 9, 10, 19 (see "Done" at the end). The rest are findings with evidence and a rough size.
 - Date: 2026-11-16. Method: the code of each implemented system read against (a) the BDS 1.26 behavior pack in
   `bds-reference/bds/behavior_packs/vanilla` (entities and spawn rules; authoritative, extracted from the `.brarchive` files),
   (b) PocketMine (`essential-reference`) and Dragonfly (`dragonfly-reference`) sources, (c) known vanilla rules where neither
@@ -69,3 +69,4 @@ Fall-damage threshold 3, drowning (300 air, -20, 2 damage, +4 refill), water flo
 - **6 Experience** from the pack: cow and fish 1 to 3 (new `killExperienceMax`, rolled per kill), iron golem, bat, minecart and villager 0. Zombie and skeleton equipment bonus is not modelled (Zenith mobs carry no equipment).
 - **19 Fish** health 6 (cod).
 - Tests that pinned the old numbers now pin the pack's (zombie/spider damage, golem and enderman kills, XP ranges, minecart/bat/villager 0).
+- **2, 9, 10 Hunger.** `HungerSystem.Exhaust` is the one door for exhaustion (Creative never tires). Sprinting costs 0.1 per metre walked and swimming 0.01 per metre (`MovementSystem.AccrueMovementExhaustion`; steps of 5 blocks or more are corrections and cost nothing), a jump 0.05 and a sprinting jump 0.2 (a rise from the ground, since the input has no jump bit), a landed attack on a mob or player 0.1, mining as before. Damage exhausts only for melee, projectile and lava, not for a fall, starvation, drowning or the void. Full hunger with saturation left heals every 10 ticks for min(saturation, 6) / 6 and pays min(saturation, 6) exhaustion (the KNOWN vanilla rule; Dragonfly has the same shape on a 20-tick cadence). Not done: a player at 6 hunger or less is not stopped from sprinting by the server (the client enforces it from the attribute).

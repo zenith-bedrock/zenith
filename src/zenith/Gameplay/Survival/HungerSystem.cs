@@ -13,7 +13,25 @@ namespace Zenith.Gameplay.Survival;
 /// </summary>
 sealed class HungerSystem : IGameSystem
 {
-    private const float ExhaustionPerSprintTick = 0.1f;
+    /// <summary>
+    /// Movement exhaustion, vanilla numbers: sprinting costs 0.1 per metre walked (not per tick), swimming 0.01 per metre, a jump
+    /// 0.05 and a sprinting jump 0.2, a landed attack 0.1. Plain walking costs nothing.
+    /// </summary>
+    internal const float SprintExhaustionPerMetre = 0.1f;
+    internal const float SwimExhaustionPerMetre = 0.01f;
+    internal const float JumpExhaustion = 0.05f;
+    internal const float SprintJumpExhaustion = 0.2f;
+    internal const float AttackExhaustion = 0.1f;
+
+    /// <summary>Full hunger with saturation left heals one point every half second, paid for out of saturation (KNOWN vanilla rule; Dragonfly's <c>canQuicklyRegenerate</c>).</summary>
+    private const ulong FastRegenIntervalTicks = 10;
+    private const float FastRegenMaxSaturationSpend = 6f;
+
+    /// <summary>Adds exhaustion for a survival player; Creative never tires. The one door for every exhaustion source.</summary>
+    internal static void Exhaust(Player.Player player, float points)
+    {
+        if (points > 0f && player.GameMode != GameMode.Creative) player.Exhaustion += points;
+    }
 
     /// <summary>
     /// Phase XXV — exhaustion sources beyond sprint (previously the only one that existed at all,
@@ -73,6 +91,19 @@ sealed class HungerSystem : IGameSystem
             {
                 // PlayerDamage already sends attributes/relays health for both outcomes.
                 PlayerDamage.ApplyCore(player, _players, DamageSource.Starve, 1f, clock.CurrentTick).Conclude(online);
+                continue;
+            }
+
+            if (player.Hunger >= 20f && player.Saturation > 0f && player.Health < player.MaxHealth &&
+                player.Level.Rules.NaturalRegeneration &&
+                clock.CurrentTick % FastRegenIntervalTicks == 0)
+            {
+                // Vanilla: heal saturation/6 (at most 1) and pay exactly that much exhaustion times 6.
+                var spent = MathF.Min(player.Saturation, FastRegenMaxSaturationSpend);
+                player.Heal(spent / FastRegenMaxSaturationSpend);
+                player.Exhaustion += spent;
+                player.Client.Entity.SendPlayerAttributes(player);
+                PlayerVisibility.RelayHealth(player, online);
                 continue;
             }
 
@@ -166,9 +197,6 @@ sealed class HungerSystem : IGameSystem
 
     private static void AccrueExhaustion(Player.Player player)
     {
-        if (player.IsSprinting)
-            player.Exhaustion += ExhaustionPerSprintTick;
-
         if (player.Exhaustion < ExhaustionThreshold) return;
         player.Exhaustion -= ExhaustionThreshold;
 

@@ -54,7 +54,12 @@ internal static class DamageableActorCombatCore
                 player.PositionZ) <= reachSquared;
             if (!player.Intents.TryConsumeAttackIntent(checked((long)view.RuntimeId), allowUntargeted: inReach)) continue;
             if (!player.IsInGame || player.IsDead || !inReach) continue;
-            if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), PlayerMeleeDamage.Resolve(player, itemPalette), online, currentTick)) return true;
+            if (tryApplyDamage(DamageSource.MeleeFrom(player.RuntimeId), PlayerMeleeDamage.Resolve(player, itemPalette), online, currentTick))
+            {
+                HungerSystem.Exhaust(player, HungerSystem.AttackExhaustion);
+                return true;
+            }
+
         }
         return false;
     }

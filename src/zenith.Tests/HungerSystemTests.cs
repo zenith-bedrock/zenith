@@ -28,7 +28,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("exhaustion-cadence");
         var client = new RecordingClientChannel(); player.AttachClient(client);
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
-        player.IsSprinting = true;
+        player.Exhaustion = 0.5f;
         for (var tick = 1; tick <= 20; tick++)
         {
             fx.Clock.AdvanceBy(1);
@@ -130,16 +130,15 @@ public class HungerSystemTests
     }
 
     [Fact]
-    public void Sprinting_accrues_exhaustion_and_depletes_one_hunger_at_threshold()
+    public void Crossing_the_exhaustion_threshold_depletes_one_hunger_when_saturation_is_gone()
     {
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("sprinter");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
-        player.IsSprinting = true;
         player.Saturation = 0f; // isolate the hunger-depletion path — see the saturation-first test below
+        player.Exhaustion = 4.05f; // what 40 metres of sprinting add up to
 
-        for (var i = 0; i < 41; i++) // ~40 * 0.1 exhaustion reaches the 4.0 threshold (float accumulation)
-            system.Tick(fx.Clock, fx.Players.Online);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(19f, player.Hunger);
         Assert.True(player.Exhaustion < 4f);
@@ -152,11 +151,10 @@ public class HungerSystemTests
         var fx = new IntentTestFixture();
         var player = fx.AddInGamePlayer("well-fed");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
-        player.IsSprinting = true;
         Assert.Equal(5f, player.Saturation); // default
+        player.Exhaustion = 4.05f;
 
-        for (var i = 0; i < 41; i++)
-            system.Tick(fx.Clock, fx.Players.Online);
+        system.Tick(fx.Clock, fx.Players.Online);
 
         Assert.Equal(20f, player.Hunger); // untouched — saturation absorbed the crossing
         Assert.Equal(4f, player.Saturation);
@@ -221,6 +219,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("regen");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
         player.Hunger = 20f;
+        player.Saturation = 0f; // saturation would make this the fast regeneration
         _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
 
         fx.Clock.AdvanceBy(79);
@@ -243,6 +242,7 @@ public class HungerSystemTests
         var player = fx.AddInGamePlayer("regen-cost");
         var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
         player.Hunger = 20f;
+        player.Saturation = 0f;
         player.Exhaustion = 0f;
         _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
 
@@ -251,6 +251,43 @@ public class HungerSystemTests
 
         Assert.Equal(16f, player.Health);
         Assert.Equal(6f, player.Exhaustion);
+    }
+
+    [Fact]
+    public void Full_hunger_with_saturation_heals_every_half_second_and_pays_with_exhaustion()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fast-regen");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.Hunger = 20f;
+        player.Saturation = 6f;
+        player.Exhaustion = 0f;
+        _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
+
+        fx.Clock.AdvanceBy(9);
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(15f, player.Health);
+
+        fx.Clock.AdvanceBy(1); // tick 10
+        system.Tick(fx.Clock, fx.Players.Online);
+        Assert.Equal(16f, player.Health);
+        Assert.Equal(6f, player.Exhaustion);
+    }
+
+    [Fact]
+    public void Fast_regeneration_needs_saturation_and_full_hunger()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("no-fast-regen");
+        var system = new HungerSystem(fx.Context.ItemPalette, fx.Players);
+        player.Hunger = 19f;
+        player.Saturation = 6f;
+        _ = player.ApplyDamage(DamageSource.Generic, 5f, 0);
+
+        fx.Clock.AdvanceBy(10);
+        system.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(15f, player.Health); // hunger 19 only has the slow regeneration, at tick 80
     }
 
     [Fact]
@@ -282,5 +319,117 @@ public class HungerSystemTests
 
         Assert.Equal(20f, player.Hunger);
         Assert.Equal(0f, player.Exhaustion);
+    }
+}
+
+/// <summary>Vanilla exhaustion sources: by the metre while sprinting or swimming, per jump, per landed attack; not for walking or non-attack damage.</summary>
+public class ExhaustionSourceTests
+{
+    public ExhaustionSourceTests() => Blocks.EnsureLoaded();
+
+    private static void Step(IntentTestFixture fx, MovementSystem system, Player.Player player, float x, float y, float z, bool onGround)
+    {
+        var input = MovementInputState.From(x, y, z, 0f, 0f);
+        input.OnGround = onGround;
+        player.Intents.SubmitMovementInput(input);
+        fx.Clock.AdvanceBy(1);
+        system.Tick(fx.Clock, fx.Players.Online);
+    }
+
+    private static (IntentTestFixture Fx, Player.Player Player, MovementSystem System) Stage()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("mover");
+        var system = new MovementSystem(fx.Players);
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY, 0f, true);
+        player.Exhaustion = 0f;
+        return (fx, player, system);
+    }
+
+    [Fact]
+    public void Sprinting_costs_a_tenth_per_metre_and_not_per_tick()
+    {
+        var (fx, player, system) = Stage();
+        player.IsSprinting = true;
+
+        Step(fx, system, player, 0.3f, Blocks.FlatSpawnY, 0f, true);
+        Step(fx, system, player, 0.3f, Blocks.FlatSpawnY, 0f, true); // standing still: nothing
+        Step(fx, system, player, 1.3f, Blocks.FlatSpawnY, 0f, true);
+
+        Assert.Equal(0.13f, player.Exhaustion, 3);
+    }
+
+    [Fact]
+    public void Walking_costs_nothing()
+    {
+        var (fx, player, system) = Stage();
+
+        for (var i = 1; i <= 20; i++) Step(fx, system, player, i * 0.2f, Blocks.FlatSpawnY, 0f, true);
+
+        Assert.Equal(0f, player.Exhaustion);
+    }
+
+    [Fact]
+    public void A_jump_costs_less_than_a_sprinting_jump_and_a_teleport_costs_nothing()
+    {
+        var (fx, player, system) = Stage();
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY + 0.42f, 0f, false);
+        Assert.Equal(HungerSystem.JumpExhaustion, player.Exhaustion, 4);
+
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY, 0f, true);
+        player.Exhaustion = 0f;
+        player.IsSprinting = true;
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY + 0.42f, 0f, false);
+        Assert.Equal(HungerSystem.SprintJumpExhaustion, player.Exhaustion, 4);
+
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY, 0f, true);
+        player.Exhaustion = 0f;
+        Step(fx, system, player, 300f, Blocks.FlatSpawnY, 0f, true); // a correction, not a run
+        Assert.Equal(0f, player.Exhaustion);
+    }
+
+    [Fact]
+    public void Creative_players_never_tire_from_moving()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("creative", GameMode.Creative);
+        var system = new MovementSystem(fx.Players);
+        Step(fx, system, player, 0f, Blocks.FlatSpawnY, 0f, true);
+        player.IsSprinting = true;
+
+        Step(fx, system, player, 4f, Blocks.FlatSpawnY, 0f, true);
+
+        Assert.Equal(0f, player.Exhaustion);
+    }
+
+    [Fact]
+    public void A_landed_attack_costs_a_tenth()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("fighter");
+        var cows = new Zenith.Gameplay.Entities.CowSystem(fx.World, fx.Players, new Zenith.Ecs.EntityRuntime(), fx.Context.ItemPalette);
+        cows.SpawnCow(player.PositionX + 1, player.PositionY, player.PositionZ);
+        player.Exhaustion = 0f;
+
+        player.Intents.SubmitAttackIntent();
+        cows.Tick(fx.Clock, fx.Players.Online);
+
+        Assert.Equal(HungerSystem.AttackExhaustion, player.Exhaustion, 4);
+    }
+
+    [Fact]
+    public void Only_attack_and_fire_damage_exhaust_not_a_fall_or_hunger()
+    {
+        var fx = new IntentTestFixture();
+        var player = fx.AddInGamePlayer("hurt");
+        player.Exhaustion = 0f;
+
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Fall, 1f, 100).Conclude(fx.Players.Online);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Starve, 1f, 200).Conclude(fx.Players.Online);
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Drown, 1f, 300).Conclude(fx.Players.Online);
+        Assert.Equal(0f, player.Exhaustion);
+
+        PlayerDamage.ApplyCore(player, fx.Players, DamageSource.Melee, 1f, 400).Conclude(fx.Players.Online);
+        Assert.Equal(HungerSystem.DamageExhaustion, player.Exhaustion, 4);
     }
 }
